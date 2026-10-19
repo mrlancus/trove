@@ -10,12 +10,12 @@ export function memoryStorage() {
 
 /** Creates a vault (as the "Mac") and returns its token plus a function that mints setup codes. */
 export async function createVault() {
-  const pair = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
-  const publicKey = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
-  const res = await fetch(`${BASE}/v1/vaults`, { method: "POST", body: JSON.stringify({ vaultPublicKey: b64uEncode(publicKey), deviceName: "Mac", deviceKind: "mac" }) });
+  const { generateVaultSecrets } = await import("../public/core/keys.js");
+  const secrets = await generateVaultSecrets();
+  const res = await fetch(`${BASE}/v1/vaults`, { method: "POST", body: JSON.stringify({ vaultPublicKey: secrets.publicKey, deviceName: "Mac", deviceKind: "mac" }) });
   if (res.status !== 201) throw new Error(`create vault: ${res.status}`);
   const mac = await res.json();
-  const keys = { v: 1, vaultKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))), privateKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))) };
+  const keys = secrets.exported;
   async function setupCode() {
     const p = await fetch(`${BASE}/v1/vaults/${mac.vaultId}/pairings`, { method: "POST", headers: { authorization: `Bearer ${mac.deviceToken}` } });
     const { pairingCode } = await p.json();

@@ -1,22 +1,30 @@
 // The web app's vault: joins the relay as a "web" device, keeps a local copy of every op, pulls and
 // pushes encrypted journal segments (docs/PROTOCOL.md §3–4) and edits records the same way the apps do.
-import { b64uDecode, fromUtf8, hex } from "./bytes.js";
+import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
-import { importVaultKeys } from "./keys.js";
-import { decrypt, encrypt, isTRV1 } from "./trv1.js";
+import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
+import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 
-/** Parses the setup code (or `trove://pair?d=` link) the apps show under "Add device". */
-export function parseSetupCode(text) {
+/** Parses a setup or recovery code (or a `trove://pair?d=` link): the apps' `PairingPayload`. */
+export function parsePayload(text) {
   let code = text.trim();
   const m = /[?&]d=([A-Za-z0-9_-]+)/.exec(code);
   if (m) code = m[1];
   let payload;
-  try { payload = JSON.parse(fromUtf8.decode(b64uDecode(code))); } catch { throw new Error("That doesn't look like a Trove setup code."); }
-  if (!payload?.keys?.vaultKey || !payload.vaultId) throw new Error("That setup code is missing the vault keys.");
-  if (!payload.pairingCode) throw new Error("This setup code has no relay pairing code. Connect the relay in the app first.");
+  try { payload = JSON.parse(fromUtf8.decode(b64uDecode(code.replace(/\s+/g, "")))); } catch { throw new Error("That doesn't look like a Trove setup code."); }
+  if (!payload?.keys?.vaultKey || !payload.vaultId) throw new Error("That code is missing the vault keys.");
   return payload;
 }
+
+/** A setup code from "Add a device": a payload with a single-use relay pairing code. */
+export function parseSetupCode(text) {
+  const payload = parsePayload(text);
+  if (!payload.pairingCode) throw new Error("This code has no relay pairing code. If it's your recovery code, use “Recover my vault” instead.");
+  return payload;
+}
+
+const encodePayload = (payload) => b64uEncode(utf8.encode(JSON.stringify(payload)));
 
 export class RelayError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -36,6 +44,7 @@ export class Vault {
     this.journal = new Journal(journalState, pending, this.now);
     this.store = new RecordStore();
     this.store.apply(ops);
+    this.store.apply(pending); // edits saved before the full op cache caught up
     this.applied = new Set(applied);
     this.cursor = cursor;
     this.listeners = new Set();
@@ -57,13 +66,90 @@ export class Vault {
     if (res.status === 403 || res.status === 404) throw new Error("That setup code has expired or was already used. Make a new one in the app.");
     if (!res.ok) throw new Error(`The relay said ${res.status}: ${await res.text()}`);
     const joined = await res.json();
-    const config = { v: 1, base, vaultId: relayVaultId, deviceId: joined.deviceId, token: joined.deviceToken, encrypted: payload.encrypted !== false, deviceName };
+    return Vault.finishJoin(storage, payload, base, relayVaultId, joined, keys, deviceName, options);
+  }
+
+  /** Saves a newly joined device; keeps the inbox key when the code carried the private key. */
+  static async finishJoin(storage, payload, base, relayVaultId, joined, keys, deviceName, options) {
+    const config = { v: 1, base, vaultId: relayVaultId, deviceId: joined.deviceId, token: joined.deviceToken, encrypted: payload.encrypted !== false, deviceName,
+      inboxToken: joined.inboxToken ?? payload.inboxToken ?? null };
+    const vault = new Vault(storage, config, keys, { device: joined.deviceId }, [], [], [], 0, options);
+    const info = await vault.api("GET", "info");
+    config.vaultPublicKey = info.vaultPublicKey;
+    if (payload.keys.privateKey) {
+      const inbox = await importInboxKey(payload.keys.privateKey);
+      if (inbox.publicKey !== info.vaultPublicKey) {
+        await vault.forget();
+        throw new Error("That code is for a different vault.");
+      }
+      keys.inbox = inbox.privateKey;
+    }
+    if (!config.inboxToken) config.inboxToken = (await vault.api("POST", "inbox-tokens", { expect: [201] })).inboxToken;
     await storage.set("config", config);
     await storage.set("keys", keys);
-    const vault = new Vault(storage, config, keys, { device: joined.deviceId }, [], [], [], 0, options);
     await vault.save();
     return vault;
   }
+
+  /**
+   * Creates a brand-new vault on this relay with this browser as its first device. Returns the
+   * recovery code: the only copy of the vault keys outside this browser's locked key store.
+   */
+  static async create(storage, { origin, deviceName = "Web browser", ...options } = {}) {
+    const secrets = await generateVaultSecrets();
+    const doFetch = options.fetch ?? ((...a) => fetch(...a));
+    const res = await doFetch(`${origin}/v1/vaults`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ vaultPublicKey: secrets.publicKey, deviceName, deviceKind: "web", deviceId: crypto.randomUUID().toUpperCase() }),
+    });
+    if (res.status === 403) throw new Error("This relay isn't accepting new vaults.");
+    if (!res.ok) throw new Error(`The relay said ${res.status}: ${await res.text()}`);
+    const created = await res.json();
+    const payload = { v: 1, vaultId: created.vaultId, keys: secrets.exported, encrypted: true, relayURL: origin, relayVaultId: created.vaultId };
+    const vault = await Vault.finishJoin(storage, payload, origin, created.vaultId, created, await importVaultKeys(secrets.exported), deviceName, options);
+    return { vault, recoveryCode: encodePayload(payload) };
+  }
+
+  /** Adds this browser to a vault using only the recovery code (proves it holds the private key). */
+  static async recover(storage, recoveryCode, { origin, deviceName = "Web browser", ...options } = {}) {
+    const payload = parsePayload(recoveryCode);
+    if (!payload.keys.privateKey) throw new Error("That code has no private key, so it can't recover a vault.");
+    const relayVaultId = payload.relayVaultId ?? payload.vaultId;
+    const base = origin ?? payload.relayURL;
+    const doFetch = options.fetch ?? ((...a) => fetch(...a));
+    const challengeRes = await doFetch(`${base}/v1/vaults/${relayVaultId}/recovery`, { method: "POST" });
+    if (challengeRes.status === 404) throw new Error("This relay doesn't have that vault.");
+    if (!challengeRes.ok) throw new Error(`The relay said ${challengeRes.status}: ${await challengeRes.text()}`);
+    const challenge = await challengeRes.json();
+    const inbox = await importInboxKey(payload.keys.privateKey);
+    let answer;
+    try { answer = await unseal(b64uDecode(challenge.box), inbox.privateKey, b64uDecode(inbox.publicKey)); } catch { throw new Error("That recovery code is for a different vault."); }
+    const res = await doFetch(`${base}/v1/vaults/${relayVaultId}/devices`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ recoveryChallenge: challenge.challengeId, recoveryAnswer: b64uEncode(answer), deviceName, deviceKind: "web", deviceId: crypto.randomUUID().toUpperCase() }),
+    });
+    if (!res.ok) throw new Error("The relay didn't accept the recovery code.");
+    return Vault.finishJoin(storage, payload, base, relayVaultId, await res.json(), await importVaultKeys(payload.keys), deviceName, options);
+  }
+
+  /** A single-use setup code for another device. Needs the recovery code, since keys here are locked. */
+  async setupCodeForNewDevice(recoveryCode) {
+    const payload = parsePayload(recoveryCode);
+    const { publicKey } = await importInboxKey(payload.keys.privateKey ?? "");
+    if (publicKey !== this.config.vaultPublicKey) throw new Error("That recovery code is for a different vault.");
+    const { pairingCode } = await this.api("POST", "pairings", { expect: [201] });
+    return encodePayload({ ...payload, relayURL: this.config.base, relayVaultId: this.config.vaultId, pairingCode, inboxToken: this.config.inboxToken });
+  }
+
+  /** The browser extension's setup code: public key + inbox token only, so it can add but not read. */
+  browserExtensionCode() {
+    if (!this.config.inboxToken || !this.config.vaultPublicKey) return null;
+    return encodePayload({ v: 1, relayURL: this.config.base, vaultId: this.config.vaultId, inboxToken: this.config.inboxToken, vaultPublicKey: this.config.vaultPublicKey });
+  }
+
+  get canReadInbox() { return Boolean(this.keys.inbox); }
 
   /** Opens the vault saved in this browser, or returns null. */
   static async open(storage, options = {}) {
@@ -111,11 +197,16 @@ export class Vault {
     return op;
   }
 
-  /** Local edits are saved straight away (sync uploads them later). */
+  /**
+   * Local edits: the journal of unsent ops is written straight away (it's small, and it's what must
+   * survive a reload); the full op cache follows a moment later. Sync uploads them.
+   */
   edited() {
     this.changed();
+    const journal = { state: { ...this.journal.state }, pending: [...this.journal.pending] };
+    this.writes = (this.writes ?? Promise.resolve()).then(() => this.storage.set("journal", journal)).catch(() => {});
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.save().catch(() => {}), 250);
+    this.saveTimer = setTimeout(() => this.save().catch(() => {}), 1000);
   }
 
   editText(field, value, record, kind) {
@@ -134,9 +225,9 @@ export class Vault {
     };
   }
 
-  addNote({ title = "", body = "" } = {}) {
+  addNote({ title = "", body = "", source = "web" } = {}) {
     const id = crypto.randomUUID().toLowerCase();
-    const fields = { ...this.baseFields("note", title), [Field.category]: "note" };
+    const fields = { ...this.baseFields("note", title), [Field.source]: source, [Field.category]: "note" };
     const tags = [...new Set(hashtags(body))].sort();
     if (tags.length) fields[Field.tags] = tags;
     this.set(fields, id, "item");
@@ -145,13 +236,13 @@ export class Vault {
   }
 
   /** Adds a link (the apps fetch its title and preview when they next enrich). */
-  addLink(url, { title = "", note = "" } = {}) {
+  addLink(url, { title = "", note = "", source = "web" } = {}) {
     const cleaned = cleanURL(url);
     const key = dedupeKey(cleaned.toString());
     const existing = this.items().find((i) => i.url && dedupeKey(i.url.toString()) === key);
     if (existing) return { id: existing.id, isNew: false };
     const id = crypto.randomUUID().toLowerCase();
-    this.set({ ...this.baseFields("link", title), [Field.url]: cleaned.toString() }, id, "item");
+    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString() }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
   }
@@ -232,6 +323,8 @@ export class Vault {
       more = page.more;
     }
     if (ok) this.cursor = after;
+    // Sealed inbox (browser extension, email, GoodNotes): import, then ack once uploaded.
+    const imported = await this.importInbox(report);
     // Push.
     for (const batch of this.journal.segments()) {
       const first = batch[0].s, last = batch[batch.length - 1].s;
@@ -246,8 +339,78 @@ export class Vault {
       }
     }
     await this.save();
-    if (report.pulled) this.changed();
+    if (!this.journal.pending.length) {
+      for (const id of imported) {
+        try { await this.api("DELETE", `inbox/${id}`, { expect: [204] }); } catch (e) { report.errors.push(`ack ${id}: ${e.message}`); }
+      }
+    }
+    report.imported = imported.length;
+    if (report.pulled || imported.length) this.changed();
     return report;
+  }
+
+  async importInbox(report) {
+    if (!this.keys.inbox || !this.config.vaultPublicKey) return [];
+    const done = [];
+    let entries;
+    try { entries = (await this.api("GET", "inbox")).entries; } catch (e) { report.errors.push(`inbox: ${e.message}`); return done; }
+    const vaultPublic = b64uDecode(this.config.vaultPublicKey);
+    for (const entry of entries) {
+      try {
+        const box = await this.api("GET", `inbox/${entry.id}`, { raw: true });
+        const { header, body } = parseEnvelope(await unseal(box, this.keys.inbox, vaultPublic));
+        await this.importEnvelope(header, body, entry);
+        done.push(entry.id);
+      } catch (e) {
+        report.errors.push(`inbox ${entry.id}: ${e.message}`);
+      }
+    }
+    return done;
+  }
+
+  /** Turns an inbox envelope into an item, like Library.importInbox in Swift. */
+  async importEnvelope(h, body, entry = {}) {
+    const text = () => fromUtf8.decode(body);
+    if (h.source === "webdav") {
+      const path = h.meta?.davPath ?? entry.davPath ?? h.name ?? "notebook.pdf";
+      const attachment = await this.storeBlob(body, h.name ?? "notebook.pdf", h.mime ?? "application/pdf");
+      const existing = this.items().find((i) => i.record.fields.origin?.davPath === path);
+      if (existing) {
+        this.update(existing.id, { attachments: [attachment], needsEnrichment: true, ocrText: null, enrichment: null });
+        return existing.id;
+      }
+      const id = crypto.randomUUID().toLowerCase();
+      this.set({ ...this.baseFields("pdf", titleFromFileName(h.name ?? "Notebook")), source: "goodnotes", attachments: [attachment], origin: { davPath: path } }, id, "item");
+      return id;
+    }
+    if (h.source === "email") {
+      if (h.mime === "text/html" || h.mime === "text/plain") {
+        const id = crypto.randomUUID().toLowerCase();
+        const origin = {};
+        if (h.groupId) origin.emailGroup = h.groupId;
+        if (h.meta?.from) origin.from = h.meta.from;
+        this.set({ ...this.baseFields("email", h.title ?? "Email"), source: "email", origin }, id, "item");
+        this.editText(Field.body, h.mime === "text/html" ? htmlToText(text()) : text(), id, "item");
+        return id;
+      }
+      const attachment = await this.storeBlob(body, h.name ?? "attachment", h.mime ?? "application/octet-stream");
+      const parent = h.groupId && this.items().find((i) => i.record.fields.origin?.emailGroup === h.groupId);
+      if (parent) {
+        this.update(parent.id, { attachments: [...parent.attachments, attachment] });
+        return parent.id;
+      }
+      return this.addFile(body, attachment.name, attachment.mime, { source: "email" });
+    }
+    const source = h.source === "web" ? "web" : "share";
+    if (h.url) {
+      const note = h.mime?.startsWith("text/") ? text() : "";
+      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source });
+      const item = this.item(id);
+      if (!isNew && note && item) this.setBody(id, item.body ? `${item.body}\n\n${note}` : note);
+      return id;
+    }
+    if (h.mime && !h.mime.startsWith("text/")) return this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title });
+    return this.addNote({ title: h.title ?? "", body: text(), source });
   }
 
   /** Our own journal on the relay already reaches `last` (another tab, or lost local state): move pending ops past it. */
@@ -269,15 +432,20 @@ export class Vault {
     return isTRV1(data) ? decrypt(data, this.keys.blob) : data;
   }
 
-  /** Uploads a file as an encrypted blob and adds an item for it (like Library.addFile). */
-  async addFile(bytes, name, mime) {
+  /** Encrypts and uploads attachment bytes; returns the attachment JSON for an item. */
+  async storeBlob(bytes, name, mime) {
     const id = hex(new Uint8Array(await crypto.subtle.sign("HMAC", this.keys.blobId, bytes)));
     const stored = this.config.encrypted ? await encrypt(bytes, this.keys.blob) : bytes;
     await this.api("PUT", `blobs/${id}`, { body: stored, expect: [200, 201, 204] });
+    return { id, name, mime, size: bytes.length };
+  }
+
+  /** Uploads a file as an encrypted blob and adds an item for it (like Library.addFile). */
+  async addFile(bytes, name, mime, { source = "web", title } = {}) {
+    const attachment = await this.storeBlob(bytes, name, mime);
     const kind = mime.startsWith("image/") ? "image" : mime === "application/pdf" ? "pdf" : mime.startsWith("audio/") ? "audio" : mime.startsWith("video/") ? "video" : "file";
-    const title = name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
     const itemId = crypto.randomUUID().toLowerCase();
-    this.set({ ...this.baseFields(kind, title), [Field.attachments]: [{ id, name, mime, size: bytes.length }] }, itemId, "item");
+    this.set({ ...this.baseFields(kind, title ?? titleFromFileName(name)), [Field.source]: source, [Field.attachments]: [attachment] }, itemId, "item");
     return itemId;
   }
 
@@ -295,3 +463,21 @@ export class Vault {
   }
 }
 
+
+function titleFromFileName(name) {
+  return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+}
+
+/** Readable text from an HTML email. */
+export function htmlToText(html) {
+  if (typeof DOMParser !== "undefined") {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script, style, head").forEach((n) => n.remove());
+    doc.querySelectorAll("br").forEach((n) => n.replaceWith("\n"));
+    doc.querySelectorAll("p, div, li, tr, h1, h2, h3, h4").forEach((n) => n.append("\n"));
+    return (doc.body?.textContent ?? "").replace(/[ \t\u00a0]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
+  }
+  return html.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
+}

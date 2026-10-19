@@ -68,25 +68,120 @@ async function boot() {
 
 function showSetup(message) {
   app.replaceChildren($("#setup-view").content.cloneNode(true));
-  const form = $("#setup-form"), error = $(".error", form), button = $("button", form);
-  $("#device-name").value = guessDeviceName();
-  if (message) { error.textContent = message; error.hidden = false; }
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  const tabs = [...app.querySelectorAll("[data-tab]")];
+  const select = (name) => {
+    for (const t of tabs) t.setAttribute("aria-pressed", String(t.dataset.tab === name));
+    for (const p of app.querySelectorAll("[data-panel]")) p.hidden = p.dataset.panel !== name;
+    app.querySelector(`[data-panel="${name}"] textarea, [data-panel="${name}"] input`)?.focus();
+  };
+  for (const t of tabs) t.addEventListener("click", () => select(t.dataset.tab));
+  for (const id of ["#create-name", "#device-name", "#recover-name"]) $(id).value = guessDeviceName();
+
+  const wire = (form, run) => {
+    const error = $(".error", form), button = $("button[type=submit]", form), label = button.textContent;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      button.disabled = true;
+      button.textContent = "Working…";
+      try {
+        await run();
+      } catch (e) {
+        error.textContent = e.message;
+        error.hidden = false;
+        button.disabled = false;
+        button.textContent = label;
+      }
+    });
+  };
+  wire($("#create-form"), async () => {
+    const { vault, recoveryCode } = await Vault.create(storage, { origin: location.origin, deviceName: $("#create-name").value.trim() });
+    showRecovery(vault, recoveryCode);
+  });
+  wire($("#setup-form"), async () => {
+    showMain(await Vault.join(storage, $("#setup-code").value, { origin: location.origin, deviceName: $("#device-name").value.trim() }));
+  });
+  wire($("#recover-form"), async () => {
+    showMain(await Vault.recover(storage, $("#recover-code").value, { origin: location.origin, deviceName: $("#recover-name").value.trim() }));
+  });
+  if (message) {
+    select("join");
+    const error = $(".error", $("#setup-form"));
+    error.textContent = message;
+    error.hidden = false;
+  }
+}
+
+function showRecovery(vault, code) {
+  app.replaceChildren($("#recovery-view").content.cloneNode(true));
+  $("#recovery-code").value = code;
+  $("#copy-recovery").addEventListener("click", async () => {
+    await navigator.clipboard?.writeText(code).catch(() => {});
+    $("#recovery-code").select();
+    $("#copy-recovery").textContent = "Copied";
+  });
+  $("#download-recovery").addEventListener("click", () => {
+    const text = `Trove recovery code\nMade ${new Date().toLocaleString()} for ${location.origin}\nKeep this secret. Anyone with it can read your vault.\n\n${code}\n`;
+    const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "Trove recovery code.txt" });
+    a.click();
+  });
+  $("#saved-it").addEventListener("change", (e) => { $("#recovery-done").disabled = !e.target.checked; });
+  $("#recovery-done").addEventListener("click", () => showMain(vault));
+}
+
+function showDevices() {
+  const vault = state.vault;
+  const frag = $("#devices-view").content.cloneNode(true);
+  const backdrop = frag.firstElementChild;
+  document.body.append(frag);
+  const close = () => backdrop.remove();
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop || e.target.closest("[data-close]")) close(); });
+  backdrop.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  const ext = vault.browserExtensionCode();
+  $("#extension-code", backdrop).value = ext ?? "Not available for this browser.";
+  $("[data-copy-ext]", backdrop).addEventListener("click", () => navigator.clipboard?.writeText(ext ?? "").then(() => toast("Extension code copied")));
+  $("#share-url", backdrop).textContent = `${location.origin}/#add=`;
+
+  const error = $(".error", backdrop);
+  $("#make-setup", backdrop).addEventListener("click", async () => {
     error.hidden = true;
-    button.disabled = true;
-    button.textContent = "Connecting…";
     try {
-      const vault = await Vault.join(storage, $("#setup-code").value, { origin: location.origin, deviceName: $("#device-name").value.trim() });
-      showMain(vault);
+      const code = await vault.setupCodeForNewDevice($("#add-recovery", backdrop).value);
+      $("#add-recovery", backdrop).value = "";
+      const out = $("#setup-out", backdrop);
+      out.hidden = false;
+      $("textarea", out).value = code;
+      $("[data-copy]", out).onclick = () => navigator.clipboard?.writeText(code).then(() => toast("Setup code copied"));
     } catch (e) {
-      error.textContent = e.message;
+      error.textContent = e.message === "bad private key" ? "That isn't a recovery code." : e.message;
       error.hidden = false;
-      button.disabled = false;
-      button.textContent = "Connect";
     }
   });
-  $("#setup-code").focus();
+
+  const list = $("#device-list", backdrop);
+  vault.api("GET", "devices").then(({ devices }) => {
+    list.replaceChildren(...devices.filter((d) => !d.revoked).map((d) =>
+      h("li", {}, h("span", { text: `${d.name}${d.deviceId === vault.config.deviceId ? " (this browser)" : ""}` }),
+        h("span", { class: "saved", text: d.kind }))));
+    list.previousElementSibling.textContent = "Devices in this vault";
+  }).catch(() => {});
+  $("#add-recovery", backdrop).focus();
+}
+
+/** `/#add=<url or text>`: lets an iPhone Shortcut (or a bookmarklet) save into Trove. */
+function handleSharedAdd() {
+  const m = /^#add=(.*)$/s.exec(location.hash);
+  if (!m || !state.vault) return;
+  history.replaceState(null, "", location.pathname);
+  let value = "";
+  try { value = decodeURIComponent(m[1]).trim(); } catch { value = m[1]; }
+  if (!value) return;
+  let url = null;
+  try { const u = new URL(value); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
+  if (url) toast(state.vault.addLink(url.toString()).isNew ? "Saved to Trove" : "Already saved");
+  else { state.vault.addNote({ body: value }); toast("Note saved to Trove"); }
+  syncSoon(300);
 }
 
 // ---------- main view ----------
@@ -132,6 +227,8 @@ function showMain(vault) {
   });
   $("#menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
   $("#sync-now").addEventListener("click", () => runSync(true));
+  $("#devices").addEventListener("click", showDevices);
+  addEventListener("hashchange", handleSharedAdd);
   $("#forget").addEventListener("click", async () => {
     if (!confirm("Remove this browser from your vault? Its access is revoked and everything stored here is deleted. Your vault stays safe on your other devices.")) return;
     stopLive();
@@ -142,6 +239,7 @@ function showMain(vault) {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") runSync(); });
   setInterval(() => runSync(), 60_000);
   claimTab();
+  handleSharedAdd();
   render();
   runSync();
   connectLive();
@@ -411,6 +509,7 @@ async function runSync(manual = false) {
   syncing = true;
   try {
     const report = await state.vault.sync();
+    if (report.imported) toast(report.imported === 1 ? "1 new item from your inbox" : `${report.imported} new items from your inbox`);
     setStatus(report.errors.length ? "error" : live ? "live" : "idle", report.errors[0]);
     if (manual) toast(report.errors.length ? `Sync problem: ${report.errors[0]}` : "Up to date");
   } catch (e) {

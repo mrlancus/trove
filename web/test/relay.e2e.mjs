@@ -94,3 +94,43 @@ test("a fresh browser opens from storage, and forgetting revokes it", async () =
   assert.equal(await Vault.open(storage, opts), null);
   await assert.rejects(a.sync(), (e) => e.status === 401);
 });
+
+test("a vault made in the browser: recovery code, new devices, sealed inbox from the extension", async () => {
+  const { seal, envelope, parseSetupCode: parseExtensionCode } = await import("../../extensions/browser/trv1.js");
+  const { vault: a, recoveryCode } = await Vault.create(memoryStorage(), { origin: BASE, deviceName: "Laptop" });
+  assert.equal(a.canReadInbox, true);
+  const note = a.addNote({ title: "First", body: "made on the web" });
+  await a.sync();
+
+  // Another device joins with a setup code made from the recovery code.
+  await assert.rejects(a.setupCodeForNewDevice("bm9wZQ"), /setup code|recovery|key/);
+  const b = await Vault.join(memoryStorage(), await a.setupCodeForNewDevice(recoveryCode), { origin: BASE, deviceName: "Phone" });
+  await b.sync();
+  assert.equal(b.item(note).body, "made on the web");
+  assert.equal(b.canReadInbox, true);
+
+  // The extension code seals to the vault; the next sync imports and acks it.
+  const ext = parseExtensionCode(a.browserExtensionCode());
+  const header = { v: 1, source: "web", receivedAt: new Date().toISOString(), url: "https://example.com/page?utm_source=x", title: "A page", mime: "text/plain" };
+  const sealed = await seal(envelope(header, new TextEncoder().encode("the bit I selected")), (await import("../public/core/bytes.js")).b64uDecode(ext.vaultPublicKey));
+  const posted = await fetch(`${BASE}/v1/vaults/${ext.vaultId}/inbox`, { method: "POST", headers: { authorization: `Bearer ${ext.inboxToken}`, "x-trove-source": "web" }, body: sealed });
+  assert.equal(posted.status, 201);
+  const report = await b.sync();
+  assert.equal(report.imported, 1);
+  const saved = b.items().find((i) => i.url?.toString() === "https://example.com/page");
+  assert.equal(saved.title, "A page");
+  assert.equal(saved.body, "the bit I selected");
+  assert.equal((await b.api("GET", "inbox")).entries.length, 0);
+  await a.sync();
+  assert.ok(a.item(saved.id));
+
+  // Lost everything: the recovery code alone gets back in, a wrong one doesn't.
+  const other = await Vault.create(memoryStorage(), { origin: BASE });
+  const wrong = JSON.parse(Buffer.from(other.recoveryCode, "base64url"));
+  wrong.relayVaultId = a.config.vaultId;
+  await assert.rejects(Vault.recover(memoryStorage(), Buffer.from(JSON.stringify(wrong)).toString("base64url"), { origin: BASE }), /different vault/);
+  const c = await Vault.recover(memoryStorage(), recoveryCode, { origin: BASE, deviceName: "Recovered" });
+  await c.sync();
+  assert.equal(c.item(note).title, "First");
+  assert.ok(c.item(saved.id));
+});

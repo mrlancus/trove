@@ -39,6 +39,7 @@ cd web && npm run test:e2e                             # needs `npx wrangler dev
 - Swift 6 strict concurrency. Deployment targets are iOS 18 and macOS 15. Use Liquid Glass and Foundation Models behind `#available(iOS 26, macOS 26, *)`.
 - Never put vault secret keys anywhere but the main app's Keychain. Extensions get the public key only (`SharedConfig.Capture`).
   The one exception is the web app, which the user adds on purpose and can revoke. It keeps only
-  *derived*, non-extractable WebCrypto keys in IndexedDB, never the raw vault key or private key (PROTOCOL.md §7).
+  non-extractable WebCrypto keys in IndexedDB, never raw key bytes (PROTOCOL.md §7). The user has no
+  Apple Silicon Mac, so the web app is their main client for now.
 - Commit after each working step and push to `main`. Keep NOTES.md current (what's done, next steps, manual steps for the user) so a fresh session can say "read NOTES.md and continue".
 - Ask the user before decisions that are theirs (name, design direction, anything that costs money).

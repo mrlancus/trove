@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { envelopePrefix, randomId, randomToken, sealedLength, sealStream, sha256Hex, b64uDecode, type InboxHeader } from "./crypto";
+import { envelopePrefix, randomId, randomToken, seal, sealedLength, sealStream, sha256Hex, b64uDecode, b64uEncode, type InboxHeader } from "./crypto";
 import { handleDav } from "./webdav";
 import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
 import { checkPrice, type Price } from "./price";
@@ -20,6 +20,8 @@ export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
 
 const MAX_SEGMENT_BYTES = 1024 * 1024;
 const PAIRING_TTL_MS = 10 * 60 * 1000;
+const RECOVERY_TTL_MS = 5 * 60 * 1000;
+const MAX_OPEN_RECOVERIES = 10;
 const PRICE_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const PRICE_CHECKS_PER_RUN = 40; // stays under the free plan's subrequest limit
 const MAX_WATCHES = 200;
@@ -45,6 +47,7 @@ export class VaultObject extends DurableObject<Env> {
         created_at INTEGER, last_seen_at INTEGER, revoked INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS inbox_tokens(token_hash TEXT PRIMARY KEY, label TEXT, created_at INTEGER, revoked INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS pairings(code_hash TEXT PRIMARY KEY, expires_at INTEGER, used INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS recoveries(id TEXT PRIMARY KEY, answer_hash TEXT, expires_at INTEGER);
       CREATE TABLE IF NOT EXISTS segments(cursor INTEGER PRIMARY KEY AUTOINCREMENT, device TEXT, first INTEGER, last INTEGER,
         size INTEGER, digest TEXT, body BLOB, created_at INTEGER, UNIQUE(device, first));
       CREATE TABLE IF NOT EXISTS inbox(cursor INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, size INTEGER, source TEXT,
@@ -130,6 +133,7 @@ export class VaultObject extends DurableObject<Env> {
       if (path === "/internal/inbox") return await this.ingest(request);
       if (path.startsWith("/public/") && request.method === "GET") return this.publicPage(path.slice(8));
       if (path === "/api/devices" && request.method === "POST") return await this.pairDevice(request);
+      if (path === "/api/recovery" && request.method === "POST") return await this.recoveryChallenge();
 
       const caller = await this.authenticate(request);
       if (!caller) return error(401, "unauthorized");
@@ -157,8 +161,37 @@ export class VaultObject extends DurableObject<Env> {
     return json({ vaultId: body.vaultId, ...device, inboxToken }, 201);
   }
 
+  /**
+   * Recovery (PROTOCOL.md §4): a random answer sealed to the vault public key. Only someone holding
+   * the vault private key (the recovery code) can open it and use the answer to add a device.
+   */
+  private async recoveryChallenge(): Promise<Response> {
+    const now = Date.now();
+    this.sql.exec("DELETE FROM recoveries WHERE expires_at < ?", now);
+    const open = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM recoveries").one().n;
+    if (open >= MAX_OPEN_RECOVERIES) return error(429, "too many recovery attempts, try again in a few minutes");
+    const answer = crypto.getRandomValues(new Uint8Array(32));
+    const id = randomId();
+    const box = await seal(answer, { recipientPublicKey: b64uDecode(this.meta("publicKey") ?? "") });
+    this.sql.exec("INSERT INTO recoveries(id, answer_hash, expires_at) VALUES(?, ?, ?)", id, await sha256Hex(answer), now + RECOVERY_TTL_MS);
+    return json({ challengeId: id, box: b64uEncode(box) }, 201);
+  }
+
   private async pairDevice(request: Request): Promise<Response> {
-    const body = (await request.json()) as { pairingCode?: string; deviceName?: string; deviceKind?: string; deviceId?: string };
+    const body = (await request.json()) as {
+      pairingCode?: string; recoveryChallenge?: string; recoveryAnswer?: string; deviceName?: string; deviceKind?: string; deviceId?: string;
+    };
+    if (body.recoveryChallenge) {
+      const row = this.sql
+        .exec<{ answer_hash: string; expires_at: number }>("SELECT answer_hash, expires_at FROM recoveries WHERE id = ?", body.recoveryChallenge)
+        .toArray()[0];
+      this.sql.exec("DELETE FROM recoveries WHERE id = ?", body.recoveryChallenge);
+      const answer = b64uDecode(body.recoveryAnswer ?? "");
+      if (!row || row.expires_at < Date.now() || answer.length !== 32 || (await sha256Hex(answer)) !== row.answer_hash) {
+        return error(403, "recovery failed");
+      }
+      return json(await this.addDevice(body.deviceName ?? "Recovered device", body.deviceKind ?? "unknown", body.deviceId), 201);
+    }
     const hash = await sha256Hex(body.pairingCode ?? "");
     const row = this.sql
       .exec<{ expires_at: number }>("SELECT expires_at FROM pairings WHERE code_hash = ? AND used = 0", hash)

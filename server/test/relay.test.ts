@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { open, parseEnvelope, seal } from "../src/crypto";
+import { b64uDecode, b64uEncode, open, parseEnvelope, seal } from "../src/crypto";
 import { auth, call, createVault } from "./helpers";
 import type { Env } from "../src/vault";
 
@@ -50,6 +50,27 @@ describe("vaults and devices", () => {
       body: JSON.stringify({ pairingCode: pairing.pairingCode, deviceName: "iPad", deviceId: id.toLowerCase() }),
     })).json()) as { deviceId: string };
     expect(joined.deviceId).toBe(id);
+  });
+
+  it("recovers access with the vault private key, once per challenge", async () => {
+    const v = await createVault();
+    const challenge = async () => {
+      const res = await call(`/v1/vaults/${v.vaultId}/recovery`, { method: "POST" });
+      expect(res.status).toBe(201);
+      return (await res.json()) as { challengeId: string; box: string };
+    };
+    const join = (body: object) => call(`/v1/vaults/${v.vaultId}/devices`, { method: "POST", body: JSON.stringify({ deviceName: "Browser", deviceKind: "web", ...body }) });
+
+    const wrong = await challenge();
+    expect((await join({ recoveryChallenge: wrong.challengeId, recoveryAnswer: b64uEncode(new Uint8Array(32)) })).status).toBe(403);
+
+    const c = await challenge();
+    const answer = await open(b64uDecode(c.box), { recipientPrivateKey: v.keys.privateKey, recipientPublicKey: v.publicKey });
+    const ok = await join({ recoveryChallenge: c.challengeId, recoveryAnswer: b64uEncode(answer) });
+    expect(ok.status).toBe(201);
+    const device = (await ok.json()) as { deviceToken: string };
+    expect((await call(`/v1/vaults/${v.vaultId}/info`, { headers: auth(device.deviceToken) })).status).toBe(200);
+    expect((await join({ recoveryChallenge: c.challengeId, recoveryAnswer: b64uEncode(answer) })).status).toBe(403);
   });
 
   it("inbox tokens cannot read anything", async () => {

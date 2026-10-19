@@ -145,6 +145,11 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
 | `GET /health` | none | `{ok:true, version}` |
 
+**Recovery** (no token): `POST /vaults/:v/recovery` → `201 {challengeId, box}`, where `box` is 32 random bytes
+sealed (TRV1 mode 2) to the vault public key. It expires after 5 minutes, and at most 10 can be open at once (`429` after that).
+Only a holder of the vault private key can open it. `POST /vaults/:v/devices {recoveryChallenge, recoveryAnswer (b64u), deviceName, deviceKind, deviceId?}`
+then adds a device, as a pairing code would. Each challenge works once. A wrong answer gives `403`.
+
 `POST /vaults` returns `403` when the Worker var `ALLOW_NEW_VAULTS` is `"false"`. Set it once your own vault
 exists, so nobody else can use your relay. Existing vaults are unaffected.
 
@@ -203,9 +208,14 @@ capped at 256 KB of Markdown.
 The web app is a relay device like any other (`deviceKind: "web"`). It joins with the app's
 "Add a device" setup code (`PairingPayload`: vault keys plus a single-use relay pairing code) and is
 revoked the same way.
-- **Keys:** it derives the segment, blob and blob-id keys with HKDF (§1) and stores only those, as
-  **non-extractable** WebCrypto keys in IndexedDB. It never keeps the raw vault key or the X25519
-  private key. That means it can't open the sealed inbox; the apps import the inbox.
+- **Keys:** it stores the segment, blob and blob-id keys (HKDF, §1) and, when the code it joined
+  with carried it, the vault X25519 private key. All of them are **non-extractable** WebCrypto keys
+  in IndexedDB. The raw bytes are used once and dropped. With the private key it imports the sealed
+  inbox (extension, email, GoodNotes) like the apps do.
+- **Creating a vault:** the web app can create a vault (`POST /vaults`, `deviceKind: "web"`). It
+  shows the **recovery code** once: a `PairingPayload` without a pairing code. With that code, a
+  device can make setup codes for new devices (`POST pairings` plus the keys) or recover access with
+  the recovery challenge (§4).
 - **Journal:** it writes the same ops and segments as the apps (§3). Its sequence numbers live in
   IndexedDB. If its own journal on the relay is already ahead (a stale tab or restored storage), it
   renumbers its unpushed ops past it before uploading.

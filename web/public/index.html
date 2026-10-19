@@ -18,12 +18,24 @@
   <main class="setup">
     <div class="setup-card">
       <img src="/icon.svg" alt="" width="56" height="56">
-      <h1>Open Trove in this browser</h1>
-      <ol class="steps">
-        <li>On your Mac, iPhone or iPad, open Trove → <b>Settings → Devices → Add a device</b>.</li>
-        <li>Tap <b>Copy setup code instead</b> and paste it below. Codes work once and expire after a few minutes.</li>
-      </ol>
-      <form id="setup-form">
+      <h1>Welcome to Trove</h1>
+      <p class="lead">Save anything, find it by meaning. End-to-end encrypted: only your devices can read it.</p>
+      <div class="segmented wide" role="tablist" aria-label="How to start">
+        <button type="button" role="tab" data-tab="create" aria-pressed="true">New vault</button>
+        <button type="button" role="tab" data-tab="join" aria-pressed="false">Setup code</button>
+        <button type="button" role="tab" data-tab="recover" aria-pressed="false">Recover</button>
+      </div>
+
+      <form id="create-form" data-panel="create">
+        <p class="hint">Start a new vault with this browser as its first device. You'll get a recovery code to keep safe.</p>
+        <label for="create-name">Name this browser</label>
+        <input id="create-name" required maxlength="60">
+        <button type="submit" class="primary">Create my vault</button>
+        <p class="error" role="alert" hidden></p>
+      </form>
+
+      <form id="setup-form" data-panel="join" hidden>
+        <p class="hint">On a device that already has Trove: <b>Add a device</b> (in Settings → Devices, or in the web app's sidebar), then copy the setup code. Codes work once and expire after a few minutes.</p>
         <label for="setup-code">Setup code</label>
         <textarea id="setup-code" rows="4" required autocomplete="off" spellcheck="false" placeholder="eyJ2IjoxLC…"></textarea>
         <label for="device-name">Name this browser</label>
@@ -31,9 +43,65 @@
         <button type="submit" class="primary">Connect</button>
         <p class="error" role="alert" hidden></p>
       </form>
-      <p class="fine">This browser will be able to read and edit your vault. Everything stays end-to-end encrypted on the relay. You can remove this browser any time from <b>Settings → Devices</b> in the app, or from here.</p>
+
+      <form id="recover-form" data-panel="recover" hidden>
+        <p class="hint">Lost every device? Paste the recovery code you saved when you made the vault.</p>
+        <label for="recover-code">Recovery code</label>
+        <textarea id="recover-code" rows="4" required autocomplete="off" spellcheck="false"></textarea>
+        <label for="recover-name">Name this browser</label>
+        <input id="recover-name" required maxlength="60">
+        <button type="submit" class="primary">Recover my vault</button>
+        <p class="error" role="alert" hidden></p>
+      </form>
+      <p class="fine">This browser keeps your keys locked in its own storage. You can remove it any time from the sidebar here or from Settings → Devices in the app.</p>
     </div>
   </main>
+</template>
+
+<template id="recovery-view">
+  <main class="setup">
+    <div class="setup-card">
+      <h1>Save your recovery code</h1>
+      <p class="lead">It's the only way back into your vault if you lose this browser, and you'll need it to add your phone or another computer. Keep it in a password manager. Anyone with it can read your vault.</p>
+      <textarea id="recovery-code" class="code" rows="6" readonly aria-label="Recovery code"></textarea>
+      <div class="row">
+        <button id="copy-recovery" type="button" class="secondary">Copy</button>
+        <button id="download-recovery" type="button" class="secondary">Download as a file</button>
+      </div>
+      <label class="check"><input id="saved-it" type="checkbox"> I've saved it somewhere safe</label>
+      <button id="recovery-done" type="button" class="primary" disabled>Open my vault</button>
+    </div>
+  </main>
+</template>
+
+<template id="devices-view">
+  <div class="dialog-backdrop">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="devices-title">
+      <div class="dialog-head"><h2 id="devices-title">Devices &amp; extension</h2><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>
+      <section>
+        <h3 class="section-title">Add a phone, tablet or computer</h3>
+        <p class="hint">Paste your recovery code to make a single-use setup code (valid 10 minutes). Use it on the new device's “Setup code” tab here, or in the Trove app.</p>
+        <textarea id="add-recovery" rows="3" autocomplete="off" spellcheck="false" placeholder="Recovery code" aria-label="Recovery code"></textarea>
+        <button id="make-setup" type="button" class="primary">Make a setup code</button>
+        <p class="error" role="alert" hidden></p>
+        <div id="setup-out" hidden><textarea class="code" rows="4" readonly aria-label="Setup code"></textarea><button type="button" class="secondary" data-copy>Copy setup code</button></div>
+      </section>
+      <section>
+        <h3 class="section-title">Chrome extension</h3>
+        <p class="hint">In the extension's options, paste this code. It can add to your vault but never read it.</p>
+        <textarea id="extension-code" class="code" rows="3" readonly aria-label="Extension setup code"></textarea>
+        <button type="button" class="secondary" data-copy-ext>Copy extension code</button>
+      </section>
+      <section>
+        <h3 class="section-title">Save from your iPhone's share sheet</h3>
+        <p class="hint">Make a Shortcut: <b>Receive</b> URLs and text from the Share Sheet → <b>Open URL</b> <code id="share-url"></code><b>[Shortcut Input]</b>. Open it in the same browser you use Trove in.</p>
+      </section>
+      <section>
+        <h3 class="section-title">This browser</h3>
+        <ul id="device-list" class="device-list"></ul>
+      </section>
+    </div>
+  </div>
 </template>
 
 <template id="main-view">
@@ -46,6 +114,7 @@
       <div class="side-footer">
         <div id="sync-status" class="sync-status" role="status"><span class="dot"></span><span class="label">Connecting…</span></div>
         <button id="sync-now" type="button" class="link-button">Sync now</button>
+        <button id="devices" type="button" class="link-button">Devices &amp; extension</button>
         <button id="forget" type="button" class="link-button danger">Remove this browser</button>
       </div>
     </aside>

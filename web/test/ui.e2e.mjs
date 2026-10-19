@@ -53,11 +53,12 @@ test("set up with a code, browse, capture, edit, upload and get live updates", a
   page.on("dialog", (d) => d.accept());
 
   await page.goto(BASE + "/");
+  await page.getByRole("tab", { name: "Setup code" }).click();
   await page.getByLabel("Setup code").fill("not a code");
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByText("doesn't look like a Trove setup code").waitFor();
   await page.getByLabel("Setup code").fill(await v.setupCode());
-  await page.getByLabel("Name this browser").fill("Chrome on Test");
+  await page.locator("#device-name").fill("Chrome on Test");
   await page.getByRole("button", { name: "Connect" }).click();
 
   await page.locator(".card", { hasText: "Miso ramen" }).waitFor();
@@ -132,9 +133,68 @@ test("set up with a code, browse, capture, edit, upload and get live updates", a
   // Removing the browser revokes it and returns to setup.
   await page.getByRole("button", { name: "Use it here" }).click();
   await page.getByRole("button", { name: "Remove this browser" }).click();
-  await page.getByLabel("Setup code").waitFor();
+  await page.getByRole("button", { name: "Create my vault" }).waitFor();
   const devices = await (await fetch(`${BASE}/v1/vaults/${v.mac.vaultId}/devices`, { headers: { authorization: `Bearer ${v.mac.deviceToken}` } })).json();
   assert.equal(devices.devices.find((d) => d.name === "Chrome on Test")?.revoked, true);
+
+  assert.deepEqual(problems, []);
+  await context.close();
+});
+
+test("create a vault in the browser, save the recovery code, add a second browser and recover", async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
+  const page = await context.newPage();
+  const problems = [];
+  page.on("pageerror", (e) => problems.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") problems.push(m.text()); });
+
+  await page.goto(BASE + "/");
+  await page.locator("#create-name").fill("Work laptop");
+  await page.getByRole("button", { name: "Create my vault" }).click();
+  await page.getByRole("heading", { name: "Save your recovery code" }).waitFor();
+  const recovery = await page.getByLabel("Recovery code").inputValue();
+  assert.ok(recovery.length > 100);
+  assert.equal(await page.getByRole("button", { name: "Open my vault" }).isDisabled(), true);
+  await page.getByLabel("I've saved it somewhere safe").check();
+  await page.getByRole("button", { name: "Open my vault" }).click();
+  await page.getByLabel("Quick capture").fill("Made in a brand-new vault");
+  await page.keyboard.press("Enter");
+  await page.locator(".card", { hasText: "Made in a brand-new vault" }).waitFor();
+
+  // Share link (what the iPhone Shortcut opens).
+  await page.goto(BASE + "/#add=" + encodeURIComponent("https://example.net/shared"));
+  await page.locator(".card", { hasText: "example.net" }).waitFor();
+
+  // Make a setup code for a second browser.
+  await page.getByRole("button", { name: "Devices & extension" }).click();
+  await page.getByLabel("Recovery code").fill(recovery);
+  await page.getByRole("button", { name: "Make a setup code" }).click();
+  await page.locator("#setup-out").waitFor();
+  const setup = await page.getByLabel("Setup code", { exact: true }).inputValue();
+  assert.ok((await page.getByLabel("Extension setup code").inputValue()).length > 50);
+  if (shots) await page.screenshot({ path: join(shots, "web-devices.png") });
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.waitForTimeout(1500); // let the capture sync
+
+  const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const phone = await other.newPage();
+  await phone.goto(BASE + "/");
+  await phone.getByRole("tab", { name: "Setup code" }).click();
+  await phone.getByLabel("Setup code").fill(setup);
+  await phone.getByRole("button", { name: "Connect" }).click();
+  await phone.locator(".card", { hasText: "Made in a brand-new vault" }).waitFor();
+  await other.close();
+
+  // A third browser recovers with the recovery code alone.
+  const third = await browser.newContext();
+  const fresh = await third.newPage();
+  await fresh.goto(BASE + "/");
+  await fresh.getByRole("tab", { name: "Recover" }).click();
+  await fresh.getByLabel("Recovery code").fill(recovery);
+  await fresh.getByRole("button", { name: "Recover my vault" }).click();
+  await fresh.locator(".card", { hasText: "Made in a brand-new vault" }).waitFor();
+  await third.close();
 
   assert.deepEqual(problems, []);
   await context.close();
