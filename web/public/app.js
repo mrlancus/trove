@@ -232,6 +232,8 @@ function showMain(vault) {
   $("#forget").addEventListener("click", async () => {
     if (!confirm("Remove this browser from your vault? Its access is revoked and everything stored here is deleted. Your vault stays safe on your other devices.")) return;
     stopLive();
+    clearTimeout(syncTimer);
+    state.vault = null; // no more syncs from this tab
     await vault.forget();
     location.reload();
   });

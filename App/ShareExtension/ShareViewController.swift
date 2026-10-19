@@ -88,13 +88,14 @@ struct ShareForm: View {
         }
     }
 
-    static func loadFile(_ provider: NSItemProvider) async -> (Data, String, String)? {
+    nonisolated static func loadFile(_ provider: NSItemProvider) async -> (Data, String, String)? {
+        let suggested = provider.suggestedName
         for type in [UTType.pdf, .image, .movie, .audio, UTType(filenameExtension: "md") ?? .plainText, .data] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
             if type == .plainText { continue }
             let result: (Data, String, String)? = await withCheckedContinuation { c in
                 _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
                     guard let url, let data = try? Data(contentsOf: url) else { c.resume(returning: nil); return }
-                    c.resume(returning: (data, provider.suggestedName.map { $0 + "." + (url.pathExtension.isEmpty ? (type.preferredFilenameExtension ?? "bin") : url.pathExtension) } ?? url.lastPathComponent,
+                    c.resume(returning: (data, suggested.map { $0 + "." + (url.pathExtension.isEmpty ? (type.preferredFilenameExtension ?? "bin") : url.pathExtension) } ?? url.lastPathComponent,
                                          type.preferredMIMEType ?? mime(url)))
                 }
             }
@@ -103,7 +104,7 @@ struct ShareForm: View {
         return nil
     }
 
-    static func mime(_ url: URL) -> String {
+    nonisolated static func mime(_ url: URL) -> String {
         UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
     }
 }

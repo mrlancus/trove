@@ -138,11 +138,27 @@ public struct PriceWatch: Hashable, Sendable {
     public var currency: String?
     public var checkedAt: Date?
     public var droppedAt: Date?
+
+    public init(url: String, price: Double? = nil, previous: Double? = nil, lowest: Double? = nil, currency: String? = nil,
+                checkedAt: Date? = nil, droppedAt: Date? = nil) {
+        self.url = url
+        self.price = price
+        self.previous = previous
+        self.lowest = lowest
+        self.currency = currency
+        self.checkedAt = checkedAt
+        self.droppedAt = droppedAt
+    }
 }
 
 public struct PublishedLink: Hashable, Sendable {
     public var slug: String
     public var url: URL
+
+    public init(slug: String, url: URL) {
+        self.slug = slug
+        self.url = url
+    }
 }
 
 extension Attachment {
