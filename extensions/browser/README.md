@@ -16,6 +16,10 @@ The extension holds only the vault **public** key and an inbox token. It can add
 
 ## Tests
 ```bash
-node --experimental-strip-types --test extensions/browser/test/trv1.test.mjs
+npm test          # crypto: the Worker's reference code opens what the extension seals
+npm run test:e2e  # real Chromium + local relay (start `npx wrangler dev --local --config wrangler.test.jsonc` in server/ first)
 ```
-These check that the Worker's reference code opens what the extension seals.
+The e2e test loads the extension in Chromium and saves a real page (title, canonical URL,
+selection, note), then decrypts the entry from the relay. It also covers the offline queue.
+The setup page's permission prompt needs a real click, so the test grants host access in a copy of
+the manifest instead.
