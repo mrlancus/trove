@@ -145,6 +145,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
 | `GET /health` | none | `{ok:true, version}` |
 
+`POST /vaults` returns `403` when the Worker var `ALLOW_NEW_VAULTS` is `"false"`. Set it once your own vault
+exists, so nobody else can use your relay. Existing vaults are unaffected.
+
 `deviceId` (optional, a UUID) is kept if no other device uses it. That way a device that started in an
 iCloud-only vault keeps the journal id it already writes under `.sync/<deviceId>/`.
 

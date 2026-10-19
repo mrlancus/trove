@@ -29,6 +29,7 @@ export default {
 
     if (parts[0] === "v1" && parts[1] === "vaults") {
       if (parts.length === 2 && request.method === "POST") {
+        if (env.ALLOW_NEW_VAULTS === "false") return error(403, "this relay isn't accepting new vaults");
         const body = (await request.json().catch(() => ({}))) as { vaultPublicKey?: string; deviceName?: string; deviceKind?: string; deviceId?: string };
         if (!body.vaultPublicKey || b64uDecode(body.vaultPublicKey).length !== 32) return error(400, "vaultPublicKey (32-byte X25519, b64u) required");
         const vaultId = randomId();

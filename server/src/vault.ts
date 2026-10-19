@@ -12,6 +12,8 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   CLAUDE_MODEL: string;
   EMAIL_VAULT_ID: string;
+  /** "false" closes POST /v1/vaults once your own vault exists, so nobody else can use this relay. */
+  ALLOW_NEW_VAULTS?: string;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };

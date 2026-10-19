@@ -11,7 +11,7 @@ _Last updated by the cloud session that wrote the code (Linux, no Xcode)._
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
 | `web/` web app (any browser, served by the relay) | ✅ Done | 11 unit/interop tests, relay e2e, real-Chromium UI e2e |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟡 Written, **never compiled** | all files pass the Swift parser only |
-| Relay deployed to Cloudflare | ⬜ Not yet | needs `wrangler login` (Mac session) |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
@@ -41,7 +41,11 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
    1. Pair with the QR code from Mac Settings → Devices.
    2. Test share sheet saves, widgets, the Control Center control, and Shortcuts ("Save Clipboard to Trove" for Back Tap).
    3. Check that the iPad enriches items saved on the other devices.
-5. **Relay.** Deploy with `server/README.md` (`npx wrangler login` opens the browser, so do it on the Mac), connect it in Settings, then test:
+5. **Relay.** It's **already deployed** at `https://trove-relay.lancus.workers.dev`, with R2 bucket `trove-blobs` and `CLAUDE_MODEL=claude-haiku-5-5`. To redeploy from the Mac, run `npx wrangler login` once, then `npx wrangler deploy` in `server/`.
+   1. Connect it in the app's Settings → Cloudflare relay.
+   2. **Once the user's vault exists,** set `ALLOW_NEW_VAULTS` to `"false"` in `server/wrangler.jsonc` and redeploy, so strangers can't create vaults.
+   3. No `ANTHROPIC_API_KEY` secret is set yet, so cloud AI is off. Ask the user before adding one: it's billed separately.
+   4. Then test:
    - live sync and the browser extension
    - GoodNotes WebDAV with a big notebook, and optionally email-in
    - **the web app**: open the relay URL in a browser and paste a setup code from Add a device
@@ -64,7 +68,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Mac permissions:**
   - Automation → Notes, for Apple Notes mirroring.
   - Keep "Trove" in iCloud Drive set to **Keep Downloaded** (right-click it in Finder). Do the same in the Files app on iOS.
-- **Relay:** `server/README.md` (Cloudflare login, R2 bucket, deploy; optional Anthropic key and email routing).
+- **Relay:** already deployed at https://trove-relay.lancus.workers.dev. Optional extras in `server/README.md`: an Anthropic key for cloud AI (costs money, so it is your call) and email routing (needs a domain).
 - **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings.
 
 ## How the newer features work (built without a Mac)

@@ -19,7 +19,9 @@
     // Set to your vault id to route Cloudflare Email Routing mail into it (optional).
     "EMAIL_VAULT_ID": "",
     // Claude model for enrich/ask. claude-haiku-5-5 is ~40x cheaper; see docs/RESEARCH.md §3.
-    "CLAUDE_MODEL": "claude-opus-5-5"
+    "CLAUDE_MODEL": "claude-haiku-5-5",
+    // Set to "false" and redeploy once your vault exists, so nobody else can create vaults here.
+    "ALLOW_NEW_VAULTS": "true"
   }
   // Secret (not in this file): `npx wrangler secret put ANTHROPIC_API_KEY`
 }

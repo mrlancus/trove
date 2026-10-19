@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { open, parseEnvelope, seal } from "../src/crypto";
 import { auth, call, createVault } from "./helpers";
+import type { Env } from "../src/vault";
 
 const enc = new TextEncoder();
 
@@ -175,5 +176,18 @@ describe("live websocket", () => {
     await call(`/v1/vaults/${v.vaultId}/segments/${v.deviceId}/1/1`, { method: "PUT", headers: auth(v.deviceToken), body: enc.encode("x") });
     expect(JSON.parse(await message)).toMatchObject({ type: "segment", device: v.deviceId, first: 1, last: 1 });
     ws.close();
+  });
+});
+
+describe("closing the relay to new vaults", () => {
+  it("refuses new vaults when ALLOW_NEW_VAULTS is false, but existing vaults keep working", async () => {
+    const { env } = await import("cloudflare:workers");
+    const worker = (await import("../src/index")).default;
+    const v = await createVault();
+    const closed = { ...(env as unknown as Env), ALLOW_NEW_VAULTS: "false" };
+    const create = await worker.fetch(new Request("https://relay.test/v1/vaults", { method: "POST", body: JSON.stringify({ vaultPublicKey: "x" }) }), closed);
+    expect(create.status).toBe(403);
+    const info = await worker.fetch(new Request(`https://relay.test/v1/vaults/${v.vaultId}/info`, { headers: auth(v.deviceToken) }), closed);
+    expect(info.status).toBe(200);
   });
 });

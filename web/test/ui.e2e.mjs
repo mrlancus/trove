@@ -19,7 +19,10 @@ function findChromium() {
 
 const shots = process.env.SCREENSHOTS;
 let browser;
-before(async () => { browser = await chromium.launch({ executablePath: findChromium(), args: ["--no-proxy-server"] }); });
+// Local relays are reached directly; a deployed one goes through HTTPS_PROXY when the machine has one.
+const local = /^http:\/\/(127\.0\.0\.1|localhost)/.test(BASE);
+const proxy = !local && process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY } : undefined;
+before(async () => { browser = await chromium.launch({ executablePath: findChromium(), args: proxy ? [] : ["--no-proxy-server"], proxy }); });
 after(async () => { await browser?.close(); });
 
 async function until(check, what, timeout = 8000) {

@@ -28,13 +28,17 @@ Then in Trove go to **Settings → Cloudflare relay**, paste that URL and choose
 joins as a device you can remove later. It's served from `../web/public` as Workers static assets,
 so `wrangler deploy` uploads it too.
 
+### After your vault exists: close the relay to new vaults
+Anyone who finds the URL could otherwise create vaults and use your free-tier storage. Once Trove
+has created your vault, set `"ALLOW_NEW_VAULTS": "false"` in `wrangler.jsonc` and run
+`npx wrangler deploy` again.
+
 ### Optional: cloud AI
 Turn this on per vault in Trove → Settings → Intelligence.
 ```bash
 npx wrangler secret put ANTHROPIC_API_KEY   # from console.anthropic.com (billed separately from Claude Pro)
 ```
-- **Model:** `CLAUDE_MODEL` in `wrangler.jsonc` defaults to `claude-opus-5-5`.
-- **Cost:** for pennies a month, set it to `claude-haiku-5-5` and run `npx wrangler deploy` again. See `../docs/RESEARCH.md` §3 for costs.
+- **Model:** `CLAUDE_MODEL` in `wrangler.jsonc` is `claude-haiku-5-5` (pennies a month). See `../docs/RESEARCH.md` §3 for costs.
 
 ### Optional: email-in (needs a domain on Cloudflare)
 1. In the Cloudflare dashboard, go to **Email → Email Routing** and enable it for your domain.
@@ -51,7 +55,7 @@ Notebooks then arrive in Trove, and the handwriting gets OCR'd so you can search
 
 ## Develop / test
 ```bash
-npm test                    # 33 tests on the real Workers runtime (no network, no cost)
+npm test                    # 34 tests on the real Workers runtime (no network, no cost)
 npx tsc --noEmit
 npx wrangler dev --local --config wrangler.test.jsonc   # local relay on :8787
 # Swift client end-to-end against it:
