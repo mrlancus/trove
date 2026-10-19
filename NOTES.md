@@ -8,6 +8,7 @@ _Last updated by a cloud session (Linux, no Xcode). The user has only an Intel M
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
 | `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing) | ✅ Done | 49 tests, plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
+| Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
 | `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import | ✅ Done | 11 unit/interop tests; 6 e2e (relay + real Chromium), passing locally and against production |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS; not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
@@ -26,6 +27,19 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, ad-hoc signed) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
+
+## Latest round (user feedback from running the Mac app)
+- Dock icon was full-bleed; now on Apple's 824/1024 grid (iOS icon is opaque full-bleed).
+- Settings on the Mac is the Settings window with tabs (General, Devices & Web, Clipboard, Intelligence, Integrations).
+- **Trove on the web** (Settings → Devices & Web): turns on the relay (`TroveDefaultRelay` in project.yml)
+  and makes a setup code that's copied for you. Joining a website-made vault on a Mac now starts the
+  empty iCloud folder instead of failing.
+- Clipboard: watcher in common run-loop modes; "Last copy recorded" status; password guard needs a digit.
+- **Import** is its own screen in the app (sidebar, ⌘⇧I) and the website: animated drop zone, folders,
+  zips (TroveCore `ZipArchive` + `FileImport`; web `core/importer.js`), exports. Drop anywhere works.
+- Open: what "it isn't copying automatically" meant (clipboard history not recording, or picking a
+  clip not pasting). Ask, and have the user check Settings → Clipboard → "Last copy recorded".
+- The website changes go live only after `wrangler deploy` in `server/`, which needs the user's approval.
 
 ## Next steps
 1. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
