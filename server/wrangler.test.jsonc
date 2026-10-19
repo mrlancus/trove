@@ -1,0 +1,13 @@
+// Same as wrangler.jsonc minus the remote-only AI binding, for local tests.
+{
+  "name": "trove-relay-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "trove-blobs-test" }],
+  "vars": { "EMAIL_VAULT_ID": "", "CLAUDE_MODEL": "claude-opus-5-5" }
+}

@@ -1,0 +1,16 @@
+# Node / Cloudflare
+node_modules/
+.wrangler/
+.dev.vars
+dist/
+
+# Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store

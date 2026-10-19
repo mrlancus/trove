@@ -1,0 +1,157 @@
+# Trove sync & crypto protocol (v1)
+
+This is the contract shared by **TroveCore** (Swift), the **relay Worker** (TypeScript) and the
+**browser extension** (JavaScript). Change it only with a version bump.
+
+All multi-byte integers are big-endian. `b64u` = base64url without padding.
+
+---
+
+## 1. Keys
+
+| Key | Size | Where it lives | Purpose |
+|---|---|---|---|
+| **Vault key** `VK` | 32 random bytes | Keychain on each device (never on the server) | Root symmetric key |
+| **Vault keypair** | X25519 | Private key: Keychain on devices. Public key: server and extensions | Sealed inbox (others can *add*, only devices can *read*) |
+
+Derived keys use HKDF-SHA256 with `ikm = VK`, an empty salt, `L = 32` and these `info` strings:
+
+| info | Use |
+|---|---|
+| `trove/v1/segment` | AEAD key for journal segments |
+| `trove/v1/blob` | AEAD key for attachments |
+| `trove/v1/blob-id` | HMAC-SHA256 key for attachment ids |
+
+**Attachment id** = lowercase hex of `HMAC-SHA256(blobIdKey, plaintextBytes)`. It's deterministic, so
+duplicates de-dupe, and it reveals nothing about the content to the server.
+
+---
+
+## 2. TRV1 chunked AEAD container
+
+Every encrypted file or body (segments, blobs, inbox entries) uses this one format. It works with
+streams, so the Worker can seal a 90 MB GoodNotes PDF without holding two copies in memory.
+
+```
+offset size  field
+0      4     magic "TRV1"
+4      1     mode: 1 = symmetric, 2 = sealed (X25519)
+5      4     chunkSize (plaintext bytes per chunk; default 65536)
+9      32    ephemeralPublicKey (only when mode = 2)
+..     8     noncePrefix (random)
+..     ...   chunks
+```
+
+- **Header** = every byte before the first chunk. That's 17 bytes for symmetric, 49 for sealed.
+- **Chunk i**: `AES-256-GCM(key, nonce = noncePrefix ‖ u32(i), plaintext_i, aad = header ‖ u8(isLast))`. Each chunk is `len(plaintext_i) + 16` bytes.
+- **Chunk sizes:** every chunk except the last carries exactly `chunkSize` plaintext bytes. The last carries `0 … chunkSize` bytes. Empty plaintext is a single empty last chunk.
+- **Reading:** a chunk is "last" when the remaining ciphertext is ≤ `chunkSize + 16` bytes. A truncated or extended stream fails authentication.
+- **Sealed key (mode 2):**
+  `shared = X25519(ephemeralPrivate, vaultPublic)`,
+  `key = HKDF-SHA256(ikm = shared, salt = ephemeralPublic ‖ vaultPublic, info = "trove/v1/sealed", L = 32)`.
+- **Symmetric key (mode 1):** the derived key for the purpose (segment or blob).
+
+---
+
+## 3. Records and operations
+
+All of Trove's state is a set of **records**: items, collections, spaces and settings. Each record has an
+id, a `kind`, and a map of fields. State is never stored directly. It is **materialised from ops**,
+and every device that has the same set of ops computes the same state.
+
+### Hybrid logical clock (HLC)
+`hlc` = `"<millis, 13 digits>-<counter, 4 digits>-<deviceId>"`, for example `1760000000000-0003-7F3A…`.
+It sorts as a plain string, and ties break on device id. Each device keeps its HLC ≥ every HLC it has seen.
+
+### Op (JSON)
+```json
+{
+  "d": "<deviceId>",           // author device
+  "s": 42,                      // per-device sequence, starts at 1, no gaps
+  "h": "<hlc>",
+  "r": "<recordId>",
+  "k": "item",                  // record kind (only needed on the first op, but always allowed)
+  "t": "set" | "text",
+  "f": { "title": "…", "_deleted": false },   // for "set": field → JSON value (LWW per field)
+  "x": { "field": "body", "value": "…", "base": "<sha256 hex of previous text or empty>" } // for "text"
+}
+```
+
+**Materialisation:** sort all ops by `h`, then apply them in order.
+- **`set`:** each field takes the value from the op with the highest `h` (last writer wins). Deleting a record = setting `_deleted: true`. Undeleting = setting it to `false` later.
+- **`text`:** a per-field text register with history.
+  - If `base` equals the hash of the current text, the new value replaces it.
+  - Otherwise this was a concurrent edit. Run a 3-way line merge with `base text = history[base]` (empty string if unknown), `ours = current`, `theirs = value`.
+  - A clean merge becomes the new text.
+  - On conflict, the current text stays and `value` is kept in the record's `_conflicts` list for the UI to show. Data is never silently lost.
+  - Every text value seen is added to the history, keyed by its hash.
+
+### Segment (the file and relay unit)
+A segment is an immutable batch of consecutive ops from one device:
+- **Plaintext:** UTF-8 JSON Lines, one op per line, with sequence numbers contiguous from `firstSeq` to `lastSeq`.
+- **Encrypted:** TRV1 mode 1, using the segment key.
+- **File name:** `<firstSeq zero-padded to 12>-<lastSeq zero-padded to 12>.trv`.
+- **Limit:** 512 KiB of plaintext per segment.
+
+### iCloud Drive vault layout
+```
+Trove/
+  vault.json                 public info: { "v":1, "vaultId", "vaultPublicKey" (b64u), "createdAt", "encrypted": true }
+  .sync/<deviceId>/<first>-<last>.trv      journals; ONLY that device writes in its own folder
+  .blobs/<aa>/<blobId>.trv   attachments (blobId prefix folders); written once, never modified
+  Notes/…                    readable Markdown mirror (written only by the "mirror owner" device, the Mac)
+```
+No file is ever written by two devices, so iCloud never has to resolve a conflict.
+
+---
+
+## 4. Relay HTTP API (Cloudflare Worker)
+
+Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
+
+| Token kind | Can do |
+|---|---|
+| **device** | Everything in its vault |
+| **inbox** | Only `POST /vaults/:v/inbox` and WebDAV uploads (write-only) |
+
+| Method & path | Auth | Body → Response |
+|---|---|---|
+| `POST /vaults` | none | `{vaultPublicKey, deviceName}` → `{vaultId, deviceId, deviceToken, inboxToken}` |
+| `POST /vaults/:v/pairings` | device | → `{pairingCode, expiresAt}` (single use, 10 min) |
+| `POST /vaults/:v/devices` | none (pairing code in body) | `{pairingCode, deviceName}` → `{deviceId, deviceToken}` |
+| `GET /vaults/:v/devices` | device | → `{devices:[{deviceId,name,kind,createdAt,lastSeenAt,revoked}]}` |
+| `DELETE /vaults/:v/devices/:id` | device | revoke → `204` |
+| `POST /vaults/:v/inbox-tokens` | device | → `{inboxToken}` (for the extension / GoodNotes / email) |
+| `PUT /vaults/:v/segments/:device/:first/:last` | device (must be `:device`) | TRV1 bytes → `{cursor}`. Idempotent: an identical re-upload returns the same cursor |
+| `GET /vaults/:v/segments?after=<cursor>&limit=<n>` | device | → `{segments:[{cursor,device,first,last,size}], more}` |
+| `GET /vaults/:v/segments/:device/:first/:last` | device | → TRV1 bytes |
+| `PUT /vaults/:v/blobs/:blobId` | device | TRV1 bytes → `201` (or `200` if it already exists) |
+| `GET /vaults/:v/blobs/:blobId` | device | → TRV1 bytes |
+| `POST /vaults/:v/inbox` | inbox or device | TRV1 **sealed** bytes, plus header `X-Trove-Source: web\|ios\|other` → `{id, cursor}` |
+| `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
+| `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
+| `DELETE /vaults/:v/inbox/:id` | device | ack after import → `204` |
+| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last}`, `{"type":"inbox",cursor,id}` |
+| `POST /vaults/:v/ai/enrich` | device | `{text, url?, title?}` → `{title, summary, tags[], kind?}` (Claude) |
+| `POST /vaults/:v/ai/ask` | device | `{question, sources:[{id,text}]}` → `{answer, citations:[id]}` (Claude) |
+| `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
+| `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
+| `GET /health` | none | `{ok:true, version}` |
+
+AI routes return `403` unless the vault has AI enabled (`PUT /vaults/:v/settings {aiEnabled:true}`).
+The Anthropic key is a Worker secret (`ANTHROPIC_API_KEY`). Content sent to AI routes is plaintext
+by necessity, and the apps label those items "processed in cloud".
+
+### Inbox plaintext (inside the sealed TRV1)
+```
+u32 headerLength | header JSON (UTF-8) | body bytes
+header = { "v":1, "source":"email|webdav|web|ios", "receivedAt": ISO8601,
+           "name"?: "file.pdf", "mime"?: "application/pdf", "url"?: "…", "title"?: "…",
+           "groupId"?: "…" (links an email to its attachments), "meta"?: {…} }
+```
+
+### WebDAV (for GoodNotes Auto Backup)
+- **Address:** `https://<worker>/dav/`. Basic auth: username = vaultId, password = an inbox token.
+- **Supported:** `OPTIONS`, `PROPFIND` (depth 0/1), `MKCOL`, `PUT`, `HEAD`, `DELETE`, `MOVE`, `LOCK`/`UNLOCK` (fake locks).
+- **How uploads are handled:** a `PUT` is sealed straight into the inbox, with `davPath` recorded. The server keeps only path, size and etag, so `PROPFIND` can list what was uploaded. A newer upload of the same path supersedes the older one on import.
+- **Privacy caveat:** notebook *file names* are visible to the server. The contents are not.

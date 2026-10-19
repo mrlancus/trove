@@ -1,0 +1,22 @@
+// Trove relay: sync journals, encrypted blobs, sealed inbox (email / GoodNotes WebDAV / browser),
+// and the optional AI proxy. See ../docs/PROTOCOL.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trove-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "trove-blobs" }],
+  "ai": { "binding": "AI" },
+  "vars": {
+    // Set to your vault id to route Cloudflare Email Routing mail into it (optional).
+    "EMAIL_VAULT_ID": "",
+    // Claude model for enrich/ask. claude-haiku-5-5 is ~40x cheaper; see docs/RESEARCH.md §3.
+    "CLAUDE_MODEL": "claude-opus-5-5"
+  }
+  // Secret (not in this file): `npx wrangler secret put ANTHROPIC_API_KEY`
+}

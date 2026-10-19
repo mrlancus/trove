@@ -1,0 +1,446 @@
+import { DurableObject } from "cloudflare:workers";
+import { envelopePrefix, randomId, randomToken, sealedLength, sealStream, sha256Hex, b64uDecode, type InboxHeader } from "./crypto";
+import { handleDav } from "./webdav";
+import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
+
+export interface Env {
+  VAULT: DurableObjectNamespace<VaultObject>;
+  BLOBS: R2Bucket;
+  AI?: Ai;
+  ANTHROPIC_API_KEY?: string;
+  CLAUDE_MODEL: string;
+  EMAIL_VAULT_ID: string;
+}
+
+export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
+
+const MAX_SEGMENT_BYTES = 1024 * 1024;
+const PAIRING_TTL_MS = 10 * 60 * 1000;
+
+export function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+export function error(status: number, message: string): Response {
+  return json({ error: message }, status);
+}
+
+/** One Durable Object per vault: devices, journals, inbox index, WebDAV listing, live sockets. */
+export class VaultObject extends DurableObject<Env> {
+  private sql: SqlStorage;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
+      CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, name TEXT, kind TEXT, token_hash TEXT UNIQUE,
+        created_at INTEGER, last_seen_at INTEGER, revoked INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS inbox_tokens(token_hash TEXT PRIMARY KEY, label TEXT, created_at INTEGER, revoked INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS pairings(code_hash TEXT PRIMARY KEY, expires_at INTEGER, used INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS segments(cursor INTEGER PRIMARY KEY AUTOINCREMENT, device TEXT, first INTEGER, last INTEGER,
+        size INTEGER, digest TEXT, body BLOB, created_at INTEGER, UNIQUE(device, first));
+      CREATE TABLE IF NOT EXISTS inbox(cursor INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, size INTEGER, source TEXT,
+        dav_path TEXT, r2_key TEXT, created_at INTEGER, acked INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS dav(path TEXT PRIMARY KEY, size INTEGER, etag TEXT, updated_at INTEGER, is_dir INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS blobs(id TEXT PRIMARY KEY, size INTEGER, created_at INTEGER);
+    `);
+    // Keep-alive pings never wake the object (free-tier friendly).
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  // ---------- meta ----------
+
+  private meta(k: string): string | undefined {
+    const row = this.sql.exec<{ v: string }>("SELECT v FROM meta WHERE k = ?", k).toArray()[0];
+    return row?.v;
+  }
+  private setMeta(k: string, v: string) {
+    this.sql.exec("INSERT INTO meta(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", k, v);
+  }
+  get vaultId(): string {
+    return this.meta("vaultId") ?? "";
+  }
+  get publicKey(): Uint8Array {
+    return b64uDecode(this.meta("publicKey") ?? "");
+  }
+
+  // ---------- auth ----------
+
+  private async authenticate(request: Request): Promise<Caller | undefined> {
+    const header = request.headers.get("authorization") ?? "";
+    let token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    if (!token) token = new URL(request.url).searchParams.get("token") ?? "";
+    if (!token && header.startsWith("Basic ")) {
+      // WebDAV: username = vault id, password = inbox token.
+      const [user, pass] = atob(header.slice(6)).split(":");
+      if (user === this.vaultId) token = pass ?? "";
+    }
+    if (!token) return undefined;
+    const hash = await sha256Hex(token);
+    const device = this.sql
+      .exec<{ id: string }>("SELECT id FROM devices WHERE token_hash = ? AND revoked = 0", hash)
+      .toArray()[0];
+    if (device) {
+      this.sql.exec("UPDATE devices SET last_seen_at = ? WHERE id = ?", Date.now(), device.id);
+      return { kind: "device", deviceId: device.id };
+    }
+    const inbox = this.sql.exec("SELECT 1 FROM inbox_tokens WHERE token_hash = ? AND revoked = 0", hash).toArray()[0];
+    return inbox ? { kind: "inbox" } : undefined;
+  }
+
+  private async addDevice(name: string, kind: string) {
+    const deviceId = crypto.randomUUID().toUpperCase();
+    const deviceToken = randomToken("tdv_");
+    this.sql.exec(
+      "INSERT INTO devices(id, name, kind, token_hash, created_at, last_seen_at) VALUES(?, ?, ?, ?, ?, ?)",
+      deviceId, name.slice(0, 80), kind.slice(0, 20), await sha256Hex(deviceToken), Date.now(), Date.now(),
+    );
+    return { deviceId, deviceToken };
+  }
+
+  private async addInboxToken(label: string) {
+    const inboxToken = randomToken("tin_");
+    this.sql.exec("INSERT INTO inbox_tokens(token_hash, label, created_at) VALUES(?, ?, ?)", await sha256Hex(inboxToken), label, Date.now());
+    return inboxToken;
+  }
+
+  // ---------- entry point ----------
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    try {
+      if (path === "/internal/init") return await this.init(request);
+      if (!this.vaultId) return error(404, "vault not found");
+      if (path === "/internal/inbox") return await this.ingest(request);
+      if (path === "/api/devices" && request.method === "POST") return await this.pairDevice(request);
+
+      const caller = await this.authenticate(request);
+      if (!caller) return error(401, "unauthorized");
+      if (path.startsWith("/dav")) return await handleDav(this, request, path.slice(4) || "/");
+      if (path === "/api/inbox" && request.method === "POST") return await this.postInbox(request);
+      if (caller.kind !== "device") return error(403, "inbox tokens can only add to the inbox");
+      return await this.deviceRoute(request, url, caller.deviceId);
+    } catch (e) {
+      if (e instanceof HttpError) return error(e.status, e.message);
+      console.error(e);
+      return error(500, "internal error");
+    }
+  }
+
+  private async init(request: Request): Promise<Response> {
+    if (this.vaultId) return error(409, "vault already exists");
+    const body = (await request.json()) as { vaultId: string; vaultPublicKey: string; deviceName: string; deviceKind?: string };
+    if (b64uDecode(body.vaultPublicKey).length !== 32) return error(400, "vaultPublicKey must be a raw X25519 key (32 bytes, b64u)");
+    this.setMeta("vaultId", body.vaultId);
+    this.setMeta("publicKey", body.vaultPublicKey);
+    this.setMeta("createdAt", new Date().toISOString());
+    this.setMeta("aiEnabled", "false");
+    const device = await this.addDevice(body.deviceName || "First device", body.deviceKind ?? "unknown");
+    const inboxToken = await this.addInboxToken("default");
+    return json({ vaultId: body.vaultId, ...device, inboxToken }, 201);
+  }
+
+  private async pairDevice(request: Request): Promise<Response> {
+    const body = (await request.json()) as { pairingCode?: string; deviceName?: string; deviceKind?: string };
+    const hash = await sha256Hex(body.pairingCode ?? "");
+    const row = this.sql
+      .exec<{ expires_at: number }>("SELECT expires_at FROM pairings WHERE code_hash = ? AND used = 0", hash)
+      .toArray()[0];
+    if (!row || row.expires_at < Date.now()) return error(403, "pairing code invalid or expired");
+    this.sql.exec("UPDATE pairings SET used = 1 WHERE code_hash = ?", hash);
+    return json(await this.addDevice(body.deviceName ?? "New device", body.deviceKind ?? "unknown"), 201);
+  }
+
+  private async deviceRoute(request: Request, url: URL, deviceId: string): Promise<Response> {
+    const parts = url.pathname.split("/").filter(Boolean).slice(1); // drop "api"
+    const method = request.method;
+    const [section, a, b, c] = parts;
+
+    switch (section) {
+      case "info":
+        return json({ vaultId: this.vaultId, vaultPublicKey: this.meta("publicKey"), createdAt: this.meta("createdAt"), aiEnabled: this.meta("aiEnabled") === "true", deviceId });
+      case "settings":
+        if (method === "PUT") {
+          const body = (await request.json()) as { aiEnabled?: boolean };
+          if (typeof body.aiEnabled === "boolean") this.setMeta("aiEnabled", String(body.aiEnabled));
+        }
+        return json({ aiEnabled: this.meta("aiEnabled") === "true" });
+      case "pairings": {
+        if (method !== "POST") break;
+        const pairingCode = randomToken("tpc_");
+        const expiresAt = Date.now() + PAIRING_TTL_MS;
+        this.sql.exec("INSERT INTO pairings(code_hash, expires_at) VALUES(?, ?)", await sha256Hex(pairingCode), expiresAt);
+        return json({ pairingCode, expiresAt: new Date(expiresAt).toISOString() }, 201);
+      }
+      case "devices":
+        if (!a && method === "GET") {
+          const devices = this.sql
+            .exec("SELECT id, name, kind, created_at, last_seen_at, revoked FROM devices ORDER BY created_at")
+            .toArray()
+            .map((r) => ({ deviceId: r.id, name: r.name, kind: r.kind, createdAt: r.created_at, lastSeenAt: r.last_seen_at, revoked: r.revoked === 1 }));
+          return json({ devices });
+        }
+        if (a && method === "DELETE") {
+          this.sql.exec("UPDATE devices SET revoked = 1 WHERE id = ?", a);
+          for (const ws of this.ctx.getWebSockets(a)) ws.close(4001, "revoked");
+          return new Response(null, { status: 204 });
+        }
+        break;
+      case "inbox-tokens":
+        if (method === "POST") return json({ inboxToken: await this.addInboxToken("extra") }, 201);
+        break;
+      case "segments":
+        if (!a && method === "GET") return this.listSegments(url);
+        if (a && b && c && method === "PUT") return this.putSegment(request, deviceId, a, Number(b), Number(c));
+        if (a && b && c && method === "GET") return this.getSegment(a, Number(b), Number(c));
+        break;
+      case "blobs":
+        if (a && method === "PUT") return this.putBlob(request, a);
+        if (a && method === "GET") return this.getBlob(a);
+        break;
+      case "inbox":
+        if (!a && method === "GET") return this.listInbox(url);
+        if (a && method === "GET") return this.getInbox(a);
+        if (a && method === "DELETE") return this.ackInbox(a);
+        break;
+      case "live":
+        return this.live(request, deviceId);
+      case "ai": {
+        if (method !== "POST") break;
+        if (this.meta("aiEnabled") !== "true") return error(403, "AI is disabled for this vault");
+        if (a === "enrich") return json(await aiEnrich(this.env, await request.json()));
+        if (a === "ask") return json(await aiAsk(this.env, await request.json()));
+        if (a === "transcribe") return json(await aiTranscribe(this.env, new Uint8Array(await request.arrayBuffer())));
+        if (a === "embed") return json(await aiEmbed(this.env, await request.json()));
+        break;
+      }
+    }
+    return error(404, "not found");
+  }
+
+  // ---------- journal segments ----------
+
+  private async putSegment(request: Request, caller: string, device: string, first: number, last: number) {
+    if (device !== caller) return error(403, "devices may only upload their own journal");
+    if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1 || last < first) return error(400, "bad sequence range");
+    const body = new Uint8Array(await request.arrayBuffer());
+    if (body.length > MAX_SEGMENT_BYTES) return error(413, "segment too large");
+    const digest = await sha256Hex(body);
+    const existing = this.sql
+      .exec<{ cursor: number; digest: string }>("SELECT cursor, digest FROM segments WHERE device = ? AND first = ?", device, first)
+      .toArray()[0];
+    if (existing) {
+      if (existing.digest === digest) return json({ cursor: existing.cursor });
+      return error(409, "a different segment with this start already exists");
+    }
+    const row = this.sql
+      .exec<{ cursor: number }>(
+        "INSERT INTO segments(device, first, last, size, digest, body, created_at) VALUES(?, ?, ?, ?, ?, ?, ?) RETURNING cursor",
+        device, first, last, body.length, digest, body, Date.now(),
+      )
+      .one();
+    this.broadcast({ type: "segment", cursor: row.cursor, device, first, last });
+    return json({ cursor: row.cursor }, 201);
+  }
+
+  private listSegments(url: URL) {
+    const after = Number(url.searchParams.get("after") ?? 0);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 500);
+    const rows = this.sql
+      .exec("SELECT cursor, device, first, last, size FROM segments WHERE cursor > ? ORDER BY cursor LIMIT ?", after, limit + 1)
+      .toArray();
+    return json({ segments: rows.slice(0, limit), more: rows.length > limit });
+  }
+
+  private getSegment(device: string, first: number, last: number) {
+    const row = this.sql
+      .exec<{ body: ArrayBuffer }>("SELECT body FROM segments WHERE device = ? AND first = ? AND last = ?", device, first, last)
+      .toArray()[0];
+    if (!row) return error(404, "no such segment");
+    return new Response(row.body, { headers: { "content-type": "application/octet-stream" } });
+  }
+
+  // ---------- blobs ----------
+
+  private r2Key(kind: "b" | "i", id: string) {
+    return `v/${this.vaultId}/${kind}/${id}`;
+  }
+
+  private async putBlob(request: Request, id: string) {
+    if (!/^[0-9a-f]{64}$/.test(id)) return error(400, "blob id must be 64 hex chars");
+    if (this.sql.exec("SELECT 1 FROM blobs WHERE id = ?", id).toArray()[0]) return json({ id }, 200);
+    const length = Number(request.headers.get("content-length"));
+    if (!request.body || !Number.isFinite(length) || length <= 0) return error(411, "content-length required");
+    await this.env.BLOBS.put(this.r2Key("b", id), fixedLength(request.body, length));
+    this.sql.exec("INSERT OR IGNORE INTO blobs(id, size, created_at) VALUES(?, ?, ?)", id, length, Date.now());
+    return json({ id }, 201);
+  }
+
+  private async getBlob(id: string) {
+    const obj = await this.env.BLOBS.get(this.r2Key("b", id));
+    if (!obj) return error(404, "no such blob");
+    return new Response(obj.body, { headers: { "content-type": "application/octet-stream", "content-length": String(obj.size) } });
+  }
+
+  // ---------- sealed inbox ----------
+
+  /** Already-sealed upload from an extension, the iOS share sheet, etc. */
+  private async postInbox(request: Request) {
+    const length = Number(request.headers.get("content-length"));
+    if (!request.body || !Number.isFinite(length) || length < 49) return error(411, "content-length required");
+    const id = randomId();
+    await this.env.BLOBS.put(this.r2Key("i", id), fixedLength(request.body, length));
+    const source = (request.headers.get("x-trove-source") ?? "other").slice(0, 20);
+    return json(this.recordInbox(id, length, source, null), 201);
+  }
+
+  /** Plaintext from a trusted path inside this Worker (email handler, WebDAV PUT): seal it here. */
+  async sealIntoInbox(header: InboxHeader, body: ReadableStream<Uint8Array> | Uint8Array, bodyLength: number, davPath: string | null) {
+    const prefix = envelopePrefix(header);
+    const total = prefix.length + bodyLength;
+    const id = randomId();
+    const sealer = sealStream({ recipientPublicKey: this.publicKey });
+    const fixed = new FixedLengthStream(sealedLength(total));
+    const pump = (async () => {
+      const writer = sealer.writable.getWriter();
+      await writer.write(prefix);
+      if (body instanceof Uint8Array) {
+        await writer.write(body);
+      } else {
+        const reader = body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+      }
+      await writer.close();
+    })();
+    const piping = sealer.readable.pipeTo(fixed.writable);
+    await Promise.all([this.env.BLOBS.put(this.r2Key("i", id), fixed.readable), pump, piping]);
+    return this.recordInbox(id, sealedLength(total), header.source, davPath);
+  }
+
+  private recordInbox(id: string, size: number, source: string, davPath: string | null) {
+    const row = this.sql
+      .exec<{ cursor: number }>(
+        "INSERT INTO inbox(id, size, source, dav_path, r2_key, created_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING cursor",
+        id, size, source, davPath, this.r2Key("i", id), Date.now(),
+      )
+      .one();
+    this.broadcast({ type: "inbox", cursor: row.cursor, id });
+    return { id, cursor: row.cursor };
+  }
+
+  private async ingest(request: Request) {
+    const header = JSON.parse(request.headers.get("x-trove-envelope") ?? "{}") as InboxHeader;
+    const body = new Uint8Array(await request.arrayBuffer());
+    return json(await this.sealIntoInbox(header, body, body.length, null), 201);
+  }
+
+  private listInbox(url: URL) {
+    const after = Number(url.searchParams.get("after") ?? 0);
+    const rows = this.sql
+      .exec("SELECT cursor, id, size, source, dav_path, created_at FROM inbox WHERE cursor > ? AND acked = 0 ORDER BY cursor LIMIT 201", after)
+      .toArray();
+    const entries = rows.slice(0, 200).map((r) => ({
+      cursor: r.cursor, id: r.id, size: r.size, source: r.source,
+      ...(r.dav_path ? { davPath: r.dav_path } : {}),
+      createdAt: new Date(r.created_at as number).toISOString(),
+    }));
+    return json({ entries, more: rows.length > 200 });
+  }
+
+  private async getInbox(id: string) {
+    const obj = await this.env.BLOBS.get(this.r2Key("i", id));
+    if (!obj) return error(404, "no such inbox entry");
+    return new Response(obj.body, { headers: { "content-type": "application/octet-stream", "content-length": String(obj.size) } });
+  }
+
+  private async ackInbox(id: string) {
+    await this.env.BLOBS.delete(this.r2Key("i", id));
+    this.sql.exec("UPDATE inbox SET acked = 1 WHERE id = ?", id);
+    return new Response(null, { status: 204 });
+  }
+
+  // ---------- WebDAV listing (used by webdav.ts) ----------
+
+  davList(prefix: string) {
+    return this.sql
+      .exec<{ path: string; size: number; etag: string; updated_at: number; is_dir: number }>(
+        "SELECT path, size, etag, updated_at, is_dir FROM dav WHERE path = ? OR path LIKE ? ORDER BY path",
+        prefix, `${prefix.replace(/\/$/, "")}/%`,
+      )
+      .toArray();
+  }
+  davGet(path: string) {
+    return this.sql
+      .exec<{ path: string; size: number; etag: string; updated_at: number; is_dir: number }>("SELECT * FROM dav WHERE path = ?", path)
+      .toArray()[0];
+  }
+  davPut(path: string, size: number, isDir: boolean) {
+    const etag = randomId();
+    this.sql.exec(
+      "INSERT INTO dav(path, size, etag, updated_at, is_dir) VALUES(?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET size = excluded.size, etag = excluded.etag, updated_at = excluded.updated_at, is_dir = excluded.is_dir",
+      path, size, etag, Date.now(), isDir ? 1 : 0,
+    );
+    return etag;
+  }
+  davDelete(path: string) {
+    this.sql.exec("DELETE FROM dav WHERE path = ? OR path LIKE ?", path, `${path.replace(/\/$/, "")}/%`);
+  }
+  davMove(from: string, to: string) {
+    const item = this.davGet(from);
+    if (!item) return false;
+    this.davDelete(to);
+    this.sql.exec("UPDATE dav SET path = ? WHERE path = ?", to, from);
+    this.sql.exec("UPDATE inbox SET dav_path = ? WHERE dav_path = ?", to, from);
+    return true;
+  }
+
+  // ---------- live sockets ----------
+
+  private live(request: Request, deviceId: string) {
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return error(426, "expected websocket");
+    const pair = new WebSocketPair();
+    this.ctx.acceptWebSocket(pair[1], [deviceId]);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  private broadcast(message: unknown) {
+    const text = JSON.stringify(message);
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(text);
+      } catch {
+        // socket already closing
+      }
+    }
+  }
+
+  async webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer) {
+    // Clients only listen; "ping" is answered by the auto-response without waking us.
+  }
+
+  async webSocketClose(ws: WebSocket, code: number) {
+    try {
+      ws.close(code, "closing");
+    } catch {
+      // already closed
+    }
+  }
+}
+
+/** R2 needs a stream of known length; this also rejects bodies that lie about Content-Length. */
+function fixedLength(body: ReadableStream<Uint8Array>, length: number): ReadableStream<Uint8Array> {
+  const fixed = new FixedLengthStream(length);
+  void body.pipeTo(fixed.writable).catch(() => {});
+  return fixed.readable;
+}
+
+export class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
