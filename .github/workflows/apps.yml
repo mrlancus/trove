@@ -2,6 +2,9 @@
 # Apple Silicon Mac to run Xcode on. Download the apps from the run's Artifacts:
 #   Trove-macOS  → unzip, then right-click Trove.app → Open (it isn't notarized)
 #   Trove-iOS    → Trove.ipa; install with Sideloadly using your free Apple ID (redo every 7 days)
+# Successful builds of main are also published as the "latest" release, with stable links:
+#   https://github.com/mrlancus/trove/releases/download/latest/Trove.ipa
+#   https://github.com/mrlancus/trove/releases/download/latest/Trove-macOS.zip
 name: Apple apps
 
 on:
@@ -79,3 +82,13 @@ jobs:
           name: Trove-iOS
           path: build/out/Trove.ipa
           if-no-files-found: ignore
+
+      - name: Publish the "latest" release
+        if: steps.build.outcome == 'success' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest build/out/Trove.ipa build/out/Trove-macOS.zip \
+            --prerelease --target "${{ github.sha }}" --title "Latest build" \
+            --notes "Built from ${{ github.sha }}. iPhone/iPad: install Trove.ipa with Sideloadly using your Apple ID (redo every 7 days). Mac: unzip, then System Settings → Privacy & Security → Open Anyway the first time."
