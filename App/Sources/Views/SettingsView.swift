@@ -184,12 +184,18 @@ private struct IntegrationsSection: View {
     var body: some View {
         Section("Bring things in") {
             Button { importing = true } label: { Label("Import files (Kindle My Clippings, bookmarks, CSV, Markdown, PDFs…)", systemImage: "square.and.arrow.down") }
+                .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                    if case .success(let urls) = result { Task { await model.importFiles(urls, source: .import) } }
+                }
             #if os(macOS)
             Toggle("Mirror Apple Notes into Trove search", isOn: Binding(
                 get: { model.config?.appleNotesImport ?? false },
                 set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.syncNow() } } }))
             Button { choosingObsidian = true } label: {
                 Label(model.config?.obsidianFolder.map { "Obsidian vault: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Sync with an Obsidian vault…", systemImage: "point.3.connected.trianglepath.dotted")
+            }
+            .fileImporter(isPresented: $choosingObsidian, allowedContentTypes: [.folder]) { result in
+                if case .success(let url) = result { model.updateConfig { $0.obsidianFolder = url.path } }
             }
             if model.config?.obsidianFolder != nil {
                 Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
@@ -205,12 +211,6 @@ private struct IntegrationsSection: View {
                     }
                 }))
             #endif
-        }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { Task { await model.importFiles(urls, source: .import) } }
-        }
-        .fileImporter(isPresented: $choosingObsidian, allowedContentTypes: [.folder]) { result in
-            if case .success(let url) = result { model.updateConfig { $0.obsidianFolder = url.path } }
         }
     }
 }

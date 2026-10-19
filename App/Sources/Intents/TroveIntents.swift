@@ -25,6 +25,7 @@ struct SaveClipboardIntent: AppIntent {
     static let title: LocalizedStringResource = "Save Clipboard to Trove"
     static let description = IntentDescription("Saves whatever you last copied. Great on Back Tap or the Action Button.")
 
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         if let url = Pasteboard.url {
             try await CaptureDrop.send(CaptureDrop.link(url))

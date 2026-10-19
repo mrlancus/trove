@@ -30,6 +30,7 @@ extension PlatformImage {
     static func fromData(_ data: Data) -> PlatformImage? { PlatformImage(data: data) }
 }
 
+@MainActor
 enum Pasteboard {
     static var string: String? {
         #if canImport(UIKit)
