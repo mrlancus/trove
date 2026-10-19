@@ -6,7 +6,7 @@ public actor Library {
     public let engine: SyncEngine
     private var index = SearchIndex()
     private var indexed: [String: String] = [:]   // record id → updatedHLC already indexed
-    private let now: @Sendable () -> Date
+    let now: @Sendable () -> Date
 
     public init(engine: SyncEngine, now: @escaping @Sendable () -> Date = { Date() }) {
         self.engine = engine
@@ -59,7 +59,7 @@ public actor Library {
 
     // MARK: Adding
 
-    private func newId() -> String { UUID().uuidString.lowercased() }
+    func newId() -> String { UUID().uuidString.lowercased() }
 
     private func baseFields(kind: ItemKind, source: ItemSource, title: String, createdAt: Date? = nil) async -> [String: JSONValue] {
         [

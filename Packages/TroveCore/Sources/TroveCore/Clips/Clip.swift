@@ -1,0 +1,245 @@
+import Foundation
+
+/// Clipboard history (PROTOCOL.md §8). Every copy on a device with clipboard history on becomes a
+/// `clip` record, synced and encrypted like everything else, kept apart from library items.
+public struct Clip: Identifiable, Hashable, Sendable {
+    public let record: Record
+    public init(_ record: Record) { self.record = record }
+
+    public enum Field {
+        public static let text = "text", image = "image", files = "files", hash = "hash"
+        public static let sourceApp = "sourceApp", sourceDevice = "sourceDevice", device = "device"
+        public static let createdAt = "createdAt", lastUsedAt = "lastUsedAt", pinned = "pinned", savedItem = "savedItem"
+    }
+
+    public var id: String { record.id }
+    public var text: String { record[Field.text]?.string ?? "" }
+    /// An image clip's attachment (encrypted blob, like item attachments).
+    public var image: Attachment? {
+        guard let o = record[Field.image]?.object, let id = o["id"]?.string else { return nil }
+        return Attachment(id: id, name: o["name"]?.string ?? "image.png", mime: o["mime"]?.string ?? "image/png", size: Int(o["size"]?.number ?? 0))
+    }
+    /// File paths, when files were copied (Mac).
+    public var files: [String] { record[Field.files]?.stringArray ?? [] }
+    public var hash: String { record[Field.hash]?.string ?? "" }
+    public var sourceApp: String? { record[Field.sourceApp]?.string }
+    public var sourceDevice: String? { record[Field.sourceDevice]?.string }
+    public var device: String? { record[Field.device]?.string }
+    public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
+    public var lastUsedAt: Date { record[Field.lastUsedAt]?.date ?? createdAt }
+    public var isPinned: Bool { record[Field.pinned]?.bool ?? false }
+    /// The library item this clip was saved as, if any.
+    public var savedItem: String? { record[Field.savedItem]?.string }
+
+    /// Most recent activity: copied again or pasted from history moves a clip to the top.
+    public var sortDate: Date { max(createdAt, lastUsedAt) }
+    public var kind: ClipKind { image != nil ? .image : !files.isEmpty ? .file : ClipClassifier.classify(text) }
+
+    /// One line for lists.
+    public var preview: String {
+        switch kind {
+        case .image: return image?.name ?? "Image"
+        case .file: return files.map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
+        default:
+            let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
+            return String(line.trimmingCharacters(in: .whitespaces).prefix(200))
+        }
+    }
+
+    public func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        if q.isEmpty { return true }
+        let haystack = [text, sourceApp ?? "", sourceDevice ?? "", files.joined(separator: " "), image?.name ?? ""].joined(separator: "\n")
+        return q.split(separator: " ").allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
+    /// Stable content hash for de-duplication: the same text copied twice is one clip.
+    public static func hash(text: String) -> String { "t:" + text.sha256Hex }
+    public static func hash(image: Data) -> String { "i:" + image.sha256Hex }
+    public static func hash(files: [String]) -> String { "f:" + files.joined(separator: "\n").sha256Hex }
+}
+
+public enum ClipKind: String, CaseIterable, Sendable {
+    case text, link, email, phone, color, code, json, number, path, image, file
+
+    public var title: String {
+        switch self {
+        case .text: "Text"
+        case .link: "Links"
+        case .email: "Emails"
+        case .phone: "Phone numbers"
+        case .color: "Colors"
+        case .code: "Code"
+        case .json: "JSON"
+        case .number: "Numbers"
+        case .path: "Paths"
+        case .image: "Images"
+        case .file: "Files"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .text: "text.alignleft"
+        case .link: "link"
+        case .email: "envelope"
+        case .phone: "phone"
+        case .color: "paintpalette"
+        case .code: "chevron.left.forwardslash.chevron.right"
+        case .json: "curlybraces"
+        case .number: "number"
+        case .path: "folder"
+        case .image: "photo"
+        case .file: "doc"
+        }
+    }
+}
+
+/// Works out what a copied string is, so the history can show a swatch for a color, a host for a
+/// link, monospace for code and so on. Kept in step with web/public/core/clips.js.
+public enum ClipClassifier {
+    public static func classify(_ raw: String) -> ClipKind {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty { return .text }
+        let oneLine = !s.contains("\n")
+        if oneLine, color(s) != nil { return .color }
+        if oneLine, !s.contains(" "), let url = URL(string: s), let scheme = url.scheme?.lowercased(),
+           ["http", "https"].contains(scheme), url.host != nil { return .link }
+        if oneLine, s.wholeMatch(of: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/) != nil { return .email }
+        if oneLine, s.wholeMatch(of: /\+?[0-9][0-9 ()\-.]{6,}[0-9]/) != nil, s.filter(\.isNumber).count >= 7 { return .phone }
+        if oneLine, s.wholeMatch(of: /[-+]?[0-9]{1,3}(,?[0-9]{3})*(\.[0-9]+)?%?/) != nil { return .number }
+        if oneLine, s.wholeMatch(of: /(~|\/)[^\s]*/) != nil, s.count > 1 { return .path }
+        if (s.hasPrefix("{") && s.hasSuffix("}")) || (s.hasPrefix("[") && s.hasSuffix("]")),
+           let data = s.data(using: .utf8), (try? JSONSerialization.jsonObject(with: data)) != nil { return .json }
+        if looksLikeCode(s) { return .code }
+        return .text
+    }
+
+    /// RGB(A) 0…1 for `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb(…)`/`rgba(…)` and `hsl(…)`/`hsla(…)`.
+    public static func color(_ s: String) -> (r: Double, g: Double, b: Double, a: Double)? {
+        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        if let m = t.wholeMatch(of: /#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})/) {
+            var hex = String(m.1)
+            if hex.count == 3 { hex = hex.map { "\($0)\($0)" }.joined() }
+            guard let v = UInt64(hex, radix: 16) else { return nil }
+            if hex.count == 8 {
+                return (Double((v >> 24) & 255) / 255, Double((v >> 16) & 255) / 255, Double((v >> 8) & 255) / 255, Double(v & 255) / 255)
+            }
+            return (Double((v >> 16) & 255) / 255, Double((v >> 8) & 255) / 255, Double(v & 255) / 255, 1)
+        }
+        if let m = t.wholeMatch(of: /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([0-9.]+)\s*)?\)/),
+           let r = Double(m.1), let g = Double(m.2), let b = Double(m.3), r <= 255, g <= 255, b <= 255 {
+            return (r / 255, g / 255, b / 255, m.4.flatMap { Double($0) } ?? 1)
+        }
+        if let m = t.wholeMatch(of: /hsla?\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*(?:,\s*([0-9.]+)\s*)?\)/),
+           let h = Double(m.1), let sat = Double(m.2), let l = Double(m.3) {
+            let (r, g, b) = hslToRGB(h / 360, sat / 100, l / 100)
+            return (r, g, b, m.4.flatMap { Double($0) } ?? 1)
+        }
+        return nil
+    }
+
+    static func hslToRGB(_ h: Double, _ s: Double, _ l: Double) -> (Double, Double, Double) {
+        guard s > 0 else { return (l, l, l) }
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        let p = 2 * l - q
+        func hue(_ t0: Double) -> Double {
+            var t = t0
+            if t < 0 { t += 1 }
+            if t > 1 { t -= 1 }
+            if t < 1 / 6 { return p + (q - p) * 6 * t }
+            if t < 1 / 2 { return q }
+            if t < 2 / 3 { return p + (q - p) * (2 / 3 - t) * 6 }
+            return p
+        }
+        return (hue(h + 1 / 3), hue(h), hue(h - 1 / 3))
+    }
+
+    static func looksLikeCode(_ s: String) -> Bool {
+        let lines = s.split(whereSeparator: \.isNewline)
+        let signals = [";\n", "{\n", "}\n", "=>", "func ", "def ", "const ", "let ", "var ", "import ", "return ", "class ", "#include",
+                       "</", "/>", "SELECT ", "fn ", "console.", "print(", "&&", "||", "!=", "==="]
+        let hits = signals.filter { s.contains($0) }.count
+        let indented = lines.filter { $0.hasPrefix("    ") || $0.hasPrefix("\t") }.count
+        let symbols = s.filter { "{}();=<>[]".contains($0) }.count
+        if lines.count >= 2 { return hits >= 2 || (indented >= 1 && hits >= 1) || Double(symbols) / Double(max(s.count, 1)) > 0.06 }
+        return hits >= 2 && Double(symbols) / Double(max(s.count, 1)) > 0.05
+    }
+}
+
+/// Looks for things that shouldn't sit in a synced history: passwords, API keys, private keys and
+/// one-time codes. Those clips stay on the device and expire after a couple of minutes.
+public enum SensitiveDetector {
+    public static func isSensitive(_ raw: String) -> Bool {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty, s.count <= 4_000 else { return false }
+        if s.contains("PRIVATE KEY-----") { return true }
+        let oneToken = !s.contains(where: \.isWhitespace)
+        guard oneToken else { return false }
+        // One-time codes: 4–8 digits on their own.
+        if s.count >= 4, s.count <= 8, s.allSatisfy(\.isNumber) { return true }
+        // Well-known token shapes.
+        let prefixes = ["sk-", "sk_live_", "sk_test_", "rk_live_", "ghp_", "gho_", "ghu_", "ghs_", "github_pat_", "xoxb-", "xoxp-", "xoxa-",
+                        "AKIA", "ASIA", "AIza", "ya29.", "glpat-", "npm_", "pypi-", "SG.", "shpat_", "cfut_", "eyJ"]
+        if s.count >= 16, prefixes.contains(where: { s.hasPrefix($0) }) { return true }
+        if URL(string: s)?.scheme != nil, s.contains("://") { return false }
+        // Password-like: 8–64 chars mixing at least three of lower, upper, digits, symbols.
+        if s.count >= 8, s.count <= 64 {
+            let classes = [s.contains(where: \.isLowercase), s.contains(where: \.isUppercase), s.contains(where: \.isNumber),
+                           s.contains(where: { !$0.isLetter && !$0.isNumber })].filter { $0 }.count
+            if classes >= 3, !s.contains("@"), !s.hasPrefix("/"), !s.hasPrefix("~") { return true }
+        }
+        // Long random-looking tokens.
+        if s.count >= 24, s.count <= 200, entropy(s) > 4.0 { return true }
+        return false
+    }
+
+    static func entropy(_ s: String) -> Double {
+        var counts: [Character: Double] = [:]
+        for c in s { counts[c, default: 0] += 1 }
+        let n = Double(s.count)
+        return counts.values.reduce(0) { $0 - ($1 / n) * log2($1 / n) }
+    }
+}
+
+/// Quick rewrites offered when pasting from history.
+public enum ClipTransform: String, CaseIterable, Sendable {
+    case trimmed, singleLine, uppercase, lowercase, titleCase, cleanLink, prettyJSON, minifiedJSON
+
+    public var title: String {
+        switch self {
+        case .trimmed: "Trim whitespace"
+        case .singleLine: "Join into one line"
+        case .uppercase: "UPPERCASE"
+        case .lowercase: "lowercase"
+        case .titleCase: "Title Case"
+        case .cleanLink: "Remove link tracking"
+        case .prettyJSON: "Pretty JSON"
+        case .minifiedJSON: "Minify JSON"
+        }
+    }
+
+    /// Transforms that make sense for this text (and change it).
+    public static func available(for text: String) -> [ClipTransform] {
+        allCases.filter { t in t.apply(text).map { $0 != text } ?? false }
+    }
+
+    public func apply(_ text: String) -> String? {
+        switch self {
+        case .trimmed: return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .singleLine:
+            return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+        case .uppercase: return text.uppercased()
+        case .lowercase: return text.lowercased()
+        case .titleCase: return text.capitalized
+        case .cleanLink:
+            guard ClipClassifier.classify(text) == .link, let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+            return URLCleaner.clean(url).absoluteString
+        case .prettyJSON, .minifiedJSON:
+            guard let data = text.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
+                  object is [Any] || object is [String: Any] else { return nil }
+            let options: JSONSerialization.WritingOptions = self == .prettyJSON ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys, .withoutEscapingSlashes]
+            return (try? JSONSerialization.data(withJSONObject: object, options: options)).map { String(decoding: $0, as: UTF8.self) }
+        }
+    }
+}
