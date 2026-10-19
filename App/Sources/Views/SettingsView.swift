@@ -395,11 +395,11 @@ private struct ClipboardSection: View {
                     }
                 }
             }
+            .task { while !Task.isCancelled { trusted = AXIsProcessTrusted(); try? await Task.sleep(for: .seconds(2)) } }
             if !trusted {
                 Text("Until this is allowed, picking a clip copies it and you press ⌘V. If Trove is already switched on in Accessibility but this still says so, select Trove there, remove it with −, then allow it again: macOS treats each new download as a different app.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .task { while !Task.isCancelled { trusted = AXIsProcessTrusted(); try? await Task.sleep(for: .seconds(2)) } }
             #else
             Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
                 .font(.caption).foregroundStyle(.secondary)
