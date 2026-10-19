@@ -73,4 +73,27 @@ enum SharedConfig {
     static func saveWidget(_ snapshot: WidgetSnapshot) {
         if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: widgetURL, options: .atomic) }
     }
+
+    // MARK: Clipboard history for the keyboard extension
+
+    /// Recent text clips the Trove keyboard shows. Written by the app, read by the keyboard (which
+    /// has no vault keys). Sensitive clips never get here.
+    struct KeyboardClip: Codable, Hashable, Identifiable {
+        var id: String
+        var text: String
+        var kind: String
+        var pinned: Bool
+        var source: String?
+    }
+
+    static var keyboardClipsURL: URL { container.appendingPathComponent("keyboard-clips.json") }
+
+    static func loadKeyboardClips() -> [KeyboardClip] {
+        guard let data = try? Data(contentsOf: keyboardClipsURL) else { return [] }
+        return (try? JSONDecoder().decode([KeyboardClip].self, from: data)) ?? []
+    }
+
+    static func saveKeyboardClips(_ clips: [KeyboardClip]) {
+        if let data = try? JSONEncoder().encode(clips) { try? data.write(to: keyboardClipsURL, options: .atomic) }
+    }
 }

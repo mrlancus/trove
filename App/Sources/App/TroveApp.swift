@@ -126,6 +126,10 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.borderless)
             }
+            Button { model.clipboardPalette?.show() } label: {
+                Label("Clipboard history  ⌥Space", systemImage: "list.clipboard")
+            }
+            .buttonStyle(.borderless)
             Divider()
             Text("Recent").font(.caption).foregroundStyle(.secondary)
             ForEach(model.items.prefix(6)) { item in

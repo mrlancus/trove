@@ -44,6 +44,11 @@ final class AppModel {
     private(set) var library: Library?
     private(set) var enrichment: EnrichmentService?
     let semantic = SemanticIndex()
+    let clipboard = ClipboardStore()
+    #if os(macOS)
+    private var clipboardWatcher: ClipboardWatcher?
+    private(set) var clipboardPalette: ClipboardPaletteController?
+    #endif
     private var syncTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
@@ -70,8 +75,40 @@ final class AppModel {
         vault.publishCaptureSettings()
         await engine.observe { _ in Task { @MainActor [weak self] in self?.scheduleSave() } }
         await reload()
+        await clipboard.attach(library)
+        #if os(macOS)
+        startClipboard()
+        #endif
         startSyncLoop()
         connectLive()
+    }
+
+    // MARK: Clipboard
+
+    #if os(macOS)
+    private func startClipboard() {
+        if clipboardWatcher == nil {
+            let watcher = ClipboardWatcher(store: clipboard)
+            watcher.start()
+            clipboardWatcher = watcher
+        }
+        if clipboardPalette == nil {
+            let palette = ClipboardPaletteController(store: clipboard, thisDevice: { [weak self] in self?.config?.deviceId },
+                                                     saveToLibrary: { [weak self] clip in self?.saveClip(clip) })
+            palette.installHotKey()
+            clipboardPalette = palette
+        }
+    }
+    #endif
+
+    /// Turns a clip into a library item.
+    func saveClip(_ clip: Clip) {
+        Task {
+            if await clipboard.saveToLibrary(clip) != nil {
+                toast = "Saved to Trove"
+                await reload()
+            }
+        }
     }
 
     func createVault(useICloud: Bool, pickedFolder: URL?, encrypted: Bool) async {
@@ -120,6 +157,7 @@ final class AppModel {
 
     func reload() async {
         guard let library else { return }
+        await clipboard.reload()
         items = await library.items()
         collections = await library.collections()
         await semantic.update(items)

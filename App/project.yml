@@ -4,8 +4,8 @@
 # The vault's secret keys live only in the main app's Keychain; extensions get the vault *public*
 # key and an inbox token through the App Group, so they can add items but never read them.
 #
-# Free Apple ID budget (10 App IDs / 7 days, 3 apps per device): one multiplatform app plus three
-# extensions = 4 App IDs, 1 app slot per device.
+# Free Apple ID budget (10 App IDs / 7 days, 3 apps per device): one multiplatform app plus four
+# extensions (share, widgets, Safari, and the iOS keyboard) = 5 App IDs, 1 app slot per device.
 name: Trove
 options:
   bundleIdPrefix: com.mrlancus
@@ -49,6 +49,8 @@ targets:
       - target: TroveShare
       - target: TroveWidgets
       - target: TroveSafari
+      - target: TroveKeyboard
+        destinationFilters: [iOS]
     info:
       path: Config/Trove-Info.plist
       properties:
@@ -171,3 +173,31 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.safari
+
+  TroveKeyboard:
+    type: app-extension
+    supportedDestinations: [iOS]
+    sources:
+      - path: KeyboardExtension
+      - path: Sources/Platform/SharedConfig.swift
+    info:
+      path: Config/TroveKeyboard-Info.plist
+      properties:
+        CFBundleDisplayName: Trove
+        TroveAppGroup: $(TROVE_APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            # Needed to read the App Group (the clips the app saved). The keyboard never uses the network.
+            RequestsOpenAccess: true
+    entitlements:
+      path: Config/TroveKeyboard.entitlements
+      properties:
+        com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.keyboard

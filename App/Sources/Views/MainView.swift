@@ -30,6 +30,7 @@ struct MainView: View {
     @State private var showImporter = false
     @State private var showAsk = false
     @State private var showSettings = false
+    @State private var showClipboard = false
 
     var body: some View {
         @Bindable var model = model
@@ -50,6 +51,7 @@ struct MainView: View {
         }
         .sheet(isPresented: $model.showCapture) { CaptureView().presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showAsk) { AskView() }
+        .sheet(isPresented: $showClipboard) { ClipboardScreen() }
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { Task { await model.importFiles(urls) } }
@@ -76,6 +78,9 @@ struct MainView: View {
             } label: { Label("Add", systemImage: "ellipsis.circle") }
             Button { showAsk = true } label: { Label("Ask Trove", systemImage: "sparkles") }
                 .keyboardShortcut("j", modifiers: .command)
+            Button { showClipboard = true } label: { Label("Clipboard", systemImage: "doc.on.clipboard") }
+                .keyboardShortcut("v", modifiers: [.command, .shift])
+                .help("Clipboard history (⌥Space from anywhere on the Mac)")
             SyncIndicator()
         }
     }

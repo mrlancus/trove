@@ -1,6 +1,10 @@
 import SwiftUI
 import TroveCore
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+import ApplicationServices
+#endif
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -13,6 +17,7 @@ struct SettingsView: View {
             RelaySection()
             AISection()
             IntegrationsSection()
+            ClipboardSection()
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
                 Link("How Trove works (docs)", destination: URL(string: "https://github.com/mrlancus/trove/blob/main/docs/RESEARCH.md")!)
@@ -238,3 +243,44 @@ struct CopyRow: View {
         }
     }
 }
+
+private struct ClipboardSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var confirmClear = false
+    #if os(macOS)
+    @State private var trusted = AXIsProcessTrusted()
+    #endif
+
+    var body: some View {
+        @Bindable var clipboard = model.clipboard
+        Section {
+            Toggle("Keep clipboard history", isOn: $clipboard.enabled)
+            Toggle("Hold passwords and codes briefly (this device only)", isOn: $clipboard.keepSensitive)
+            #if os(macOS)
+            LabeledContent("Open from anywhere", value: "⌥Space")
+            LabeledContent("Paste straight into apps") {
+                if trusted { Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+                else {
+                    Button("Allow in Accessibility…") {
+                        _ = ClipboardPaletteController.canPostKeystrokes(prompt: true)
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                    }
+                }
+            }
+            .task { while !Task.isCancelled { trusted = AXIsProcessTrusted(); try? await Task.sleep(for: .seconds(2)) } }
+            #else
+            Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
+                .font(.caption).foregroundStyle(.secondary)
+            #endif
+            Button("Clear history…", role: .destructive) { confirmClear = true }
+                .confirmationDialog("Delete every unpinned clip on all your devices?", isPresented: $confirmClear) {
+                    Button("Clear history", role: .destructive) { Task { await model.clipboard.clearHistory() } }
+                }
+        } header: {
+            Text("Clipboard")
+        } footer: {
+            Text("Copies sync end-to-end encrypted to your other devices and are kept for 30 days (pinned ones forever). Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
+        }
+    }
+}
+
