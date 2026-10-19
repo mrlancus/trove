@@ -10,7 +10,7 @@ _Last updated by a cloud session (Linux, no Xcode). The user has only an Intel M
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
 | `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import | ✅ Done | 11 unit/interop tests; 6 e2e (relay + real Chromium), passing locally and against production |
-| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟡 Compiling on GitHub Actions; fixing errors | CI: `.github/workflows/apps.yml` |
+| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS; not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
@@ -27,9 +27,9 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
 ## Next steps
-1. **Get the apps compiling on CI.** Push fixes, read `ci-logs`, repeat until both macOS and iOS build. Keep fixes minimal.
-   - Likely trouble spots: Foundation Models API shapes in `OnDeviceAI.swift`, strict concurrency, and the Safari extension resources folder.
+1. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
    - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
+   - The Mac build is ad-hoc signed, so the data protection keychain is unavailable; `Keychain` falls back to the login keychain on macOS.
 2. **The user tries the website**: create a vault, save the recovery code, add the Chrome extension (Devices & extension → extension code), and set up the iPhone (Safari → the site → Setup code; optionally the share Shortcut). Then close the relay to new vaults.
 3. **Sideload on iPhone/iPad** once the IPA builds. Pair the app with a setup code from the website (Devices & extension → paste the recovery code → Make a setup code). Note the web-created vault has no iCloud folder; the app should use the relay.
    - Check: does the app join a relay-only vault cleanly (`VaultStore.join` with no iCloud folder)? Fix if not.
@@ -47,7 +47,9 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Start on the website:** https://trove-relay.lancus.workers.dev → New vault → save the recovery code in a password manager.
 - **iPhone/iPad now:** open the site in Safari → Setup code tab, using a code from Devices & extension on the computer. Then Share → Add to Home Screen.
 - **Chrome extension:** load `extensions/browser` unpacked (chrome://extensions → Developer mode), then paste the extension code from Devices & extension.
-- **Later, the real apps:** download `Trove-iOS` from the latest successful run on GitHub (Actions tab → "Apple apps") and install it with Sideloadly using your Apple ID. Redo it every 7 days.
+- **The real apps:** download from https://github.com/mrlancus/trove/releases/tag/latest.
+  - **iPhone/iPad:** install `Trove.ipa` with Sideloadly (sideloadly.io; works on Intel Macs) using your Apple ID. Then on the device: Settings → General → VPN & Device Management → trust it, and turn on Developer Mode if asked. Redo every 7 days.
+  - **Mac:** unzip `Trove-macOS.zip` and move Trove to Applications. On first open, macOS blocks it; go to System Settings → Privacy & Security → **Open Anyway**.
 - **Relay:** deployed at https://trove-relay.lancus.workers.dev. Optional extras in `server/README.md`: an Anthropic key for cloud AI (costs money, so it's your call) and email routing (needs a domain).
 - **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings (in the app; the website doesn't show WebDAV settings yet).
 
