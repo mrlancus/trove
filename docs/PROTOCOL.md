@@ -223,3 +223,29 @@ revoked the same way.
   each side materialise to identical records on the other.
 - **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to
   the same origin only, no inline script or style.
+
+## 8. Clipboard history (clips)
+Clips are records with `kind: "clip"`, synced and encrypted like everything else. They're kept apart
+from library items (`kind: "item"`). Fields (all `set`, last writer wins):
+
+| Field | Meaning |
+|---|---|
+| `text` | the copied text (for files: their paths, one per line) |
+| `image` | attachment JSON `{id, name, mime, size}` for a copied image (an encrypted blob, §1) |
+| `files` | `[path]` when files were copied (Mac) |
+| `hash` | `"t:" + sha256hex(utf8 text)`, `"i:" + sha256hex(image bytes)` or `"f:" + sha256hex(paths joined by "\n")` |
+| `createdAt`, `lastUsedAt` | Unix ms. History is sorted by the later of the two |
+| `device`, `sourceDevice`, `sourceApp` | device id, its display name, and the app it was copied from |
+| `pinned` | pinned clips are never pruned |
+| `savedItem` | the library item the clip was saved as |
+
+- **De-duplication:** copying something whose `hash` matches an existing clip just sets that clip's
+  `lastUsedAt` (and `sourceApp`).
+- **Pruning:** any device may delete unpinned clips older than 30 days or beyond the newest 1,000.
+- **Never stored:** copies marked concealed or transient (nspasteboard.org types), copies from
+  password managers, and text that looks sensitive (passwords, API keys, private keys, one-time
+  codes) are never written as clips. The Mac holds sensitive copies in memory for two minutes only.
+  The rules live in `Clip.swift` (`SensitiveDetector`) and `web/public/core/clips.js`, and their
+  tests are kept in step.
+- **iOS keyboard:** the app writes the latest text clips to the App Group (`keyboard-clips.json`)
+  for the Trove keyboard, which has no vault keys.
