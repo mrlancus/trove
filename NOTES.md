@@ -1,56 +1,40 @@
 # NOTES: status and next steps
 
-_Last updated by the cloud session that wrote the code (Linux, no Xcode)._
+_Last updated by a cloud session (Linux, no Xcode). The user has only an Intel Mac, so there is no local Xcode._
 
 ## Status
 | Part | State | Tested |
 |---|---|---|
-| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 33 tests on the Workers runtime (incl. a real MIME email) |
+| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
 | `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing) | ✅ Done | 49 tests, plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
-| `web/` web app (any browser, served by the relay) | ✅ Done | 11 unit/interop tests, relay e2e, real-Chromium UI e2e |
-| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟡 Written, **never compiled** | all files pass the Swift parser only |
+| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import | ✅ Done | 11 unit/interop tests; 6 e2e (relay + real Chromium), passing locally and against production |
+| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟡 Compiling on GitHub Actions; fixing errors | CI: `.github/workflows/apps.yml` |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
 before restyling `App/Sources/Views`. The web app currently uses a neutral style close to Midnight.
 
-## Next steps (Mac session)
-1. **Get it compiling.**
-   1. Run `brew install xcodegen`, then `cd App && xcodegen`, then open `Trove.xcodeproj`.
-   2. In Xcode, select each of the 4 targets → Signing & Capabilities → choose the user's Personal Team. Or set `DEVELOPMENT_TEAM` in `project.yml` and re-run xcodegen.
-   3. `xcodebuild … -destination 'platform=macOS' build`, then fix errors until it builds. Then do the same for iOS.
-   4. Likely trouble spots:
-      - Exact Foundation Models API shapes in `OnDeviceAI.swift` (`@Guide(.count(3...6))` and `.anyOf`)
-      - Strict-concurrency complaints (closures capturing non-Sendable types)
-      - `supportedDestinations` in XcodeGen (needs XcodeGen ≥ 2.39)
-      - The Safari extension resources folder reference
-   5. If App Groups can't be provisioned on the free team, `SharedConfig.container` falls back to a local folder. The share extension then can't hand items over, so note it and use the relay path.
-2. **Run Phase 0 spikes** and record the results in `docs/RESEARCH.md` §11:
-   - **The big one:** whether iPhone/iPad can read/write a picked iCloud Drive folder with a free account. The flow is onboarding → "Choose a folder".
-   - Whether Foundation Models are available on the iPad (Settings → Intelligence shows the status).
-   - Whether speech transcription works on the iPhone.
-   - Whether the Safari extension loads.
-3. **Mac MVP pass.**
-   1. Create a vault in iCloud Drive. Add notes, links and files, and check the cards, detail view and search.
-   2. Test the ⌘⇧Space capture window and the menu bar.
-   3. Show the user the UI and iterate on the design. The prompt asks for 2–3 directions.
-4. **iPhone + iPad.**
-   1. Pair with the QR code from Mac Settings → Devices.
-   2. Test share sheet saves, widgets, the Control Center control, and Shortcuts ("Save Clipboard to Trove" for Back Tap).
-   3. Check that the iPad enriches items saved on the other devices.
-5. **Relay.** It's **already deployed** at `https://trove-relay.lancus.workers.dev`, with R2 bucket `trove-blobs` and `CLAUDE_MODEL=claude-haiku-5-5`. To redeploy from the Mac, run `npx wrangler login` once, then `npx wrangler deploy` in `server/`.
-   1. Connect it in the app's Settings → Cloudflare relay.
-   2. **Once the user's vault exists,** set `ALLOW_NEW_VAULTS` to `"false"` in `server/wrangler.jsonc` and redeploy, so strangers can't create vaults.
-   3. No `ANTHROPIC_API_KEY` secret is set yet, so cloud AI is off. Ask the user before adding one: it's billed separately.
-   4. Then test:
-   - live sync and the browser extension
-   - GoodNotes WebDAV with a big notebook, and optionally email-in
-   - **the web app**: open the relay URL in a browser and paste a setup code from Add a device
-   - **price-drop alerts**: on a product link, ⋯ → Track price drops. Check it in the detail view after a sync
-   - **publish to link**: on a note, ⋯ → Publish to link; the link is copied. Open it in a private window, then Remove public link
+## The user's setup (important)
+- **No Apple Silicon Mac.** The user's Mac is Intel, and current Xcode needs M1 or later. So:
+  - **The website is the main client for now:** https://trove-relay.lancus.workers.dev. It can create the vault, sync, import the inbox and add devices.
+  - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
+    1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
+    2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
+  - **Installing:** the run's artifacts are `Trove-macOS` (universal, ad-hoc signed) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
+- **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
+
+## Next steps
+1. **Get the apps compiling on CI.** Push fixes, read `ci-logs`, repeat until both macOS and iOS build. Keep fixes minimal.
+   - Likely trouble spots: Foundation Models API shapes in `OnDeviceAI.swift`, strict concurrency, and the Safari extension resources folder.
+   - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
+2. **The user tries the website**: create a vault, save the recovery code, add the Chrome extension (Devices & extension → extension code), and set up the iPhone (Safari → the site → Setup code; optionally the share Shortcut). Then close the relay to new vaults.
+3. **Sideload on iPhone/iPad** once the IPA builds. Pair the app with a setup code from the website (Devices & extension → paste the recovery code → Make a setup code). Note the web-created vault has no iCloud folder; the app should use the relay.
+   - Check: does the app join a relay-only vault cleanly (`VaultStore.join` with no iCloud folder)? Fix if not.
+4. **Mac app on the Intel Mac**: unzip, right-click → Open. If macOS is older than 15, lower `deploymentTarget.macOS` in `project.yml`.
+5. **Then:** price-drop alerts and publish-to-link in the apps (the website doesn't have them yet), the design direction (user hasn't picked yet), and link previews for links saved on the website (needs a relay unfurl endpoint, since browsers can't fetch other sites).
 6. **Polish / later:**
    - A TextKit 2 live-styling Markdown editor
    - Move `SyncEngine` snapshot persistence from JSON to SQLite once vaults are big
@@ -60,16 +44,12 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
    - Notion and Readwise import UI (parsers exist in TroveCore)
 
 ## Manual steps for the user
-- **Install and sign in:** install Xcode and sign in with your Apple ID (Xcode → Settings → Accounts).
-- **iPhone/iPad:**
-  - Plug in, tap Trust, then turn on Settings → Privacy & Security → Developer Mode.
-  - After the first install, go to Settings → General → VPN & Device Management → trust your Apple ID.
-- **Every 7 days:** plug in and run the app from Xcode again (free account limit). Your data is safe in iCloud.
-- **Mac permissions:**
-  - Automation → Notes, for Apple Notes mirroring.
-  - Keep "Trove" in iCloud Drive set to **Keep Downloaded** (right-click it in Finder). Do the same in the Files app on iOS.
-- **Relay:** already deployed at https://trove-relay.lancus.workers.dev. Optional extras in `server/README.md`: an Anthropic key for cloud AI (costs money, so it is your call) and email routing (needs a domain).
-- **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings.
+- **Start on the website:** https://trove-relay.lancus.workers.dev → New vault → save the recovery code in a password manager.
+- **iPhone/iPad now:** open the site in Safari → Setup code tab, using a code from Devices & extension on the computer. Then Share → Add to Home Screen.
+- **Chrome extension:** load `extensions/browser` unpacked (chrome://extensions → Developer mode), then paste the extension code from Devices & extension.
+- **Later, the real apps:** download `Trove-iOS` from the latest successful run on GitHub (Actions tab → "Apple apps") and install it with Sideloadly using your Apple ID. Redo it every 7 days.
+- **Relay:** deployed at https://trove-relay.lancus.workers.dev. Optional extras in `server/README.md`: an Anthropic key for cloud AI (costs money, so it's your call) and email routing (needs a domain).
+- **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings (in the app; the website doesn't show WebDAV settings yet).
 
 ## How the newer features work (built without a Mac)
 - **Price-drop alerts:**
