@@ -88,7 +88,8 @@ struct ShareForm: View {
         }
     }
 
-    nonisolated static func loadFile(_ provider: NSItemProvider) async -> (Data, String, String)? {
+    /// Stays on the main actor with `provider` (not Sendable); the callback only captures Sendable values.
+    static func loadFile(_ provider: NSItemProvider) async -> (Data, String, String)? {
         let suggested = provider.suggestedName
         for type in [UTType.pdf, .image, .movie, .audio, UTType(filenameExtension: "md") ?? .plainText, .data] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
             if type == .plainText { continue }

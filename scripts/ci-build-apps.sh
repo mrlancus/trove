@@ -9,6 +9,9 @@ status=0
 
 (cd App && xcodegen generate) > build/logs/xcodegen.log 2>&1 || { cat build/logs/xcodegen.log; exit 1; }
 
+# Keep going after the first failing target, so one CI run reports every error.
+defaults write com.apple.dt.Xcode IDEBuildingContinueBuildingAfterErrors -bool YES
+
 common=(-project App/Trove.xcodeproj -scheme Trove -configuration Release -derivedDataPath build/dd
         -skipPackagePluginValidation -skipMacroValidation)
 
