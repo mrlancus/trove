@@ -74,6 +74,7 @@ targets:
         NSRemindersFullAccessUsageDescription: Trove can turn tasks in your notes into reminders.
         NSUserActivityTypes: [com.mrlancus.trove.item]
         TroveAppGroup: $(TROVE_APP_GROUP)
+        TroveDefaultRelay: https://trove-relay.lancus.workers.dev
     entitlements:
       path: Config/Trove.entitlements
       properties:

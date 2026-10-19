@@ -110,8 +110,9 @@ export function isSensitive(raw) {
     "AKIA", "ASIA", "AIza", "ya29.", "glpat-", "npm_", "pypi-", "SG.", "shpat_", "cfut_", "eyJ"];
   if (s.length >= 16 && prefixes.some((p) => s.startsWith(p))) return true;
   if (s.includes("://")) { try { new URL(s); return false; } catch { /* not a URL */ } }
-  // (Only for plain text: compact JSON, colors and paths mix character classes too.)
-  if (s.length >= 8 && s.length <= 64 && classify(s) === "text") {
+  // (Only for plain text: compact JSON, colors and paths mix character classes too. Words with
+  // punctuation, like "Tuesday," or "Hello-World", and file names aren't passwords.)
+  if (s.length >= 8 && s.length <= 64 && classify(s) === "text" && /\p{N}/u.test(s) && !/^[\w\- ]+\.[A-Za-z0-9]{2,4}$/.test(s)) {
     const classes = [/\p{Ll}/u, /\p{Lu}/u, /\p{N}/u, /[^\p{L}\p{N}]/u].filter((r) => r.test(s)).length;
     if (classes >= 3 && !s.includes("@") && !s.startsWith("/") && !s.startsWith("~")) return true;
   }

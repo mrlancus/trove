@@ -24,6 +24,9 @@ final class ClipboardStore {
     /// Keep sensitive copies for two minutes on this device (off: ignore them entirely).
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
 
+    /// The last copy this device recorded, for the status line in Settings.
+    private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
+
     @ObservationIgnored private var library: Library?
     @ObservationIgnored private var images: [String: PlatformImage] = [:]
     @ObservationIgnored private var lastPrune = Date.distantPast
@@ -59,22 +62,26 @@ final class ClipboardStore {
             guard keepSensitive else { return }
             ephemeral.removeAll { $0.text == text }
             ephemeral.insert(EphemeralClip(text: text, sourceApp: sourceApp, expires: Date().addingTimeInterval(Self.sensitiveLifetime)), at: 0)
+            lastCaptured = (Date(), true)
             scheduleExpiry()
             return
         }
         await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        lastCaptured = (Date(), false)
         await reload()
     }
 
     func capture(image data: Data, mime: String, sourceApp: String?) async {
         guard enabled, let library else { return }
         _ = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        lastCaptured = (Date(), false)
         await reload()
     }
 
     func capture(files: [String], sourceApp: String?) async {
         guard enabled, let library else { return }
         await library.addClip(files: files, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        lastCaptured = (Date(), false)
         await reload()
     }
 

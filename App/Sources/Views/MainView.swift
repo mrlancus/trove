@@ -52,7 +52,9 @@ struct MainView: View {
         .sheet(isPresented: $model.showCapture) { CaptureView().presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showAsk) { AskView() }
         .sheet(isPresented: $showClipboard) { ClipboardScreen() }
+        #if os(iOS)
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
+        #endif
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { Task { await model.importFiles(urls) } }
         }
@@ -166,7 +168,13 @@ struct SidebarView: View {
         }
         .navigationTitle("Trove")
         .toolbar {
-            ToolbarItem { Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") } }
+            ToolbarItem {
+                #if os(macOS)
+                SettingsLink { Label("Settings", systemImage: "gearshape") }
+                #else
+                Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                #endif
+            }
         }
         .alert("New collection", isPresented: $addingCollection) {
             TextField("Name", text: $newCollection)

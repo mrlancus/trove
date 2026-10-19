@@ -468,6 +468,11 @@ final class AppModel {
         try? await vault.relayClient?.setAIEnabled(on)
     }
 
+    /// The user's own relay, baked in at build time (`TroveDefaultRelay` in project.yml).
+    static var defaultRelay: String? {
+        (Bundle.main.object(forInfoDictionaryKey: "TroveDefaultRelay") as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
     func connectRelay(_ urlString: String) async throws {
         guard let url = URL(string: urlString.trimmingCharacters(in: .whitespaces)) else { throw URLError(.badURL) }
         try await vault.connectRelay(url)

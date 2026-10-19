@@ -134,7 +134,8 @@ test("clips: classify, secrets and transforms match the Swift rules", async () =
   for (const secret of ["sk-ant-api03-abcdefghijklmnopqrstuvwxyz", "ghp_abcdefghijklmnopqrstuvwxyz0123456789", "Tr0ub4dor&3x!", "482913",
     "AKIAIOSFODNN7EXAMPLE", "-----BEGIN OPENSSH PRIVATE KEY-----\nabc", "q8Zr2LmX9vB4nT7cK1pW5sY3hJ6gD0fA"]) assert.ok(isSensitive(secret), secret);
   for (const normal of ["Remember to buy milk", "https://example.com/Page?id=1&X=2", "me@example.com", "hello", "1,299", "~/Documents/My File.txt",
-    "#ff8a3d", "iPhone 17 Pro", '{"b":1,"a":2}', "rgb(1,2,3)"]) assert.ok(!isSensitive(normal), normal);
+    "#ff8a3d", "iPhone 17 Pro", '{"b":1,"a":2}', "rgb(1,2,3)",
+    "Tuesday,", "Hello-World!", "Trove-macOS.zip", "Report2024.pdf"]) assert.ok(!isSensitive(normal), normal);
   const t = Object.fromEntries(transforms.map((x) => [x.id, x.apply]));
   assert.equal(t.cleanLink("https://example.com/a?utm_source=x&id=2"), "https://example.com/a?id=2");
   assert.equal(t.minifiedJSON('{ "a" : 1 }'), '{"a":1}');

@@ -183,10 +183,12 @@ public enum SensitiveDetector {
                         "AKIA", "ASIA", "AIza", "ya29.", "glpat-", "npm_", "pypi-", "SG.", "shpat_", "cfut_", "eyJ"]
         if s.count >= 16, prefixes.contains(where: { s.hasPrefix($0) }) { return true }
         if URL(string: s)?.scheme != nil, s.contains("://") { return false }
-        // Password-like: 8–64 chars mixing at least three of lower, upper, digits, symbols.
-        // (Only for plain text: compact JSON, colors and paths mix character classes too.)
-        if s.count >= 8, s.count <= 64, ClipClassifier.classify(s) == .text {
-            let classes = [s.contains(where: \.isLowercase), s.contains(where: \.isUppercase), s.contains(where: \.isNumber),
+        // Password-like: 8–64 chars with a digit, mixing at least three of lower, upper, digits, symbols.
+        // (Only for plain text: compact JSON, colors and paths mix character classes too. Words with
+        // punctuation, like "Tuesday," or "Hello-World", and file names aren't passwords.)
+        if s.count >= 8, s.count <= 64, ClipClassifier.classify(s) == .text, s.contains(where: \.isNumber),
+           s.range(of: #"^[\w\- ]+\.[A-Za-z0-9]{2,4}$"#, options: .regularExpression) == nil {
+            let classes = [s.contains(where: \.isLowercase), s.contains(where: \.isUppercase), true,
                            s.contains(where: { !$0.isLetter && !$0.isNumber })].filter { $0 }.count
             if classes >= 3, !s.contains("@"), !s.hasPrefix("/"), !s.hasPrefix("~") { return true }
         }

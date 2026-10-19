@@ -67,7 +67,7 @@ struct TroveApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            NavigationStack { SettingsView() }.environment(model)
+            SettingsView().environment(model)
         }
         #endif
     }

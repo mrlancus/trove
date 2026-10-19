@@ -7,31 +7,70 @@ import ApplicationServices
 #endif
 
 struct SettingsView: View {
-    @Environment(AppModel.self) private var model
+    var body: some View {
+        #if os(macOS)
+        // A real Settings window with tabs, so it never outgrows the main window.
+        TabView {
+            Form { VaultSection(); AboutSection() }.formStyle(.grouped)
+                .tabItem { Label("General", systemImage: "gearshape") }
+            Form { WebSection(); DevicesSection(); RelaySection() }.formStyle(.grouped)
+                .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
+            Form { ClipboardSection() }.formStyle(.grouped)
+                .tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }
+            Form { AISection() }.formStyle(.grouped)
+                .tabItem { Label("Intelligence", systemImage: "sparkles") }
+            Form { IntegrationsSection() }.formStyle(.grouped)
+                .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
+        }
+        .frame(width: 600, height: 560)
+        #else
+        SettingsList()
+        #endif
+    }
+}
+
+#if os(iOS)
+private struct SettingsList: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Form {
             VaultSection()
+            WebSection()
             DevicesSection()
             RelaySection()
             AISection()
             IntegrationsSection()
             ClipboardSection()
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
-                Link("How Trove works (docs)", destination: URL(string: "https://github.com/mrlancus/trove/blob/main/docs/RESEARCH.md")!)
-            }
-            Section {
-                Button("Remove Trove from this device…", role: .destructive) { model.resetThisDevice(); dismiss() }
-            } footer: {
-                Text("Removes the keys and local copy from this device only. Your vault in iCloud and on other devices is untouched.")
-            }
+            AboutSection()
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        .frame(minWidth: 480, minHeight: 560)
+    }
+}
+#endif
+
+private struct AboutSection: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmRemove = false
+
+    var body: some View {
+        Section("About") {
+            LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
+            Link("How Trove works (docs)", destination: URL(string: "https://github.com/mrlancus/trove/blob/main/docs/RESEARCH.md")!)
+        }
+        Section {
+            Button("Remove Trove from this device…", role: .destructive) { confirmRemove = true }
+                .confirmationDialog("Remove Trove from this device?", isPresented: $confirmRemove) {
+                    Button("Remove from this device", role: .destructive) { model.resetThisDevice(); dismiss() }
+                } message: {
+                    Text("You'll need your recovery code or another device to set it up again.")
+                }
+        } footer: {
+            FormFooter("Removes the keys and local copy from this device only. Your vault in iCloud and on other devices is untouched.")
+        }
     }
 }
 
@@ -80,6 +119,74 @@ private struct RecoveryCodeView: View {
     }
 }
 
+/// "Use Trove in a browser": turns the relay on if needed, then makes a one-time setup code to paste
+/// on the website. The code is copied as soon as it's made.
+struct WebSection: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
+    @State private var code: String?
+    @State private var working = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            if let relay = model.config?.relay, let site = URL(string: relay.url) {
+                LabeledContent("Website") { Link(site.host ?? relay.url, destination: site) }
+                if let code {
+                    CopyRow(title: "Setup code (copied)", value: code, copied: true)
+                    Text("On the website, open the Setup code tab, paste it and press Join. It works once, for 10 minutes.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button { makeCode() } label: {
+                        if working { ProgressView().controlSize(.small) } else { Text(code == nil ? "Make a setup code" : "Make a new code") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(working)
+                    Button("Open the website") { openURL(site) }
+                }
+            } else {
+                Text("The website syncs through your Cloudflare relay. Turn it on to use Trove in any browser, with the browser extension, email-in and GoodNotes backups.")
+                    .font(.callout).foregroundStyle(.secondary)
+                if let relay = AppModel.defaultRelay {
+                    Button { turnOnRelay(relay) } label: {
+                        if working { ProgressView().controlSize(.small) } else { Text("Turn on the relay (\(URL(string: relay)?.host ?? relay))") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(working)
+                }
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+        } header: {
+            Text("Trove on the web")
+        }
+    }
+
+    private func turnOnRelay(_ url: String) {
+        working = true
+        error = nil
+        Task {
+            do { try await model.connectRelay(url); working = false; makeCode() } catch {
+                self.error = error.localizedDescription
+                working = false
+            }
+        }
+    }
+
+    private func makeCode() {
+        working = true
+        error = nil
+        Task {
+            do {
+                let made = try await model.vault.pairingPayload().setupCode
+                Pasteboard.copy(made)
+                code = made
+            } catch { self.error = error.localizedDescription }
+            working = false
+        }
+    }
+}
+
 private struct DevicesSection: View {
     @Environment(AppModel.self) private var model
     @State private var devices: [RelayClient.Device] = []
@@ -113,7 +220,7 @@ private struct DevicesSection: View {
 
 private struct RelaySection: View {
     @Environment(AppModel.self) private var model
-    @State private var url = ""
+    @State private var url = AppModel.defaultRelay ?? ""
     @State private var error: String?
     @State private var working = false
 
@@ -122,10 +229,6 @@ private struct RelaySection: View {
             if let relay = model.config?.relay {
                 LabeledContent("Relay", value: URL(string: relay.url)?.host ?? relay.url)
                 LabeledContent("Live updates", value: model.sync.live ? "Connected" : "Not connected")
-                if let web = URL(string: relay.url) {
-                    LabeledContent("Web app") { Link(web.host ?? relay.url, destination: web) }
-                    Text("Open it in any browser and add it with a setup code from Add a device.").font(.caption).foregroundStyle(.secondary)
-                }
                 if let code = model.vault.browserSetupCode() {
                     CopyRow(title: "Browser extension setup code", value: code)
                 }
@@ -158,7 +261,7 @@ private struct RelaySection: View {
         } header: {
             Text("Cloudflare relay (optional)")
         } footer: {
-            Text("Adds instant sync, email-in, GoodNotes backups, the browser extension and cloud AI. Everything stays end-to-end encrypted; see server/README.")
+            FormFooter("Adds instant sync, email-in, GoodNotes backups, the browser extension and cloud AI. Everything stays end-to-end encrypted; see server/README.")
         }
     }
 }
@@ -180,7 +283,7 @@ private struct AISection: View {
         } header: {
             Text("Intelligence")
         } footer: {
-            Text("Search by meaning, text in images, dates and places work on every device. Smart titles and summaries come from Apple Intelligence (your iPad does it for everything). Cloud AI sends that item's text to Claude via your relay; items processed this way get a ☁︎ badge.")
+            FormFooter("Search by meaning, text in images, dates and places work on every device. Smart titles and summaries come from Apple Intelligence (your iPad does it for everything). Cloud AI sends that item's text to Claude via your relay; items processed this way get a ☁︎ badge.")
         }
     }
 }
@@ -224,10 +327,27 @@ private struct IntegrationsSection: View {
     }
 }
 
+/// Section footnote. macOS right-aligns form footers by default; these are sentences, so they
+/// read from the left.
+struct FormFooter: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct CopyRow: View {
     let title: String
     let value: String
-    @State private var copied = false
+    @State private var copied: Bool
+
+    init(title: String, value: String, copied: Bool = false) {
+        self.title = title
+        self.value = value
+        _copied = State(initialValue: copied)
+    }
 
     var body: some View {
         HStack {
@@ -257,6 +377,15 @@ private struct ClipboardSection: View {
             Toggle("Keep clipboard history", isOn: $clipboard.enabled)
             Toggle("Hold passwords and codes briefly (this device only)", isOn: $clipboard.keepSensitive)
             #if os(macOS)
+            if clipboard.enabled {
+                LabeledContent("Last copy recorded") {
+                    if let last = clipboard.lastCaptured {
+                        Text(last.heldBriefly ? "\(last.date.relative) (looked like a password: kept 2 min, not synced)" : last.date.relative)
+                    } else {
+                        Text("None yet. Copy something to try it.")
+                    }
+                }
+            }
             LabeledContent("Open from anywhere", value: "⌥Space")
             LabeledContent("Paste straight into apps") {
                 if trusted { Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
@@ -266,6 +395,10 @@ private struct ClipboardSection: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
                     }
                 }
+            }
+            if !trusted {
+                Text("Until this is allowed, picking a clip copies it and you press ⌘V. If Trove is already switched on in Accessibility but this still says so, select Trove there, remove it with −, then allow it again: macOS treats each new download as a different app.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             .task { while !Task.isCancelled { trusted = AXIsProcessTrusted(); try? await Task.sleep(for: .seconds(2)) } }
             #else
@@ -279,7 +412,7 @@ private struct ClipboardSection: View {
         } header: {
             Text("Clipboard")
         } footer: {
-            Text("Copies sync end-to-end encrypted to your other devices and are kept for 30 days (pinned ones forever). Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
+            FormFooter("Copies sync end-to-end encrypted to your other devices and are kept for 30 days (pinned ones forever). Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
         }
     }
 }

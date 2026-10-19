@@ -37,7 +37,7 @@ struct VaultConfig: Codable, Equatable {
 }
 
 enum VaultError: LocalizedError {
-    case noKeys, folderUnavailable(String), notAVault, alreadyExists
+    case noKeys, folderUnavailable(String), notAVault, alreadyExists, differentVault
 
     var errorDescription: String? {
         switch self {
@@ -45,6 +45,7 @@ enum VaultError: LocalizedError {
         case .folderUnavailable(let why): "Couldn't open the Trove folder: \(why)"
         case .notAVault: "That folder isn't a Trove vault (no vault.json)."
         case .alreadyExists: "There's already a Trove vault in that folder. Choose “Join” instead."
+        case .differentVault: "That folder holds a different Trove vault. Choose another folder, or skip it and sync through the relay."
         }
     }
 }
@@ -179,8 +180,18 @@ final class VaultStore {
         let keys = try VaultKeys(payload.keys)
         var storage = VaultConfig.Storage.none
         if let folder {
-            let info = try FolderTransport(root: folder, coordinate: Self.coordinate).readVaultInfo()
-            guard let info, info.vaultId == payload.vaultId else { throw VaultError.notAVault }
+            let transport = FolderTransport(root: folder, coordinate: Self.coordinate)
+            if let info = try transport.readVaultInfo() {
+                guard info.vaultId == payload.vaultId else { throw VaultError.differentVault }
+            } else {
+                // A vault made on the website has no iCloud folder yet; this device starts one and
+                // copies the relay's journals into it. Only in an empty folder: anything else may be
+                // a vault iCloud hasn't downloaded yet.
+                let contents = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+                guard contents.allSatisfy({ $0 == ".DS_Store" }) else { throw VaultError.notAVault }
+                try transport.writeVaultInfo(.init(vaultId: payload.vaultId, vaultPublicKey: keys.publicKeyBase64URL,
+                                                   encrypted: payload.encrypted, relayURL: payload.relayURL))
+            }
             storage = picked ? .bookmark(try Self.bookmark(for: folder)) : .path(folder.path)
         }
         let deviceId = UUID().uuidString

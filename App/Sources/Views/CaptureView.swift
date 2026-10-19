@@ -31,7 +31,13 @@ struct CaptureView: View {
                 .card(cornerRadius: 14)
                 .overlay(alignment: .topLeading) {
                     if text.isEmpty {
-                        Text("A link, an idea, a #tagged thought…").foregroundStyle(.tertiary).padding(18).allowsHitTesting(false)
+                        // Same font and inset as the editor's first line, so it sits right at the caret.
+                        Text("A link, an idea, a #tagged thought…")
+                            .font(.title3)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 10 + Self.editorInset.width)
+                            .padding(.top, 10 + Self.editorInset.height)
+                            .allowsHitTesting(false)
                     }
                 }
             HStack {
@@ -52,6 +58,14 @@ struct CaptureView: View {
         .frame(minWidth: 420)
         .onAppear { focused = true }
     }
+
+    /// Where a TextEditor draws its first character: the text view's line padding (5pt) plus its
+    /// top inset (none on the Mac, 8pt on iOS).
+    #if os(macOS)
+    static let editorInset = CGSize(width: 5, height: 0)
+    #else
+    static let editorInset = CGSize(width: 5, height: 8)
+    #endif
 
     private var kindHint: String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -111,7 +111,7 @@ struct OnboardingView: View {
     private var join: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Join your Trove").font(.title.bold())
-            Text("On a device that already has Trove, open Settings → Devices → Add a device, then scan the code here or paste it.")
+            Text("On a device that already has Trove, open Settings → Devices → Add a device. On the website, open Devices & extension → Make a setup code. Then scan the code here or paste it.")
                 .foregroundStyle(.secondary)
             PairingInput { scanned in
                 payload = scanned
