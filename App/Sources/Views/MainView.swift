@@ -110,7 +110,7 @@ struct WindowDropOverlay: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
-                    .symbolEffect(.bounce, options: .repeating)
+                    .symbolEffect(.pulse)
                 Text("Drop to add to Trove").font(.title.weight(.semibold))
                 Text("Files, folders, zips, links or text").foregroundStyle(.secondary)
             }
@@ -331,9 +331,9 @@ struct ItemMenu: View {
     }
 }
 
+@MainActor
 enum DropHandler {
     /// Files are imported together (so one drop is one import run); links and text are captured.
-    @MainActor
     static func handle(_ providers: [NSItemProvider], model: AppModel) -> Bool {
         Task { @MainActor in
             var files: [URL] = []
@@ -371,11 +371,12 @@ enum DropHandler {
         #if os(macOS)
         return await loadURL(provider)
         #else
+        let suggested = provider.suggestedName
         return await withCheckedContinuation { done in
             _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.item.identifier) { url, _ in
                 guard let url else { done.resume(returning: nil); return }
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                var name = provider.suggestedName ?? url.lastPathComponent
+                var name = suggested ?? url.lastPathComponent
                 if (name as NSString).pathExtension.isEmpty, !url.pathExtension.isEmpty { name += "." + url.pathExtension }
                 let copy = dir.appendingPathComponent(name)
                 try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

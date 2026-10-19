@@ -523,7 +523,7 @@ final class AppModel {
     }
 
     /// The user's own relay, baked in at build time (`TroveDefaultRelay` in project.yml).
-    static var defaultRelay: String? {
+    nonisolated static var defaultRelay: String? {
         (Bundle.main.object(forInfoDictionaryKey: "TroveDefaultRelay") as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 

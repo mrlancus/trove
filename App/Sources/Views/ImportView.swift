@@ -9,10 +9,18 @@ struct ImportView: View {
     @State private var targeted = false
     @State private var choosing = false
 
-    private let formats: [(symbol: String, title: String)] = [
-        ("doc.zipper", "Zip archives"), ("square.stack.3d.up", "Notion & Obsidian exports"), ("bookmark", "Browser bookmarks"),
-        ("highlighter", "Kindle highlights"), ("tablecells", "Pocket & Raindrop CSV"), ("quote.bubble", "Readwise"),
-        ("doc.richtext", "PDFs & documents"), ("photo", "Photos & screenshots"), ("folder", "Whole folders"),
+    private struct Format: Identifiable {
+        let symbol: String
+        let title: String
+        var id: String { title }
+    }
+
+    private let formats: [Format] = [
+        .init(symbol: "doc.zipper", title: "Zip archives"), .init(symbol: "square.stack.3d.up", title: "Notion & Obsidian exports"),
+        .init(symbol: "bookmark", title: "Browser bookmarks"), .init(symbol: "highlighter", title: "Kindle highlights"),
+        .init(symbol: "tablecells", title: "Pocket & Raindrop CSV"), .init(symbol: "quote.bubble", title: "Readwise"),
+        .init(symbol: "doc.richtext", title: "PDFs & documents"), .init(symbol: "photo", title: "Photos & screenshots"),
+        .init(symbol: "folder", title: "Whole folders"),
     ]
 
     var body: some View {
@@ -30,7 +38,7 @@ struct ImportView: View {
                     .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $targeted) { DropHandler.handle($0, model: model) }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 10)], spacing: 10) {
-                    ForEach(formats, id: \.title) { f in
+                    ForEach(formats) { f in
                         Label(f.title, systemImage: f.symbol)
                             .font(.callout)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -170,7 +178,7 @@ private struct DropZone: View {
             ForEach(Array(run.recent.prefix(5).enumerated()), id: \.element.id) { i, arrival in
                 Label(arrival.label, systemImage: "plus.circle.fill")
                     .font(.callout)
-                    .foregroundStyle(.primary.opacity(1 - Double(i) * 0.17))
+                    .foregroundStyle(Color.primary.opacity(1 - Double(i) * 0.17))
                     .lineLimit(1)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
