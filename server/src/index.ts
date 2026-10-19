@@ -43,6 +43,12 @@ export default {
       return forward(env, vaultId, request, "/api/" + parts.slice(3).join("/"));
     }
 
+    if (parts[0] === "p" && parts.length === 3 && request.method === "GET") {
+      const [, vaultId, slug] = parts;
+      if (!VAULT_ID.test(vaultId!) || !/^[A-Za-z0-9_-]{6,64}$/.test(slug!)) return error(404, "not found");
+      return stub(env, vaultId!).fetch(new Request(`https://vault/public/${slug}`));
+    }
+
     if (parts[0] === "dav") {
       // Basic auth username is the vault id.
       const auth = request.headers.get("authorization") ?? "";

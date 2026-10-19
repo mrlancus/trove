@@ -2,6 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { envelopePrefix, randomId, randomToken, sealedLength, sealStream, sha256Hex, b64uDecode, type InboxHeader } from "./crypto";
 import { handleDav } from "./webdav";
 import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
+import { checkPrice, type Price } from "./price";
+import { publishedPage } from "./publish";
 
 export interface Env {
   VAULT: DurableObjectNamespace<VaultObject>;
@@ -16,6 +18,10 @@ export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
 
 const MAX_SEGMENT_BYTES = 1024 * 1024;
 const PAIRING_TTL_MS = 10 * 60 * 1000;
+const PRICE_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
+const PRICE_CHECKS_PER_RUN = 40; // stays under the free plan's subrequest limit
+const MAX_WATCHES = 200;
+const MAX_PUBLISHED_BYTES = 256 * 1024;
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -43,6 +49,9 @@ export class VaultObject extends DurableObject<Env> {
         dav_path TEXT, r2_key TEXT, created_at INTEGER, acked INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS dav(path TEXT PRIMARY KEY, size INTEGER, etag TEXT, updated_at INTEGER, is_dir INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS blobs(id TEXT PRIMARY KEY, size INTEGER, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS watches(id TEXT PRIMARY KEY, url TEXT, item_id TEXT, created_at INTEGER, checked_at INTEGER DEFAULT 0,
+        error TEXT, price REAL, currency TEXT, lowest REAL, history TEXT DEFAULT '[]', dropped_at INTEGER);
+      CREATE TABLE IF NOT EXISTS published(slug TEXT PRIMARY KEY, title TEXT, markdown TEXT, updated_at INTEGER);
     `);
     // Keep-alive pings never wake the object (free-tier friendly).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
@@ -117,6 +126,7 @@ export class VaultObject extends DurableObject<Env> {
       if (path === "/internal/init") return await this.init(request);
       if (!this.vaultId) return error(404, "vault not found");
       if (path === "/internal/inbox") return await this.ingest(request);
+      if (path.startsWith("/public/") && request.method === "GET") return this.publicPage(path.slice(8));
       if (path === "/api/devices" && request.method === "POST") return await this.pairDevice(request);
 
       const caller = await this.authenticate(request);
@@ -210,6 +220,22 @@ export class VaultObject extends DurableObject<Env> {
         break;
       case "live":
         return this.live(request, deviceId);
+      case "watches":
+        if (!a && method === "GET") return this.listWatches();
+        if (a && method === "PUT") return this.putWatch(a, await request.json());
+        if (a && method === "DELETE") return this.deleteWatch(a);
+        break;
+      case "published":
+        if (!a && method === "GET") {
+          return json({ pages: this.sql.exec("SELECT slug, title, updated_at FROM published ORDER BY updated_at DESC").toArray()
+            .map((r) => ({ slug: r.slug, title: r.title, updatedAt: r.updated_at, path: `/p/${this.vaultId}/${r.slug}` })) });
+        }
+        if (a && method === "PUT") return this.publish(a, await request.json());
+        if (a && method === "DELETE") {
+          this.sql.exec("DELETE FROM published WHERE slug = ?", a);
+          return new Response(null, { status: 204 });
+        }
+        break;
       case "ai": {
         if (method !== "POST") break;
         if (this.meta("aiEnabled") !== "true") return error(403, "AI is disabled for this vault");
@@ -401,6 +427,100 @@ export class VaultObject extends DurableObject<Env> {
     this.sql.exec("UPDATE dav SET path = ? WHERE path = ?", to, from);
     this.sql.exec("UPDATE inbox SET dav_path = ? WHERE dav_path = ?", to, from);
     return true;
+  }
+
+  // ---------- price watches (PROTOCOL.md §5) ----------
+
+  /** Overridable in tests. */
+  fetchPage: typeof fetch = (input, init) => fetch(input, init);
+
+  private watchRow(r: Record<string, SqlStorageValue>) {
+    return {
+      id: r.id, url: r.url, itemId: r.item_id, createdAt: r.created_at, checkedAt: r.checked_at || null,
+      error: r.error ?? null, price: r.price ?? null, currency: r.currency ?? null, lowest: r.lowest ?? null,
+      history: JSON.parse((r.history as string) || "[]"), droppedAt: r.dropped_at ?? null,
+    };
+  }
+
+  private listWatches() {
+    return json({ watches: this.sql.exec("SELECT * FROM watches ORDER BY created_at").toArray().map((r) => this.watchRow(r)) });
+  }
+
+  private async putWatch(id: string, body: { url?: string; itemId?: string }) {
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) return error(400, "bad watch id");
+    let url: URL;
+    try { url = new URL(body.url ?? ""); } catch { return error(400, "url required"); }
+    if (url.protocol !== "https:" && url.protocol !== "http:") return error(400, "http(s) urls only");
+    const count = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches").one().n;
+    const exists = this.sql.exec("SELECT 1 FROM watches WHERE id = ?", id).toArray()[0];
+    if (!exists && count >= MAX_WATCHES) return error(429, "too many watches");
+    this.sql.exec(
+      "INSERT INTO watches(id, url, item_id, created_at) VALUES(?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET url = excluded.url, item_id = excluded.item_id",
+      id, url.toString(), body.itemId ?? null, Date.now(),
+    );
+    // Check right away (in the alarm) and keep a 12h cadence afterwards.
+    await this.ctx.storage.setAlarm(Date.now() + 1000);
+    return json(this.watchRow(this.sql.exec("SELECT * FROM watches WHERE id = ?", id).one()), exists ? 200 : 201);
+  }
+
+  private async deleteWatch(id: string) {
+    this.sql.exec("DELETE FROM watches WHERE id = ?", id);
+    return new Response(null, { status: 204 });
+  }
+
+  /** Re-checks the stalest watches; pings devices about any price drop. */
+  async checkWatches(now = Date.now()) {
+    const due = this.sql
+      .exec("SELECT * FROM watches WHERE checked_at < ? ORDER BY checked_at LIMIT ?", now - PRICE_CHECK_EVERY_MS + 60_000, PRICE_CHECKS_PER_RUN)
+      .toArray();
+    for (const row of due) {
+      const result = await checkPrice(row.url as string, this.fetchPage);
+      if ("error" in result) {
+        this.sql.exec("UPDATE watches SET checked_at = ?, error = ? WHERE id = ?", now, result.error, row.id);
+        continue;
+      }
+      const price: Price = result;
+      const previous = row.price as number | null;
+      const history = (JSON.parse((row.history as string) || "[]") as { at: number; price: number }[]);
+      if (previous === null || price.amount !== previous) history.push({ at: now, price: price.amount });
+      const lowest = Math.min(price.amount, (row.lowest as number | null) ?? Infinity);
+      const dropped = previous !== null && price.amount < previous;
+      this.sql.exec(
+        "UPDATE watches SET checked_at = ?, error = NULL, price = ?, currency = ?, lowest = ?, history = ?, dropped_at = COALESCE(?, dropped_at) WHERE id = ?",
+        now, price.amount, price.currency ?? row.currency ?? null, lowest, JSON.stringify(history.slice(-60)), dropped ? now : null, row.id,
+      );
+      if (dropped) this.broadcast({ type: "price", id: row.id, itemId: row.item_id, price: price.amount, previous, currency: price.currency });
+    }
+    return due.length;
+  }
+
+  async alarm() {
+    await this.checkWatches();
+    const remaining = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches").one().n;
+    if (remaining > 0) {
+      const next = this.sql.exec<{ c: number }>("SELECT MIN(checked_at) AS c FROM watches").one().c ?? 0;
+      await this.ctx.storage.setAlarm(Math.max(Date.now() + 60_000, next + PRICE_CHECK_EVERY_MS));
+    }
+  }
+
+  // ---------- publish to link (PROTOCOL.md §6) ----------
+
+  private publish(slug: string, body: { title?: string; markdown?: string }) {
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(slug)) return error(400, "bad slug");
+    const title = String(body.title ?? "Untitled").slice(0, 200);
+    const markdown = String(body.markdown ?? "");
+    if (new TextEncoder().encode(markdown).length > MAX_PUBLISHED_BYTES) return error(413, "page too large");
+    this.sql.exec(
+      "INSERT INTO published(slug, title, markdown, updated_at) VALUES(?, ?, ?, ?) ON CONFLICT(slug) DO UPDATE SET title = excluded.title, markdown = excluded.markdown, updated_at = excluded.updated_at",
+      slug, title, markdown, Date.now(),
+    );
+    return json({ slug, path: `/p/${this.vaultId}/${slug}` }, 201);
+  }
+
+  private publicPage(slug: string) {
+    const row = this.sql.exec<{ title: string; markdown: string; updated_at: number }>("SELECT title, markdown, updated_at FROM published WHERE slug = ?", slug).toArray()[0];
+    if (!row) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
+    return publishedPage(row.title, row.markdown, row.updated_at);
   }
 
   // ---------- live sockets ----------

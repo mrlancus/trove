@@ -131,7 +131,14 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
 | `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
 | `DELETE /vaults/:v/inbox/:id` | device | ack after import → `204` |
-| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last}`, `{"type":"inbox",cursor,id}` |
+| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last}`, `{"type":"inbox",cursor,id}`, `{"type":"price",id,itemId,price,previous,currency}` |
+| `GET /vaults/:v/watches` | device | → `{watches:[Watch]}` (§5) |
+| `PUT /vaults/:v/watches/:id` | device | `{url, itemId?}` → `201`/`200` `Watch` (§5) |
+| `DELETE /vaults/:v/watches/:id` | device | → `204` |
+| `GET /vaults/:v/published` | device | → `{pages:[{slug,title,updatedAt,path}]}` (§6) |
+| `PUT /vaults/:v/published/:slug` | device | `{title, markdown}` → `201 {slug, path}` (§6) |
+| `DELETE /vaults/:v/published/:slug` | device | → `204` |
+| `GET /p/:v/:slug` | none | the published page as HTML (§6) |
 | `POST /vaults/:v/ai/enrich` | device | `{text, url?, title?}` → `{title, summary, tags[], kind?}` (Claude) |
 | `POST /vaults/:v/ai/ask` | device | `{question, sources:[{id,text}]}` → `{answer, citations:[id]}` (Claude) |
 | `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
@@ -158,3 +165,33 @@ header = { "v":1, "source":"email|webdav|web|ios", "receivedAt": ISO8601,
 - **Supported:** `OPTIONS`, `PROPFIND` (depth 0/1), `MKCOL`, `PUT`, `HEAD`, `DELETE`, `MOVE`, `LOCK`/`UNLOCK` (fake locks).
 - **How uploads are handled:** a `PUT` is sealed straight into the inbox, with `davPath` recorded. The server keeps only path, size and etag, so `PROPFIND` can list what was uploaded. A newer upload of the same path supersedes the older one on import.
 - **Privacy caveat:** notebook *file names* are visible to the server. The contents are not.
+
+## 5. Price-drop watches (opt-in per item)
+A device turns on "Track price drops" for a product item by sending `PUT /vaults/:v/watches/:id`
+with `{url, itemId}`. `id` is 8–64 of `[A-Za-z0-9_-]`; apps use the item id. The relay can see the
+product URL and the item id, and nothing else about the item. A vault can have up to 200 watches.
+
+- **Checking:** a Durable Object alarm re-fetches each page about every 12 hours, at most 40 pages
+  per run. It also runs about 1 second after a watch is added. The price comes from schema.org
+  `Product` JSON-LD (`offers.price`, `lowPrice`, `priceSpecification.price`, including inside
+  `@graph`), with a fallback to the `product:price:amount`, `og:price:amount` and `itemprop=price` meta tags.
+- **Watch:** `{id, url, itemId, createdAt, checkedAt|null, error|null, price|null, currency|null,
+  lowest|null, history:[{at,price}] (last 60 changes), droppedAt|null}`. Times are Unix ms.
+- **Drop:** when a check finds a price lower than the previous one, the relay sets `droppedAt` and
+  sends `{"type":"price",id,itemId,price,previous,currency}` on every live socket. Apps also poll
+  `GET /watches` when they sync. They show the alert and write `price`/`lowest` into the item's
+  fields, so the price also syncs to iCloud-only devices.
+
+## 6. Publish to link
+Publishing a note is the user's explicit choice to make that note public. The relay stores it in
+**plaintext** and serves it at `GET /p/:vaultId/:slug`. The app picks a random slug of 6–64
+`[A-Za-z0-9_-]` (22 characters of base64url in practice), so links can't be guessed. The page is
+capped at 256 KB of Markdown.
+
+- **Rendering:** the server renders a safe subset of Markdown and escapes everything first:
+  headings, lists, tasks, quotes, code, bold, italic, strike, `[[wikilinks]]` (as plain text) and
+  links (`http`, `https`, `mailto` only).
+- **Headers:** `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src https: data:`, `noindex`, `nosniff`, `no-referrer`.
+- **Updating:** re-publishing the same slug updates the page. `DELETE` takes it down (`404` afterwards).
+- **On the item:** the app stores `published: {slug, url}` in the item's fields so every device can
+  show and remove the link.
