@@ -27,6 +27,12 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     TROVE_APP_GROUP: group.com.mrlancus.trove
 
+schemes:
+  Trove:
+    build:
+      targets:
+        Trove: all
+
 packages:
   TroveCore:
     path: ../Packages/TroveCore
