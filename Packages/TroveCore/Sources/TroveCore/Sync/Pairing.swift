@@ -38,6 +38,25 @@ public struct PairingPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// Code pasted into the browser extension (extensions/browser/trv1.js `parseSetupCode`). It holds an
+/// inbox token and the vault *public* key only, so a browser can add to the inbox but never read.
+public struct BrowserSetupCode: Codable, Equatable, Sendable {
+    public var v: Int = 1
+    public var relayURL: String
+    public var vaultId: String
+    public var inboxToken: String
+    public var vaultPublicKey: String
+
+    public init(relayURL: String, vaultId: String, inboxToken: String, vaultPublicKey: String) {
+        self.relayURL = relayURL
+        self.vaultId = vaultId
+        self.inboxToken = inboxToken
+        self.vaultPublicKey = vaultPublicKey
+    }
+
+    public var code: String { (try? JSONEncoder().encode(self))?.base64URL ?? "" }
+}
+
 /// Pulls sealed inbox entries (email, GoodNotes, browser, share sheet) from the relay into the library.
 public enum InboxSync {
     public struct Result: Sendable, Equatable {

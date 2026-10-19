@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trove extension setup</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="options">
+  <main>
+    <h1><img src="icons/icon48.png" alt="" width="32" height="32"> Connect to Trove</h1>
+    <ol>
+      <li>On your Mac or iPhone, open <b>Trove → Settings → Browser extension</b> and copy the setup code.</li>
+      <li>Paste it below and press <b>Connect</b>.</li>
+    </ol>
+    <textarea id="code" rows="4" placeholder="Paste your setup code"></textarea>
+    <button id="connect" class="primary">Connect</button>
+    <p id="status" class="status" role="status"></p>
+    <section id="connected" hidden>
+      <h2>Connected</h2>
+      <p>Saving to vault <code id="vault"></code> via <code id="relay"></code>.</p>
+      <p class="hint">This browser can only <em>add</em> to your Trove. It holds no key that can read your items.</p>
+      <p id="queue" class="hint"></p>
+      <button id="retry">Retry offline saves</button>
+      <button id="disconnect" class="danger">Disconnect</button>
+    </section>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

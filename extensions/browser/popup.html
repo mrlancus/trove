@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Save to Trove</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="popup">
+  <header>
+    <img src="icons/icon32.png" alt="" width="20" height="20">
+    <span>Save to Trove</span>
+  </header>
+  <main id="ready" hidden>
+    <div class="card">
+      <div id="title" class="title"></div>
+      <div id="host" class="host"></div>
+      <blockquote id="selection" hidden></blockquote>
+    </div>
+    <textarea id="note" rows="3" placeholder="Add a note (optional)… #tags work"></textarea>
+    <button id="save" class="primary">Save</button>
+    <p id="status" class="status" role="status"></p>
+  </main>
+  <main id="setup" hidden>
+    <p>Connect this browser to your Trove first.</p>
+    <button id="open-options" class="primary">Set up</button>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
