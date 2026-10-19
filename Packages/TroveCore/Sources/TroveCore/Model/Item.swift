@@ -48,6 +48,8 @@ public enum Field {
     public static let ocrText = "ocrText", siteName = "siteName", imageURL = "imageURL", author = "author"
     public static let location = "location" // {"lat","lon","name","address"}
     public static let resolvedConflicts = "resolvedConflicts"
+    public static let priceWatch = "priceWatch" // {"url","price","lowest","currency","checkedAt","droppedAt","previous"}
+    public static let published = "published"   // {"slug","url"}
     // text fields
     public static let body = "body"
 }
@@ -87,6 +89,26 @@ public struct Item: Identifiable, Hashable, Sendable {
     public var hasConflicts: Bool { !conflictingVersions.isEmpty }
     public var extracted: [String: JSONValue] { record[Field.extracted]?.object ?? [:] }
 
+    /// Set while "Track price drops" is on for this item.
+    public var priceWatch: PriceWatch? {
+        guard let o = record[Field.priceWatch]?.object, let url = o["url"]?.string else { return nil }
+        return PriceWatch(url: url, price: o["price"]?.number, previous: o["previous"]?.number, lowest: o["lowest"]?.number,
+                          currency: o["currency"]?.string, checkedAt: o["checkedAt"]?.date, droppedAt: o["droppedAt"]?.date)
+    }
+
+    /// The public link, if this note has been published.
+    public var published: PublishedLink? {
+        guard let o = record[Field.published]?.object, let slug = o["slug"]?.string,
+              let url = o["url"]?.string.flatMap(URL.init(string:)) else { return nil }
+        return PublishedLink(slug: slug, url: url)
+    }
+
+    /// The URL to watch for price drops: a product item's link.
+    public var watchableURL: URL? {
+        guard let url, url.scheme == "https" || url.scheme == "http" else { return nil }
+        return category == .product || extracted["product"] != nil ? url : nil
+    }
+
     public var attachments: [Attachment] {
         (record[Field.attachments]?.array ?? []).compactMap { v in
             guard let o = v.object, let id = o["id"]?.string else { return nil }
@@ -107,6 +129,21 @@ public struct Item: Identifiable, Hashable, Sendable {
 }
 
 extension Field { public static let kind = "kind" }
+
+public struct PriceWatch: Hashable, Sendable {
+    public var url: String
+    public var price: Double?
+    public var previous: Double?
+    public var lowest: Double?
+    public var currency: String?
+    public var checkedAt: Date?
+    public var droppedAt: Date?
+}
+
+public struct PublishedLink: Hashable, Sendable {
+    public var slug: String
+    public var url: URL
+}
 
 extension Attachment {
     public var json: JSONValue { ["id": .string(id), "name": .string(name), "mime": .string(mime), "size": .number(Double(size))] }

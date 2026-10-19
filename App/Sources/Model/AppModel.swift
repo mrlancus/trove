@@ -187,6 +187,9 @@ final class AppModel {
         if let client = vault.relayClient, let keys = vault.keys {
             let inbox = await InboxSync.run(client: client, keys: keys, library: library)
             if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
+            let watches = await PriceWatchSync.run(client: client, library: library)
+            for drop in watches.drops { await PriceAlerts.notify(drop) }
+            if let drop = watches.drops.first { toast = PriceAlerts.message(drop) }
         }
         sync.lastSync = Date()
         sync.lastError = report.errors.first
@@ -337,6 +340,52 @@ final class AppModel {
         if selectedItemID == item.id { selectedItemID = nil }
         await reload()
         SpotlightIndexer.remove(item.id)
+    }
+
+    // MARK: Price drops and public links
+
+    var hasRelay: Bool { vault.relayClient != nil }
+
+    /// Turns price tracking on or off. The relay watch is set up by `PriceWatchSync` on the next
+    /// sync of any device that has the relay.
+    func setTracking(_ item: Item, _ on: Bool) async {
+        guard let library, let url = item.watchableURL else { return }
+        await library.setWatching(item.id, url: on ? url : nil)
+        if on { await PriceAlerts.requestPermission() }
+        toast = !on ? "Stopped tracking the price"
+            : hasRelay ? "Tracking the price. You'll get an alert when it drops"
+            : "Tracking turns on once a device with the relay syncs"
+        await reload()
+        if hasRelay { await syncNow() }
+    }
+
+    /// Publishes (or re-publishes) a note as a public web page and copies the link.
+    func publish(_ item: Item) async {
+        guard let library, let client = vault.relayClient else { toast = "Public links need the relay (Settings → Sync)"; return }
+        let slug = item.published?.slug ?? RelayClient.newSlug()
+        do {
+            let url = try await client.publish(slug: slug, title: item.displayTitle, markdown: item.body)
+            if item.published?.url != url { await library.setPublished(item.id, PublishedLink(slug: slug, url: url)) }
+            Pasteboard.copy(url.absoluteString)
+            toast = item.published == nil ? "Published. Link copied" : "Page updated. Link copied"
+        } catch {
+            toast = "Couldn't publish: \(error.localizedDescription)"
+        }
+        await reload()
+    }
+
+    func unpublish(_ item: Item) async {
+        guard let library, let link = item.published else { return }
+        guard let client = vault.relayClient else { toast = "Removing a public link needs the relay"; return }
+        do {
+            try await client.unpublish(slug: link.slug)
+        } catch {
+            toast = "Couldn't remove the link: \(error.localizedDescription)"
+            return
+        }
+        await library.setPublished(item.id, nil)
+        toast = "Public link removed"
+        await reload()
     }
 
     func resolveConflicts(_ item: Item, keeping text: String) async {

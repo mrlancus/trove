@@ -168,6 +168,45 @@ public actor Library {
         return true
     }
 
+    // MARK: Price watches and published links
+
+    /// Turns "Track price drops" on or off. The relay watch itself is created by `PriceWatchSync`
+    /// on whichever device has the relay, so this works on iCloud-only devices too.
+    public func setWatching(_ id: String, url: URL?) async {
+        await update(id, [Field.priceWatch: url.map { ["url": .string($0.absoluteString)] } ?? .null])
+    }
+
+    public func setPublished(_ id: String, _ link: PublishedLink?) async {
+        await update(id, [Field.published: link.map { ["slug": .string($0.slug), "url": .string($0.url.absoluteString)] } ?? .null])
+    }
+
+    /// Copies relay watch results onto their items. Returns the drops this device hadn't seen yet.
+    @discardableResult
+    public func applyWatches(_ watches: [RelayClient.Watch]) async -> [PriceDrop] {
+        var drops: [PriceDrop] = []
+        for watch in watches {
+            guard let item = await item(watch.itemId ?? watch.id), let current = item.priceWatch, current.url == watch.url,
+                  let price = watch.price else { continue }
+            let droppedAt = watch.droppedAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+            let previous = watch.history.count >= 2 ? watch.history[watch.history.count - 2].price : nil
+            let checkedAt = watch.checkedAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+            if current.price == price, current.lowest == watch.lowest, current.droppedAt == droppedAt, current.currency == watch.currency {
+                continue
+            }
+            var o: [String: JSONValue] = ["url": .string(watch.url), "price": .number(price)]
+            if let lowest = watch.lowest { o["lowest"] = .number(lowest) }
+            if let currency = watch.currency { o["currency"] = .string(currency) }
+            if let checkedAt { o["checkedAt"] = JSONValue(checkedAt) }
+            if let droppedAt { o["droppedAt"] = JSONValue(droppedAt) }
+            if let previous { o["previous"] = .number(previous) }
+            await update(item.id, [Field.priceWatch: .object(o)])
+            if let droppedAt, droppedAt != current.droppedAt, let previous, price < previous {
+                drops.append(PriceDrop(itemId: item.id, title: item.displayTitle, price: price, previous: previous, currency: watch.currency))
+            }
+        }
+        return drops
+    }
+
     // MARK: Collections
 
     @discardableResult
@@ -297,4 +336,12 @@ public struct ItemCollection: Identifiable, Hashable, Sendable {
     public var name: String { record["name"]?.string ?? "Untitled" }
     public var symbol: String { record["symbol"]?.string ?? "folder" }
     public var color: String { record["color"]?.string ?? "blue" }
+}
+
+public struct PriceDrop: Hashable, Sendable {
+    public var itemId: String
+    public var title: String
+    public var price: Double
+    public var previous: Double
+    public var currency: String?
 }

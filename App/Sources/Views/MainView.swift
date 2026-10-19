@@ -250,6 +250,21 @@ struct ItemMenu: View {
             Button { Pasteboard.copy(url.absoluteString) } label: { Label("Copy link", systemImage: "doc.on.doc") }
             Link(destination: url) { Label("Open link", systemImage: "safari") }
         }
+        if item.watchableURL != nil {
+            Button { Task { await model.setTracking(item, item.priceWatch == nil) } } label: {
+                Label(item.priceWatch == nil ? "Track price drops" : "Stop tracking price",
+                      systemImage: item.priceWatch == nil ? "bell.badge" : "bell.slash")
+            }
+        }
+        if item.kind == .note {
+            Button { Task { await model.publish(item) } } label: {
+                Label(item.published == nil ? "Publish to link" : "Update public page", systemImage: "globe")
+            }
+            if let link = item.published {
+                Button { Pasteboard.copy(link.url.absoluteString) } label: { Label("Copy public link", systemImage: "link") }
+                Button { Task { await model.unpublish(item) } } label: { Label("Remove public link", systemImage: "eye.slash") }
+            }
+        }
         if !model.collections.isEmpty {
             Menu("Collections") {
                 ForEach(model.collections) { c in

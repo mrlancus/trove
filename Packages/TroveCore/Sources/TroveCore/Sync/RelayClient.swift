@@ -72,6 +72,31 @@ public struct RelayClient: Sendable {
         public var model: String?
     }
 
+    /// A price-drop watch (PROTOCOL.md §5). Times are Unix milliseconds.
+    public struct Watch: Codable, Sendable, Equatable, Identifiable {
+        public struct Point: Codable, Sendable, Equatable { public var at: Double; public var price: Double }
+        public var id: String
+        public var url: String
+        public var itemId: String?
+        public var createdAt: Double
+        public var checkedAt: Double?
+        public var error: String?
+        public var price: Double?
+        public var currency: String?
+        public var lowest: Double?
+        public var history: [Point]
+        public var droppedAt: Double?
+    }
+
+    /// A note published to a public link (PROTOCOL.md §6).
+    public struct PublishedPage: Codable, Sendable, Equatable, Identifiable {
+        public var slug: String
+        public var title: String?
+        public var updatedAt: Double?
+        public var path: String
+        public var id: String { slug }
+    }
+
     // MARK: Vault lifecycle
 
     /// `deviceId`: the journal id this device already uses (kept if free on the relay).
@@ -182,6 +207,48 @@ public struct RelayClient: Sendable {
         struct E: Decodable { var vectors: [[Double]] }
         let e: E = try await json("POST", vaultPath("ai/embed"), body: ["texts": texts])
         return e.vectors
+    }
+
+    // MARK: Price watches (the relay sees the product URL only)
+
+    public func watches() async throws -> [Watch] {
+        struct L: Decodable { var watches: [Watch] }
+        let l: L = try await json("GET", vaultPath("watches"))
+        return l.watches
+    }
+
+    @discardableResult
+    public func putWatch(id: String, url: String, itemId: String? = nil) async throws -> Watch {
+        var body: [String: Any] = ["url": url]
+        if let itemId { body["itemId"] = itemId }
+        return try await json("PUT", vaultPath("watches/\(id)"), body: body, expect: [200, 201])
+    }
+
+    public func deleteWatch(id: String) async throws { _ = try await raw("DELETE", vaultPath("watches/\(id)"), expect: [204]) }
+
+    // MARK: Publish to link (the page is public plaintext by the user's choice)
+
+    /// A random, unguessable slug for a new link.
+    public static func newSlug() -> String {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        for i in bytes.indices { bytes[i] = UInt8.random(in: 0...255) }
+        return Data(bytes).base64URL
+    }
+
+    /// Publishes (or updates) a page and returns its public URL.
+    public func publish(slug: String, title: String, markdown: String) async throws -> URL {
+        struct P: Decodable { var path: String }
+        let p: P = try await json("PUT", vaultPath("published/\(slug)"), body: ["title": title, "markdown": markdown], expect: [201])
+        guard let url = URL(string: p.path, relativeTo: baseURL)?.absoluteURL else { throw TransportError.invalidResponse }
+        return url
+    }
+
+    public func unpublish(slug: String) async throws { _ = try await raw("DELETE", vaultPath("published/\(slug)"), expect: [204]) }
+
+    public func publishedPages() async throws -> [PublishedPage] {
+        struct L: Decodable { var pages: [PublishedPage] }
+        let l: L = try await json("GET", vaultPath("published"))
+        return l.pages
     }
 
     /// WebSocket URL for live notifications (open with URLSessionWebSocketTask in the app).

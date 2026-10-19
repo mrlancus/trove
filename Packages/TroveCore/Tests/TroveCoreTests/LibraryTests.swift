@@ -47,6 +47,38 @@ import Testing
         Library(engine: SyncEngine(device: device, keys: keys, transports: transports))
     }
 
+    @Test func priceWatchesApplyOntoItemsAndReportNewDrops() async throws {
+        let lib = makeLibrary()
+        let (id, _) = await lib.addLink(URL(string: "https://shop.example/kettle")!, title: "Kettle")
+        await lib.update(id, [Field.category: "product"])
+        let url = try #require(await lib.item(id)?.watchableURL)
+        await lib.setWatching(id, url: url)
+        #expect(await lib.item(id)?.priceWatch?.url == "https://shop.example/kettle")
+
+        func watch(_ prices: [Double], droppedAt: Double?) -> RelayClient.Watch {
+            RelayClient.Watch(id: id, url: url.absoluteString, itemId: id, createdAt: 0, checkedAt: 2000, error: nil, price: prices.last,
+                              currency: "GBP", lowest: prices.min(), history: prices.enumerated().map { .init(at: Double($0.offset), price: $0.element) },
+                              droppedAt: droppedAt)
+        }
+        #expect(await lib.applyWatches([watch([59.99], droppedAt: nil)]).isEmpty)
+        #expect(await lib.item(id)?.priceWatch?.price == 59.99)
+
+        let drops = await lib.applyWatches([watch([59.99, 44], droppedAt: 5000)])
+        #expect(drops == [PriceDrop(itemId: id, title: "Kettle", price: 44, previous: 59.99, currency: "GBP")])
+        #expect(await lib.item(id)?.priceWatch?.lowest == 44)
+        #expect(await lib.applyWatches([watch([59.99, 44], droppedAt: 5000)]).isEmpty) // already seen
+
+        await lib.setWatching(id, url: nil)
+        #expect(await lib.item(id)?.priceWatch == nil)
+        #expect(await lib.applyWatches([watch([59.99, 30], droppedAt: 9000)]).isEmpty) // tracking is off
+
+        let link = PublishedLink(slug: "abc123def", url: URL(string: "https://relay.example/p/v/abc123def")!)
+        await lib.setPublished(id, link)
+        #expect(await lib.item(id)?.published == link)
+        await lib.setPublished(id, nil)
+        #expect(await lib.item(id)?.published == nil)
+    }
+
     @Test func notesLinksDedupeAndSearch() async throws {
         let lib = makeLibrary()
         let note = await lib.addNote(title: "Ideas", body: "Build a #garden app")

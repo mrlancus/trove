@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Testing
 @testable import TroveCore
 
@@ -43,6 +46,26 @@ import Testing
         #expect(try await phoneClient.inbox().isEmpty)
         _ = await macLib.sync()
         #expect(await macLib.search("great quote").count == 1)
+
+        // Price watches follow the item field; publishing gives a public page.
+        let (product, _) = await phoneLib.addLink(URL(string: "https://shop.example/lamp")!, title: "Lamp")
+        await phoneLib.setWatching(product, url: URL(string: "https://shop.example/lamp")!)
+        var watched = await PriceWatchSync.run(client: macClient, library: phoneLib)
+        #expect(watched.added == 1 && watched.errors.isEmpty)
+        #expect(try await macClient.watches().map(\.id) == [product])
+        await phoneLib.setWatching(product, url: nil)
+        watched = await PriceWatchSync.run(client: macClient, library: phoneLib)
+        #expect(watched.removed == 1)
+        #expect(try await macClient.watches().isEmpty)
+
+        let slug = RelayClient.newSlug()
+        let page = try await macClient.publish(slug: slug, title: "Hello", markdown: "from **Trove**")
+        #expect(page.absoluteString == base.absoluteString.trimmingCharacters(in: ["/"]) + "/p/\(mac.vaultId)/\(slug)")
+        let (html, _) = try await URLSession.shared.data(from: page)
+        #expect(String(decoding: html, as: UTF8.self).contains("<strong>Trove</strong>"))
+        #expect(try await macClient.publishedPages().map(\.slug) == [slug])
+        try await macClient.unpublish(slug: slug)
+        #expect(try await macClient.publishedPages().isEmpty)
 
         // Revoked devices lose access.
         try await macClient.revoke(device: phone.deviceId)

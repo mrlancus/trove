@@ -62,6 +62,10 @@ struct ItemCard: View {
     }
 
     private var productPrice: String? {
+        if let w = item.priceWatch, let price = w.price {
+            let dropped = w.previous.map { price < $0 } ?? false
+            return (dropped ? "↓ " : "") + PriceAlerts.price(price, w.currency)
+        }
         guard let p = item.extracted["product"]?.object, let price = p["price"]?.number else { return nil }
         let currency = p["currency"]?.string ?? "GBP"
         return price.formatted(.currency(code: currency))

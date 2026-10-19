@@ -237,6 +237,7 @@ struct ConflictBanner: View {
 /// Recipes, products, places, events, dates/addresses found in the item.
 struct ExtractedCards: View {
     let item: Item
+    @Environment(AppModel.self) private var model
     @State private var checked: Set<Int> = []
     @State private var calendarMessage: String?
 
@@ -283,6 +284,7 @@ struct ExtractedCards: View {
             }
             .padding(16).card(cornerRadius: 16)
         }
+        if item.watchableURL != nil { priceTracking }
         if let place = x["place"]?.object {
             placeCard(name: place["name"]?.string ?? item.displayTitle, address: place["address"]?.string,
                       lat: place["lat"]?.number, lon: place["lon"]?.number)
@@ -294,6 +296,33 @@ struct ExtractedCards: View {
         } else if let first = x["dates"]?.array?.first?.date, first > Date() {
             eventCard(name: item.displayTitle, start: first, venue: x["addresses"]?.stringArray.first)
         }
+    }
+
+    private var priceTracking: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { item.priceWatch != nil }, set: { on in Task { await model.setTracking(item, on) } })) {
+                Label("Track price drops", systemImage: "bell.badge")
+            }
+            if let w = item.priceWatch {
+                if let price = w.price {
+                    HStack {
+                        Text("Now \(PriceAlerts.price(price, w.currency))").font(.headline)
+                        if let previous = w.previous, price < previous {
+                            Text("was \(PriceAlerts.price(previous, w.currency))").strikethrough().foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let lowest = w.lowest { Text("Lowest \(PriceAlerts.price(lowest, w.currency))").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    if let checked = w.checkedAt {
+                        Text("Checked \(checked.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text(model.hasRelay ? "Checking the price…" : "Starts when a device with the relay syncs")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(16).card(cornerRadius: 16)
     }
 
     private func placeCard(name: String, address: String?, lat: Double?, lon: Double?) -> some View {
