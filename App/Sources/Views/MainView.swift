@@ -31,6 +31,7 @@ struct MainView: View {
     @State private var showAsk = false
     @State private var showSettings = false
     @State private var showClipboard = false
+    @State private var dropTargeted = false
 
     var body: some View {
         @Bindable var model = model
@@ -38,7 +39,9 @@ struct MainView: View {
             SidebarView(showSettings: $showSettings)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } content: {
-            LibraryView()
+            Group {
+                if model.selection == .importer, model.searchText.isEmpty { ImportView() } else { LibraryView() }
+            }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 520)
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
                 .toolbar { toolbar }
@@ -55,11 +58,16 @@ struct MainView: View {
         #if os(iOS)
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
         #endif
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { Task { await model.importFiles(urls) } }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item, .folder], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                model.selection = .importer
+                Task { await model.importFiles(urls) }
+            }
         }
         .overlay(alignment: .bottom) { ToastView() }
-        .onDrop(of: [.fileURL, .url, .plainText], isTargeted: nil) { providers in
+        .overlay { if dropTargeted, model.selection != .importer { WindowDropOverlay().transition(.opacity) } }
+        .animation(.easeOut(duration: 0.2), value: dropTargeted)
+        .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $dropTargeted) { providers in
             DropHandler.handle(providers, model: model)
         }
     }
@@ -73,6 +81,7 @@ struct MainView: View {
                 Button { Task { await model.newNote() } } label: { Label("New note", systemImage: "square.and.pencil") }
                     .keyboardShortcut("n", modifiers: .command)
                 Button { showImporter = true } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
                 VoiceNoteButton()
                 #if os(iOS)
                 ScanDocumentButton()
@@ -85,6 +94,29 @@ struct MainView: View {
                 .help("Clipboard history (⌥Space from anywhere on the Mac)")
             SyncIndicator()
         }
+    }
+}
+
+/// Shown over the whole window while files are dragged over it.
+struct WindowDropOverlay: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(LinearGradient(colors: [.orange, .pink], startPoint: .topLeading, endPoint: .bottomTrailing),
+                              style: StrokeStyle(lineWidth: 3, dash: [12, 8]))
+                .padding(20)
+            VStack(spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
+                    .symbolEffect(.bounce, options: .repeating)
+                Text("Drop to add to Trove").font(.title.weight(.semibold))
+                Text("Files, folders, zips, links or text").foregroundStyle(.secondary)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
@@ -139,6 +171,9 @@ struct SidebarView: View {
         List(selection: $model.selection) {
             Section {
                 ForEach(primary) { s in row(s) }
+                Label("Import", systemImage: "square.and.arrow.down.on.square")
+                    .badge(model.importRun.map { $0.finished ? 0 : $0.total - $0.done } ?? 0)
+                    .tag(AppModel.Selection.importer)
             }
             Section("Smart Collections") {
                 ForEach(smart.filter { model.count($0) > 0 || $0 == .recipes || $0 == .places }) { s in row(s) }
@@ -233,6 +268,7 @@ struct LibraryView: View {
         case .smart(let s): return s.title
         case .collection(let id): return model.collections.first { $0.id == id }?.name ?? "Collection"
         case .source(let s): return ItemStyle.sourceLabel(s)
+        case .importer: return "Import"
         case nil: return "Trove"
         }
     }
@@ -296,26 +332,57 @@ struct ItemMenu: View {
 }
 
 enum DropHandler {
+    /// Files are imported together (so one drop is one import run); links and text are captured.
     @MainActor
     static func handle(_ providers: [NSItemProvider], model: AppModel) -> Bool {
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    Task { @MainActor in await model.importFiles([url]) }
-                }
-            } else if provider.canLoadObject(ofClass: URL.self) {
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    Task { @MainActor in await model.capture(url.absoluteString) }
-                }
-            } else if provider.canLoadObject(ofClass: String.self) {
-                _ = provider.loadObject(ofClass: String.self) { text, _ in
-                    guard let text else { return }
-                    Task { @MainActor in await model.capture(text) }
+        Task { @MainActor in
+            var files: [URL] = []
+            for provider in providers {
+                if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                    if let url = await loadFile(provider) { files.append(url) }
+                } else if provider.canLoadObject(ofClass: URL.self) {
+                    if let url = await loadURL(provider) { await model.capture(url.absoluteString) }
+                } else if provider.canLoadObject(ofClass: String.self) {
+                    if let text = await loadString(provider) { await model.capture(text) }
                 }
             }
+            guard !files.isEmpty else { return }
+            model.selection = .importer
+            await model.importFiles(files)
         }
         return true
+    }
+
+    private static func loadURL(_ provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: URL.self) { value, _ in done.resume(returning: value) }
+        }
+    }
+
+    private static func loadString(_ provider: NSItemProvider) async -> String? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: String.self) { value, _ in done.resume(returning: value) }
+        }
+    }
+
+    /// On the Mac a dropped file is its real path. On iOS the system hands over a temporary copy that
+    /// disappears after the callback, so it's copied somewhere that lasts until the import is done.
+    private static func loadFile(_ provider: NSItemProvider) async -> URL? {
+        #if os(macOS)
+        return await loadURL(provider)
+        #else
+        return await withCheckedContinuation { done in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.item.identifier) { url, _ in
+                guard let url else { done.resume(returning: nil); return }
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                var name = provider.suggestedName ?? url.lastPathComponent
+                if (name as NSString).pathExtension.isEmpty, !url.pathExtension.isEmpty { name += "." + url.pathExtension }
+                let copy = dir.appendingPathComponent(name)
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try? FileManager.default.copyItem(at: url, to: copy)
+                done.resume(returning: FileManager.default.fileExists(atPath: copy.path) ? copy : nil)
+            }
+        }
+        #endif
     }
 }

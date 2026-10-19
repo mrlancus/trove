@@ -16,6 +16,25 @@ final class AppModel {
         case smart(SmartCollection)
         case collection(String)
         case source(ItemSource)
+        case importer
+    }
+
+    /// A running or finished import, which the Import screen animates.
+    struct ImportRun: Equatable {
+        var total: Int
+        var done = 0
+        var added = 0
+        var current: String?
+        var finished = false
+        /// The latest things that came in, newest first.
+        var recent: [Arrival] = []
+
+        struct Arrival: Identifiable, Equatable {
+            let id = UUID()
+            let label: String
+        }
+
+        var fraction: Double { total == 0 ? 1 : Double(done) / Double(total) }
     }
 
     struct SyncStatus: Equatable {
@@ -172,7 +191,7 @@ final class AppModel {
         case .smart(let s): return items.filter(s.contains)
         case .collection(let id): return items.filter { $0.collections.contains(id) }
         case .source(let src): return items.filter { $0.source == src }
-        case nil: return items
+        case .importer, nil: return items
         }
     }
 
@@ -337,35 +356,70 @@ final class AppModel {
         selectedItemID = id
     }
 
-    func importFiles(_ urls: [URL], source: ItemSource = .app) async {
+    private(set) var importRun: ImportRun?
+
+    /// Imports anything: files, folders (recursively) and zips (opened, see `FileImport`). The
+    /// Import screen shows progress from `importRun`.
+    func importFiles(_ urls: [URL], source: ItemSource = .import) async {
         guard let library else { return }
-        var added = 0
-        for url in urls {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let ext = url.pathExtension.lowercased()
-            switch ext {
-            case "txt" where url.lastPathComponent.lowercased().contains("clippings"):
-                added += await library.importItems(KindleClippings.parse(String(decoding: data, as: UTF8.self)))
-            case "html", "htm":
-                let html = String(decoding: data, as: UTF8.self)
-                let marks = NetscapeBookmarks.parse(html)
-                if marks.isEmpty { _ = try? await library.addFile(data, name: url.lastPathComponent, mime: "text/html", source: source) ; added += 1 }
-                else { added += await library.importItems(marks) }
-            case "csv":
-                added += await library.importItems(CSVImport.importLinks(String(decoding: data, as: UTF8.self)))
-            case "md", "markdown":
-                let note = ObsidianMirror.parse(String(decoding: data, as: UTF8.self), fileName: url.lastPathComponent)
-                await library.addNote(title: note.title, body: note.body, tags: note.tags, source: .import)
-                added += 1
-            default:
-                if (try? await library.addFile(data, name: url.lastPathComponent, mime: Self.mime(for: ext), source: source)) != nil { added += 1 }
+        guard importRun?.finished != false else { toast = "Still importing. Drop the rest when it's done."; return }
+        let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
+        defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
+        let files = urls.flatMap(Self.filesInside)
+        var run = ImportRun(total: files.count)
+        importRun = run
+        for url in files {
+            run.current = url.lastPathComponent
+            importRun = run
+            if let data = try? Data(contentsOf: url) {
+                let name = url.lastPathComponent
+                let actions = await Task.detached(priority: .userInitiated) { FileImport.actions(name: name, data: data) }.value
+                for action in actions {
+                    let (count, label) = await perform(action, in: library, source: source)
+                    run.added += count
+                    if count > 0 { run.recent.insert(.init(label: label), at: 0) }
+                }
+                run.recent = Array(run.recent.prefix(8))
             }
+            run.done += 1
+            importRun = run
         }
-        toast = added == 1 ? "Added 1 item" : "Added \(added) items"
+        run.current = nil
+        run.finished = true
+        importRun = run
+        toast = run.added == 1 ? "Added 1 item" : "Added \(run.added) items"
         await reload()
-        Task { await syncNow() }
+        Task {
+            await syncNow()
+            await enrichSoon()
+        }
+    }
+
+    /// Clears a finished import so the drop zone shows again.
+    func dismissImport() { if importRun?.finished == true { importRun = nil } }
+
+    private func perform(_ action: ImportAction, in library: Library, source: ItemSource) async -> (Int, String) {
+        switch action {
+        case .items(let items):
+            let added = await library.importItems(items)
+            let kind = items.first?.kind == .highlight ? "highlights" : "links"
+            return (added, added == 1 ? "1 \(kind.dropLast())" : "\(added) \(kind)")
+        case .note(let title, let body, let tags):
+            _ = await library.addNote(title: title, body: body, tags: tags, source: .import)
+            return (1, title.isEmpty ? "Note" : title)
+        case .file(let name, let data, let mime):
+            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source)) != nil
+            return (ok ? 1 : 0, name)
+        }
+    }
+
+    /// The file itself, or every visible file in a folder (packages such as .pages count as files).
+    nonisolated static func filesInside(_ url: URL) -> [URL] {
+        guard (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
+              (try? url.resourceValues(forKeys: [.isPackageKey]).isPackage) != true else { return [url] }
+        let walker = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey],
+                                                    options: [.skipsHiddenFiles, .skipsPackageDescendants])
+        return (walker?.allObjects as? [URL] ?? []).filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
     }
 
     func update(_ id: String, _ fields: [String: JSONValue]) async { await library?.update(id, fields); await reload() }
@@ -503,24 +557,6 @@ final class AppModel {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
         #endif
-    }
-
-    static func mime(for ext: String) -> String {
-        switch ext {
-        case "pdf": "application/pdf"
-        case "png": "image/png"
-        case "jpg", "jpeg": "image/jpeg"
-        case "heic": "image/heic"
-        case "gif": "image/gif"
-        case "webp": "image/webp"
-        case "m4a": "audio/m4a"
-        case "mp3": "audio/mpeg"
-        case "wav": "audio/wav"
-        case "mov": "video/quicktime"
-        case "mp4": "video/mp4"
-        case "txt": "text/plain"
-        default: "application/octet-stream"
-        }
     }
 
     static let welcomeNote = """

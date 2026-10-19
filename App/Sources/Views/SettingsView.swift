@@ -290,15 +290,10 @@ private struct AISection: View {
 
 private struct IntegrationsSection: View {
     @Environment(AppModel.self) private var model
-    @State private var importing = false
     @State private var choosingObsidian = false
 
     var body: some View {
-        Section("Bring things in") {
-            Button { importing = true } label: { Label("Import files (Kindle My Clippings, bookmarks, CSV, Markdown, PDFs…)", systemImage: "square.and.arrow.down") }
-                .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-                    if case .success(let urls) = result { Task { await model.importFiles(urls, source: .import) } }
-                }
+        Section {
             #if os(macOS)
             Toggle("Mirror Apple Notes into Trove search", isOn: Binding(
                 get: { model.config?.appleNotesImport ?? false },
@@ -323,6 +318,10 @@ private struct IntegrationsSection: View {
                     }
                 }))
             #endif
+        } header: {
+            Text("Other apps")
+        } footer: {
+            FormFooter("To bring in files, folders, zips and exports, use Import in the sidebar or drop them on the Trove window.")
         }
     }
 }
