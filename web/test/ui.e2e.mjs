@@ -164,6 +164,25 @@ test("create a vault in the browser, save the recovery code, add a second browse
   await page.keyboard.press("Enter");
   await page.locator(".card", { hasText: "Made in a brand-new vault" }).waitFor();
 
+  // Clipboard history: paste in, refuse passwords, click to copy back.
+  await page.locator("nav a", { hasText: "Clipboard" }).click();
+  await page.evaluate(() => navigator.clipboard.writeText("#ff8a3d"));
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await page.locator(".clip", { hasText: "#ff8a3d" }).waitFor();
+  await page.evaluate(() => navigator.clipboard.writeText("Tr0ub4dor&3x!"));
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await page.getByText("looks like a password").waitFor();
+  assert.equal(await page.locator(".clip", { hasText: "Tr0ub4dor" }).count(), 0);
+  await page.evaluate(() => navigator.clipboard.writeText('{"b":1,"a":2}'));
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await page.locator(".clip", { hasText: '{"b":1' }).getByRole("button", { name: "More" }).click();
+  await page.getByRole("button", { name: "Pretty JSON" }).click();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '{\n  "b": 1,\n  "a": 2\n}');
+  await page.locator(".clip", { hasText: "#ff8a3d" }).locator(".clip-main").click();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "#ff8a3d");
+  if (shots) await page.screenshot({ path: join(shots, "web-clipboard.png") });
+  await page.locator("nav a", { hasText: "Everything" }).click();
+
   // Share link (what the iPhone Shortcut opens).
   await page.goto(BASE + "/#add=" + encodeURIComponent("https://example.net/shared"));
   await page.locator(".card", { hasText: "example.net" }).waitFor();
@@ -186,6 +205,9 @@ test("create a vault in the browser, save the recovery code, add a second browse
   await phone.getByLabel("Setup code").fill(setup);
   await phone.getByRole("button", { name: "Connect" }).click();
   await phone.locator(".card", { hasText: "Made in a brand-new vault" }).waitFor();
+  await phone.locator("#menu").click();
+  await phone.locator("nav a", { hasText: "Clipboard" }).click();
+  await phone.locator(".clip", { hasText: "#ff8a3d" }).waitFor();
   await other.close();
 
   // A third browser recovers with the recovery code alone.

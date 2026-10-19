@@ -1,5 +1,6 @@
 // The same two-device scenario as WebInteropTests.scenario() in Swift, written with the JS journal.
 import { Journal, RecordStore } from "../public/core/records.js";
+import { hashText } from "../public/core/clips.js";
 
 export function scenario() {
   const now = () => 1_760_000_000_000;
@@ -20,6 +21,7 @@ export function scenario() {
   b.set({ title: "Shopping list", tags: ["home", "food"] }, "n1");
   b.set({ _deleted: true }, "n3");
   b.set({ name: "Kitchen", symbol: "fork.knife" }, "c1", "collection");
+  b.set({ text: "#ff8a3d", hash: hashText("#ff8a3d"), createdAt: 1_760_000_000_500, sourceApp: "Figma", device: "BBBB" }, "k1", "clip");
   const store = new RecordStore();
   store.apply(b.pending);
   store.apply(a.pending);

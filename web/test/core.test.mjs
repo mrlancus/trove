@@ -120,3 +120,51 @@ test("setup codes", () => {
   assert.throws(() => parseSetupCode("nonsense"));
   assert.throws(() => parseSetupCode(b64uEncode(utf8.encode(JSON.stringify({ ...payload, pairingCode: undefined })))), /relay/);
 });
+
+test("clips: classify, secrets and transforms match the Swift rules", async () => {
+  const { classify, color, isSensitive, availableTransforms, transforms, colorFormats } = await import("../public/core/clips.js");
+  const cases = {
+    "https://example.com/a?b=1": "link", "me@example.com": "email", "+44 20 7946 0958": "phone", "#ff8a3d": "color",
+    "rgb(255, 138, 61)": "color", "hsl(24, 100%, 62%)": "color", "1,299.50": "number", "~/Documents/notes.md": "path",
+    '{"a": [1, 2]}': "json", "func hello() {\n    return 1\n}": "code", "const x = a => a + 1;\nconsole.log(x(1));": "code",
+    "Remember to buy milk and eggs": "text", facade: "text",
+  };
+  for (const [input, kind] of Object.entries(cases)) assert.equal(classify(input), kind, input);
+  assert.deepEqual(color("#fff"), { r: 1, g: 1, b: 1, a: 1 });
+  for (const secret of ["sk-ant-api03-abcdefghijklmnopqrstuvwxyz", "ghp_abcdefghijklmnopqrstuvwxyz0123456789", "Tr0ub4dor&3x!", "482913",
+    "AKIAIOSFODNN7EXAMPLE", "-----BEGIN OPENSSH PRIVATE KEY-----\nabc", "q8Zr2LmX9vB4nT7cK1pW5sY3hJ6gD0fA"]) assert.ok(isSensitive(secret), secret);
+  for (const normal of ["Remember to buy milk", "https://example.com/Page?id=1&X=2", "me@example.com", "hello", "1,299", "~/Documents/My File.txt",
+    "#ff8a3d", "iPhone 17 Pro", '{"b":1,"a":2}', "rgb(1,2,3)"]) assert.ok(!isSensitive(normal), normal);
+  const t = Object.fromEntries(transforms.map((x) => [x.id, x.apply]));
+  assert.equal(t.cleanLink("https://example.com/a?utm_source=x&id=2"), "https://example.com/a?id=2");
+  assert.equal(t.minifiedJSON('{ "a" : 1 }'), '{"a":1}');
+  assert.equal(t.singleLine("one\n  two\n\nthree"), "one two three");
+  assert.equal(t.titleCase("hello world"), "Hello World");
+  assert.ok(availableTransforms("plain words").some((x) => x.id === "uppercase"));
+  assert.ok(!availableTransforms("plain words").some((x) => x.id === "prettyJSON"));
+  assert.deepEqual(colorFormats(color("#ff8a3d")), ["#FF8A3D", "rgb(255, 138, 61)", "hsl(24, 100%, 62%)"]);
+});
+
+test("clips in the vault: dedupe, pin, delete and save to the library", async () => {
+  const { Vault } = await import("../public/core/vault.js");
+  const storage = { m: new Map(), get: async (k) => storage.m.get(k), set: async (k, v) => { storage.m.set(k, v); }, clear: async () => storage.m.clear() };
+  let t = 1_760_000_000_000;
+  const keys = await importVaultKeys({ vaultKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))) });
+  const v = new Vault(storage, { deviceName: "Chrome", encrypted: true }, keys, { device: "WEB" }, [], [], [], 0, { now: () => (t += 1000) });
+  const a = v.addClip("first", { sourceApp: "Notes" });
+  const b = v.addClip("https://example.com/x");
+  assert.deepEqual(v.clips().map((c) => c.id), [b, a]);
+  assert.equal(v.addClip("first"), a);
+  assert.deepEqual(v.clips().map((c) => c.id), [a, b]);
+  assert.equal(v.clip(b).kind, "link");
+  assert.equal(v.clip(a).sourceDevice, "Chrome");
+  assert.equal(v.addClip("   "), null);
+  v.setClipPinned(b, true);
+  assert.equal(v.clip(b).isPinned, true);
+  const item = await v.saveClipToLibrary(b);
+  assert.equal(v.item(item).url.toString(), "https://example.com/x");
+  assert.equal(await v.saveClipToLibrary(b), item);
+  v.deleteClip(a);
+  assert.deepEqual(v.clips().map((c) => c.id), [b]);
+  assert.equal(v.items().length, 1);
+});

@@ -46,6 +46,8 @@ import Testing
         opsB.append(b.set(["title": "Shopping list", "tags": ["home", "food"]], record: "n1"))
         opsB.append(b.set(["_deleted": true], record: "n3"))
         opsB.append(b.set(["name": "Kitchen", "symbol": "fork.knife"], record: "c1", kind: "collection"))
+        opsB.append(b.set([Clip.Field.text: "#ff8a3d", Clip.Field.hash: .string(Clip.hash(text: "#ff8a3d")), Clip.Field.createdAt: 1_760_000_000_500,
+                           Clip.Field.sourceApp: "Figma", Clip.Field.device: "BBBB"], record: "k1", kind: "clip"))
         let segments = try a.takeSegments() + b.takeSegments()
         var store = RecordStore()
         store.apply(opsB)

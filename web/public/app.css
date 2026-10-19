@@ -139,6 +139,28 @@ textarea { resize: vertical; }
 .chips button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .saved { color: var(--muted); font-size: 12px; }
 
+/* Clipboard */
+.clip-tools { display: grid; gap: 10px; margin: -4px 0 14px; }
+.clip-tools .row { align-items: center; margin: 0; }
+.clip-tools .chips button[aria-pressed="true"], .clip-details .chips button:hover { border-color: var(--accent); color: var(--accent); }
+.grid.clip-list { columns: auto; display: grid; gap: 6px; max-width: 860px; }
+.clip { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; grid-template-columns: 1fr auto; overflow: hidden; }
+.clip.open { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.clip-main { display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 10px 12px; min-width: 0; }
+.clip-main:hover { background: var(--bg); }
+.clip-badge { flex: none; width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent);
+  font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; border: 1px solid var(--line); }
+.clip-badge img { width: 100%; height: 100%; object-fit: cover; }
+.clip-text { display: grid; min-width: 0; }
+.clip-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.clip-more { align-self: center; margin-right: 6px; font-size: 14px; color: var(--muted); }
+.clip-details { grid-column: 1 / -1; padding: 0 12px 12px; display: grid; gap: 10px; }
+.clip-details pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); padding: 10px; border-radius: 8px; max-height: 320px; overflow: auto; margin: 0; }
+.clip-details img { max-width: 100%; max-height: 360px; border-radius: 10px; }
+.clip-details .row { margin: 0; }
+.clip-details a.secondary { text-decoration: none; color: var(--fg); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 10; max-width: calc(100% - 32px); }
 .other-tab { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 85%, transparent); display: grid; place-items: center; z-index: 20; text-align: center; padding: 16px; }
 .only-narrow { display: none; }

@@ -1,11 +1,12 @@
 // Trove for any browser. Vanilla modules, no build step; the relay serves these files.
 import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
+import { availableTransforms, color, colorFormats, isSensitive } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
 import { renderMarkdown } from "./markdown.js";
 
 const app = document.getElementById("app");
-const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false };
+const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null };
 const blobURLs = new Map();
 const MAX_UPLOAD = 100 * 1024 * 1024;
 const MAX_CARDS = 400;
@@ -238,6 +239,14 @@ function showMain(vault) {
     location.reload();
   });
   document.addEventListener("keydown", onKey);
+  document.addEventListener("paste", (e) => {
+    if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "") || !state.vault) return;
+    const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/"));
+    const text = e.clipboardData?.getData("text/plain");
+    if (!file && !text) return;
+    e.preventDefault();
+    addToClipboardHistory({ file, text }).then(() => { if (state.selection !== "clips") { state.selection = "clips"; render(); } });
+  });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") runSync(); });
   setInterval(() => runSync(), 60_000);
   claimTab();
@@ -287,9 +296,15 @@ function render() {
     const count = items.filter((i) => s.contains(i, now)).length;
     if (!count && !["all", "notes", "pinned"].includes(s.id)) return null;
     return navLink(s.id, s.title, count);
-  }).filter(Boolean));
+  }).filter(Boolean), navLink("clips", "Clipboard", vault.clips().length));
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
   if (!collections.length) $("#collection-list").replaceChildren(h("p", { class: "side-note", text: "Make collections in the app." }));
+
+  const clipsMode = state.selection === "clips";
+  $("#grid").classList.toggle("clip-list", clipsMode);
+  $("#capture").hidden = clipsMode;
+  if (clipsMode) { renderClips(); renderDetail(); return; }
+  $("#clip-tools")?.remove();
 
   let shown;
   let title;
@@ -318,6 +333,139 @@ function navLink(id, title, count) {
     href: "#", "aria-current": state.selection === id ? "true" : "false",
     onclick: (e) => { e.preventDefault(); state.selection = id; $(".sidebar").classList.remove("open"); render(); },
   }, h("span", { text: title }), h("span", { class: "count", text: count }));
+}
+
+// ---------- clipboard history ----------
+
+const clipFilters = [
+  ["all", "All", () => true], ["pinned", "Pinned", (c) => c.isPinned], ["link", "Links", (c) => c.kind === "link"],
+  ["image", "Images", (c) => c.kind === "image"], ["code", "Code", (c) => c.kind === "code" || c.kind === "json"],
+  ["color", "Colors", (c) => c.kind === "color"], ["text", "Text", (c) => ["text", "email", "phone", "number", "path"].includes(c.kind)],
+  ["other", "Other devices", (c) => c.device && c.device !== state.vault.config.deviceId],
+];
+const clipSymbol = { text: "¶", link: "🔗", email: "@", phone: "☎", color: "◐", code: "</>", json: "{ }", number: "#", path: "/", image: "▣", file: "▤" };
+
+function renderClips() {
+  const vault = state.vault;
+  const filter = clipFilters.find(([id]) => id === state.clipFilter) ?? clipFilters[0];
+  const q = state.query.trim().toLowerCase();
+  const all = vault.clips();
+  const shown = all.filter((c) => filter[2](c))
+    .filter((c) => !q || q.split(/\s+/).every((w) => [c.text, c.sourceApp, c.sourceDevice, c.files.join(" ")].join("\n").toLowerCase().includes(w)));
+  const pinned = !q && state.clipFilter === "all" ? [...shown.filter((c) => c.isPinned), ...shown.filter((c) => !c.isPinned)] : shown;
+
+  $("#heading").textContent = q ? `${shown.length} clip${shown.length === 1 ? "" : "s"}` : "Clipboard";
+  let tools = $("#clip-tools");
+  if (!tools) {
+    tools = h("div", { id: "clip-tools", class: "clip-tools" },
+      h("div", { class: "chips", role: "group", "aria-label": "Filter" }),
+      h("div", { class: "row" },
+        h("button", { type: "button", class: "primary", onclick: pasteFromClipboard }, "Paste"),
+        h("span", { class: "hint", text: "…or press ⌘V / Ctrl+V anywhere on this page. Copies on your Mac show up here by themselves." })));
+    $("#heading").after(tools);
+  }
+  $(".chips", tools).replaceChildren(...clipFilters.map(([id, title]) =>
+    h("button", { type: "button", "aria-pressed": String(state.clipFilter === id), onclick: () => { state.clipFilter = id; render(); } }, title)));
+  $("#grid").replaceChildren(...pinned.slice(0, 300).map(clipRow));
+  $("#empty").hidden = pinned.length > 0;
+  $("#empty").textContent = all.length ? "No clips match." : "Nothing copied yet. Copy something on your Mac, or paste here.";
+}
+
+function clipRow(clip) {
+  const open = state.openClip === clip.id;
+  const c = clip.kind === "color" ? color(clip.text) : null;
+  const badge = h("span", { class: "clip-badge", "aria-hidden": "true" }, c ? "" : clipSymbol[clip.kind] ?? "¶");
+  if (c) badge.style.setProperty("background", `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${c.a})`);
+  if (clip.image) blobURL(clip.image).then((url) => badge.replaceChildren(h("img", { src: url, alt: "" }))).catch(() => {});
+  const meta = [clip.sourceApp, clip.device !== state.vault.config.deviceId ? clip.sourceDevice : null, ago(clip.sortDate)].filter(Boolean).join(" · ");
+  const row = h("div", { class: `clip${open ? " open" : ""}` },
+    h("button", { type: "button", class: "clip-main", title: "Copy", onclick: () => copyClip(clip) },
+      badge,
+      h("span", { class: "clip-text" },
+        h("span", { class: `clip-preview${["code", "json"].includes(clip.kind) ? " mono" : ""}`, text: clip.preview || clip.kind }),
+        h("span", { class: "clip-meta", text: meta })),
+      clip.isPinned ? h("span", { class: "pin", "aria-label": "Pinned", text: "●" }) : null),
+    h("button", { type: "button", class: "icon-button clip-more", "aria-label": open ? "Less" : "More", "aria-expanded": String(open),
+      onclick: () => { state.openClip = open ? null : clip.id; render(); } }, open ? "▴" : "▾"));
+  if (!open) return row;
+
+  const details = h("div", { class: "clip-details" });
+  if (clip.image) {
+    const img = h("img", { alt: clip.image.name });
+    blobURL(clip.image).then((url) => { img.src = url; }).catch(() => {});
+    details.append(img);
+  } else if (c) {
+    details.append(h("div", { class: "chips" }, colorFormats(c).map((f) => h("button", { type: "button", onclick: () => copyText(f) }, f))));
+  } else {
+    details.append(h("pre", { class: ["code", "json"].includes(clip.kind) ? "mono" : "", text: clip.text.slice(0, 20_000) }));
+    const transforms = availableTransforms(clip.text);
+    if (transforms.length) details.append(h("div", { class: "chips" }, h("span", { class: "hint", text: "Copy as" }),
+      transforms.map((t) => h("button", { type: "button", onclick: () => copyText(t.apply(clip.text), clip) }, t.title))));
+  }
+  details.append(h("div", { class: "row" },
+    h("button", { type: "button", class: "secondary", onclick: () => { state.vault.setClipPinned(clip.id, !clip.isPinned); syncSoon(); } }, clip.isPinned ? "Unpin" : "Pin"),
+    h("button", { type: "button", class: "secondary", onclick: async () => {
+      try { await state.vault.saveClipToLibrary(clip.id); toast("Saved to Trove"); syncSoon(); } catch (e) { toast(`Couldn't save: ${e.message}`); }
+    } }, clip.savedItem ? "Saved ✓" : "Save to Trove"),
+    clip.kind === "link" ? h("a", { class: "secondary", href: clip.text.trim(), target: "_blank", rel: "noopener noreferrer" }, "Open") : null,
+    h("button", { type: "button", class: "secondary danger", onclick: () => { state.vault.deleteClip(clip.id); state.openClip = null; syncSoon(); } }, "Delete")));
+  row.append(details);
+  return row;
+}
+
+async function copyText(text, clip) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (clip) { state.vault.markClipUsed(clip.id); syncSoon(); }
+    toast("Copied");
+  } catch {
+    toast("Your browser blocked copying. Select the text and copy it instead.");
+  }
+}
+
+async function copyClip(clip) {
+  if (clip.image) {
+    try {
+      const blob = await (await fetch(await blobURL(clip.image))).blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
+      state.vault.markClipUsed(clip.id);
+      syncSoon();
+      toast("Image copied");
+    } catch {
+      toast("Your browser can't copy images here. Open it with ▾ instead.");
+    }
+    return;
+  }
+  await copyText(clip.text, clip);
+}
+
+/** Adds text or an image to the history (the web can't watch the clipboard, so you paste). */
+async function addToClipboardHistory({ text, file }) {
+  if (file && file.type.startsWith("image/")) {
+    await state.vault.addImageClip(new Uint8Array(await file.arrayBuffer()), file.type);
+    toast("Image added to your clipboard history");
+  } else if (text && text.trim()) {
+    if (isSensitive(text)) { toast("That looks like a password or code, so it wasn't saved"); return; }
+    state.vault.addClip(text, { sourceApp: "Web" });
+    toast("Added to your clipboard history");
+  } else {
+    return;
+  }
+  syncSoon();
+}
+
+async function pasteFromClipboard() {
+  try {
+    if (navigator.clipboard.read) {
+      for (const entry of await navigator.clipboard.read()) {
+        const imageType = entry.types.find((t) => t.startsWith("image/"));
+        if (imageType) { await addToClipboardHistory({ file: new File([await entry.getType(imageType)], "image", { type: imageType }) }); return; }
+      }
+    }
+    await addToClipboardHistory({ text: await navigator.clipboard.readText() });
+  } catch {
+    toast("Your browser didn't allow reading the clipboard. Press ⌘V / Ctrl+V instead.");
+  }
 }
 
 const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email" };

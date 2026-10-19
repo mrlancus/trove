@@ -27,7 +27,7 @@ import Testing
             #expect(SensitiveDetector.isSensitive(secret), "\(secret)")
         }
         for normal in ["Remember to buy milk", "https://example.com/Page?id=1&X=2", "me@example.com", "hello", "1,299", "~/Documents/My File.txt",
-                       "#ff8a3d", "iPhone 17 Pro"] {
+                       "#ff8a3d", "iPhone 17 Pro", #"{"b":1,"a":2}"#, "rgb(1,2,3)"] {
             #expect(!SensitiveDetector.isSensitive(normal), "\(normal)")
         }
     }

@@ -4,6 +4,7 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
+import { ClipField, clipView, hashImageHex, hashText } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 
 /** Parses a setup or recovery code (or a `trove://pair?d=` link): the apps' `PairingPayload`. */
@@ -272,6 +273,65 @@ export class Vault {
     if (!item) return;
     const next = item.collections.includes(collectionId) ? item.collections.filter((c) => c !== collectionId) : [...item.collections, collectionId];
     this.update(itemId, { [Field.collections]: next });
+  }
+
+  // ---------- clipboard history (PROTOCOL.md §8) ----------
+
+  clips() {
+    return this.store.visible.filter((r) => r.kind === "clip").map(clipView).sort((a, b) => b.sortDate - a.sortDate);
+  }
+
+  clip(id) {
+    const r = this.store.records.get(id);
+    return r && r.kind === "clip" && r.fields._deleted !== true ? clipView(r) : null;
+  }
+
+  /** Adds copied text, or moves the same text's clip back to the top. Callers skip sensitive text. */
+  addClip(text, { sourceApp = null } = {}) {
+    if (!text.trim() || utf8.encode(text).length > 256 * 1024) return null;
+    return this.upsertClip(hashText(text), { [ClipField.text]: text }, sourceApp);
+  }
+
+  async addImageClip(bytes, mime = "image/png") {
+    if (!bytes.length || bytes.length > 20 * 1024 * 1024) return null;
+    const hash = hashImageHex(hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))));
+    const existing = this.clips().find((c) => c.hash === hash);
+    if (existing) { this.markClipUsed(existing.id); return existing.id; }
+    const ext = mime === "image/jpeg" ? "jpg" : mime.split("/")[1] ?? "png";
+    const attachment = await this.storeBlob(bytes, `Image.${ext}`, mime);
+    return this.upsertClip(hash, { [ClipField.image]: attachment }, null);
+  }
+
+  upsertClip(hash, fields, sourceApp) {
+    const at = this.now();
+    const existing = this.clips().find((c) => c.hash === hash);
+    if (existing) {
+      this.set({ [ClipField.lastUsedAt]: at, ...(sourceApp ? { [ClipField.sourceApp]: sourceApp } : {}) }, existing.id, "clip");
+      return existing.id;
+    }
+    const id = crypto.randomUUID().toLowerCase();
+    const all = { ...fields, [ClipField.hash]: hash, [ClipField.createdAt]: at, [ClipField.lastUsedAt]: at, [ClipField.device]: this.journal.device,
+      [ClipField.sourceDevice]: this.config.deviceName ?? "Web browser" };
+    if (sourceApp) all[ClipField.sourceApp] = sourceApp;
+    this.set(all, id, "clip");
+    return id;
+  }
+
+  markClipUsed(id) { this.set({ [ClipField.lastUsedAt]: this.now() }, id, "clip"); }
+  setClipPinned(id, pinned) { this.set({ [ClipField.pinned]: pinned }, id, "clip"); }
+  deleteClip(id) { this.set({ _deleted: true }, id, "clip"); }
+
+  /** Turns a clip into a library item (link, note or file) and links the two. */
+  async saveClipToLibrary(id) {
+    const clip = this.clip(id);
+    if (!clip) return null;
+    if (clip.savedItem && this.item(clip.savedItem)) return clip.savedItem;
+    let itemId;
+    if (clip.image) itemId = await this.addFile(await this.attachment(clip.image.id), clip.image.name, clip.image.mime);
+    else if (clip.kind === "link") itemId = this.addLink(clip.text.trim()).id;
+    else itemId = this.addNote({ body: clip.text });
+    this.set({ [ClipField.savedItem]: itemId }, id, "clip");
+    return itemId;
   }
 
   // ---------- relay ----------
