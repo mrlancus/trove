@@ -102,10 +102,27 @@ test("set up with a code, browse, capture, edit, upload and get live updates", a
   await until(async () => { await phone.sync(); return phone.items().find((i) => i.title === "Typed in Chrome")?.body === "Hello from the browser\n- one\n- two"; }, "typed note on the phone");
   await page.getByRole("button", { name: "Close" }).click();
 
-  // Upload: encrypted in the page, readable on the phone.
-  await page.locator("#upload").setInputFiles({ name: "receipt.txt", mimeType: "text/plain", buffer: Buffer.from("total £12.50") });
+  // Upload (through Import): encrypted in the page, readable on the phone.
+  await page.locator("#upload").setInputFiles({ name: "receipt.pdf", mimeType: "application/pdf", buffer: Buffer.from("total £12.50") });
+  await page.locator(".dz-done").waitFor();
   const uploaded = await until(async () => { await phone.sync(); return phone.items().find((i) => i.title === "receipt"); }, "uploaded file on the phone");
   assert.equal(new TextDecoder().decode(await phone.attachment(uploaded.attachments[0].id)), "total £12.50");
+
+  // A zip export (the Swift test fixture) is opened in the page: notes, links and highlights land on the phone.
+  await page.getByRole("button", { name: "Import more" }).click();
+  if (shots) await page.screenshot({ path: join(shots, "web-import.png") });
+  await page.locator("#import-files").setInputFiles(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/import-sample.zip", import.meta.url).pathname);
+  await page.locator(".dz-summary", { hasText: "Added 7 things" }).waitFor({ timeout: 15000 });
+  if (shots) {
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: join(shots, "web-import-done.png") });
+  }
+  await until(async () => {
+    await phone.sync();
+    const items = phone.items();
+    return ["Big ideas", "Inside", "Example", "Dune"].every((t) => items.some((i) => i.title === t));
+  }, "zip contents on the phone");
+  await page.getByRole("button", { name: "Show them" }).click();
 
   // Live: something saved on the phone appears without a reload.
   phone.addNote({ title: "Live from the phone", body: "hi" });

@@ -134,10 +134,49 @@
       <div id="heading" class="heading"></div>
       <div id="grid" class="grid" aria-live="polite"></div>
       <p id="empty" class="empty" hidden>Nothing here yet.</p>
+      <section id="import-view" class="import-view" hidden aria-labelledby="import-title">
+        <h1 id="import-title">Bring everything in</h1>
+        <p class="lead">Drop files, folders or whole exports. Zips are opened for you, and everything is encrypted before it leaves this browser.</p>
+        <div id="dropzone" class="dropzone">
+          <div class="dz-idle">
+            <svg class="dz-icon" aria-hidden="true" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="url(#dz-grad)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <defs><linearGradient id="dz-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9f43"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient></defs>
+              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>
+            </svg>
+            <p class="dz-title">Drop anything here</p>
+            <p class="hint">or</p>
+            <div class="row center">
+              <label class="primary">Choose files<input id="import-files" type="file" multiple hidden></label>
+              <label class="secondary">Choose a folder<input id="import-folder" type="file" webkitdirectory hidden></label>
+            </div>
+          </div>
+          <div class="dz-progress" hidden>
+            <div class="ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" cx="60" cy="60" r="52"/></svg>
+              <div class="ring-label"><b class="dz-added">0</b><span>added</span></div></div>
+            <p class="dz-current hint"></p>
+            <p class="dz-count fine"></p>
+            <ul class="arrivals" aria-live="polite"></ul>
+          </div>
+          <div class="dz-done" hidden>
+            <div class="mark-wrap" aria-hidden="true"><div class="burst"></div><div class="done-mark">✓</div></div>
+            <p class="dz-title dz-summary"></p>
+            <ul class="arrivals"></ul>
+            <div class="row center"><button type="button" class="primary" id="import-show">Show them</button><button type="button" class="secondary" id="import-more">Import more</button></div>
+          </div>
+        </div>
+        <ul class="formats">
+          <li>Zip archives</li><li>Notion &amp; Obsidian exports</li><li>Browser bookmarks</li><li>Kindle highlights</li>
+          <li>Pocket &amp; Raindrop CSV</li><li>Readwise</li><li>PDFs &amp; documents</li><li>Photos &amp; screenshots</li><li>Whole folders</li>
+        </ul>
+        <p class="fine center">You can also drop things anywhere on this page.</p>
+      </section>
     </div>
     <section id="detail" class="detail" hidden aria-label="Item"></section>
   </div>
   <div id="toast" class="toast" role="status" hidden></div>
+  <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
+    <div><div class="drop-arrow">↓</div><p class="dz-title">Drop to add to Trove</p><p class="hint">Files, folders, zips, links or text</p></div>
+  </div>
   <div id="other-tab" class="other-tab" hidden>
     <div><p>Trove is open in another tab.</p><button id="use-here" type="button" class="primary">Use it here</button></div>
   </div>

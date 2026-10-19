@@ -169,3 +169,25 @@ test("clips in the vault: dedupe, pin, delete and save to the library", async ()
   assert.deepEqual(v.clips().map((c) => c.id), [b]);
   assert.equal(v.items().length, 1);
 });
+
+test("imports the same zip as FileImportTests.swift", async () => {
+  const { importActions, countActions, isJunk, readZip, parseMarkdownNote } = await import("../public/core/importer.js");
+  const bytes = new Uint8Array(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/import-sample.zip", import.meta.url)));
+  const zip = readZip(bytes);
+  assert.equal(zip.entries.length, 9);
+  const long = await zip.data(zip.entries.find((e) => e.path === "Export/long.txt"));
+  assert.equal(long.length, 196_710);
+  const actions = await importActions("export.zip", bytes);
+  const notes = actions.filter((a) => a.type === "note").map((a) => a.title);
+  assert.deepEqual(new Set(notes), new Set(["Big ideas", "long", "Inside"]));
+  assert.deepEqual(actions.filter((a) => a.type === "file").map((a) => `${a.name} ${a.mime}`), ["photo.png image/png"]);
+  const items = actions.filter((a) => a.type === "items").flatMap((a) => a.items);
+  assert.deepEqual(items.filter((i) => i.kind === "link").map((i) => i.url), ["https://example.com/a", "https://example.org/b"]);
+  const dune = items.find((i) => i.kind === "highlight");
+  assert.equal(dune.title, "Dune");
+  assert.equal(dune.externalId, "kindle:dacb4933b882f63a"); // same as Swift: sha256("Dune|Fear is the mind-killer.")
+  assert.equal(countActions(actions), 7);
+  assert.ok(isJunk("__MACOSX/a/._b.md") && isJunk("a/.DS_Store") && !isJunk("a/b.md"));
+  assert.deepEqual(parseMarkdownNote("---\ntags: [ideas]\n---\n# Big ideas\n\nShip it #now\n", "x.md"),
+    { title: "Big ideas", tags: ["ideas", "now"], body: "Ship it #now" });
+});

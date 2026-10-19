@@ -3,12 +3,15 @@ import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
 import { availableTransforms, color, colorFormats, isSensitive } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
+import { importActions } from "./core/importer.js";
 import { renderMarkdown } from "./markdown.js";
 
 const app = document.getElementById("app");
-const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null };
+const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
+  importRun: null };
 const blobURLs = new Map();
 const MAX_UPLOAD = 100 * 1024 * 1024;
+const MAX_ZIP = 1024 * 1024 * 1024;
 const MAX_CARDS = 400;
 
 // ---------- tiny DOM helper ----------
@@ -215,17 +218,16 @@ function showMain(vault) {
     input.value = "";
     syncSoon();
   });
-  $("#upload").addEventListener("change", async (e) => {
-    const files = [...e.target.files];
-    e.target.value = "";
-    await upload(files);
-  });
-  document.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) e.preventDefault(); });
-  document.addEventListener("drop", (e) => {
-    if (!e.dataTransfer?.files.length) return;
-    e.preventDefault();
-    upload([...e.dataTransfer.files]);
-  });
+  for (const id of ["#upload", "#import-files", "#import-folder"]) {
+    $(id).addEventListener("change", (e) => {
+      const files = [...e.target.files];
+      e.target.value = "";
+      if (files.length) importFiles(files);
+    });
+  }
+  wireDrops();
+  $("#import-show").addEventListener("click", () => { state.importRun = null; state.selection = "all"; render(); });
+  $("#import-more").addEventListener("click", () => { state.importRun = null; render(); });
   $("#menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
@@ -264,18 +266,143 @@ function onKey(e) {
   if (e.key === "n") { e.preventDefault(); $("#new-note").click(); }
 }
 
-async function upload(files) {
-  for (const file of files) {
-    if (file.size > MAX_UPLOAD) { toast(`${file.name} is over 100 MB`); continue; }
-    toast(`Encrypting and uploading ${file.name}…`);
-    try {
-      await state.vault.addFile(new Uint8Array(await file.arrayBuffer()), file.name, file.type || "application/octet-stream");
-      toast(`Added ${file.name}`);
-    } catch (e) {
-      toast(`Couldn't upload ${file.name}: ${e.message}`);
+// ---------- import ----------
+
+/** Drops anywhere on the page: files and folders are imported, a dragged link or text is captured. */
+function wireDrops() {
+  const overlay = $("#drop-overlay"), zone = $("#dropzone");
+  let depth = 0;
+  const carriesFiles = (e) => e.dataTransfer?.types.includes("Files");
+  const reset = () => { depth = 0; overlay.hidden = true; zone.classList.remove("hover"); };
+  document.addEventListener("dragenter", (e) => {
+    if (!carriesFiles(e)) return;
+    depth++;
+    overlay.hidden = state.selection === "import";
+  });
+  document.addEventListener("dragleave", (e) => { if (carriesFiles(e) && --depth <= 0) reset(); });
+  document.addEventListener("dragover", (e) => {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    zone.classList.toggle("hover", zone.contains(e.target));
+  });
+  document.addEventListener("drop", async (e) => {
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    if (e.target.closest?.("input, textarea") && !dt.files.length) return; // let text drop into fields
+    e.preventDefault();
+    reset();
+    if (dt.files.length) { importFiles(await droppedFiles(dt)); return; }
+    const text = (dt.getData("text/uri-list").split("\n").find((l) => l && !l.startsWith("#")) || dt.getData("text/plain")).trim();
+    if (!text) return;
+    let url = null;
+    try { const u = new URL(text); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
+    if (url) toast(state.vault.addLink(url.toString()).isNew ? "Link saved" : "Already saved");
+    else { state.vault.addNote({ body: text }); toast("Note saved"); }
+    syncSoon();
+  });
+}
+
+/** Dropped files, with dropped folders walked. Entries must be taken before the first await. */
+async function droppedFiles(dt) {
+  const entries = [...dt.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entries.length) return [...dt.files];
+  const out = [];
+  const walk = async (entry) => {
+    if (entry.name.startsWith(".")) return;
+    if (entry.isFile) { const f = await new Promise((ok, fail) => entry.file(ok, fail)).catch(() => null); if (f) out.push(f); return; }
+    const reader = entry.createReader();
+    for (;;) {
+      const batch = await new Promise((ok, fail) => reader.readEntries(ok, fail)).catch(() => []);
+      if (!batch.length) break;
+      for (const e of batch) await walk(e);
     }
+  };
+  for (const e of entries) await walk(e);
+  return out;
+}
+
+/** Imports files one by one (zips opened, exports parsed; core/importer.js), animating the Import page. */
+async function importFiles(files) {
+  if (state.importRun && !state.importRun.finished) { toast("Still importing. Drop the rest when it's done."); return; }
+  const run = state.importRun = { total: files.length, done: 0, added: 0, current: null, recent: [], seq: 0, finished: false };
+  state.selection = "import";
+  render();
+  for (const file of files) {
+    run.current = file.name;
+    renderImport();
+    const isZip = /\.zip$/i.test(file.name);
+    try {
+      if (file.size > (isZip ? MAX_ZIP : MAX_UPLOAD)) toast(`${file.name} is too big to import here`);
+      else {
+        for (const action of await importActions(file.name, new Uint8Array(await file.arrayBuffer()))) {
+          const [count, label] = await applyImport(action);
+          run.added += count;
+          if (count) run.recent.unshift({ id: ++run.seq, label });
+        }
+        run.recent = run.recent.slice(0, 8);
+      }
+    } catch (e) {
+      toast(`Couldn't import ${file.name}: ${e.message}`);
+    }
+    run.done++;
+    renderImport();
   }
+  run.current = null;
+  run.finished = true;
+  render();
   syncSoon(200);
+}
+
+async function applyImport(action) {
+  const vault = state.vault;
+  if (action.type === "items") {
+    const n = vault.importItems(action.items);
+    const kind = action.items[0]?.kind === "highlight" ? "highlight" : "link";
+    return [n, `${n} ${kind}${n === 1 ? "" : "s"}`];
+  }
+  if (action.type === "note") {
+    vault.addNote({ title: action.title, body: action.body, tags: action.tags, source: "import" });
+    return [1, action.title || "Note"];
+  }
+  if (action.bytes.length > MAX_UPLOAD) { toast(`${action.name} is over 100 MB`); return [0, action.name]; }
+  await vault.addFile(action.bytes, action.name, action.mime, { source: "import" });
+  return [1, action.name];
+}
+
+function renderImport() {
+  const view = $("#import-view"), run = state.importRun;
+  if (!view) return;
+  $(".dz-idle", view).hidden = Boolean(run);
+  $(".dz-progress", view).hidden = !run || run.finished;
+  $(".dz-done", view).hidden = !run?.finished;
+  if (!run) return;
+  const panel = run.finished ? $(".dz-done", view) : $(".dz-progress", view);
+  // Only new arrivals are added, so each slides in once.
+  const list = $(".arrivals", panel);
+  for (const a of run.recent.slice(0, 5).reverse()) {
+    if (!list.querySelector(`[data-id="${a.id}"]`)) list.prepend(h("li", { "data-id": a.id, text: a.label }));
+  }
+  while (list.children.length > 5) list.lastElementChild.remove();
+  if (!run.finished) {
+    $(".bar", view).style.strokeDashoffset = String(326.7 * (1 - (run.total ? run.done / run.total : 1)));
+    $(".dz-added", view).textContent = run.added;
+    $(".dz-current", view).textContent = run.current ? `Reading ${run.current}…` : "Finishing up…";
+    $(".dz-count", view).textContent = `${run.done} of ${run.total} file${run.total === 1 ? "" : "s"}`;
+    return;
+  }
+  if (run.celebrated) return;
+  run.celebrated = true;
+  $(".dz-summary", view).textContent = run.added === 0 ? "Nothing new to add" : run.added === 1 ? "Added 1 thing" : `Added ${run.added} things`;
+  $(".done-mark", view).classList.toggle("none", run.added === 0);
+  $(".done-mark", view).textContent = run.added ? "✓" : "?";
+  $("#import-show").hidden = run.added === 0;
+  const colors = ["#ff9f43", "#ff4f8b", "#a55eea", "#feca57", "#1dd1a1", "#54a0ff"];
+  $(".burst", view).replaceChildren(...Array.from({ length: 14 }, (_, i) => {
+    const angle = (i / 14) * 2 * Math.PI;
+    const dot = h("i");
+    dot.style.cssText = `background:${colors[i % colors.length]};--x:${Math.cos(angle) * 80}px;--y:${Math.sin(angle) * 80}px`;
+    return dot;
+  }));
 }
 
 // ---------- rendering ----------
@@ -296,13 +423,17 @@ function render() {
     const count = items.filter((i) => s.contains(i, now)).length;
     if (!count && !["all", "notes", "pinned"].includes(s.id)) return null;
     return navLink(s.id, s.title, count);
-  }).filter(Boolean), navLink("clips", "Clipboard", vault.clips().length));
+  }).filter(Boolean), navLink("clips", "Clipboard", vault.clips().length),
+  navLink("import", "Import", state.importRun && !state.importRun.finished ? state.importRun.total - state.importRun.done : ""));
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
   if (!collections.length) $("#collection-list").replaceChildren(h("p", { class: "side-note", text: "Make collections in the app." }));
 
-  const clipsMode = state.selection === "clips";
+  const clipsMode = state.selection === "clips", importMode = state.selection === "import" && !state.query.trim();
   $("#grid").classList.toggle("clip-list", clipsMode);
-  $("#capture").hidden = clipsMode;
+  $("#capture").hidden = clipsMode || importMode;
+  $("#import-view").hidden = !importMode;
+  for (const id of ["#heading", "#grid"]) $(id).hidden = importMode;
+  if (importMode) { $("#empty").hidden = true; $("#clip-tools")?.remove(); renderImport(); renderDetail(); return; }
   if (clipsMode) { renderClips(); renderDetail(); return; }
   $("#clip-tools")?.remove();
 

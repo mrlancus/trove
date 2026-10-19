@@ -226,10 +226,10 @@ export class Vault {
     };
   }
 
-  addNote({ title = "", body = "", source = "web" } = {}) {
+  addNote({ title = "", body = "", source = "web", tags: extra = [] } = {}) {
     const id = crypto.randomUUID().toLowerCase();
     const fields = { ...this.baseFields("note", title), [Field.source]: source, [Field.category]: "note" };
-    const tags = [...new Set(hashtags(body))].sort();
+    const tags = [...new Set([...extra.map((t) => t.toLowerCase()), ...hashtags(body)])].sort();
     if (tags.length) fields[Field.tags] = tags;
     this.set(fields, id, "item");
     if (body) this.editText(Field.body, body, id, "item");
@@ -246,6 +246,37 @@ export class Vault {
     this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString() }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
+  }
+
+  /** Adds imported items (importer.js), skipping ones already imported (like Library.importItems). */
+  importItems(imported) {
+    const existing = new Set(this.items().map((i) => i.record.fields.origin?.externalId).filter(Boolean));
+    let added = 0;
+    for (const entry of imported) {
+      if (entry.externalId && existing.has(entry.externalId)) continue;
+      const id = crypto.randomUUID().toLowerCase();
+      const fields = { ...this.baseFields(entry.kind, entry.title), [Field.source]: entry.source };
+      if (entry.createdAt) fields[Field.createdAt] = entry.createdAt;
+      if (entry.url) fields[Field.url] = entry.url;
+      if (entry.tags.length) fields[Field.tags] = entry.tags;
+      if (entry.author) fields.author = entry.author;
+      if (entry.kind === "highlight") fields[Field.category] = "quote";
+      if (entry.externalId) { fields.origin = { externalId: entry.externalId }; existing.add(entry.externalId); }
+      if (entry.collection) fields[Field.collections] = [this.createCollection(entry.collection)];
+      this.set(fields, id, "item");
+      if (entry.body) this.editText(Field.body, entry.body, id, "item");
+      added++;
+    }
+    return added;
+  }
+
+  /** The collection with this name, made if needed (Library.createCollection). */
+  createCollection(name, { symbol = "folder", color = "blue" } = {}) {
+    const existing = this.collections().find((c) => c.name.localeCompare(name, undefined, { sensitivity: "accent" }) === 0);
+    if (existing) return existing.id;
+    const id = crypto.randomUUID().toLowerCase();
+    this.set({ name, symbol, color, [Field.createdAt]: this.now() }, id, "collection");
+    return id;
   }
 
   update(id, fields) { this.set(fields, id, "item"); }

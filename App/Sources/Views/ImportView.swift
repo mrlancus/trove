@@ -153,7 +153,7 @@ private struct DropZone: View {
                 if run.added > 0 {
                     Button("Show them") {
                         model.dismissImport()
-                        model.selection = .smart(.recent)
+                        model.selection = .source(.import)
                     }
                     .buttonStyle(.borderedProminent)
                 }

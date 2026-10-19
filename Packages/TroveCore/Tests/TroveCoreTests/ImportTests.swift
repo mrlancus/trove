@@ -55,6 +55,7 @@ import Testing
         #expect(files == ["photo.png image/png"])
         #expect(items.filter { $0.kind == .link }.map(\.url) == ["https://example.com/a", "https://example.org/b"])
         #expect(items.filter { $0.kind == .highlight }.map(\.title) == ["Dune"])
+        #expect(items.first { $0.kind == .highlight }?.externalId == "kindle:dacb4933b882f63a") // web/test checks the same id
         #expect(FileImport.count(actions) == 7)
     }
 
