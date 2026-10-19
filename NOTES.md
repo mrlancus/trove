@@ -5,12 +5,17 @@ _Last updated by the cloud session that wrote the code (Linux, no Xcode)._
 ## Status
 | Part | State | Tested |
 |---|---|---|
-| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy) | ✅ Done | 20 tests on the Workers runtime |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library) | ✅ Done | 45 tests, plus an end-to-end test against `wrangler dev` |
-| Crypto compatibility Swift ⇄ Worker ⇄ extension | ✅ Verified both directions | fixtures + scripts |
-| `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test |
+| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 33 tests on the Workers runtime (incl. a real MIME email) |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing) | ✅ Done | 49 tests, plus an end-to-end test against `wrangler dev` |
+| Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
+| `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
+| `web/` web app (any browser, served by the relay) | ✅ Done | 11 unit/interop tests, relay e2e, real-Chromium UI e2e |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟡 Written, **never compiled** | all files pass the Swift parser only |
-| Relay deployed to Cloudflare | ⬜ Not yet | – |
+| Relay deployed to Cloudflare | ⬜ Not yet | needs `wrangler login` (Mac session) |
+
+**Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
+private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
+before restyling `App/Sources/Views`. The web app currently uses a neutral style close to Midnight.
 
 ## Next steps (Mac session)
 1. **Get it compiling.**
@@ -36,12 +41,18 @@ _Last updated by the cloud session that wrote the code (Linux, no Xcode)._
    1. Pair with the QR code from Mac Settings → Devices.
    2. Test share sheet saves, widgets, the Control Center control, and Shortcuts ("Save Clipboard to Trove" for Back Tap).
    3. Check that the iPad enriches items saved on the other devices.
-5. **Relay.** Deploy with `server/README.md`, connect it in Settings, then test live sync, the browser extension, GoodNotes WebDAV with a big notebook, and optionally email-in.
+5. **Relay.** Deploy with `server/README.md` (`npx wrangler login` opens the browser, so do it on the Mac), connect it in Settings, then test:
+   - live sync and the browser extension
+   - GoodNotes WebDAV with a big notebook, and optionally email-in
+   - **the web app**: open the relay URL in a browser and paste a setup code from Add a device
+   - **price-drop alerts**: on a product link, ⋯ → Track price drops. Check it in the detail view after a sync
+   - **publish to link**: on a note, ⋯ → Publish to link; the link is copied. Open it in a private window, then Remove public link
 6. **Polish / later:**
    - A TextKit 2 live-styling Markdown editor
    - Move `SyncEngine` snapshot persistence from JSON to SQLite once vaults are big
    - SpeechAnalyzer on OS 26
-   - Places map, resurfacing ("on this day"), price-drop alerts (Worker cron), publish-to-link, a web app
+   - Places map, resurfacing ("on this day")
+   - Web app: offline support (service worker), collections editing, a richer editor
    - Notion and Readwise import UI (parsers exist in TroveCore)
 
 ## Manual steps for the user
@@ -56,9 +67,26 @@ _Last updated by the cloud session that wrote the code (Linux, no Xcode)._
 - **Relay:** `server/README.md` (Cloudflare login, R2 bucket, deploy; optional Anthropic key and email routing).
 - **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings.
 
+## How the newer features work (built without a Mac)
+- **Price-drop alerts:**
+  - The item field `priceWatch` is the source of truth. `PriceWatchSync` (run on every sync by relay devices) creates and removes relay watches to match it.
+  - The relay checks schema.org prices every ~12h with a Durable Object alarm and pings live sockets on a drop.
+  - Apps show a local notification (no push on a free Apple ID), so alerts appear when a device syncs.
+  - Privacy: the relay sees product URLs for tracked items only.
+- **Publish to link:**
+  - The note is stored on the relay in **plaintext** by the user's choice, at `/p/<vault>/<random slug>`.
+  - It's rendered with everything escaped and served with a strict CSP and noindex.
+  - Re-publishing updates the page; edits aren't pushed automatically.
+- **Web app:**
+  - It joins as device kind `web` and keeps only derived, non-extractable keys in IndexedDB (see CLAUDE.md rules and PROTOCOL.md §7).
+  - It can browse, search, write notes, add links, upload files, resolve conflicts and toggle collections, and it updates live.
+  - It can't read the sealed inbox (no private key); the apps import it.
+  - One tab at a time; a second tab takes over.
+
 ## Decisions made so far
 - **Name:** working name "Trove". Ask the user for the final name and suggest 5.
 - **Storage:** iCloud Drive vault with per-device journals is the source of truth. The relay is an optional add-on. CloudKit can come later if the user pays for the developer account.
 - **Mac app:** not sandboxed (personal use: iCloud Drive path, AppleScript, Obsidian folder). Extensions are sandboxed.
 - **Relay AI model:** `CLAUDE_MODEL` defaults to `claude-opus-5-5`. The user wants costs at pennies, so suggest `claude-haiku-5-5` when deploying.
+- **Web app keys:** the web app stores derived keys in the browser. That's the one exception to "secrets only in the Keychain". If the user would rather not, remove the `assets` block from `server/wrangler.jsonc`.
 - **Bundle ids:** `com.mrlancus.trove(.share/.widgets/.safari)`. App Group: `group.com.mrlancus.trove`.

@@ -195,3 +195,18 @@ capped at 256 KB of Markdown.
 - **Updating:** re-publishing the same slug updates the page. `DELETE` takes it down (`404` afterwards).
 - **On the item:** the app stores `published: {slug, url}` in the item's fields so every device can
   show and remove the link.
+
+## 7. Web app (`web/public`, served at the relay root)
+The web app is a relay device like any other (`deviceKind: "web"`). It joins with the app's
+"Add a device" setup code (`PairingPayload`: vault keys plus a single-use relay pairing code) and is
+revoked the same way.
+- **Keys:** it derives the segment, blob and blob-id keys with HKDF (§1) and stores only those, as
+  **non-extractable** WebCrypto keys in IndexedDB. It never keeps the raw vault key or the X25519
+  private key. That means it can't open the sealed inbox; the apps import the inbox.
+- **Journal:** it writes the same ops and segments as the apps (§3). Its sequence numbers live in
+  IndexedDB. If its own journal on the relay is already ahead (a stale tab or restored storage), it
+  renumbers its unpushed ops past it before uploading.
+- **Same results everywhere:** `web/test` and `WebInteropTests.swift` check journals written by
+  each side materialise to identical records on the other.
+- **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to
+  the same origin only, no inline script or style.

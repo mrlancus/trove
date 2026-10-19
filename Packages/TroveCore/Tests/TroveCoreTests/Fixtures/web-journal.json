@@ -1,0 +1,77 @@
+{
+  "keys": {
+    "v": 1,
+    "vaultKey": "hk0uAk5VWaravHxMV5WQ22H2HVF0jtge3Z71cWhnWmw",
+    "privateKey": "Pqs-YgbTuYGwc2nYrGMfqyaVaW36Gk3LS8uJlnk7yKg"
+  },
+  "segments": [
+    {
+      "device": "AAAA-WEB",
+      "first": 1,
+      "last": 8,
+      "data": "VFJWMQEAAQAAkhEyUMky8Y0u83fpZN5tJXZbp6Xivo0eWJmvEPzgrX77Ehpqz4xsPqJyFqTcTQqjF6Ms2xnD6ohqD0vTDj25UbjdebupMRVNSN-gViRUEJtcBW8Dq4EtaPAlZxICpBj7jvLX-2qrJFXF0hIcxgs0IAVJe4yUqc-EyFFHUudc10LQcgDc2yQAlpvWmS8h7fBtiOU1G7VAhYt8zjJ_spX_Whhigl0EBRcyJrE6uANeOEyZVc3mkcQpNuWhI-nyDa9HSiI0LqOviQt3FPBOEW9TwX9TRyeHj4M2nroCpCXdnc2TojXu2cIC6lfbpbocJWWaIDwqcrVXSfY4_c19UaDN-Xsd4O0osrbJjk1vR0ZSDaT-BLVqiDb7hHw0cojztmOY8D9vgf6UxPJewIWlmQn05r_41YprbUaGoyu53y8DxQAN24fXRPBf1xm-HsJV-WQPGGr0Q505zpk1Ar9EMjxBs71x1sz-h_lRJAWB-14dxNuqjtEPV6ECVyadRSzTOM99PTEhct5bMRIYDqUOPyVrY4Oe8VRoFWuga0QOFLcgf_snd8ZRDFRfJvFYKVOskq9HgkGV5n-_T6TYverFuPxobp7jRuIrhy0IcJYNTpUmxGJ7Qe-fxNO-afASN6Qb4tLhL9Jl6sj3XUr2zMX93A2fBiQ3mgwvapFCsFMAl6sIli4yjrntSWmq45ZRSnERNil_34HeS06ZZEI2D2eoapxqpeZTPo3X9QVFYZ8ogI_dqoCStKHJ4hN737sQ1yTSVl2Fhr6gs0feSp7pyFSJIXnhny5MnQqC8v9coHEBtE17VKJVgfzng6KoDJ5vLJxquYnSrpg9vgrj52OUZH-6XuoC2d-vByspIQtSqCa-vD7ETVHF7Qq1RxbH9bIVGmgljxA4jUrfUaeb3QaLLBbh5ROMejE0G_Jc84ZSTWfdKmePaBZAw8-YKCuygsipecKwzrYLa8vHpWIzyWm-quuzCGXcwZ3gIl-rVFLR7F1aPqRrePlWBp-31zQ-ubBcsUn4b8sbxnXCGUQPLtlT-oTM9jNa2KcwM1WpYG65jLUSRKo9v1GwzzhYBCwqSzTCbiH-TFdPUv0_9ONbe6IaInT6cRZzZiGlXpH-RRswLYmsPTAFKHUFmqnOm7HgXiHOslUg02exwuhPGPaToIHR5OypjRqvfN-Mcpsf5NnVEXOGnWQhTjN3WBKWpxvpsBP5qFE5lZkHYNUrbVWm3Cy7zzCdC48KRIgz3HUeE_NJa8GIoTWpsJFjFT9LI9OW5AgOCeXbnCOjgmTFq9YgPDQ612i3x7NVO1Jiy_b7HNmxB2NZuZn3WSjG3n7ZhKDq_W-hI8Z9IGF2q03xWmVgc6erTUqM1Rphn8251GS6gsLgdvWmMDGfIuYHgzvwjtY4KmxUF_kvmMkiq4HTzrM-l1AG8mg_QCqf5e7f0H9AkNHMSFUqQcUg4phiiL_nnLLOTmKt93v-w_4p1madGOD4h5-uRncRrCARbheTF2VXG7ChVkRohUy85meAoeICMxEYyHS1crh71qdKsVrqnfz9TQdJnoM8XSrfF8R89tFnxqIsd1EsuymOkTJEdQdG4lAn2NSBt1BRhG7y3TpT-vocGwmvAYa_ZEALp_pGzgp943fo9HqoMAMLTEmOcVvfmnAFDAUjDkKYtLmTXWs87PoBmdSmKSd9s2wJewZe5M2SWn3KHhnC8daLLuWpfX5FtuPfeM5OxoaW1pIlfUT7UVXXOEfg_keEJTPlUp-9GY2w0DrGWZ3EikL1CqhMcd6VEdr3x4v59FrptDgC9QrjYyMpysig2XjG5RTTlodnkgRChrxixr9zkxjQyvPwSejohFnB_aT79tGvW0CcqdE-QZNpaXlAavSFZYd_4vdQQFUHbrPFZOjFENS5ofnS9AIXVr6E3_unPc6vv0FfWp3J8lB8-FyG0ZPGKUKccCdTiTLxMqgoZTdTMXuVVYBafgr0eahoe9nPztHP"
+    },
+    {
+      "device": "BBBB-WEB",
+      "first": 1,
+      "last": 5,
+      "data": "VFJWMQEAAQAAGcaQQpJPs3ZmWUaSglgoy3xb7iZNnmJL0-w4FisRqL5fJN0qSRaTnfDD6PXmynzkhRc2FoutOWA_bOgJ-kmTN9QOr4qxx3ZWZtnFx7nG00Zlk20mbR5M32KWX_61pwZ8W3odYkWRaHKGVx9BCDenJaDGvCjxXlYvjR6rL5SQcTwZY9KjbVFXcAQREWzGuOOPkqkiS8aYgy1wohBL5hTDt9-ZyA-zYOPKR-Na51Lji3-bzb14fSlEWF1SlFShU2FaqdCdGBK0HogQ77wDGo6FcH6R1NGozd57atXQrpIWypRu-jdt-EUF4EomotGMoe97MlUN0C8gUGEDEArGxP4Rtl99xCroknvKXwPw51piyJ29Ffgz1LNPVtw7icVCWwyELtRcIKFxgOuRaiH06qwxN8bRhmkaoPpvyKK9LXDjWAxlo35quZOrD2HwNWbbOxT_u7CXzTinv916KB4tZ6aQicex3ucj-OBoRZhc_KltLYPuJzUn-xh2O1RQSd61yoZX6AzqYk8Fsf_7BbyGE0Fep3qGkdjMg2c03UA-547dKj87rc8r9mZJcJSqSEvCkFrO-5-EXxusPkDJUV5jXpr4FE7OzUSDh0C2CkqfI6LBkTFzMtr-B4VYBdZEZLisfgexGi7QuJX4OFxBOszMPdV9rbyjDsbftreXBaMTpYfU2TdEAx2XHLLbG4muMfu2Je0KTsOyGwvnR9AsU0-NH8b2262dBTboHtNqqBZSge1zNj5fvC5KXq2ieAMJJHqpqYFJrmvhYf5HWBEaShdz4XTD87YUATfVyi3echwaM0Osr7JBHxhdQ_VYBjBOVoMKL2gf8GK8Nkv2Jp4hFLD5W5uhL-HbOqhJygVNieyjLXjoKcAVqF2bSx7mYdmuZvJ6cPnMKdqHoEd43SK1YmQRrXYm3z4dkYzcJzaYYvXS_9XR4GBvxoHxIxNLi_ql5Yf52iNIZ36pxcJfc0_B8fxwwuJbZUGnDIiioaakI4WaHRc8eF1I5dhjPRkN_ULRAJO6FEQ4HM5_iSox4B9NVKe3whCvaqQYdb5-_s_RDp3wtiPpL1X48IW5ufD6KsOEcq_cSpir_OIq-7mlsDJgT-J4_w"
+    }
+  ],
+  "expected": {
+    "n1": {
+      "kind": "item",
+      "fields": {
+        "kind": "note",
+        "title": "Shopping list",
+        "createdAt": 1760000000000,
+        "tags": [
+          "home",
+          "food"
+        ],
+        "pinned": true,
+        "price": 12.5,
+        "readAt": null
+      },
+      "texts": {
+        "body": "Shopping\n- oat milk\n- eggs\n- bread\n- coffee ☕️"
+      },
+      "conflicts": {}
+    },
+    "n2": {
+      "kind": "item",
+      "fields": {
+        "kind": "note",
+        "title": "Greeting"
+      },
+      "texts": {
+        "body": "Hello world\nsecond line"
+      },
+      "conflicts": {
+        "body": [
+          "Hello there\nsecond line"
+        ]
+      }
+    },
+    "n3": {
+      "kind": "item",
+      "fields": {
+        "kind": "link",
+        "url": "https://example.com/café?q=☕️",
+        "title": "Café ☕️",
+        "_deleted": true
+      },
+      "texts": {},
+      "conflicts": {}
+    },
+    "c1": {
+      "kind": "collection",
+      "fields": {
+        "name": "Kitchen",
+        "symbol": "fork.knife"
+      },
+      "texts": {},
+      "conflicts": {}
+    }
+  }
+}

@@ -6,6 +6,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // The web app (../web/public) is served from the same origin as the API. Asset paths never
+  // overlap /v1, /dav, /p or /health, so those still reach the Worker.
+  "assets": { "directory": "../web/public" },
   "durable_objects": {
     "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }]
   },

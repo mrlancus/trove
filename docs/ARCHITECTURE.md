@@ -27,8 +27,20 @@
         iCloud Drive/Trove/ ─────┴───── Cloudflare relay (server/)
         .sync/<device>/*.trv            Worker + Durable Object per vault
         .blobs/aa/<id>.trv              R2 blobs + sealed inbox, WebDAV, email, AI
-        Notes/*.md (Mac mirror)
+        Notes/*.md (Mac mirror)                      │
+                                                       └─ serves web/public: the web app (JS port
+                                                          of segments, merge, search; PROTOCOL.md §7)
 ```
+
+## Web app (`web/`)
+| Concern | File |
+|---|---|
+| TRV1, HKDF keys, SHA-256 | `web/public/core/{trv1,keys,bytes}.js` |
+| Ops, HLC, RecordStore, Journal, segments (port of the Swift sync core) | `web/public/core/records.js`, `merge.js` |
+| Item view, search, smart collections, URL cleaning | `web/public/core/items.js` |
+| Join, sync, edit, attachments | `web/public/core/vault.js` |
+| UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
+| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs` |
 
 ## Data model
 - Everything is a **record** (`kind`: `item` or `collection`), materialised from **ops** (PROTOCOL.md §3).

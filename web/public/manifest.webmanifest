@@ -1,0 +1,9 @@
+{
+  "name": "Trove",
+  "short_name": "Trove",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#ff8a3d",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

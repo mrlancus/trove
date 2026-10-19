@@ -1,0 +1,87 @@
+{
+  "expected" : {
+    "c1" : {
+      "conflicts" : {
+
+      },
+      "fields" : {
+        "name" : "Kitchen",
+        "symbol" : "fork.knife"
+      },
+      "kind" : "collection",
+      "texts" : {
+
+      }
+    },
+    "n1" : {
+      "conflicts" : {
+
+      },
+      "fields" : {
+        "createdAt" : 1760000000000,
+        "kind" : "note",
+        "pinned" : true,
+        "price" : 12.5,
+        "readAt" : null,
+        "tags" : [
+          "home",
+          "food"
+        ],
+        "title" : "Shopping list"
+      },
+      "kind" : "item",
+      "texts" : {
+        "body" : "Shopping\n- oat milk\n- eggs\n- bread\n- coffee ☕️"
+      }
+    },
+    "n2" : {
+      "conflicts" : {
+        "body" : [
+          "Hello there\nsecond line"
+        ]
+      },
+      "fields" : {
+        "kind" : "note",
+        "title" : "Greeting"
+      },
+      "kind" : "item",
+      "texts" : {
+        "body" : "Hello world\nsecond line"
+      }
+    },
+    "n3" : {
+      "conflicts" : {
+
+      },
+      "fields" : {
+        "_deleted" : true,
+        "kind" : "link",
+        "title" : "Café ☕️",
+        "url" : "https://example.com/café?q=☕️"
+      },
+      "kind" : "item",
+      "texts" : {
+
+      }
+    }
+  },
+  "keys" : {
+    "privateKey" : "OMU16hTdmwh6nYl-yiRI6rfs7TjGb4gXpRpsouBmqFg",
+    "v" : 1,
+    "vaultKey" : "kk9mlMnm4w4rTyhZrFp0dvlLrOflxkytNesjIVxUa_4"
+  },
+  "segments" : [
+    {
+      "data" : "VFJWMQEAAQAAr8rBjWJ3b-kEcx8ub7pixaZAoEUD-mJ_f-hU7mzM0J8TXlz8XpDgvJRL62b2ia5kVp9NC7d8iHJOp-SaVz8UrYHAh3ZZdGzfCnMOVSADeRSTIEFYMmpKtS5TEqX7giniHr1Z_rglTLeHOHvob2qsdcdqGKF_0WliSZEjrZSkYg7BNziqJgNZdozAPkAjSIk6uvTy_K3RoZQonvMIdjvcWs3q2pKE6obTe3xwzMpWxhEiM20ZAFuWmstsiXG3rrRT2DOh1Gdt4tzLM3XytUkiixZ5PuFQhpoEou3l71150o1tEv6_RJ1Ac0bJdcdn1jbF8G2fHMhyMlrjAzfgN7PprWjq7F2KD3HVwKvGPZ64ELNMGJDN3stCbM1hiLkP2pLU4Bhlr4wdZP9t1qogwFeEL3QPhV1RFpjC1_JI_nxbdJh7Gd1mPjMLak5t_Yq6YxfW2zWTWuDKygRKsZOgaaQTMD_CXAPImub9fLPw4HcdPKcavOoU9bu_teSEJ4o5GfAna1iye9dp2HOdgJrF96uuTK4ePRLMkdgjf3zdLLBzyY15sA31iu9glpgsbu9tGJcgtRoXvywztw7VmSISHf1IFjZoD_bFIeWq1BgGcxyD92sQIcTuq9DvCFbNL_hdjJnKy9WdbYYBy0WmmoTE9rnYIclB88UBmCW6V5v3z3qXLcfu-x2juzkQp9ZLBR18o4TjhjjzxVXS7u5jCSIXk9dGbrMWuhsAx1YxM0Y1KPgHpoJupF9jsGS_iDBXhFwFJsB7bilw7yGFoE5fn6_6myTA07zxrplaRFOo89agWMu95ALNnTuZ7idk-JDGsBVRl_ctxA6wBozJMkQRtEQlkpDJv2-I6zEBgU9XGBcXM0k2KH-sV9vYy0X-s88WtUsZz7ap5QwGzOmJZgt9UUHqLC_EvZRjRBQHPCL4aP4hwSuE97-T2Hg7Zf7y39BA9rXgtJ712hVg2j-MyYNtKnMMzQgkKWSO_JrC8YEdaejBFIC6t8cDcHrx1ol7bB0oJLtxCxab_8ijrpo_IMKTwXli0YXXphmAwaczFcU9OTRVr9icTe5xStpgB4zuXOn9KGcyFttndPeyt7jkLyiVS4vjuiLNOheHlArXp_Ra90qNhjVHAKiNaRDXUolzKCVi4VPMQfHw75vGC2fSHl8ApLp0O6YJpu3YZKrniklUvo7JR6iNs9g-KryO1h8HqVT-W3eiKZZ0tzqfJXN9XmJFHiP7EGjE_W3Vfk6YeEUo4XQT5UDgmq8yUrx9h1garajp1AzEd9N4l_rBIqdUVR0tXU6y-33BbY0hbSEjPIPzrgbISa6SN6L0SSMeyPdAhD0SUGMcFvypCW5UIb1_cvutbOtUGxS9yPAmG_Csi60OIbFHDATFbCtkFsECWlm0qOa5-21EVOh0JE3fYGd5_hO13mCDf9anXdmjmYsJKDKgkEzk9Kz65XzTXSf5yBkU8N1QeOqIbrHQ5e8TKc9aRfgYHnhfOWwKjTDhgNk0yV9zF0NiTeUyPiNIGrE4hRi2BnN4Nl7qqH_YVl69-TWboIjp50fFueNMwzKl6joUZCOZEmpmuPRJvNFOiSeKq3YKy8bHDVBvaCEsAbHt7uwqff2g7XsyO3sLv2DlvNa5tPnCyM4SCgdRk8ne6EIC7dCuAcH2Xy1XlsL2aDcUwFQgy76P-RPdQD-UNha4akDlPTO2hxrTSEF4MgGjSyjIB_fwP2aNeKMao4j09nk8C2pZBZT7Ok1G-oCs6eoO4yZ6ll8OqR0TRjDstdhZ_qhfJ2p9yEY9srdaSzvupoJses3P9xeE5uSpJ3aFtNWwLx1-K3_6tyb8JbeRB4u4UtrKAMvgyxkjFTpyIhcA9b2Q8wuxS5XwpT3T3Kgx8CPjRcHjmK6s2Zu21hxf0FcRFYzZSq8lnEyAUVZn_qdA5HZE-1haTrc4zn4fw3WtarqkbBXBzLsoLDgg12-D3rpIz79eSK2fVZUW0Lxl",
+      "device" : "AAAA-MAC",
+      "first" : 1,
+      "last" : 8
+    },
+    {
+      "data" : "VFJWMQEAAQAAc600Lbt7K3IMtgfnST168TiiFBr_MPkmkQ2eqpIXqWDcavkyuZnFcRQL4J3u_1LWaQstIle8nzPf0hE2QVBfeAzsh5jEUOmVIPDDwwD4lMZl5c5q1_ctsWCzQnIS6krBSm3Kl61PSpCfywbGsLyu_LqFiigDnW8pZJ05UHxQppJ2TlXOREOTL_9AIgJdRgMh_iol23tzJYeny1A-AY4z4GRpYF3R0uBuYz9bGLyrAcCOXIg1790TPxK59NeqPfqiN9EBTJLZ8HxjSGdrhMdbvWdEU-oCar2wC2ntwfXocHdfBPcBApBoZnOU4HYcVf8HZ19otV2-8oKArz-hxMzxwwHxwZbLeR-lz8j6ATg-PhCHk6e9-OxdLNeI6VE42bMiLOx1ooQfKN32HUnheXLL26x0zIGAjDnx_YtORvTXDi8gxmuVSh3KZZuK0AAOJw2afz6szrvXDZ7WuWh8jp_qjg_PdYXdmXh49NF3rQ9yyc-hSXABPRAHDd2S_x6KiWQdO-GU13ww4dPLefupDZrAWH0lERcWUnS5bxTY81GzM-CoPywft0rx9I8qWGPnK4gw5TdnFah3cfaRmrKeb4gELART0l132tGjU-BKZqDRRVh6yjE4t1yZi956ftqEWRwYL4PQL7GCVGttw0xdsQbub8hpKhL4o5flKiENYxO74jdH0x27Y2q5hd7XS0XD8I4v_g1TIYFwbcmq83OHMUtTfawqYPz-R-7k7oktvTNmKu_dQjafNpJQtq2xeg8kvuhBrmdcZkakQN0n24rjhT5k3HLau68YGF3TNkH_PA5wqnfjUnhf4zLY1OaTDHgBjERm2EZvlR9cm9vuJOH58zNbVXsNbVlBrwdRLUHSINztywUK-z5wMCquAedMomOBd4TSDWR_NjM0-Z8f5YNE0zKKKkKxZEe6awxyZeWCZ26oL4YB4OlZW7mla0VUTNRPamvm32VacgssD8OrI_Lf-ilH5b8K6T_M8ZxW8mOdQF7re0lBMGgwOPbIBG1P5R0-rCqqn6A9Hwm8VaEE2h8lxw9XdimlM1jweQqaKencDCHF56TENhoVHDWphESSOx-66sRlbIUbzju18zcicgO5zyLTuZxf7jUEn0OpmX_ajXj8RaDbjlY5oZFHL2HloA",
+      "device" : "BBBB-IPHONE",
+      "first" : 1,
+      "last" : 5
+    }
+  ]
+}

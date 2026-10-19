@@ -1,0 +1,14 @@
+{
+  "name": "trove-web",
+  "private": true,
+  "type": "module",
+  "description": "Trove in any browser. Static files served by the relay (Workers static assets).",
+  "scripts": {
+    "test": "node --test test/core.test.mjs",
+    "test:e2e": "node --test test/relay.e2e.mjs test/ui.e2e.mjs",
+    "fixtures": "node test/make-fixtures.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.56.0"
+  }
+}

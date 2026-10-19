@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Trove</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/app.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<div id="app" class="loading" aria-busy="true"></div>
+
+<template id="setup-view">
+  <main class="setup">
+    <div class="setup-card">
+      <img src="/icon.svg" alt="" width="56" height="56">
+      <h1>Open Trove in this browser</h1>
+      <ol class="steps">
+        <li>On your Mac, iPhone or iPad, open Trove → <b>Settings → Devices → Add a device</b>.</li>
+        <li>Tap <b>Copy setup code instead</b> and paste it below. Codes work once and expire after a few minutes.</li>
+      </ol>
+      <form id="setup-form">
+        <label for="setup-code">Setup code</label>
+        <textarea id="setup-code" rows="4" required autocomplete="off" spellcheck="false" placeholder="eyJ2IjoxLC…"></textarea>
+        <label for="device-name">Name this browser</label>
+        <input id="device-name" required maxlength="60">
+        <button type="submit" class="primary">Connect</button>
+        <p class="error" role="alert" hidden></p>
+      </form>
+      <p class="fine">This browser will be able to read and edit your vault. Everything stays end-to-end encrypted on the relay. You can remove this browser any time from <b>Settings → Devices</b> in the app, or from here.</p>
+    </div>
+  </main>
+</template>
+
+<template id="main-view">
+  <div class="shell">
+    <aside class="sidebar" aria-label="Library">
+      <div class="brand"><img src="/icon.svg" alt="" width="28" height="28"><span>Trove</span></div>
+      <nav id="smart-list"></nav>
+      <h2 class="side-heading">Collections</h2>
+      <nav id="collection-list"></nav>
+      <div class="side-footer">
+        <div id="sync-status" class="sync-status" role="status"><span class="dot"></span><span class="label">Connecting…</span></div>
+        <button id="sync-now" type="button" class="link-button">Sync now</button>
+        <button id="forget" type="button" class="link-button danger">Remove this browser</button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="toolbar">
+        <button id="menu" type="button" class="icon-button only-narrow" aria-label="Show library">☰</button>
+        <label class="search">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="search" type="search" placeholder="Search, or try tag:food is:pinned type:note" aria-label="Search">
+        </label>
+        <button id="new-note" type="button" class="primary">New note</button>
+      </header>
+      <form id="capture" class="capture">
+        <input id="capture-input" placeholder="Paste a link or jot something down, then press Enter" aria-label="Quick capture" autocomplete="off">
+        <label class="upload-button">Upload<input id="upload" type="file" multiple hidden></label>
+      </form>
+      <div id="heading" class="heading"></div>
+      <div id="grid" class="grid" aria-live="polite"></div>
+      <p id="empty" class="empty" hidden>Nothing here yet.</p>
+    </div>
+    <section id="detail" class="detail" hidden aria-label="Item"></section>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="other-tab" class="other-tab" hidden>
+    <div><p>Trove is open in another tab.</p><button id="use-here" type="button" class="primary">Use it here</button></div>
+  </div>
+</template>
+</body>
+</html>

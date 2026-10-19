@@ -86,7 +86,7 @@ private struct DevicesSection: View {
                 .sheet(isPresented: $adding) { AddDeviceView() }
             ForEach(devices) { d in
                 HStack {
-                    Image(systemName: d.kind == "mac" ? "laptopcomputer" : d.kind == "ipad" ? "ipad" : "iphone")
+                    Image(systemName: d.kind == "mac" ? "laptopcomputer" : d.kind == "ipad" ? "ipad" : d.kind == "web" ? "globe" : "iphone")
                     VStack(alignment: .leading) {
                         Text(d.name + (d.deviceId == model.config?.deviceId.uppercased() ? " (this device)" : ""))
                         Text(d.revoked ? "Removed" : "Seen \(Date(timeIntervalSince1970: d.lastSeenAt / 1000).relative)").font(.caption).foregroundStyle(.secondary)
@@ -117,6 +117,10 @@ private struct RelaySection: View {
             if let relay = model.config?.relay {
                 LabeledContent("Relay", value: URL(string: relay.url)?.host ?? relay.url)
                 LabeledContent("Live updates", value: model.sync.live ? "Connected" : "Not connected")
+                if let web = URL(string: relay.url) {
+                    LabeledContent("Web app") { Link(web.host ?? relay.url, destination: web) }
+                    Text("Open it in any browser and add it with a setup code from Add a device.").font(.caption).foregroundStyle(.secondary)
+                }
                 if let code = model.vault.browserSetupCode() {
                     CopyRow(title: "Browser extension setup code", value: code)
                 }

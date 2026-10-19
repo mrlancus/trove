@@ -6,6 +6,8 @@ This is optional. Trove works with just iCloud Drive. The relay adds:
 - email-in
 - GoodNotes Auto Backup (WebDAV)
 - opt-in cloud AI
+- price-drop alerts and publish-to-link
+- **the web app**: Trove in any browser, at the relay's address
 
 It runs on Cloudflare's free plan, and it only ever stores encrypted bytes (see `../docs/PROTOCOL.md`).
 
@@ -20,6 +22,11 @@ npx wrangler deploy                      # prints https://trove-relay.<you>.work
 ```
 
 Then in Trove go to **Settings → Cloudflare relay**, paste that URL and choose **Connect relay**.
+
+**Web app:** open the same URL in any browser (Windows, Android, a work laptop). In Trove go to
+**Settings → Devices → Add a device → Copy setup code instead** and paste the code there. The browser
+joins as a device you can remove later. It's served from `../web/public` as Workers static assets,
+so `wrangler deploy` uploads it too.
 
 ### Optional: cloud AI
 Turn this on per vault in Trove → Settings → Intelligence.
@@ -44,7 +51,7 @@ Notebooks then arrive in Trove, and the handwriting gets OCR'd so you can search
 
 ## Develop / test
 ```bash
-npm test                    # 20 tests on the real Workers runtime (no network, no cost)
+npm test                    # 33 tests on the real Workers runtime (no network, no cost)
 npx tsc --noEmit
 npx wrangler dev --local --config wrangler.test.jsonc   # local relay on :8787
 # Swift client end-to-end against it:

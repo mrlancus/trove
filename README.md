@@ -11,6 +11,7 @@ and is end-to-end encrypted. It's a native app for Mac, iPhone and iPad.
 | `Packages/TroveCore/` | Shared Swift core: sync engine, encryption, merge, importers, search |
 | `server/` | Cloudflare relay: instant sync, sealed inbox, GoodNotes WebDAV, email-in, opt-in AI |
 | `extensions/browser/` | "Save to Trove" for Chrome (and Safari) |
+| `web/` | Trove in any browser, served by the relay (browse, search, write, upload; end-to-end encrypted) |
 | `docs/` | `RESEARCH.md` (spec), `PROTOCOL.md` (wire format), `ARCHITECTURE.md` (code map) |
 
 **Status and next steps:** [NOTES.md](NOTES.md). **Run the tests:** `./scripts/test-all.sh`.
