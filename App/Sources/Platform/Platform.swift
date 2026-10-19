@@ -59,6 +59,7 @@ enum Pasteboard {
     }
 }
 
+@MainActor
 enum DeviceInfo {
     static var name: String {
         #if os(macOS)
