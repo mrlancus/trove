@@ -34,8 +34,8 @@ public actor Library {
         await items().filter(smart.contains)
     }
 
-    public func collections() async -> [Collection] {
-        await engine.records.filter { $0.kind == "collection" }.map(Collection.init).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    public func collections() async -> [ItemCollection] {
+        await engine.records.filter { $0.kind == "collection" }.map(ItemCollection.init).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     /// Work for this device's enrichment pass: never-enriched items, plus items still flagged as
@@ -290,7 +290,7 @@ public actor Library {
 }
 
 /// A user-made collection record.
-public struct Collection: Identifiable, Hashable, Sendable {
+public struct ItemCollection: Identifiable, Hashable, Sendable {
     public let record: Record
     public init(_ record: Record) { self.record = record }
     public var id: String { record.id }

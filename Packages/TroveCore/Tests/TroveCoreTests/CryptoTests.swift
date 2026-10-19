@@ -89,6 +89,7 @@ struct Fixture: Decodable {
         let keys = VaultKeys.generate()
         let env = InboxEnvelope(header: .init(source: "ios", name: "a.txt", mime: "text/plain", title: "Hi"), body: Data("body".utf8))
         let opened = try InboxEnvelope.open(env.sealed(for: keys), with: keys)
+        #expect(try InboxEnvelope.open(env.sealed(toPublicKey: keys.publicKeyBase64URL), with: keys).body == Data("body".utf8))
         #expect(opened.header.title == "Hi")
         #expect(opened.body == Data("body".utf8))
     }

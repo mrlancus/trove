@@ -1,0 +1,167 @@
+# XcodeGen spec. On the Mac: `brew install xcodegen && cd App && xcodegen` → opens Trove.xcodeproj.
+# Never hand-edit the generated .xcodeproj; change this file and re-run xcodegen.
+#
+# The vault's secret keys live only in the main app's Keychain; extensions get the vault *public*
+# key and an inbox token through the App Group, so they can add items but never read them.
+#
+# Free Apple ID budget (10 App IDs / 7 days, 3 apps per device): one multiplatform app plus three
+# extensions = 4 App IDs, 1 app slot per device.
+name: Trove
+options:
+  bundleIdPrefix: com.mrlancus
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Set your team once in Xcode (Signing & Capabilities) or here, e.g. DEVELOPMENT_TEAM: ABCDE12345
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    TROVE_APP_GROUP: group.com.mrlancus.trove
+
+packages:
+  TroveCore:
+    path: ../Packages/TroveCore
+
+targets:
+  Trove:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Sources
+      - path: Resources
+    dependencies:
+      - package: TroveCore
+      - target: TroveShare
+      - target: TroveWidgets
+      - target: TroveSafari
+    info:
+      path: Config/Trove-Info.plist
+      properties:
+        CFBundleDisplayName: Trove
+        LSApplicationCategoryType: public.app-category.productivity
+        UILaunchScreen: {}
+        UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: true }
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mrlancus.trove
+            CFBundleURLSchemes: [trove]
+        BGTaskSchedulerPermittedIdentifiers: [com.mrlancus.trove.enrich, com.mrlancus.trove.refresh]
+        UIBackgroundModes: [fetch, processing]
+        NSCameraUsageDescription: Trove uses the camera to scan pairing QR codes and documents.
+        NSMicrophoneUsageDescription: Trove records voice notes when you ask it to.
+        NSSpeechRecognitionUsageDescription: Trove turns your voice notes into searchable text on this device.
+        NSPhotoLibraryUsageDescription: Trove can import your screenshots so their text becomes searchable.
+        NSAppleEventsUsageDescription: Trove reads your Apple Notes so they appear in Trove search.
+        NSCalendarsWriteOnlyAccessUsageDescription: Trove can add events it finds in your saved items to your calendar.
+        NSRemindersFullAccessUsageDescription: Trove can turn tasks in your notes into reminders.
+        NSUserActivityTypes: [com.mrlancus.trove.item]
+        TroveAppGroup: $(TROVE_APP_GROUP)
+    entitlements:
+      path: Config/Trove.entitlements
+      properties:
+        com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # The Mac app is not sandboxed (personal use): it reads ~/Library/Mobile Documents (iCloud
+        # Drive), scripts Apple Notes and mirrors an Obsidian folder. Extensions stay sandboxed.
+        ENABLE_APP_SANDBOX[sdk=macosx*]: NO
+        ENABLE_HARDENED_RUNTIME[sdk=macosx*]: YES
+
+  TroveShare:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: ShareExtension
+      - path: Sources/Platform/SharedConfig.swift
+      - path: Sources/Platform/CaptureDrop.swift
+    dependencies:
+      - package: TroveCore
+    info:
+      path: Config/TroveShare-Info.plist
+      properties:
+        CFBundleDisplayName: Save to Trove
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $item, SUBQUERY($item.attachments, $a,
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "net.daringfireball.markdown"
+              ).@count >= 1).@count >= 1
+        TroveAppGroup: $(TROVE_APP_GROUP)
+    entitlements:
+      path: Config/TroveShare.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.share
+
+  TroveWidgets:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Widgets
+      - path: Sources/Platform/SharedConfig.swift
+      - path: Sources/Intents/OpenCaptureIntent.swift
+    info:
+      path: Config/TroveWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Trove Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        TroveAppGroup: $(TROVE_APP_GROUP)
+    entitlements:
+      path: Config/TroveWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.widgets
+
+  TroveSafari:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: SafariExtension
+      - path: ../extensions/browser
+        type: folder
+        buildPhase: resources
+        excludes: ["test/**"]
+    info:
+      path: Config/TroveSafari-Info.plist
+      properties:
+        CFBundleDisplayName: Save to Trove
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: Config/TroveSafari.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.safari

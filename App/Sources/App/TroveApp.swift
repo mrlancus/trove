@@ -1,0 +1,158 @@
+import CoreSpotlight
+import SwiftUI
+import TroveCore
+
+@main
+struct TroveApp: App {
+    @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        #if os(iOS)
+        BackgroundTasks.register(model: model)
+        #endif
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environment(model)
+                .onOpenURL { handle($0) }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { model.selectedItemID = id }
+                }
+                #if os(macOS)
+                .frame(minWidth: 900, minHeight: 560)
+                .modifier(GlobalCaptureHotKey())
+                #endif
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.syncNow() } }
+            #if os(iOS)
+            if phase == .background {
+                model.saveNow()
+                BackgroundTasks.scheduleRefresh()
+                BackgroundTasks.scheduleEnrichment()
+            }
+            if phase == .active, model.config?.screenshotsImport == true, let library = model.library {
+                Task {
+                    if let newest = await ScreenshotImporter.importNew(since: model.config?.lastScreenshotImport, into: library) {
+                        model.updateConfig { $0.lastScreenshotImport = newest }
+                        await model.reload()
+                    }
+                }
+            }
+            #endif
+        }
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Capture…") { model.showCapture = true }.keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Sync Now") { Task { await model.syncNow() } }.keyboardShortcut("r", modifiers: .command)
+            }
+        }
+
+        #if os(macOS)
+        Window("Capture", id: "capture") {
+            CaptureView()
+                .environment(model)
+                .frame(width: 520)
+        }
+        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
+        .defaultPosition(.center)
+
+        MenuBarExtra("Trove", systemImage: "shippingbox") {
+            MenuBarContent().environment(model)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            NavigationStack { SettingsView() }.environment(model)
+        }
+        #endif
+    }
+
+    private func handle(_ url: URL) {
+        guard url.scheme == "trove" else { return }
+        switch url.host {
+        case "capture":
+            model.showCapture = true
+        case "item":
+            model.selectedItemID = url.pathComponents.dropFirst().first
+        case "search":
+            model.searchText = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value ?? ""
+        case "pair":
+            break // handled by onboarding's PairingInput when not set up
+        default:
+            break
+        }
+    }
+}
+
+#if os(macOS)
+/// ⌘⇧Space from anywhere opens the capture window.
+struct GlobalCaptureHotKey: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+    @State private var hotKey: HotKey?
+
+    func body(content: Content) -> some View {
+        content.onAppear {
+            guard hotKey == nil else { return }
+            hotKey = HotKey {
+                openWindow(id: "capture")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+    }
+}
+
+/// Menu bar popover: quick capture, recent items, sync status.
+struct MenuBarContent: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("Capture a link or thought…", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { save() }
+                Button(action: save) { Image(systemName: "arrow.up.circle.fill") }.buttonStyle(.borderless).disabled(text.isEmpty)
+            }
+            if let url = Pasteboard.url {
+                Button { Task { await model.capture(url.absoluteString) } } label: {
+                    Label("Save copied link: \(url.host ?? "")", systemImage: "doc.on.clipboard")
+                }
+                .buttonStyle(.borderless)
+            }
+            Divider()
+            Text("Recent").font(.caption).foregroundStyle(.secondary)
+            ForEach(model.items.prefix(6)) { item in
+                Button {
+                    model.selectedItemID = item.id
+                    NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Label(item.displayTitle, systemImage: ItemStyle.symbol(for: item)).lineLimit(1)
+                }
+                .buttonStyle(.borderless)
+            }
+            Divider()
+            HStack {
+                SyncIndicator()
+                Text(model.sync.lastSync.map { "Synced \($0.relative)" } ?? "Not synced yet").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Open Trove") { NSApp.activate(ignoringOtherApps: true) }
+            }
+        }
+        .padding(14)
+        .frame(width: 340)
+    }
+
+    private func save() {
+        let t = text
+        text = ""
+        Task { await model.capture(t) }
+    }
+}
+#endif

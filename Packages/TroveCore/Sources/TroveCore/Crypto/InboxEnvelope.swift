@@ -1,4 +1,5 @@
 import Foundation
+import Crypto
 
 /// Plaintext inside a sealed inbox entry: `u32 headerLength | header JSON | body` (PROTOCOL.md §4).
 public struct InboxEnvelope: Sendable, Equatable {
@@ -55,6 +56,12 @@ public struct InboxEnvelope: Sendable, Equatable {
     /// Seal for the inbox (what the share extension and browser extensions do).
     public func sealed(for keys: VaultKeys) throws -> Data {
         try TRV1.seal(encoded(), to: keys.publicKey)
+    }
+
+    /// Seal with just the vault public key (b64u raw X25519), as extensions do.
+    public func sealed(toPublicKey base64URL: String) throws -> Data {
+        guard let raw = Data(base64URL: base64URL) else { throw TRV1.Failure.missingKey }
+        return try TRV1.seal(encoded(), to: Curve25519.KeyAgreement.PublicKey(rawRepresentation: raw))
     }
 
     public static func open(_ sealed: Data, with keys: VaultKeys) throws -> InboxEnvelope {

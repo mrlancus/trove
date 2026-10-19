@@ -1,0 +1,61 @@
+# Trove relay (Cloudflare Worker)
+
+This is optional. Trove works with just iCloud Drive. The relay adds:
+- instant sync, with live WebSocket pings
+- the browser extension
+- email-in
+- GoodNotes Auto Backup (WebDAV)
+- opt-in cloud AI
+
+It runs on Cloudflare's free plan, and it only ever stores encrypted bytes (see `../docs/PROTOCOL.md`).
+
+## Deploy (about 5 minutes, one time)
+
+```bash
+cd server
+npm install
+npx wrangler login                       # opens the browser; approve
+npx wrangler r2 bucket create trove-blobs
+npx wrangler deploy                      # prints https://trove-relay.<you>.workers.dev
+```
+
+Then in Trove go to **Settings → Cloudflare relay**, paste that URL and choose **Connect relay**.
+
+### Optional: cloud AI
+Turn this on per vault in Trove → Settings → Intelligence.
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY   # from console.anthropic.com (billed separately from Claude Pro)
+```
+- **Model:** `CLAUDE_MODEL` in `wrangler.jsonc` defaults to `claude-opus-5-5`.
+- **Cost:** for pennies a month, set it to `claude-haiku-5-5` and run `npx wrangler deploy` again. See `../docs/RESEARCH.md` §3 for costs.
+
+### Optional: email-in (needs a domain on Cloudflare)
+1. In the Cloudflare dashboard, go to **Email → Email Routing** and enable it for your domain.
+2. Create a custom address, for example `save@yourdomain`, with the action **Send to a Worker → trove-relay**.
+3. Set `EMAIL_VAULT_ID` in `wrangler.jsonc` to your relay vault id (Trove → Settings shows it under the GoodNotes username), then run `npx wrangler deploy`.
+
+### GoodNotes
+1. In Trove, go to **Settings → Cloudflare relay → GoodNotes Auto Backup** and copy the server, username and password.
+2. In GoodNotes (iPad/iPhone), go to **Settings → Cloud & Backup → Auto Backup → WebDAV**, paste them, and choose PDF.
+
+Notebooks then arrive in Trove, and the handwriting gets OCR'd so you can search it.
+- **Upload size:** the free plan limits uploads to about 100 MB, so a huge notebook may fail.
+- **Privacy:** notebook *names* are visible to the server. The contents are not.
+
+## Develop / test
+```bash
+npm test                    # 20 tests on the real Workers runtime (no network, no cost)
+npx tsc --noEmit
+npx wrangler dev --local --config wrangler.test.jsonc   # local relay on :8787
+# Swift client end-to-end against it:
+cd ../Packages/TroveCore && TROVE_RELAY_URL=http://127.0.0.1:8787 swift test --filter RelayIntegration
+```
+Cross-language crypto checks: `scripts/make-fixtures.ts` (Worker → Swift) and `scripts/check-swift-vector.ts` (Swift → Worker).
+
+## Free-tier budget (personal use)
+| Service | Free allowance | Used for |
+|---|---|---|
+| Workers | 100k requests/day | API |
+| Durable Objects | 100k requests/day, SQLite storage | per-vault journals, devices, live sockets (pings auto-answered) |
+| R2 | 10 GB, 1M writes and 10M reads a month | encrypted attachments and inbox |
+| Workers AI | 10k neurons/day | Whisper, embeddings (optional) |

@@ -8,14 +8,21 @@ public struct PairingPayload: Codable, Equatable, Sendable {
     public var keys: VaultKeys.Exported
     public var encrypted: Bool
     public var relayURL: String?
+    /// The relay assigns its own vault id (different from the iCloud vault id in vault.json).
+    public var relayVaultId: String?
     public var pairingCode: String?
+    /// Lets the new device show the browser setup code / GoodNotes settings too.
+    public var inboxToken: String?
 
-    public init(vaultId: String, keys: VaultKeys.Exported, encrypted: Bool, relayURL: String? = nil, pairingCode: String? = nil) {
+    public init(vaultId: String, keys: VaultKeys.Exported, encrypted: Bool, relayURL: String? = nil, relayVaultId: String? = nil,
+                pairingCode: String? = nil, inboxToken: String? = nil) {
         self.vaultId = vaultId
         self.keys = keys
         self.encrypted = encrypted
         self.relayURL = relayURL
+        self.relayVaultId = relayVaultId
         self.pairingCode = pairingCode
+        self.inboxToken = inboxToken
     }
 
     public static let scheme = "trove"
