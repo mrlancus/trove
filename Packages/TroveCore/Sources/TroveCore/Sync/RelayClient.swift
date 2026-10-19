@@ -74,16 +74,22 @@ public struct RelayClient: Sendable {
 
     // MARK: Vault lifecycle
 
-    public static func createVault(baseURL: URL, publicKey: String, deviceName: String, deviceKind: String, session: URLSession = .shared) async throws -> Registration {
+    /// `deviceId`: the journal id this device already uses (kept if free on the relay).
+    public static func createVault(baseURL: URL, publicKey: String, deviceName: String, deviceKind: String, deviceId: String? = nil,
+                                   session: URLSession = .shared) async throws -> Registration {
         let client = RelayClient(baseURL: baseURL, session: session)
-        return try await client.json("POST", "/v1/vaults", body: ["vaultPublicKey": publicKey, "deviceName": deviceName, "deviceKind": deviceKind], expect: [201])
+        var body: [String: Any] = ["vaultPublicKey": publicKey, "deviceName": deviceName, "deviceKind": deviceKind]
+        if let deviceId { body["deviceId"] = deviceId }
+        return try await client.json("POST", "/v1/vaults", body: body, expect: [201])
     }
 
-    public static func join(baseURL: URL, vaultId: String, pairingCode: String, deviceName: String, deviceKind: String, session: URLSession = .shared) async throws -> Registration {
+    public static func join(baseURL: URL, vaultId: String, pairingCode: String, deviceName: String, deviceKind: String, deviceId: String? = nil,
+                            session: URLSession = .shared) async throws -> Registration {
         let client = RelayClient(baseURL: baseURL, vaultId: vaultId, session: session)
         struct Joined: Decodable { var deviceId: String; var deviceToken: String }
-        let joined: Joined = try await client.json("POST", "/v1/vaults/\(vaultId)/devices",
-                                                   body: ["pairingCode": pairingCode, "deviceName": deviceName, "deviceKind": deviceKind], expect: [201])
+        var body: [String: Any] = ["pairingCode": pairingCode, "deviceName": deviceName, "deviceKind": deviceKind]
+        if let deviceId { body["deviceId"] = deviceId }
+        let joined: Joined = try await client.json("POST", "/v1/vaults/\(vaultId)/devices", body: body, expect: [201])
         return Registration(vaultId: vaultId, deviceId: joined.deviceId, deviceToken: joined.deviceToken, inboxToken: nil)
     }
 

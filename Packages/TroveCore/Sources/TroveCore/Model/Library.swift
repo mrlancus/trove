@@ -38,11 +38,12 @@ public actor Library {
         await engine.records.filter { $0.kind == "collection" }.map(Collection.init).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    /// Items waiting for a stronger enrichment tier than `below` (e.g. the iPad picks up `.onDevice`).
+    /// Work for this device's enrichment pass: never-enriched items, plus items still flagged as
+    /// wanting more whose current tier is below what this device can do (the iPad passes `.onDevice`).
     public func enrichmentQueue(below tier: Enrichment.Tier) async -> [Item] {
         await items().filter { item in
-            guard item.needsEnrichment || item.enrichment == nil else { return (item.enrichment?.tier ?? .basic) < tier && item.needsEnrichment }
-            return (item.enrichment?.tier ?? .basic) < tier
+            guard let current = item.enrichment else { return true }
+            return item.needsEnrichment && current.tier < tier
         }
     }
 

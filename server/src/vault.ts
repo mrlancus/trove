@@ -88,8 +88,12 @@ export class VaultObject extends DurableObject<Env> {
     return inbox ? { kind: "inbox" } : undefined;
   }
 
-  private async addDevice(name: string, kind: string) {
-    const deviceId = crypto.randomUUID().toUpperCase();
+  /** `proposedId` lets a device keep the journal id it already uses in an iCloud-only vault. */
+  private async addDevice(name: string, kind: string, proposedId?: string) {
+    const wanted = proposedId?.toUpperCase();
+    const free = wanted && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(wanted) &&
+      !this.sql.exec("SELECT 1 FROM devices WHERE id = ?", wanted).toArray()[0];
+    const deviceId = free ? wanted : crypto.randomUUID().toUpperCase();
     const deviceToken = randomToken("tdv_");
     this.sql.exec(
       "INSERT INTO devices(id, name, kind, token_hash, created_at, last_seen_at) VALUES(?, ?, ?, ?, ?, ?)",
@@ -130,26 +134,26 @@ export class VaultObject extends DurableObject<Env> {
 
   private async init(request: Request): Promise<Response> {
     if (this.vaultId) return error(409, "vault already exists");
-    const body = (await request.json()) as { vaultId: string; vaultPublicKey: string; deviceName: string; deviceKind?: string };
+    const body = (await request.json()) as { vaultId: string; vaultPublicKey: string; deviceName: string; deviceKind?: string; deviceId?: string };
     if (b64uDecode(body.vaultPublicKey).length !== 32) return error(400, "vaultPublicKey must be a raw X25519 key (32 bytes, b64u)");
     this.setMeta("vaultId", body.vaultId);
     this.setMeta("publicKey", body.vaultPublicKey);
     this.setMeta("createdAt", new Date().toISOString());
     this.setMeta("aiEnabled", "false");
-    const device = await this.addDevice(body.deviceName || "First device", body.deviceKind ?? "unknown");
+    const device = await this.addDevice(body.deviceName || "First device", body.deviceKind ?? "unknown", body.deviceId);
     const inboxToken = await this.addInboxToken("default");
     return json({ vaultId: body.vaultId, ...device, inboxToken }, 201);
   }
 
   private async pairDevice(request: Request): Promise<Response> {
-    const body = (await request.json()) as { pairingCode?: string; deviceName?: string; deviceKind?: string };
+    const body = (await request.json()) as { pairingCode?: string; deviceName?: string; deviceKind?: string; deviceId?: string };
     const hash = await sha256Hex(body.pairingCode ?? "");
     const row = this.sql
       .exec<{ expires_at: number }>("SELECT expires_at FROM pairings WHERE code_hash = ? AND used = 0", hash)
       .toArray()[0];
     if (!row || row.expires_at < Date.now()) return error(403, "pairing code invalid or expired");
     this.sql.exec("UPDATE pairings SET used = 1 WHERE code_hash = ?", hash);
-    return json(await this.addDevice(body.deviceName ?? "New device", body.deviceKind ?? "unknown"), 201);
+    return json(await this.addDevice(body.deviceName ?? "New device", body.deviceKind ?? "unknown", body.deviceId), 201);
   }
 
   private async deviceRoute(request: Request, url: URL, deviceId: string): Promise<Response> {

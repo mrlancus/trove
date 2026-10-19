@@ -29,12 +29,12 @@ export default {
 
     if (parts[0] === "v1" && parts[1] === "vaults") {
       if (parts.length === 2 && request.method === "POST") {
-        const body = (await request.json().catch(() => ({}))) as { vaultPublicKey?: string; deviceName?: string; deviceKind?: string };
+        const body = (await request.json().catch(() => ({}))) as { vaultPublicKey?: string; deviceName?: string; deviceKind?: string; deviceId?: string };
         if (!body.vaultPublicKey || b64uDecode(body.vaultPublicKey).length !== 32) return error(400, "vaultPublicKey (32-byte X25519, b64u) required");
         const vaultId = randomId();
         const init = new Request("https://vault/internal/init", {
           method: "POST",
-          body: JSON.stringify({ vaultId, vaultPublicKey: body.vaultPublicKey, deviceName: body.deviceName, deviceKind: body.deviceKind }),
+          body: JSON.stringify({ vaultId, vaultPublicKey: body.vaultPublicKey, deviceName: body.deviceName, deviceKind: body.deviceKind, deviceId: body.deviceId }),
         });
         return stub(env, vaultId).fetch(init);
       }

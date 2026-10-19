@@ -116,9 +116,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 
 | Method & path | Auth | Body → Response |
 |---|---|---|
-| `POST /vaults` | none | `{vaultPublicKey, deviceName}` → `{vaultId, deviceId, deviceToken, inboxToken}` |
+| `POST /vaults` | none | `{vaultPublicKey, deviceName, deviceKind?, deviceId?}` → `{vaultId, deviceId, deviceToken, inboxToken}` |
 | `POST /vaults/:v/pairings` | device | → `{pairingCode, expiresAt}` (single use, 10 min) |
-| `POST /vaults/:v/devices` | none (pairing code in body) | `{pairingCode, deviceName}` → `{deviceId, deviceToken}` |
+| `POST /vaults/:v/devices` | none (pairing code in body) | `{pairingCode, deviceName, deviceKind?, deviceId?}` → `{deviceId, deviceToken}` |
 | `GET /vaults/:v/devices` | device | → `{devices:[{deviceId,name,kind,createdAt,lastSeenAt,revoked}]}` |
 | `DELETE /vaults/:v/devices/:id` | device | revoke → `204` |
 | `POST /vaults/:v/inbox-tokens` | device | → `{inboxToken}` (for the extension / GoodNotes / email) |
@@ -137,6 +137,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
 | `GET /health` | none | `{ok:true, version}` |
+
+`deviceId` (optional, a UUID) is kept if no other device uses it. That way a device that started in an
+iCloud-only vault keeps the journal id it already writes under `.sync/<deviceId>/`.
 
 AI routes return `403` unless the vault has AI enabled (`PUT /vaults/:v/settings {aiEnabled:true}`).
 The Anthropic key is a Worker secret (`ANTHROPIC_API_KEY`). Content sent to AI routes is plaintext

@@ -66,9 +66,11 @@ import Testing
     @Test func enrichmentRespectsTiersAndUserTitles() async {
         let lib = makeLibrary()
         let (id, _) = await lib.addLink(URL(string: "https://cook.example/r")!, title: "My ramen")
+        #expect(await lib.enrichmentQueue(below: .basic).map(\.id) == [id])  // even basic-only devices pick up new items
         #expect(await lib.applyEnrichment(id, fields: [Field.summary: "basic", Field.title: "Page title", Field.tags: ["a"]], tier: .basic, by: "D"))
         #expect(await lib.item(id)?.title == "My ramen")
         #expect(await lib.applyEnrichment(id, fields: [Field.summary: "smart", Field.tags: ["b"]], tier: .onDevice, by: "IPAD"))
+        #expect(await lib.enrichmentQueue(below: .basic).isEmpty)
         #expect(await !lib.applyEnrichment(id, fields: [Field.summary: "worse"], tier: .basic, by: "D"))
         let item = await lib.item(id)
         #expect(item?.summary == "smart")

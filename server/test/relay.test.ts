@@ -40,6 +40,17 @@ describe("vaults and devices", () => {
     expect((await call(`/v1/vaults/${v.vaultId}/info`, { headers: auth(phone.deviceToken) })).status).toBe(401);
   });
 
+  it("keeps a proposed device id when it is a free UUID", async () => {
+    const v = await createVault();
+    const pairing = (await (await call(`/v1/vaults/${v.vaultId}/pairings`, { method: "POST", headers: auth(v.deviceToken) })).json()) as { pairingCode: string };
+    const id = "0A1B2C3D-0000-4000-8000-00000000ABCD";
+    const joined = (await (await call(`/v1/vaults/${v.vaultId}/devices`, {
+      method: "POST",
+      body: JSON.stringify({ pairingCode: pairing.pairingCode, deviceName: "iPad", deviceId: id.toLowerCase() }),
+    })).json()) as { deviceId: string };
+    expect(joined.deviceId).toBe(id);
+  });
+
   it("inbox tokens cannot read anything", async () => {
     const v = await createVault();
     expect((await call(`/v1/vaults/${v.vaultId}/segments`, { headers: auth(v.inboxToken) })).status).toBe(403);
