@@ -39,7 +39,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   zips (TroveCore `ZipArchive` + `FileImport`; web `core/importer.js`), exports. Drop anywhere works.
 - Open: what "it isn't copying automatically" meant (clipboard history not recording, or picking a
   clip not pasting). Ask, and have the user check Settings → Clipboard → "Last copy recorded".
-- The website changes go live only after `wrangler deploy` in `server/`, which needs the user's approval.
+- Deployed (with the user's go-ahead); the Chromium UI e2e passes against production.
 
 ## Next steps
 1. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
