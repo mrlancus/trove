@@ -105,6 +105,7 @@ final class Updater {
     }
 
     private func offerRestart(_ release: Release) {
+        guard canInstall else { state = .ready(release.version); return } // Settings explains; no alert every 6 hours
         let alert = NSAlert()
         alert.messageText = "Trove \(release.version) is ready"
         alert.informativeText = (release.notes.map { $0 + "\n\n" } ?? "") + "Trove restarts to finish updating. Your vault and settings stay as they are."
@@ -113,18 +114,30 @@ final class Updater {
         if alert.runModal() == .alertFirstButtonReturn { installAndRelaunch() }
     }
 
-    /// Swaps the new app in once this one has quit, then opens it. If the copy fails the old app is
-    /// put back.
+    /// Whether this account may replace the app where it's installed. A standard (non-admin)
+    /// account can't change /Applications; an admin account installs the update for everyone.
+    var canInstall: Bool {
+        FileManager.default.isWritableFile(atPath: Bundle.main.bundleURL.deletingLastPathComponent().path)
+    }
+
+    /// Swaps the new app in once this one has quit, then opens it. The old app is only removed once
+    /// the new one is fully copied; if anything fails it's put back as it was.
     func installAndRelaunch() {
         guard let staged else { return }
+        guard canInstall else {
+            state = .failed("This Mac account can't change the Applications folder. Update from an administrator account, and it updates for everyone.")
+            return
+        }
         let target = Bundle.main.bundleURL.path
         let script = """
         while /bin/kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do /bin/sleep 0.2; done
         /bin/rm -rf "\(target).old"
-        if /bin/mv "\(target)" "\(target).old" && /usr/bin/ditto "\(staged.app.path)" "\(target)"; then
-          /bin/rm -rf "\(target).old"
-        else
-          /bin/rm -rf "\(target)"; /bin/mv "\(target).old" "\(target)"
+        if /bin/mv "\(target)" "\(target).old"; then
+          if /usr/bin/ditto "\(staged.app.path)" "\(target)"; then
+            /bin/rm -rf "\(target).old"
+          else
+            /bin/rm -rf "\(target)"; /bin/mv "\(target).old" "\(target)"
+          fi
         fi
         /usr/bin/open "\(target)"
         """

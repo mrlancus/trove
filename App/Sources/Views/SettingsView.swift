@@ -79,7 +79,7 @@ private struct UpdatesSection: View {
         case .checking: "Checking…"
         case .upToDate: "Up to date"
         case .downloading(let v): "Downloading \(v)…"
-        case .ready(let v): "\(v) is ready to install"
+        case .ready(let v): updater.canInstall ? "\(v) is ready to install" : "\(v) is out. Update from an administrator account."
         case .failed(let message): message
         }
     }
