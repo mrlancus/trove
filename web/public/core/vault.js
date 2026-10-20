@@ -902,7 +902,7 @@ export class Vault {
       const at = e.createdAt ?? this.now();
       const id = crypto.randomUUID().toLowerCase();
       const all = { ...fields, [ClipField.hash]: hash, [ClipField.createdAt]: at, [ClipField.lastUsedAt]: at, [ClipField.device]: this.journal.device,
-        [ClipField.sourceDevice]: `${source} import`, [ClipField.needsEnrichment]: true };
+        [ClipField.sourceDevice]: `${source} import`, [ClipField.needsEnrichment]: !e.text };
       if (e.app) all[ClipField.sourceApp] = e.app;
       if (e.bundle) all[ClipField.sourceBundle] = e.bundle;
       if (e.url && e.url !== e.text) all[ClipField.sourceURL] = e.url;

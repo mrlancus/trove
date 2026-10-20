@@ -316,7 +316,9 @@ extension Library {
             fields[Clip.Field.lastUsedAt] = JSONValue(at)
             fields[Clip.Field.device] = .string(await engine.device)
             fields[Clip.Field.sourceDevice] = .string("\(source) import")
-            fields[Clip.Field.needsEnrichment] = .bool(true)
+            // Text was worked out above; only pictures need reading (OCR). Marking thousands of text
+            // clips kept devices busy writing one tiny change per clip for hours.
+            fields[Clip.Field.needsEnrichment] = .bool(e.text == nil)
             if let app = e.app { fields[Clip.Field.sourceApp] = .string(app) }
             if let bundle = e.bundle { fields[Clip.Field.sourceBundle] = .string(bundle) }
             if let url = e.url, url != e.text { fields[Clip.Field.sourceURL] = .string(url) }

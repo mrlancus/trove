@@ -98,6 +98,13 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Asked the user:** which Obsidian-style AI features to build (local MCP server on the Mac for
   Claude Desktop/Code, Ask Trove with citations, link suggestions, digests). Notes are already
   Markdown with Preview/Edit. Re-importing the same folder makes second cards (blobs are deduped).
+- **Clipboard lag after the user's full Paste import (thousands of clips):** each row re-ran the
+  kind classifier (regexes) several times per draw, tag pills recounted every clip, and the list
+  held every row. Now `ClipboardStore.facts` (kind, title, snippet, colour, search text) is worked out
+  once per clip version in the background, tag counts once per change, and `ClipsView` shows 400 rows
+  at a time (more load near the end). Imported text clips no longer set `needsEnrichment` (only
+  images need OCR); without AI the enrichment marks text clips seen 400 at a time inside
+  `SyncEngine.hold()/release()` (one refresh), instead of 10 every 30 s with a full clipboard reload each time.
 - **Scrolling:** card snippets cut to 400 characters, no whole-grid animation diff on every sync
   (apps); off-screen clips skip layout (website).
 - **img1** from the user's message never reached the session; ask them to send it again.

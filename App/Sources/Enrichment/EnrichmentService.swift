@@ -43,11 +43,23 @@ actor EnrichmentService {
             if Task.isCancelled { break }
             if await enrich(item) { changed += 1 }
         }
-        for clip in await library.clipsNeedingEnrichment(upTo: bestTier, limit: 10) {
+        // Without AI, a text clip only needs marking as seen: do those in big batches, telling the
+        // app once (a history imported from another app can be thousands of clips). Pictures (text
+        // recognition) and AI naming stay a few at a time.
+        let cheap = bestTier == .basic
+        let queue = await library.clipsNeedingEnrichment(upTo: bestTier, limit: cheap ? 400 : 10)
+        await library.engine.hold()
+        var slow = 0
+        for clip in queue {
             if Task.isCancelled { break }
+            if clip.image != nil || !cheap {
+                guard slow < 10 else { continue }
+                slow += 1
+            }
             await enrich(clip)
             changed += 1
         }
+        await library.engine.release()
         // Handwriting in sketches, wherever they were drawn (it's read again only when the ink changed).
         var sketches = 0
         for item in await library.items() where item.kind == .sketch && sketches < 5 {
