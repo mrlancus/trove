@@ -218,6 +218,11 @@ function showMain(vault) {
     input.value = "";
     syncSoon();
   });
+  $("#paste-files")?.addEventListener("change", async (e) => {
+    const files = [...e.target.files];
+    e.target.value = "";
+    await importFromPaste(files);
+  });
   for (const id of ["#upload", "#import-files", "#import-folder"]) {
     $(id).addEventListener("change", (e) => {
       const files = [...e.target.files];
@@ -421,6 +426,25 @@ function renderImport() {
     dot.style.cssText = `background:${colors[i % colors.length]};--x:${Math.cos(angle) * 80}px;--y:${Math.sin(angle) * 80}px`;
     return dot;
   }));
+}
+
+/** Paste's database (and its -wal) → clips (core/pasteimport.js). */
+async function importFromPaste(files) {
+  const status = $("#paste-import .paste-status");
+  const db = files.find((f) => !/-(wal|shm)$/.test(f.name)), wal = files.find((f) => /-wal$/.test(f.name));
+  if (!db) { status.textContent = "Pick db.sqlite (or Paste.db)."; return; }
+  status.textContent = "Reading…";
+  try {
+    const { readPasteDatabase } = await import("./core/pasteimport.js");
+    const read = readPasteDatabase(new Uint8Array(await db.arrayBuffer()), wal ? new Uint8Array(await wal.arrayBuffer()) : null);
+    status.textContent = `Adding ${read.entries.length.toLocaleString()} clips…`;
+    const { added, merged } = await state.vault.importClips(read.entries);
+    status.textContent = `Added ${added.toLocaleString()} clip${added === 1 ? "" : "s"}${merged ? `, ${merged.toLocaleString()} already here` : ""}${read.skipped ? `; ${read.skipped} couldn't be read` : ""}.`;
+    syncSoon();
+    if (added) toast("Your Paste history is in the clipboard");
+  } catch (err) {
+    status.textContent = `Couldn't read it: ${err.message}`;
+  }
 }
 
 // ---------- rendering ----------

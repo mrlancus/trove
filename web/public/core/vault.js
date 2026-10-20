@@ -4,7 +4,7 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, isStrayItem, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
-import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
+import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, isSensitive as isSensitiveText, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
@@ -868,6 +868,52 @@ export class Vault {
     }
     this.set(fields, id, "clipEvent");
     return id;
+  }
+
+  /**
+   * Clips from another clipboard app (pasteimport.js entries): the original times, app and
+   * pinboards (as tags) are kept. Ones already here (same text or image) just gain the tags.
+   * Returns {added, merged}.
+   */
+  async importClips(entries, { source = "Paste" } = {}) {
+    let added = 0, merged = 0;
+    const byHash = new Map(this.clips().map((c) => [c.hash, c]));
+    for (const e of entries) {
+      let hash, fields;
+      if (e.text) {
+        if (!e.text.trim() || utf8.encode(e.text).length > 256 * 1024 || isSensitiveText(e.text)) continue;
+        hash = hashText(e.text);
+        const tags = ruleTags(e.text);
+        fields = { [ClipField.text]: e.text, ...insightFields(insights(e.text)), ...(tags.length ? { [ClipField.tags]: tags } : {}) };
+      } else if (e.image) {
+        hash = hashImageHex(hex(new Uint8Array(await crypto.subtle.digest("SHA-256", e.image.bytes))));
+        if (!byHash.has(hash)) {
+          const ext = e.image.mime === "image/jpeg" ? "jpg" : e.image.mime.split("/")[1];
+          fields = { [ClipField.image]: await this.storeBlob(e.image.bytes, `Image.${ext}`, e.image.mime), [ClipField.autoTitle]: "Image" };
+        }
+      } else continue;
+      const tags = cleanTags((e.pinboards ?? []).map((p) => cleanTagName(p)).filter(Boolean));
+      const existing = byHash.get(hash);
+      if (existing) {
+        if (tags.some((t) => !existing.tags.includes(t))) this.setClipTags(existing.id, [...existing.tags, ...tags]);
+        merged++;
+        continue;
+      }
+      const at = e.createdAt ?? this.now();
+      const id = crypto.randomUUID().toLowerCase();
+      const all = { ...fields, [ClipField.hash]: hash, [ClipField.createdAt]: at, [ClipField.lastUsedAt]: at, [ClipField.device]: this.journal.device,
+        [ClipField.sourceDevice]: `${source} import`, [ClipField.needsEnrichment]: true };
+      if (e.app) all[ClipField.sourceApp] = e.app;
+      if (e.bundle) all[ClipField.sourceBundle] = e.bundle;
+      if (e.url && e.url !== e.text) all[ClipField.sourceURL] = e.url;
+      if (e.title) all[ClipField.title] = e.title;
+      if (tags.length) all[ClipField.tags] = cleanTags([...(all[ClipField.tags] ?? []), ...tags]);
+      this.set(all, id, "clip");
+      this.recordClipEvent(id, "copy", { app: e.app, bundle: e.bundle, at });
+      byHash.set(hash, this.clip(id));
+      added++;
+    }
+    return { added, merged };
   }
 
   /** A clip's connections: other clips and library items. */

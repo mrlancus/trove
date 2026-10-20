@@ -284,7 +284,7 @@ struct PencilCanvas: UIViewRepresentable {
                     UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
                 }
             }
-            if fittedWidth == 0 || canvas.bounds.width != fittedWidth { layout(canvas) }
+            if fittedWidth == 0 || canvas.bounds.width != fittedWidth { self.layout(canvas) }
             if current != shownCurrent {
                 let first = shownCurrent < 0
                 shownCurrent = current

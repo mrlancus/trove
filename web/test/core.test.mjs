@@ -625,3 +625,71 @@ test("clip copy and paste events, places and the clipboard map (core/clipmap.js)
   vault.setAppSetting("recordPlaces", false);
   assert.equal(vault.appSetting("recordPlaces"), false);
 });
+
+test("import from Paste: its SQLite database (new and old layouts), keyed archives, pinboards (core/pasteimport.js)", async (t) => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { archivePasteboard, writeBplist } = await import("./bplist-writer.mjs");
+  const { readPasteDatabase } = await import("../public/core/pasteimport.js");
+  const { decodeBlob } = await import("../public/core/bplist.js");
+  const dir = mkdtempSync(join(tmpdir(), "paste"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const enc = (s) => new TextEncoder().encode(s);
+  assert.deepEqual(decodeBlob(writeBplist({ a: [1, "é", enc("x")] })), { a: [1, "é", enc("x")] });
+
+  // Newer Paste: items, pasteboard data, apps, pinboards (one list per item and a join table).
+  const path = join(dir, "db.sqlite");
+  const db = new DatabaseSync(path);
+  db.exec(`PRAGMA journal_mode=WAL;
+    CREATE TABLE ZAPPLICATIONENTITY (Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, ZNAME VARCHAR, ZBUNDLEIDENTIFIER VARCHAR);
+    CREATE TABLE ZLISTENTITY (Z_PK INTEGER PRIMARY KEY, ZNAME VARCHAR);
+    CREATE TABLE ZITEMENTITY (Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER, ZAPPLICATION INTEGER, ZCREATEDATE TIMESTAMP, ZMODIFIEDDATE TIMESTAMP, ZTITLE VARCHAR, ZTYPE INTEGER);
+    CREATE TABLE ZITEMDATAENTITY (Z_PK INTEGER PRIMARY KEY, ZITEM INTEGER, ZRAWPASTEBOARDITEMS BLOB);
+    CREATE TABLE Z_2ITEMS (Z_2LISTS INTEGER, Z_3ITEMS INTEGER, PRIMARY KEY (Z_2LISTS, Z_3ITEMS));`);
+  db.exec(`INSERT INTO ZAPPLICATIONENTITY VALUES (1, 1, 'Safari', 'com.apple.Safari'), (2, 1, 'Xcode', 'com.apple.dt.Xcode');
+    INSERT INTO ZLISTENTITY VALUES (1, 'Clipboard'), (2, 'Work Links'), (3, 'Snippets');`);
+  const item = db.prepare("INSERT INTO ZITEMENTITY VALUES (?, 3, 1, ?, ?, ?, ?, 0)"), data = db.prepare("INSERT INTO ZITEMDATAENTITY (ZITEM, ZRAWPASTEBOARDITEMS) VALUES (?, ?)");
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const at2001 = (unixMs) => unixMs / 1000 - 978307200;
+  item.run(1, 1, at2001(1760000000000), at2001(1760000000000), null);
+  data.run(1, archivePasteboard([{ "public.utf8-plain-text": enc("https://example.com/page"), "public.url": enc("https://example.com/page"), "public.html": enc("<a>x</a>") }]));
+  item.run(2, 2, at2001(1760000100000), at2001(1760000100000), "Query");
+  data.run(2, archivePasteboard([{ "public.utf16-plain-text": Uint8Array.from([...("SELECT 1 — ok")].flatMap((c) => [c.charCodeAt(0) & 255, c.charCodeAt(0) >> 8])) }]));
+  item.run(3, null, at2001(1760000200000), at2001(1760000200000), null);
+  data.run(3, archivePasteboard([{ "public.png": png, "public.tiff": enc("II*\0") }]));
+  item.run(4, 1, at2001(1760000300000), null, null);
+  data.run(4, archivePasteboard([{ "com.apple.webarchive": enc("nothing readable") }]));
+  item.run(5, 1, at2001(1760000400000), null, null);
+  data.run(5, archivePasteboard([{ "public.utf8-plain-text": enc("x".repeat(9000)) }])); // spills onto overflow pages
+  db.exec("INSERT INTO Z_2ITEMS VALUES (2, 1), (3, 2), (1, 2)");
+  const live = (await import("node:fs")).readFileSync(path), wal = (await import("node:fs")).readFileSync(path + "-wal");
+  db.close();
+  const read = readPasteDatabase(new Uint8Array(live), new Uint8Array(wal));
+  assert.equal(read.entries.length, 4);
+  assert.equal(read.skipped, 1);
+  const [link, query, image, long] = read.entries;
+  assert.deepEqual([link.text, link.url, link.app, link.bundle, link.createdAt, link.pinboards], ["https://example.com/page", "https://example.com/page", "Safari", "com.apple.Safari", 1760000000000, ["Work Links"]]);
+  assert.deepEqual([query.text, query.title, query.app, query.pinboards], ["SELECT 1 — ok", "Query", "Xcode", ["Snippets"]]);
+  assert.equal(image.image.mime, "image/png");
+  assert.equal(long.text.length, 9000);
+
+  // Older Paste: one ZSNIPPET table with the content in a plist.
+  const oldPath = join(dir, "Paste.db");
+  const old = new DatabaseSync(oldPath);
+  old.exec("CREATE TABLE ZSNIPPET (Z_PK INTEGER PRIMARY KEY, ZTIMESTAMP TIMESTAMP, ZAPPLICATIONNAME VARCHAR, ZPREVIEW2 BLOB)");
+  old.prepare("INSERT INTO ZSNIPPET (ZTIMESTAMP, ZAPPLICATIONNAME, ZPREVIEW2) VALUES (?, ?, ?)").run(701805006.78, "Terminal", writeBplist({ text: "keytool -list" }));
+  old.close();
+  const oldRead = readPasteDatabase(new Uint8Array((await import("node:fs")).readFileSync(oldPath)));
+  assert.deepEqual(oldRead.entries.map((e) => [e.text, e.app, new Date(e.createdAt).getUTCFullYear()]), [["keytool -list", "Terminal", 2023]]);
+
+  // Into the vault: times, apps and pinboards kept; a second import adds nothing.
+  const { v: vault } = await testVault();
+  const first = await vault.importClips(read.entries);
+  assert.deepEqual(first, { added: 4, merged: 0 });
+  const clip = vault.clips().find((c) => c.text === "SELECT 1 — ok");
+  assert.deepEqual([clip.createdAt, clip.sourceApp, clip.tags.includes("snippets"), clip.title], [1760000100000, "Xcode", true, "Query"]);
+  assert.equal(vault.clipEvents(clip.id)[0].at, 1760000100000);
+  assert.deepEqual(await vault.importClips(read.entries), { added: 0, merged: 4 });
+});

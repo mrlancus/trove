@@ -182,6 +182,16 @@
           <li>Pocket &amp; Raindrop CSV</li><li>Readwise</li><li>PDFs &amp; documents</li><li>Photos &amp; screenshots</li><li>Whole folders</li>
         </ul>
         <p class="fine center">You can also drop things anywhere on this page.</p>
+        <div class="import-card" id="paste-import">
+          <div class="import-card-head"><span data-icon="clipboard"></span><div><strong>Everything from Paste</strong>
+            <p class="hint">Your whole Paste history and pinboards go into Trove's clipboard, with when each was copied and the app it came from. Pinboards become tags.</p></div></div>
+          <ol class="hint import-steps">
+            <li>On your Mac, in this file picker press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> and paste <code>~/Library/Containers/com.wiheads.paste/Data/Library/Application Support/Paste</code></li>
+            <li>Pick <code>db.sqlite</code>, and <code>db.sqlite-wal</code> too if it's there (it holds your newest copies). Older Paste: <code>Paste.db</code>.</li>
+          </ol>
+          <div class="row"><label class="primary">Choose Paste's files<input id="paste-files" type="file" multiple hidden></label><span class="hint paste-status" aria-live="polite"></span></div>
+          <p class="fine">Read in this browser only; nothing is uploaded except your encrypted clips. Passwords and codes are left out.</p>
+        </div>
       </section>
       <div id="bulk-bar" class="bulk-bar" role="toolbar" aria-label="Selected items" hidden></div>
     </div>
