@@ -32,6 +32,17 @@ public actor Library {
 
     /// The search index as it stands, for searching on every keystroke without waiting on this actor
     /// (it's a value, so the copy is cheap and the caller's searches don't block syncing).
+    /// Changes when any record of these kinds is added, changed or deleted (count and newest HLC),
+    /// so a screen can skip refreshing when a sync brought nothing new.
+    public func stamp(of kinds: Set<String>) async -> String {
+        var count = 0, newest = ""
+        for r in await engine.store.records.values where kinds.contains(r.kind) {
+            count += 1
+            if r.updatedHLC > newest { newest = r.updatedHLC }
+        }
+        return "\(count)|\(newest)"
+    }
+
     public func searchIndex() async -> SearchIndex {
         await refreshIndex()
         return index

@@ -8,6 +8,7 @@ struct ImportView: View {
     @Environment(AppModel.self) private var model
     @State private var targeted = false
     @State private var choosing = false
+    @State private var choosingPaste = false
 
     private struct Format: Identifiable {
         let symbol: String
@@ -49,6 +50,7 @@ struct ImportView: View {
                 Text("You can also drop things anywhere on the Trove window.")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
+                PasteImportCard(choose: { choosingPaste = true })
             }
             .padding(32)
             .frame(maxWidth: 760)
@@ -58,11 +60,16 @@ struct ImportView: View {
         .fileImporter(isPresented: $choosing, allowedContentTypes: [.item, .folder], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { Task { await model.importFiles(urls) } }
         }
+        .fileImporter(isPresented: $choosingPaste, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result, let db = urls.first(where: { !$0.lastPathComponent.hasSuffix("-wal") && !$0.lastPathComponent.hasSuffix("-shm") }) else { return }
+            Task { await model.importFromPaste(db: db, wal: urls.first { $0.lastPathComponent.hasSuffix("-wal") }) }
+        }
     }
 }
 
-/// The animated target: a slowly turning gradient outline while idle, a lit-up one while something
-/// hovers over it, a progress ring while importing, and a burst when it's done.
+/// The target: a gradient outline (still, so the screen isn't redrawn all the time; that made
+/// scrolling stutter on Intel Macs), lit up while something hovers over it, a progress ring while
+/// importing, and a burst when it's done.
 private struct DropZone: View {
     @Environment(AppModel.self) private var model
     let targeted: Bool
@@ -88,18 +95,15 @@ private struct DropZone: View {
         }
         .overlay { border }
         .scaleEffect(targeted ? 1.02 : 1)
-        .shadow(color: .orange.opacity(targeted ? 0.35 : 0), radius: 24)
+        .shadow(color: .orange.opacity(0.35), radius: targeted ? 24 : 0)
         .animation(.spring(duration: 0.35, bounce: 0.3), value: targeted)
         .animation(.spring(duration: 0.5), value: run?.finished)
         .animation(.spring(duration: 0.5), value: run == nil)
     }
 
     private var border: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 8) / 8 * 360
-            shape.strokeBorder(AngularGradient(colors: brand, center: .center, angle: .degrees(turn)),
-                               style: StrokeStyle(lineWidth: targeted ? 3 : 2, dash: targeted || run != nil ? [] : [10, 7]))
-        }
+        shape.strokeBorder(AngularGradient(colors: brand, center: .center, angle: .degrees(targeted ? 90 : 0)),
+                           style: StrokeStyle(lineWidth: targeted ? 3 : 2, dash: targeted || run != nil ? [] : [10, 7]))
     }
 
     private var idle: some View {
@@ -205,5 +209,67 @@ private struct Burst: View {
             }
         }
         .onAppear { withAnimation(.easeOut(duration: 0.9)) { out = true } }
+    }
+}
+
+/// "Everything from Paste": finds Paste's database on this Mac (App Store, direct download or
+/// Setapp copy) and brings its whole history and pinboards into the clipboard. On iPhone and iPad
+/// (or if it isn't found) the files are picked instead.
+private struct PasteImportCard: View {
+    @Environment(AppModel.self) private var model
+    let choose: () -> Void
+    @State private var found: (db: URL, wal: URL?)?
+    @State private var looked = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "doc.on.clipboard").font(.title2).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Everything from Paste").font(.headline)
+                    Text("Your whole Paste history and pinboards go into Trove's Clipboard, with when each was copied and the app it came from. Pinboards become tags. Passwords and codes are left out.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                #if os(macOS)
+                if let found {
+                    Button { Task { await model.importFromPaste(db: found.db, wal: found.wal); model.selection = .clipboard } } label: {
+                        Label("Import from Paste", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.importingPaste)
+                    Button("Choose the file…", action: choose).buttonStyle(.bordered)
+                } else {
+                    Button("Choose Paste's db.sqlite…", action: choose).buttonStyle(.borderedProminent)
+                }
+                #else
+                Button("Choose Paste's db.sqlite…", action: choose).buttonStyle(.borderedProminent)
+                #endif
+                if model.importingPaste { ProgressView().controlSize(.small) }
+            }
+            if let status = model.pasteImportStatus {
+                Text(status).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            } else {
+                #if os(macOS)
+                Text(found.map { "Found Paste's history in \($0.db.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))." }
+                     ?? (looked ? "Paste's history wasn't found on this Mac. Pick db.sqlite (and db.sqlite-wal) from its folder: in the file picker press ⇧⌘G and type ~/Library/Application Support or ~/Library/Containers, then the folder starting with com.wiheads.paste." : "Looking for Paste…"))
+                    .font(.caption).foregroundStyle(.secondary)
+                #else
+                Text("Copy db.sqlite and db.sqlite-wal from Paste's folder on your Mac to iCloud Drive, then pick both here.")
+                    .font(.caption).foregroundStyle(.secondary)
+                #endif
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(cornerRadius: 16)
+        #if os(macOS)
+        .task {
+            let candidates = await Task.detached(priority: .utility) { PasteImport.candidates() }.value
+            found = candidates.first
+            looked = true
+        }
+        #endif
     }
 }

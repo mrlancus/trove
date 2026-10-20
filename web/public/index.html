@@ -186,7 +186,9 @@
           <div class="import-card-head"><span data-icon="clipboard"></span><div><strong>Everything from Paste</strong>
             <p class="hint">Your whole Paste history and pinboards go into Trove's clipboard, with when each was copied and the app it came from. Pinboards become tags.</p></div></div>
           <ol class="hint import-steps">
-            <li>On your Mac, in this file picker press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> and paste <code>~/Library/Containers/com.wiheads.paste/Data/Library/Application Support/Paste</code></li>
+            <li>Easiest: in the Trove Mac app, Import → <strong>Import from Paste</strong> finds it for you. Here: in the file picker press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> and paste
+              <code>~/Library/Application Support/com.wiheads.paste-direct</code> (Paste from its website) or
+              <code>~/Library/Containers/com.wiheads.paste/Data/Library/Application Support/Paste</code> (App Store).</li>
             <li>Pick <code>db.sqlite</code>, and <code>db.sqlite-wal</code> too if it's there (it holds your newest copies). Older Paste: <code>Paste.db</code>.</li>
           </ol>
           <div class="row"><label class="primary">Choose Paste's files<input id="paste-files" type="file" multiple hidden></label><span class="hint paste-status" aria-live="polite"></span></div>

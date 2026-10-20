@@ -91,8 +91,21 @@ public actor SyncEngine {
     public func removeObserver(_ id: UUID) { observers[id] = nil }
 
     private func notify() {
+        guard !observers.isEmpty, holding == 0 else { if holding > 0 { heldChanges = true }; return }
         let visible = store.visible
         for cb in observers.values { cb(visible) }
+    }
+
+    private var holding = 0
+    private var heldChanges = false
+
+    /// Many edits at once (an import): between `hold()` and `release()` observers hear nothing, then
+    /// once (each write telling the app to refresh made big imports crawl).
+    public func hold() { holding += 1 }
+
+    public func release() {
+        holding = max(0, holding - 1)
+        if holding == 0, heldChanges { heldChanges = false; notify() }
     }
 
     // MARK: Local edits

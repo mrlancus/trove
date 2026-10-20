@@ -36,6 +36,7 @@ final class ClipboardStore {
     private(set) var customTags: [CustomTag] = []
     /// Bumped whenever `clips` changes, so lists can keep their filtered results until then.
     private(set) var revision = 0
+    @ObservationIgnored private var shownStamp = ""
 
     @ObservationIgnored private var library: Library?
     /// Each clip's folded search text, kept per version so typing only does `contains` checks.
@@ -61,6 +62,10 @@ final class ClipboardStore {
             lastPrune = Date()
             await library.pruneClips()
         }
+        // Nothing new since last time: leave everything as it is, so nothing redraws.
+        let stamp = await library.stamp(of: ["clip", "setting"])
+        guard stamp != shownStamp else { return }
+        shownStamp = stamp
         clips = await library.clips()
         customTags = await library.customTags()
         autoSave = await library.clipAutoSaveKinds()

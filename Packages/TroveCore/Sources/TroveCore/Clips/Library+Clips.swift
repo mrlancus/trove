@@ -173,6 +173,11 @@ extension Library {
         await engine.set([Clip.Field.note: .string(note)], record: id, kind: "clip")
     }
 
+    /// A tag name as stored: spaces become "-", like clips.js `cleanTagName`.
+    static func cleanTagName(_ name: String) -> String? {
+        cleanTags([name.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).joined(separator: "-")]).first
+    }
+
     static func cleanTags(_ tags: [String]) -> [String] {
         var seen: Set<String> = []
         return tags.map { $0.lowercased().replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces) }

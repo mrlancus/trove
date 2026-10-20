@@ -79,6 +79,15 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   archive decoder (`core/bplist.js`); pinboards become tags, times and apps kept. Paste's schema is
   undocumented: tables/columns are found by name and content and tested on synthetic databases only.
   **Ask the user how many clips it found**; if it reads nothing, get the table names it prints.
+- **Paste in the Mac app** (follow-up: the user imports on the Mac, not the website): Import →
+  "Everything from Paste" finds the database itself (`PasteImport.candidates`: App Store
+  `~/Library/Containers/com.wiheads.paste/…`, direct download `~/Library/Application Support/com.wiheads.paste-direct`,
+  Setapp) and imports into the Clipboard. Dropping `db.sqlite` anywhere does the same. Swift ports of
+  the reader (`SQLiteReader`, `BinaryPlist`, `PasteImport`, `Library.importClips`) check
+  `Fixtures/paste-*.sqlite/.db` against `paste-expected.json` (made by `web/test/make-paste-fixture.mjs`).
+- **Mac lag** (follow-up, Intel MacBook): every sync (30 s) replaced `items`, folders, links, the index
+  and bumped `inkRevision` even when nothing changed, redrawing every screen and card; now
+  `Library.stamp(of:)` gates each refresh. The Import drop zone's border animated 30×/s forever; now still.
 - **Scrolling:** card snippets cut to 400 characters, no whole-grid animation diff on every sync
   (apps); off-screen clips skip layout (website).
 - **img1** from the user's message never reached the session; ask them to send it again.

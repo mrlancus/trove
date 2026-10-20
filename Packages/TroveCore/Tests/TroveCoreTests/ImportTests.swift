@@ -99,3 +99,65 @@ import Testing
         #expect(FilePreview.goodnotes(Data("not a zip".utf8)) == nil)
     }
 }
+
+@Suite struct PasteImportTests {
+    func fixture(_ name: String) throws -> Data {
+        let (base, ext) = (String(name[..<name.lastIndex(of: ".")!]), String(name[name.index(after: name.lastIndex(of: ".")!)...]))
+        return try Data(contentsOf: try #require(Bundle.module.url(forResource: base, withExtension: ext, subdirectory: "Fixtures")))
+    }
+
+    @Test func readsPasteLikeTheWebsite() throws {
+        let expected = try JSONDecoder().decode([String: JSONValue].self, from: try fixture("paste-expected.json"))
+        for (key, result) in [("new", try PasteImport.read(try fixture("paste-new.sqlite"), wal: try fixture("paste-new.sqlite-wal"))),
+                              ("old", try PasteImport.read(try fixture("paste-old.db")))] {
+            let e = try #require(expected[key]?.object)
+            #expect(result.skipped == Int(e["skipped"]?.number ?? -1), "\(key) skipped")
+            let want = e["entries"]?.array ?? []
+            #expect(result.entries.count == want.count, "\(key) count")
+            for (got, w) in zip(result.entries, want) {
+                let o = w.object ?? [:]
+                #expect(got.text == o["text"]?.string, "\(key) text")
+                #expect(got.url == o["url"]?.string)
+                #expect(got.app == o["app"]?.string)
+                #expect(got.bundle == o["bundle"]?.string)
+                #expect(got.title == o["title"]?.string)
+                #expect(got.pinboards == (o["pinboards"]?.array ?? []).compactMap(\.string))
+                #expect(got.createdAt.map { ($0.timeIntervalSince1970 * 1000).rounded() } == o["createdAt"]?.number, "\(key) date")
+                #expect(got.imageMime == o["image"]?.object?["mime"]?.string)
+                #expect(got.image.map { Double($0.count) } == o["image"]?.object?["size"]?.number)
+            }
+        }
+    }
+
+    @Test func findsPasteOnTheMac() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let direct = home.appendingPathComponent("Library/Application Support/com.wiheads.paste-direct")
+        let store = home.appendingPathComponent("Library/Containers/com.wiheads.paste/Data/Library/Application Support/Paste")
+        for dir in [direct, store] { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+        try Data("old".utf8).write(to: store.appendingPathComponent("db.sqlite"))
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -86_400)], ofItemAtPath: store.appendingPathComponent("db.sqlite").path)
+        try Data("new".utf8).write(to: direct.appendingPathComponent("db.sqlite"))
+        try Data().write(to: direct.appendingPathComponent("db.sqlite-wal"))
+        try Data().write(to: direct.appendingPathComponent("index.sqlite"))
+        let found = PasteImport.candidates(home: home)
+        #expect(found.map(\.db.lastPathComponent) == ["db.sqlite", "db.sqlite"])
+        #expect(found.first?.db.deletingLastPathComponent().lastPathComponent == "com.wiheads.paste-direct", "newest first")
+        #expect(found.first?.wal?.lastPathComponent == "db.sqlite-wal")
+        #expect(found.last?.wal == nil)
+    }
+
+    @Test func importsIntoTheClipboard() async throws {
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()))
+        let read = try PasteImport.read(try fixture("paste-new.sqlite"), wal: try fixture("paste-new.sqlite-wal"))
+        let first = await lib.importClips(read.entries)
+        #expect(first.added == read.entries.count)
+        let query = try #require(await lib.clips().first { $0.text == "SELECT 1 — ok" })
+        #expect(query.sourceApp == "Xcode")
+        #expect(query.tags.contains("snippets"))
+        #expect(query.title == "Query")
+        #expect(await lib.clipEvents(of: query.id).first?.type == .copy)
+        let again = await lib.importClips(read.entries)
+        #expect(again.added == 0 && again.merged == read.entries.count)
+    }
+}

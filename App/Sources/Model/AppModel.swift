@@ -82,6 +82,10 @@ final class AppModel {
     /// This device's search index, copied from the library after each change. Searching it on the
     /// main actor answers every keystroke at once, without waiting behind syncing or file loads.
     @ObservationIgnored private var index = SearchIndex()
+    /// What the library and the ink looked like at the last refresh: a sync that brought nothing
+    /// new doesn't touch `items` (which would redraw every screen and card).
+    @ObservationIgnored private var shownLibraryStamp = ""
+    @ObservationIgnored private var shownInkStamp = ""
     var sync = SyncStatus()
     var enriching = false
     var toast: String?
@@ -218,20 +222,28 @@ final class AppModel {
     func reload() async {
         guard let library else { return }
         await clipboard.reload()
-        items = await library.items()
-        collections = await library.collections()
-        folders = await library.folders()
-        links = Links.graph(items)
-        index = await library.searchIndex()
-        if !searchText.isEmpty { searchNow() }
+        let libraryStamp = await library.stamp(of: ["item", "collection", "folder"])
+        if libraryStamp != shownLibraryStamp {
+            shownLibraryStamp = libraryStamp
+            items = await library.items()
+            collections = await library.collections()
+            folders = await library.folders()
+            links = Links.graph(items)
+            index = await library.searchIndex()
+            if !searchText.isEmpty { searchNow() }
+            // Search by meaning catches up in the background; keyword search never waits for it.
+            let snapshot = self.items, semantic = self.semantic
+            Task.detached(priority: .utility) { await semantic.update(snapshot) }
+            publishWidget()
+            SpotlightIndexer.index(items)
+        }
         await applySharedSettings()
-        // Search by meaning catches up in the background; keyword search never waits for it.
-        let snapshot = self.items, semantic = self.semantic
-        Task.detached(priority: .utility) { await semantic.update(snapshot) }
-        publishWidget()
-        SpotlightIndexer.index(items)
-        inkedLayers = await library.inkedLayers()
-        inkRevision += 1
+        let inkStamp = await library.stamp(of: ["stroke", "element"])
+        if inkStamp != shownInkStamp {
+            shownInkStamp = inkStamp
+            inkedLayers = await library.inkedLayers()
+            inkRevision += 1
+        }
     }
 
     // MARK: Drawing
@@ -669,8 +681,56 @@ final class AppModel {
 
     /// Imports anything: files, folders (recursively) and zips (opened, see `FileImport`). The
     /// Import screen shows progress from `importRun`.
+    /// Paste's history going into the clipboard: what it's doing now, then what happened.
+    var pasteImportStatus: String?
+    var importingPaste = false
+
+    /// Everything from Paste into the clipboard (`PasteImport`): its database (and `-wal`), found on
+    /// this Mac or picked. Times, apps and pinboards (as tags) are kept.
+    func importFromPaste(db: URL, wal: URL?) async {
+        guard let library, !importingPaste else { return }
+        importingPaste = true
+        defer { importingPaste = false }
+        let scoped = [db, wal].compactMap { $0 }.filter { $0.startAccessingSecurityScopedResource() }
+        defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
+        pasteImportStatus = "Reading Paste's history…"
+        do {
+            let data = try Data(contentsOf: db), walData = wal.flatMap { try? Data(contentsOf: $0) }
+            let read = try await Task.detached(priority: .userInitiated) { try PasteImport.read(data, wal: walData) }.value
+            pasteImportStatus = "Adding \(read.entries.count) clips…"
+            let result = await library.importClips(read.entries)
+            await clipboard.reload()
+            var message = "Added \(result.added) clip\(result.added == 1 ? "" : "s") to your clipboard"
+            if result.merged > 0 { message += ", \(result.merged) already here" }
+            if read.skipped > 0 { message += "; \(read.skipped) couldn't be read" }
+            if read.entries.isEmpty { message = "Found no clips in it. Its tables: \(read.tables.joined(separator: ", "))" }
+            pasteImportStatus = message
+            toast = result.added > 0 ? "Your Paste history is in the clipboard" : nil
+            if result.added > 0 { pushSoon() }
+        } catch {
+            pasteImportStatus = "Couldn't read it: \(error)"
+        }
+    }
+
+    /// A dropped or picked file that's Paste's database goes to the clipboard, not the library.
+    static func isPasteDatabase(_ url: URL) -> Bool {
+        guard ["db.sqlite", "Paste.db"].contains(url.lastPathComponent) else { return false }
+        return url.path.lowercased().contains("paste") || url.path.lowercased().contains("wiheads")
+            || ((try? Data(contentsOf: url)).flatMap { try? SQLiteReader($0) }?.tables.contains { ["ZITEMENTITY", "ZSNIPPET"].contains($0.name) } ?? false)
+    }
+
     func importFiles(_ urls: [URL], source: ItemSource = .import) async {
         guard let library else { return }
+        if let db = urls.first(where: Self.isPasteDatabase) {
+            let wal = urls.first { $0.lastPathComponent == db.lastPathComponent + "-wal" }
+                ?? URL(fileURLWithPath: db.path + "-wal").checkedFile
+            await importFromPaste(db: db, wal: wal)
+            selection = .clipboard
+            let rest = urls.filter { $0 != db && !$0.lastPathComponent.hasPrefix(db.lastPathComponent + "-") }
+            if rest.isEmpty { return }
+            await importFiles(rest, source: source)
+            return
+        }
         guard importRun?.finished != false else { toast = "Still importing. Drop the rest when it's done."; return }
         let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
         defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
@@ -931,4 +991,9 @@ final class AppModel {
 
 private extension Array {
     var nilIfEmpty: Self? { isEmpty ? nil : self }
+}
+
+extension URL {
+    /// This file URL if something is there.
+    var checkedFile: URL? { FileManager.default.fileExists(atPath: path) ? self : nil }
 }

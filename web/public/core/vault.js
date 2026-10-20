@@ -875,7 +875,7 @@ export class Vault {
    * pinboards (as tags) are kept. Ones already here (same text or image) just gain the tags.
    * Returns {added, merged}.
    */
-  async importClips(entries, { source = "Paste" } = {}) {
+  async importClips(entries, { source = "Paste", progress = null } = {}) {
     let added = 0, merged = 0;
     const byHash = new Map(this.clips().map((c) => [c.hash, c]));
     for (const e of entries) {
