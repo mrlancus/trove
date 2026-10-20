@@ -86,32 +86,60 @@ enum InkRenderer {
         }
     }
 
-    static func drawPaper(_ paper: InkPaper, size: CGSize, in ctx: CGContext) {
-        let s = InkPaper.spacing
+    /// Paper like core/ink.js `drawPaper`: lines on the page's colour (lighter lines on dark pages).
+    /// `area` limits it to what's on screen, for the endless canvas.
+    static func drawPaper(_ paper: InkPaper, size: CGSize, color: String? = nil, area: CGRect? = nil, in ctx: CGContext) {
+        let x0 = area?.minX ?? 0, y0 = area?.minY ?? 0, x1 = area?.maxX ?? size.width, y1 = area?.maxY ?? size.height
+        let dark = InkPage.isDark(color)
+        let s = paper.spacing
         ctx.saveGState()
-        ctx.setStrokeColor(CGColor(red: 90 / 255, green: 130 / 255, blue: 200 / 255, alpha: 0.28))
-        ctx.setFillColor(CGColor(red: 90 / 255, green: 110 / 255, blue: 140 / 255, alpha: 0.45))
+        ctx.setFillColor(cgColor(color ?? "#ffffff"))
+        ctx.fill(CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0))
+        let line = dark ? CGColor(red: 200 / 255, green: 215 / 255, blue: 240 / 255, alpha: 0.22) : CGColor(red: 90 / 255, green: 130 / 255, blue: 200 / 255, alpha: 0.28)
+        ctx.setStrokeColor(line)
+        ctx.setFillColor(dark ? CGColor(red: 210 / 255, green: 220 / 255, blue: 235 / 255, alpha: 0.4) : CGColor(red: 90 / 255, green: 110 / 255, blue: 140 / 255, alpha: 0.45))
         ctx.setLineWidth(1)
+        func first(_ start: Double, _ step: Double, _ offset: Double = 0) -> Double { ((start - offset) / step).rounded(.up) * step + offset }
+        func hline(_ y: Double) { ctx.move(to: CGPoint(x: x0, y: y)); ctx.addLine(to: CGPoint(x: x1, y: y)) }
+        func vline(_ x: Double, _ top: Double, _ bottom: Double) { ctx.move(to: CGPoint(x: x, y: top)); ctx.addLine(to: CGPoint(x: x, y: bottom)) }
+        let endless = area != nil
         switch paper {
         case .blank: break
-        case .lined:
-            var y = s * 3
-            while y < size.height { ctx.move(to: CGPoint(x: 0, y: y)); ctx.addLine(to: CGPoint(x: size.width, y: y)); y += s }
+        case .lined, .narrow:
+            var y = endless ? first(y0, s) : s * 3
+            while y < y1 { hline(y); y += s }
             ctx.strokePath()
-        case .grid:
-            var y = s
-            while y < size.height { ctx.move(to: CGPoint(x: 0, y: y)); ctx.addLine(to: CGPoint(x: size.width, y: y)); y += s }
-            var x = s
-            while x < size.width { ctx.move(to: CGPoint(x: x, y: 0)); ctx.addLine(to: CGPoint(x: x, y: size.height)); x += s }
+        case .grid, .smallgrid:
+            var y = first(y0, s)
+            while y < y1 { if y != 0 || endless { hline(y) }; y += s }
+            var x = first(x0, s)
+            while x < x1 { if x != 0 || endless { vline(x, y0, y1) }; x += s }
             ctx.strokePath()
         case .dotted:
-            var y = s
-            while y < size.height {
-                var x = s
-                while x < size.width { ctx.addEllipse(in: CGRect(x: x - 1.3, y: y - 1.3, width: 2.6, height: 2.6)); x += s }
+            var y = first(y0, s)
+            while y < y1 {
+                var x = first(x0, s)
+                while x < x1 {
+                    if endless || (x != 0 && y != 0) { ctx.addEllipse(in: CGRect(x: x - 1.3, y: y - 1.3, width: 2.6, height: 2.6)) }
+                    x += s
+                }
                 y += s
             }
             ctx.fillPath()
+        case .cornell:
+            let bottom = size.height * 0.8, cue = size.width * 0.28, g = InkPaper.spacing
+            var y = g * 3
+            while y < bottom { hline(y); y += g }
+            ctx.strokePath()
+            ctx.setStrokeColor(dark ? CGColor(red: 240 / 255, green: 150 / 255, blue: 150 / 255, alpha: 0.5) : CGColor(red: 220 / 255, green: 90 / 255, blue: 90 / 255, alpha: 0.55))
+            vline(cue, g * 2, bottom)
+            hline(bottom)
+            hline(g * 2)
+            ctx.strokePath()
+        case .music:
+            var top = first(y0, 80, 40)
+            while top < y1 { for k in 0..<5 { hline(top + Double(k) * s) }; top += 80 }
+            ctx.strokePath()
         }
         ctx.restoreGState()
     }

@@ -90,15 +90,19 @@ public struct Clip: Identifiable, Hashable, Sendable {
     public func matches(_ query: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty { return true }
-        let haystack = [text, displayTitle, autoTitle, aiTitle ?? "", summary ?? "", note, tags.joined(separator: " "), ocrText ?? "",
-                        sourceApp ?? "", sourceDevice ?? "", sourceTitle ?? "", sourceURL?.absoluteString ?? "",
-                        files.joined(separator: " "), image?.name ?? ""].joined(separator: "\n")
+        // Built up in typed pieces: one long literal of `?? ""` is too much for the type checker.
+        var parts: [String] = [text, displayTitle, autoTitle, note, tags.joined(separator: " "), files.joined(separator: " ")]
+        let optional: [String?] = [aiTitle, summary, ocrText, sourceApp, sourceDevice, sourceTitle, sourceURL?.absoluteString, image?.name]
+        parts += optional.compactMap { $0 }
+        let haystack: String = parts.joined(separator: "\n")
+        let app: String = sourceApp ?? ""
+        let fold: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
         return q.split(separator: " ").allSatisfy { word in
             let w = String(word)
             if w.hasPrefix("tag:") { return tags.contains(String(w.dropFirst(4)).lowercased()) }
-            if w.hasPrefix("app:") { return (sourceApp ?? "").range(of: w.dropFirst(4), options: [.caseInsensitive]) != nil }
+            if w.hasPrefix("app:") { return app.range(of: String(w.dropFirst(4)), options: .caseInsensitive) != nil }
             if w == "is:pinned" { return isPinned }
-            return haystack.range(of: w, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            return haystack.range(of: w, options: fold) != nil
         }
     }
 
