@@ -10,7 +10,7 @@ import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
-import { openInkEditor, renderSketchPage, sketchThumbnail } from "./draw.js";
+import { openInkEditor, renderSketchPage, sketchPages, sketchThumbnail } from "./draw.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
@@ -1211,18 +1211,19 @@ function inkSignature(item) {
 /** A sketch's pages in the panel; click one to draw on it. */
 function sketchSection(item) {
   const vault = state.vault;
-  const grid = h("div", { class: "sketch-pages" });
-  for (let page = 0; page < item.sketchPages; page++) {
-    const canvas = h("canvas", { class: "sketch-page", "aria-label": `Page ${page + 1}` });
+  const grid = h("div", { class: `sketch-pages${item.infinite ? " endless" : ""}` });
+  const specs = sketchPages(item);
+  specs.forEach((spec, page) => {
+    const canvas = h("canvas", { class: "sketch-page", "aria-label": item.infinite ? "Endless canvas" : `Page ${page + 1}` });
     const button = h("button", { type: "button", class: "sketch-page-button", title: "Draw on this page", onclick: () => openSketch(item.id, page) }, canvas,
-      item.sketchPages > 1 ? h("span", { class: "saved", text: `${page + 1}` }) : null);
+      specs.length > 1 ? h("span", { class: "saved", text: `${page + 1}` }) : null);
     grid.append(button);
-    requestAnimationFrame(() => renderSketchPage(canvas, vault, item, page, Math.max(120, canvas.clientWidth || 300)));
-  }
+    requestAnimationFrame(() => renderSketchPage(canvas, vault, item, spec, Math.max(120, canvas.clientWidth || 300)));
+  });
   return h("section", { class: "sketch" },
     h("div", { class: "file-head" },
       h("span", { class: "type-tile mini", text: "✎" }),
-      h("span", { class: "file-name", text: `${item.sketchPages} page${item.sketchPages === 1 ? "" : "s"}` }),
+      h("span", { class: "file-name", text: item.infinite ? "Endless canvas" : `${item.sketchPages} page${item.sketchPages === 1 ? "" : "s"}` }),
       h("span", { class: "spacer" }),
       h("button", { type: "button", class: "primary small", onclick: () => openSketch(item.id, 0) }, "✎ Draw")),
     grid);
@@ -1233,15 +1234,8 @@ function openSketch(id, page = 0, after = null) {
   const vault = state.vault;
   const item = vault.item(id);
   if (!item) return;
-  const [w, hgt] = item.pageSize;
-  const sketch = {
-    paper: item.paper, pageCount: item.sketchPages,
-    setPaper: (paper) => vault.setSketch(id, { paper }),
-    addPage: () => vault.setSketch(id, { pages: sketch.pageCount }),
-  };
   openInkEditor({
-    vault, itemId: id, title: item.displayTitle, sketch, startPage: page,
-    pages: Array.from({ length: item.sketchPages }, () => ({ width: w, height: hgt })),
+    vault, itemId: id, title: item.displayTitle, sketch: true, startPage: page,
     changed: () => syncSoon(4000),
     onClose: async (edited) => {
       if (edited) {
