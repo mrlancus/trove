@@ -72,6 +72,8 @@ struct PencilCanvas: UIViewRepresentable {
         case .pencil: .pencil
         case .marker: .monoline
         case .highlighter: .marker
+        case .fountain: .fountainPen
+        case .brush: .watercolor
         }
         let points = s.points.map { p in
             let w = InkStroke.width(s.width, tool: s.tool, pressure: p.pressure)
@@ -86,6 +88,8 @@ struct PencilCanvas: UIViewRepresentable {
         case .pencil: .pencil
         case .marker: .highlighter
         case .monoline: .marker
+        case .fountainPen: .fountain
+        case .watercolor: .brush
         default: .pen
         }
         let raw = Array(s.path)
