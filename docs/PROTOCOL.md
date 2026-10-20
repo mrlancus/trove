@@ -408,15 +408,26 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   empty; the old version keeps its ink.
 
 **Sketch items** have `kind: "sketch"` and are filed in "Sketches". Extra fields:
-- `paper`: `blank`, `lined`, `narrow` (24 apart), `grid`, `smallgrid` (16), `dotted`, `cornell`
-  (lined, a cue column at 28 % of the width and a summary area below 80 % of the height) or `music`
-  (five lines 8 apart, a stave every 80). Lines are 32 points apart unless noted.
-- `pages`: the page count. `pageList`: the pages in order, `[{id, paper?, color?}]` (a page's own
-  paper and `"#rrggbb"` colour; white when unset). Without `pageList` the pages are `"0"` … `"pages-1"`.
-  Adding, duplicating (with everything on the page), reordering and deleting pages rewrite the list;
-  the last page can't be deleted. Two devices changing the list at once: the last write wins.
-- `pageSize` `[w, h]` (optional), and `canvas`: `"infinite"` for one endless page `"0"` (any
-  coordinates, paper drawn everywhere) instead of pages.
+- `paper`: one of `blank`, `lined`, `narrow` (24 apart), `wide` (40), `margin` (lined with a red
+  margin at x 72 and header line), `grid`, `smallgrid` (16), `graph` (8, every fifth bold),
+  `dotted`, `smalldots` (16), `isometric` (dots in a triangular lattice 24 apart), `cornell` (lined,
+  a cue column at 28 % of the width and a summary area below 80 % of the height), `todo` (lines 40
+  apart with a box to tick), `planner` (a week: seven lined bands), `storyboard` (six 4:3 frames
+  with note lines), `music` (five lines 8 apart, a stave every 80) or `calligraphy` (groups of four
+  handwriting guides, 96 apart). Lines are 32 points apart unless noted. The exact lines and dots
+  are `paperShapes` (core/ink.js) and `InkPaperShapes` (Swift), checked against
+  `Fixtures/ink-papers.json` (made by `web/test/make-paper-fixture.mjs`). Unknown papers draw blank.
+- `pages`: the page count. `pageList`: the pages in order, `[{id, paper?, color?, size?}]` (a page's
+  own paper, `"#rrggbb"` colour (white when unset) and `[w, h]` size in points (36–4000 a side; the
+  sketch's `pageSize` when unset)). Without `pageList` the pages are `"0"` … `"pages-1"`.
+  Adding (with the size, paper and colour of the page before), duplicating (with everything on the
+  page), reordering and deleting pages rewrite the list; the last page can't be deleted. Two
+  devices changing the list at once: the last write wins.
+- `pageSize` `[w, h]` (optional, 768 × 1024 when unset), and `canvas`: `"infinite"` for one endless
+  page `"0"` (any coordinates, paper drawn everywhere; papers that lay out a page are plain lined
+  there) instead of pages. Named sizes (scaled so pages are about 768 points wide): iPad 768 × 1024,
+  A4 768 × 1086, A5 543 × 768, US Letter 791 × 1024, US Legal 791 × 1303, square 768 × 768,
+  16:9 576 × 1024 and phone 473 × 1024, portrait; landscape swaps them.
 - `sketchText`: the words in its text boxes (rewritten when they change), and `inkText`: handwriting
   an Apple device read off the pages (Vision). Search covers both.
 

@@ -504,7 +504,15 @@ test("sketch pages, text boxes, lasso and the partial eraser (Library+InkPages)"
   const a = vault.addStroke({ on: sketch, page: second, tool: "fountain", color: "#112233", width: 6, points: [{ x: 10, y: 10, p: 0.5, t: 0 }, { x: 50, y: 50, p: 0.5, t: 0 }] });
   const box = vault.addElement({ on: sketch, page: second, type: "text", frame: { x: 20, y: 20, w: 200, h: 40 }, text: "Buy milk" });
   let item = vault.item(sketch);
-  assert.deepEqual(item.pageList, [{ id: "0", paper: null, color: null }, { id: second, paper: "music", color: "#fbf6e9" }]);
+  assert.deepEqual(item.pageList, [{ id: "0", paper: null, color: null, size: null }, { id: second, paper: "music", color: "#fbf6e9", size: null }]);
+  // Page sizes: one page, then every page.
+  vault.setPage(sketch, second, { size: [1086, 768] });
+  assert.deepEqual(vault.item(sketch).pageList[1].size, [1086, 768]);
+  vault.setAllPages(sketch, { size: [543, 768], paper: "graph" });
+  assert.deepEqual(vault.item(sketch).pageList.map((p) => [p.size, p.paper]), [[[543, 768], "graph"], [[543, 768], "graph"]]);
+  assert.deepEqual(vault.item(sketch).pageSize, [543, 768]);
+  vault.setAllPages(sketch, { size: [768, 1024], paper: "music" });
+  vault.setPage(sketch, second, { color: "#fbf6e9" });
   assert.equal(item.sketchText, "Buy milk");
   const { search } = await import("../public/core/items.js");
   assert.deepEqual(search(vault.items(), "milk").map((i) => i.id), [sketch]);

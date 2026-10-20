@@ -140,3 +140,37 @@ import Testing
         #expect(await lib.item(sketch)?.sketchText == "Buy milk")
     }
 }
+
+@Suite struct InkPaperTests {
+    struct Case: Decodable {
+        struct Area: Decodable { var x, y, w, h: Double }
+        var paper: String
+        var w, h: Double
+        var area: Area?
+        var shapes: [[String: JSONValue]]
+    }
+
+    @Test func papersMatchTheWebsite() throws {
+        let url = Bundle.module.url(forResource: "ink-papers", withExtension: "json", subdirectory: "Fixtures")!
+        struct File: Decodable { var cases: [Case] }
+        let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
+        #expect(file.cases.count == InkPaper.allCases.count * 2)
+        func close(_ a: Double, _ b: JSONValue?) -> Bool { abs(a - (b?.number ?? .nan)) < 1e-6 }
+        for c in file.cases {
+            let paper = try #require(InkPaper(rawValue: c.paper))
+            let area = c.area.map { InkGeometry.Rect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+            let got = InkPaperShapes.shapes(paper, width: c.w, height: c.h, area: area)
+            #expect(got.count == c.shapes.count, "\(c.paper) \(c.area == nil ? "page" : "endless")")
+            for (g, e) in zip(got, c.shapes) {
+                let ok: Bool = switch g {
+                case .hline(let y, let x0, let x1, let r): e["k"]?.string == "h" && close(y, e["y"]) && close(x0, e["x0"]) && close(x1, e["x1"]) && e["r"]?.string == r.rawValue
+                case .vline(let x, let y0, let y1, let r): e["k"]?.string == "v" && close(x, e["x"]) && close(y0, e["y0"]) && close(y1, e["y1"]) && e["r"]?.string == r.rawValue
+                case .dot(let x, let y, let d): e["k"]?.string == "dot" && close(x, e["x"]) && close(y, e["y"]) && close(d, e["d"])
+                case .box(let x, let y, let w, let h, let r): e["k"]?.string == "box" && close(x, e["x"]) && close(y, e["y"]) && close(w, e["w"]) && close(h, e["h"]) && e["r"]?.string == r.rawValue
+                }
+                #expect(ok, "\(c.paper): \(g) vs \(e)")
+                if !ok { break }
+            }
+        }
+    }
+}

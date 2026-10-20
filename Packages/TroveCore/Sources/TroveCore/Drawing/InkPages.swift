@@ -276,7 +276,7 @@ extension Library {
         var pages = sketch.sketchPageList
         let index = after.flatMap { a in pages.firstIndex { $0.id == a } }.map { $0 + 1 } ?? pages.count
         let like = pages[max(0, min(pages.count - 1, index - 1))]
-        let page = InkPage(id: String(newId().prefix(8)), paper: like.paper, color: like.color)
+        let page = InkPage(id: String(newId().prefix(8)), paper: like.paper, color: like.color, size: like.size)
         pages.insert(page, at: index)
         await setPages(sketchId, pages)
         return page.id
@@ -316,15 +316,32 @@ extension Library {
     }
 
     /// One page's paper or colour ("" colour = white).
-    public func setPage(_ pageKey: String, of sketchId: String, paper: InkPaper? = nil, color: String? = nil) async {
+    public func setPage(_ pageKey: String, of sketchId: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) async {
         guard let sketch = await item(sketchId) else { return }
         await setPages(sketchId, sketch.sketchPageList.map { page in
             guard page.id == pageKey else { return page }
             var p = page
             if let paper { p.paper = paper }
             if let color { p.color = color.isEmpty ? nil : color }
+            if let size = InkPage.valid(size) { p.size = size }
             return p
         })
+    }
+
+    /// Every page's paper, colour or size at once, and the sketch's own paper and size (core/ink.js `setAllPages`).
+    public func setAllPages(of sketchId: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) async {
+        guard let sketch = await item(sketchId) else { return }
+        let pages = sketch.sketchPageList.map { page in
+            var p = page
+            if let paper { p.paper = paper }
+            if let color { p.color = color.isEmpty ? nil : color }
+            if let size = InkPage.valid(size) { p.size = size }
+            return p
+        }
+        var fields: [String: JSONValue] = [Item.SketchField.pageList: .array(pages.map(\.json)), Item.SketchField.pages: .number(Double(pages.count))]
+        if let paper { fields[Item.SketchField.paper] = .string(paper.rawValue) }
+        if let size = InkPage.valid(size) { fields[Item.SketchField.pageSize] = .array(size.map(JSONValue.number)) }
+        await update(sketchId, fields)
     }
 
     /// Pages, or one endless canvas.

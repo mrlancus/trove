@@ -103,14 +103,14 @@ enum InkRenderer {
 
     /// A sketch's pages as the editor and previews see them.
     static func sketchPages(_ item: Item) -> [InkPageSpec] {
-        let size = item.sketchPageSize
         if item.isInfiniteCanvas {
             let zero = item.sketchPageList.first { $0.id == "0" }
             let side = InkPageSpec.endlessSize
             return [InkPageSpec(key: "0", width: side, height: side, background: .paper(zero?.paper ?? item.paper, color: zero?.color), origin: side / 2)]
         }
         return item.sketchPageList.map {
-            InkPageSpec(key: $0.id, width: size.width, height: size.height, background: .paper($0.paper ?? item.paper, color: $0.color))
+            let own = item.pageSize(of: $0)
+            return InkPageSpec(key: $0.id, width: own.width, height: own.height, background: .paper($0.paper ?? item.paper, color: $0.color))
         }
     }
 
@@ -152,7 +152,7 @@ enum InkRenderer {
         case .paper(let paper, let color):
             let rect = area.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
             // An endless canvas has no cue column or summary box: Cornell paper is lined there.
-            drawPaper(page.infinite && paper == .cornell ? .lined : paper, size: size, color: color, area: page.infinite ? rect : nil, in: ctx)
+            drawPaper(paper, size: size, color: color, area: page.infinite ? rect : nil, in: ctx)
         case .pdf(let data, let index):
             ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
             ctx.fill(CGRect(origin: .zero, size: size))
@@ -172,61 +172,40 @@ enum InkRenderer {
         }
     }
 
-    /// Paper like core/ink.js `drawPaper`: lines on the page's colour (lighter lines on dark pages).
-    /// `area` limits it to what's on screen, for the endless canvas.
+    /// Paper like core/ink.js `drawPaper`: `InkPaperShapes` on the page's colour (lighter lines on
+    /// dark pages). `area` limits it to what's on screen, for the endless canvas.
     static func drawPaper(_ paper: InkPaper, size: CGSize, color: String? = nil, area: CGRect? = nil, in ctx: CGContext) {
         let x0 = area?.minX ?? 0, y0 = area?.minY ?? 0, x1 = area?.maxX ?? size.width, y1 = area?.maxY ?? size.height
         let dark = InkPage.isDark(color)
-        let s = paper.spacing
         ctx.saveGState()
         ctx.setFillColor(cgColor(color ?? "#ffffff"))
         ctx.fill(CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0))
-        let line = dark ? CGColor(red: 200 / 255, green: 215 / 255, blue: 240 / 255, alpha: 0.22) : CGColor(red: 90 / 255, green: 130 / 255, blue: 200 / 255, alpha: 0.28)
-        ctx.setStrokeColor(line)
-        ctx.setFillColor(dark ? CGColor(red: 210 / 255, green: 220 / 255, blue: 235 / 255, alpha: 0.4) : CGColor(red: 90 / 255, green: 110 / 255, blue: 140 / 255, alpha: 0.45))
+        let shapes = InkPaperShapes.shapes(paper, width: size.width, height: size.height,
+                                           area: area.map { InkGeometry.Rect(x: $0.minX, y: $0.minY, width: $0.width, height: $0.height) })
+        func rgba(_ r: Double, _ g: Double, _ b: Double, _ a: Double) -> CGColor { CGColor(red: r / 255, green: g / 255, blue: b / 255, alpha: a) }
+        let colours: [InkPaperShapes.Role: CGColor] = dark
+            ? [.line: rgba(200, 215, 240, 0.22), .bold: rgba(200, 215, 240, 0.4), .accent: rgba(240, 150, 150, 0.5)]
+            : [.line: rgba(90, 130, 200, 0.28), .bold: rgba(90, 130, 200, 0.5), .accent: rgba(220, 90, 90, 0.55)]
         ctx.setLineWidth(1)
-        func first(_ start: Double, _ step: Double, _ offset: Double = 0) -> Double { ((start - offset) / step).rounded(.up) * step + offset }
-        func hline(_ y: Double) { ctx.move(to: CGPoint(x: x0, y: y)); ctx.addLine(to: CGPoint(x: x1, y: y)) }
-        func vline(_ x: Double, _ top: Double, _ bottom: Double) { ctx.move(to: CGPoint(x: x, y: top)); ctx.addLine(to: CGPoint(x: x, y: bottom)) }
-        let endless = area != nil
-        switch paper {
-        case .blank: break
-        case .lined, .narrow:
-            var y = endless ? first(y0, s) : s * 3
-            while y < y1 { hline(y); y += s }
-            ctx.strokePath()
-        case .grid, .smallgrid:
-            var y = first(y0, s)
-            while y < y1 { if y != 0 || endless { hline(y) }; y += s }
-            var x = first(x0, s)
-            while x < x1 { if x != 0 || endless { vline(x, y0, y1) }; x += s }
-            ctx.strokePath()
-        case .dotted:
-            var y = first(y0, s)
-            while y < y1 {
-                var x = first(x0, s)
-                while x < x1 {
-                    if endless || (x != 0 && y != 0) { ctx.addEllipse(in: CGRect(x: x - 1.3, y: y - 1.3, width: 2.6, height: 2.6)) }
-                    x += s
+        for role in [InkPaperShapes.Role.line, .bold, .accent] {
+            var any = false
+            for shape in shapes {
+                switch shape {
+                case .hline(let y, let a, let b, let r) where r == role:
+                    ctx.move(to: CGPoint(x: a, y: y)); ctx.addLine(to: CGPoint(x: b, y: y)); any = true
+                case .vline(let x, let a, let b, let r) where r == role:
+                    ctx.move(to: CGPoint(x: x, y: a)); ctx.addLine(to: CGPoint(x: x, y: b)); any = true
+                case .box(let x, let y, let w, let h, let r) where r == role:
+                    ctx.addRect(CGRect(x: x, y: y, width: w, height: h)); any = true
+                default:
+                    break
                 }
-                y += s
             }
-            ctx.fillPath()
-        case .cornell:
-            let bottom = size.height * 0.8, cue = size.width * 0.28, g = InkPaper.spacing
-            var y = g * 3
-            while y < bottom { hline(y); y += g }
-            ctx.strokePath()
-            ctx.setStrokeColor(dark ? CGColor(red: 240 / 255, green: 150 / 255, blue: 150 / 255, alpha: 0.5) : CGColor(red: 220 / 255, green: 90 / 255, blue: 90 / 255, alpha: 0.55))
-            vline(cue, g * 2, bottom)
-            hline(bottom)
-            hline(g * 2)
-            ctx.strokePath()
-        case .music:
-            var top = first(y0, 80, 40)
-            while top < y1 { for k in 0..<5 { hline(top + Double(k) * s) }; top += 80 }
-            ctx.strokePath()
+            if any { ctx.setStrokeColor(colours[role] ?? rgba(90, 130, 200, 0.28)); ctx.strokePath() }
         }
+        ctx.setFillColor(dark ? rgba(210, 220, 235, 0.4) : rgba(90, 110, 140, 0.45))
+        for case .dot(let x, let y, let d) in shapes { ctx.addEllipse(in: CGRect(x: x - d, y: y - d, width: d * 2, height: d * 2)) }
+        ctx.fillPath()
         ctx.restoreGState()
     }
 

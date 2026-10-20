@@ -1,4 +1,4 @@
-import { pageListOf, PAPERS } from "./ink.js";
+import { pageListOf, PAPERS, validSize } from "./ink.js";
 // Item view, search and smart collections for the web app. Mirrors Item.swift, SearchIndex.swift,
 // SmartCollections.swift, URLCleaner.swift and Markdown.hashtags closely enough to feel the same.
 
@@ -63,7 +63,7 @@ function makeItemView(record) {
     hasConflicts: conflicts.length > 0,
   };
   if (item.kind === "sketch") {
-    const size = Array.isArray(f.pageSize) && f.pageSize.length === 2 && f.pageSize.every((v) => typeof v === "number" && v > 0) ? f.pageSize : [768, 1024];
+    const size = validSize(f.pageSize) ?? [768, 1024];
     const pageList = pageListOf(f);
     Object.assign(item, { paper: PAPERS.includes(f.paper) ? f.paper : "blank", pageList, sketchPages: pageList.length, pageSize: size,
       infinite: f.canvas === "infinite" });

@@ -8,12 +8,12 @@ import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, custo
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
-import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, widthScale } from "./ink.js";
+import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
 /** Pages as the `pageList` field (InkPage.json: no null paper or colour). */
-const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}) }));
+const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}), ...(p.size ? { size: p.size } : {}) }));
 const newId = () => crypto.randomUUID().toLowerCase();
 /** The item id for a relay inbox entry, the same on every device (Library.inboxItemId). */
 export const inboxItemId = (entryId) => `inbox-${String(entryId).toLowerCase()}`;
@@ -638,7 +638,7 @@ export class Vault {
     const pages = [...item.pageList];
     const at = after !== null && pages.some((p) => p.id === after) ? pages.findIndex((p) => p.id === after) + 1 : pages.length;
     const like = pages[Math.max(0, Math.min(pages.length - 1, at - 1))];
-    const page = { id: newId().slice(0, 8), paper: like.paper, color: like.color };
+    const page = { id: newId().slice(0, 8), paper: like.paper, color: like.color, size: like.size ?? null };
     pages.splice(at, 0, page);
     this.setPages(sketch, pages);
     return page.id;
@@ -675,11 +675,23 @@ export class Vault {
     this.deleteElements(this.elements(sketch, "", page).map((e) => e.id));
   }
 
-  /** One page's paper or colour ("" colour = white). */
-  setPage(sketch, page, { paper = null, color = null } = {}) {
+  /** One page's paper, colour ("" = white) or size ([w, h]). */
+  setPage(sketch, page, { paper = null, color = null, size = null } = {}) {
     const item = this.item(sketch);
     if (!item) return;
-    this.setPages(sketch, item.pageList.map((p) => (p.id !== page ? p : { ...p, ...(paper ? { paper } : {}), ...(color !== null ? { color: color || null } : {}) })));
+    this.setPages(sketch, item.pageList.map((p) => (p.id !== page ? p
+      : { ...p, ...(paper ? { paper } : {}), ...(color !== null ? { color: color || null } : {}), ...(validSize(size) ? { size: validSize(size) } : {}) })));
+  }
+
+  /** Every page's paper, colour or size at once (the sketch's own `paper` and `pageSize` too). */
+  setAllPages(sketch, { paper = null, color = null, size = null } = {}) {
+    const item = this.item(sketch);
+    if (!item) return;
+    const fields = { pageList: pageJSON(item.pageList.map((p) => ({ ...p, ...(paper ? { paper } : {}), ...(color !== null ? { color: color || null } : {}),
+      ...(validSize(size) ? { size: validSize(size) } : {}) }))), pages: item.pageList.length };
+    if (paper) fields.paper = paper;
+    if (validSize(size)) fields.pageSize = validSize(size);
+    this.update(sketch, fields);
   }
 
   setSketchCanvas(sketch, infinite) { this.update(sketch, { canvas: infinite ? "infinite" : "pages" }); }

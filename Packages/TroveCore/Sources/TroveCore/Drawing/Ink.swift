@@ -105,19 +105,22 @@ public enum InkPoints {
     }
 }
 
-/// The paper a sketch page is printed with.
+/// The paper a sketch page is printed with (core/ink.js `PAPERS`).
 public enum InkPaper: String, Codable, CaseIterable, Sendable {
-    case blank, lined, narrow, grid, smallgrid, dotted, cornell, music
+    case blank, lined, narrow, wide, margin, grid, smallgrid, graph, dotted, smalldots, isometric
+    case cornell, todo, planner, storyboard, music, calligraphy
 
     /// Line spacing in page points (the default for every lined, squared and dotted paper).
     public static let spacing = 32.0
 
-    /// This paper's spacing: narrow ruled 24, small squares 16, music staves' lines 8.
+    /// This paper's spacing (core/ink.js `paperSpacing`).
     public var spacing: Double {
         switch self {
         case .narrow: 24
-        case .smallgrid: 16
-        case .music: 8
+        case .wide, .todo: 40
+        case .smallgrid, .smalldots: 16
+        case .graph, .music: 8
+        case .isometric: 24
         default: Self.spacing
         }
     }
@@ -127,12 +130,74 @@ public enum InkPaper: String, Codable, CaseIterable, Sendable {
         case .blank: "Blank"
         case .lined: "Lined"
         case .narrow: "Narrow lined"
+        case .wide: "Wide lined"
+        case .margin: "Lined with margin"
         case .grid: "Squared"
         case .smallgrid: "Small squares"
+        case .graph: "Graph paper"
         case .dotted: "Dotted"
+        case .smalldots: "Small dots"
+        case .isometric: "Isometric dots"
         case .cornell: "Cornell notes"
+        case .todo: "To-do list"
+        case .planner: "Week planner"
+        case .storyboard: "Storyboard"
         case .music: "Music"
+        case .calligraphy: "Handwriting guides"
         }
+    }
+
+    /// Papers grouped for pickers (core/ink.js `PAPER_GROUPS`).
+    public static let groups: [(title: String, papers: [InkPaper])] = [
+        ("Plain", [.blank]), ("Lines", [.lined, .narrow, .wide, .margin, .calligraphy]), ("Grids", [.grid, .smallgrid, .graph]),
+        ("Dots", [.dotted, .smalldots, .isometric]), ("Layouts", [.cornell, .todo, .planner, .storyboard, .music]),
+    ]
+}
+
+/// Named page sizes in page points, portrait (core/ink.js `PAGE_SIZES`): real sizes scaled so a page
+/// is about 768 points wide, so pens look the same on each. Landscape swaps them.
+public enum InkPageSize: String, CaseIterable, Sendable {
+    case tablet, a4, a5, letter, legal, square, wide, phone
+
+    public var size: (width: Double, height: Double) {
+        switch self {
+        case .tablet: (768, 1024)
+        case .a4: (768, 1086)
+        case .a5: (543, 768)
+        case .letter: (791, 1024)
+        case .legal: (791, 1303)
+        case .square: (768, 768)
+        case .wide: (576, 1024)
+        case .phone: (473, 1024)
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .tablet: "iPad"
+        case .a4: "A4"
+        case .a5: "A5"
+        case .letter: "US Letter"
+        case .legal: "US Legal"
+        case .square: "Square"
+        case .wide: "Widescreen 16:9"
+        case .phone: "Phone"
+        }
+    }
+
+    /// The named size and orientation of a size, if it is one.
+    public static func named(_ w: Double, _ h: Double) -> (size: InkPageSize, landscape: Bool)? {
+        for s in allCases {
+            let (a, b) = s.size
+            if w == a && h == b { return (s, false) }
+            if w == b && h == a { return (s, a != b) }
+        }
+        return nil
+    }
+
+    public func dimensions(landscape: Bool) -> [Double] {
+        let (a, b) = size
+        return landscape ? [b, a] : [a, b]
     }
 }
 
@@ -143,19 +208,30 @@ public struct InkPage: Equatable, Sendable, Identifiable {
     public var paper: InkPaper?
     /// "#rrggbb"; white when nil.
     public var color: String?
+    /// [width, height] in page points when the page has its own size.
+    public var size: [Double]?
 
-    public init(id: String, paper: InkPaper? = nil, color: String? = nil) { self.id = id; self.paper = paper; self.color = color }
+    public init(id: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) {
+        self.id = id; self.paper = paper; self.color = color; self.size = Self.valid(size)
+    }
 
     init?(json: JSONValue) {
         guard let o = json.object, let id = o["id"]?.string, !id.isEmpty else { return nil }
-        self.init(id: id, paper: o["paper"]?.string.flatMap(InkPaper.init(rawValue:)), color: o["color"]?.string)
+        self.init(id: id, paper: o["paper"]?.string.flatMap(InkPaper.init(rawValue:)), color: o["color"]?.string, size: o["size"]?.array?.compactMap(\.number))
     }
 
     var json: JSONValue {
         var o: [String: JSONValue] = ["id": .string(id)]
         if let paper { o["paper"] = .string(paper.rawValue) }
         if let color { o["color"] = .string(color) }
+        if let size { o["size"] = .array(size.map(JSONValue.number)) }
         return .object(o)
+    }
+
+    /// [w, h] if it's a usable page size (36 to 4000 points a side), like core/ink.js `validSize`.
+    public static func valid(_ size: [Double]?) -> [Double]? {
+        guard let size, size.count == 2, size.allSatisfy({ $0 >= 36 && $0 <= 4000 }) else { return nil }
+        return size
     }
 
     /// A stroke's or element's `page` field as a page id: numbers are the old page indexes.
@@ -166,7 +242,9 @@ public struct InkPage: Equatable, Sendable, Identifiable {
     }
 
     /// Colours offered for pages.
-    public static let colors = ["#ffffff", "#fbf6e9", "#fff7c2", "#eef5ec", "#eaf1fb", "#f2f2f2", "#26282c"]
+    public static let colors = ["#ffffff", "#fbf6e9", "#fff7c2", "#fde8ec", "#eef5ec", "#eaf1fb", "#f2f2f2", "#3a3d42", "#26282c", "#121212"]
+    public static let colorTitles = ["#ffffff": "White", "#fbf6e9": "Cream", "#fff7c2": "Yellow", "#fde8ec": "Pink", "#eef5ec": "Green", "#eaf1fb": "Blue",
+                                     "#f2f2f2": "Grey", "#3a3d42": "Slate", "#26282c": "Dark", "#121212": "Black"]
 
     /// Paper lines show up on dark pages too.
     public static func isDark(_ color: String?) -> Bool {
@@ -199,6 +277,11 @@ extension Item {
     public var sketchPageSize: (width: Double, height: Double) {
         let a = record[SketchField.pageSize]?.array?.compactMap(\.number) ?? []
         return a.count == 2 && a[0] > 0 && a[1] > 0 ? (a[0], a[1]) : (768, 1024)
+    }
+    /// A page's size: its own, else the sketch's.
+    public func pageSize(of page: InkPage) -> (width: Double, height: Double) {
+        if let s = page.size { return (s[0], s[1]) }
+        return sketchPageSize
     }
 }
 

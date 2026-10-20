@@ -98,7 +98,7 @@ export function sketchPages(item) {
     const zero = item.pageList.find((p) => p.id === "0");
     return [{ key: "0", width, height, paper: zero?.paper ?? item.paper, color: zero?.color ?? null, infinite: true }];
   }
-  return item.pageList.map((p) => ({ key: p.id, width, height, paper: p.paper ?? item.paper, color: p.color }));
+  return item.pageList.map((p) => ({ key: p.id, width: p.size?.[0] ?? width, height: p.size?.[1] ?? height, paper: p.paper ?? item.paper, color: p.color }));
 }
 
 /** A text box's height as drawn: its wrapped lines. */

@@ -5,13 +5,42 @@ import { b64uDecode, b64uEncode } from "./bytes.js";
 
 export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", color: "color", width: "width", points: "points", createdAt: "createdAt", device: "device", shape: "shape" };
 export const TOOLS = ["pen", "pencil", "marker", "highlighter", "fountain", "brush"];
-export const PAPERS = ["blank", "lined", "narrow", "grid", "smallgrid", "dotted", "cornell", "music"];
-export const PAPER_TITLES = { blank: "Blank", lined: "Lined", narrow: "Narrow lined", grid: "Squared", smallgrid: "Small squares", dotted: "Dotted", cornell: "Cornell notes", music: "Music" };
+export const PAPERS = ["blank", "lined", "narrow", "wide", "margin", "grid", "smallgrid", "graph", "dotted", "smalldots", "isometric",
+  "cornell", "todo", "planner", "storyboard", "music", "calligraphy"];
+export const PAPER_TITLES = {
+  blank: "Blank", lined: "Lined", narrow: "Narrow lined", wide: "Wide lined", margin: "Lined with margin", grid: "Squared",
+  smallgrid: "Small squares", graph: "Graph paper", dotted: "Dotted", smalldots: "Small dots", isometric: "Isometric dots",
+  cornell: "Cornell notes", todo: "To-do list", planner: "Week planner", storyboard: "Storyboard", music: "Music", calligraphy: "Handwriting guides",
+};
+/** Papers grouped for pickers. */
+export const PAPER_GROUPS = [
+  ["Plain", ["blank"]], ["Lines", ["lined", "narrow", "wide", "margin", "calligraphy"]], ["Grids", ["grid", "smallgrid", "graph"]],
+  ["Dots", ["dotted", "smalldots", "isometric"]], ["Layouts", ["cornell", "todo", "planner", "storyboard", "music"]],
+];
 /** Colours offered for pages (InkPage.colors). */
-export const PAGE_COLORS = ["#ffffff", "#fbf6e9", "#fff7c2", "#eef5ec", "#eaf1fb", "#f2f2f2", "#26282c"];
+export const PAGE_COLORS = ["#ffffff", "#fbf6e9", "#fff7c2", "#fde8ec", "#eef5ec", "#eaf1fb", "#f2f2f2", "#3a3d42", "#26282c", "#121212"];
+export const PAGE_COLOR_TITLES = { "#ffffff": "White", "#fbf6e9": "Cream", "#fff7c2": "Yellow", "#fde8ec": "Pink", "#eef5ec": "Green", "#eaf1fb": "Blue",
+  "#f2f2f2": "Grey", "#3a3d42": "Slate", "#26282c": "Dark", "#121212": "Black" };
 /** Line spacing of lined, squared and dotted paper, in page points. */
 export const PAPER_SPACING = 32;
-export const paperSpacing = (paper) => ({ narrow: 24, smallgrid: 16, music: 8 })[paper] ?? PAPER_SPACING;
+export const paperSpacing = (paper) => ({ narrow: 24, wide: 40, smallgrid: 16, graph: 8, smalldots: 16, isometric: 24, todo: 40, music: 8 })[paper] ?? PAPER_SPACING;
+/**
+ * Page sizes, in page points (real sizes scaled so a page is about as wide as the first sketches,
+ * 768 points, and pens look the same on each). Portrait; landscape swaps them.
+ */
+export const PAGE_SIZES = {
+  tablet: { title: "iPad", size: [768, 1024] }, a4: { title: "A4", size: [768, 1086] }, a5: { title: "A5", size: [543, 768] },
+  letter: { title: "US Letter", size: [791, 1024] }, legal: { title: "US Legal", size: [791, 1303] }, square: { title: "Square", size: [768, 768] },
+  wide: { title: "Widescreen 16:9", size: [576, 1024] }, phone: { title: "Phone", size: [473, 1024] },
+};
+/** The named size and orientation of a page size, or null for a custom one. */
+export function pageSizeName(size) {
+  for (const [name, { size: [a, b] }] of Object.entries(PAGE_SIZES)) {
+    if (size[0] === a && size[1] === b) return { name, landscape: false };
+    if (size[0] === b && size[1] === a) return { name, landscape: a !== b };
+  }
+  return null;
+}
 export const SKETCH_SIZE = [768, 1024];
 
 export const toolOpacity = (tool) => ({ pencil: 0.85, highlighter: 0.35 })[tool] ?? 1;
@@ -33,11 +62,14 @@ export const pageKey = (v) => (typeof v === "string" ? v : typeof v === "number"
 /** A sketch's pages in order: `pageList`, or "0", "1", … for sketches made before page ids. */
 export function pageListOf(fields) {
   const list = Array.isArray(fields.pageList) ? fields.pageList.filter((p) => p && typeof p.id === "string" && p.id)
-    .map((p) => ({ id: p.id, paper: PAPERS.includes(p.paper) ? p.paper : null, color: typeof p.color === "string" ? p.color : null })) : [];
+    .map((p) => ({ id: p.id, paper: PAPERS.includes(p.paper) ? p.paper : null, color: typeof p.color === "string" ? p.color : null, size: validSize(p.size) })) : [];
   if (list.length) return list;
   const n = Math.max(1, typeof fields.pages === "number" ? Math.floor(fields.pages) : 1);
-  return Array.from({ length: n }, (_, i) => ({ id: String(i), paper: null, color: null }));
+  return Array.from({ length: n }, (_, i) => ({ id: String(i), paper: null, color: null, size: null }));
 }
+
+/** [w, h] if it's a usable page size (36 to 4000 points a side). */
+export const validSize = (v) => (Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number" && n >= 36 && n <= 4000) ? [v[0], v[1]] : null);
 
 export const isDarkColor = (hex) => {
   if (!hex) return false;
@@ -143,6 +175,110 @@ function smoothPath(ctx, pts) {
 }
 
 /**
+ * The lines and dots of a paper on a page of `w` × `h` points, as shapes (InkPaperShapes.swift makes
+ * the same; both check Fixtures/ink-papers.json): {k: "h", y, x0, x1, r}, {k: "v", x, y0, y1, r},
+ * {k: "dot", x, y, d} and {k: "box", x, y, w, h, r}. `r` is the role: "line", "bold" or "accent".
+ * `area` ({x, y, w, h}) limits them to what's on screen, for the endless canvas; there the papers
+ * that lay out a page (Cornell, planner, storyboard) are plain lined.
+ */
+export function paperShapes(paper, w, h, area = null) {
+  const out = [];
+  const endless = Boolean(area);
+  const x0 = area ? area.x : 0, y0 = area ? area.y : 0, x1 = area ? area.x + area.w : w, y1 = area ? area.y + area.h : h;
+  if (endless && (paper === "cornell" || paper === "planner" || paper === "storyboard")) paper = "lined";
+  const s = paperSpacing(paper);
+  const first = (start, step, offset = 0) => Math.ceil((start - offset) / step) * step + offset;
+  const hline = (y, r = "line", a = x0, b = x1) => out.push({ k: "h", y, x0: a, x1: b, r });
+  const vline = (x, r = "line", a = y0, b = y1) => out.push({ k: "v", x, y0: a, y1: b, r });
+  const ruled = (step, top = step * 3, bottom = y1) => { for (let y = endless ? first(y0, step) : top; y < bottom; y += step) hline(y); };
+  switch (paper) {
+    case "lined": case "narrow": case "wide": ruled(s); break;
+    case "margin":
+      ruled(s);
+      if (!endless) hline(s * 2, "accent");
+      if (72 >= x0 && 72 <= x1) vline(72, "accent");
+      break;
+    case "grid": case "smallgrid": case "graph":
+      for (let y = first(y0, s); y < y1; y += s) if (y !== 0 || endless) hline(y, paper === "graph" && Math.round(y / s) % 5 === 0 ? "bold" : "line");
+      for (let x = first(x0, s); x < x1; x += s) if (x !== 0 || endless) vline(x, paper === "graph" && Math.round(x / s) % 5 === 0 ? "bold" : "line");
+      break;
+    case "dotted": case "smalldots":
+      for (let y = first(y0, s); y < y1; y += s) for (let x = first(x0, s); x < x1; x += s) {
+        if (!endless && (x === 0 || y === 0)) continue;
+        out.push({ k: "dot", x, y, d: paper === "smalldots" ? 1.1 : 1.3 });
+      }
+      break;
+    case "isometric": {
+      // A triangular lattice: rows s·√3/2 apart, every other row half a step along.
+      const row = s * Math.sqrt(3) / 2;
+      for (let i = Math.ceil(y0 / row); i * row < y1; i++) {
+        const y = i * row, shift = Math.abs(i) % 2 ? s / 2 : 0;
+        if (!endless && y === 0) continue;
+        for (let x = first(x0, s, shift); x < x1; x += s) if (endless || x > 0) out.push({ k: "dot", x, y, d: 1.2 });
+      }
+      break;
+    }
+    case "cornell": {
+      const bottom = h * 0.8, cue = w * 0.28;
+      for (let y = PAPER_SPACING * 3; y < bottom; y += PAPER_SPACING) hline(y);
+      vline(cue, "accent", PAPER_SPACING * 2, bottom);
+      hline(bottom, "accent");
+      hline(PAPER_SPACING * 2, "accent");
+      break;
+    }
+    case "todo":
+      // A box to tick at the start of every line.
+      for (let y = endless ? first(y0, s) : s * 2; y < y1; y += s) {
+        hline(y);
+        if (40 + 16 >= x0 && 40 <= x1) out.push({ k: "box", x: 40, y: y - 24, w: 16, h: 16, r: "bold" });
+      }
+      break;
+    case "planner": {
+      // A header, then the seven days as bands, each lined.
+      const top = 96, band = (h - top - 24) / 7;
+      hline(top - 16, "bold");
+      for (let d = 0; d < 7; d++) {
+        const y = top + d * band;
+        hline(y, "accent");
+        for (let l = y + 40; l < y + band - 8; l += PAPER_SPACING) hline(l, "line", 120, x1);
+        vline(108, "line", y, y + band);
+      }
+      hline(top + 7 * band, "accent");
+      break;
+    }
+    case "storyboard": {
+      // Two columns of three 4:3 frames, each with two lines for notes.
+      const pad = 40, gap = 32, fw = (w - pad * 2 - gap) / 2, fh = fw * 3 / 4, block = (h - pad * 2) / 3;
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 2; c++) {
+        const x = pad + c * (fw + gap), y = pad + r * block;
+        out.push({ k: "box", x, y, w: fw, h: fh, r: "bold" });
+        for (const dy of [fh + 28, fh + 56]) if (y + dy < pad + (r + 1) * block) hline(y + dy, "line", x, x + fw);
+      }
+      break;
+    }
+    case "music":
+      // Five-line staves, 8 points apart, one every 80 points.
+      for (let top = first(y0, 80, 40); top < y1; top += 80) for (let k = 0; k < 5; k++) hline(top + k * s);
+      break;
+    case "calligraphy":
+      // Groups of four guides: ascender, x-height (light), baseline (bold), descender; 96 points apart.
+      for (let top = endless ? first(y0, 96) : 64; top < y1; top += 96) {
+        hline(top); hline(top + 24); hline(top + 48, "bold"); hline(top + 68);
+      }
+      break;
+    default: break;
+  }
+  return out;
+}
+
+/** The colours paper lines are drawn in, on a light or dark page. */
+export function paperInk(dark) {
+  return dark
+    ? { line: "rgba(200, 215, 240, 0.22)", bold: "rgba(200, 215, 240, 0.4)", accent: "rgba(240, 150, 150, 0.5)", dot: "rgba(210, 220, 235, 0.4)" }
+    : { line: "rgba(90, 130, 200, 0.28)", bold: "rgba(90, 130, 200, 0.5)", accent: "rgba(220, 90, 90, 0.55)", dot: "rgba(90, 110, 140, 0.45)" };
+}
+
+/**
  * Paper on a page of `w` × `h` points, in the page's colour (white by default). `area` limits the
  * drawing to what's on screen, for the endless canvas: {x, y, w, h} in page points.
  */
@@ -151,35 +287,25 @@ export function drawPaper(ctx, paper, w, h, color = null, area = null) {
   ctx.save();
   ctx.fillStyle = color || "#fff";
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-  const dark = isDarkColor(color);
-  const s = paperSpacing(paper);
-  ctx.strokeStyle = dark ? "rgba(200, 215, 240, 0.22)" : "rgba(90, 130, 200, 0.28)";
-  ctx.fillStyle = dark ? "rgba(210, 220, 235, 0.4)" : "rgba(90, 110, 140, 0.45)";
+  const ink = paperInk(isDarkColor(color));
   ctx.lineWidth = 1;
-  const first = (start, step, offset = 0) => Math.ceil((start - offset) / step) * step + offset;
-  const hline = (y) => { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); };
-  const vline = (x, top = y0, bottom = y1) => { ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); };
-  if (paper === "lined" || paper === "narrow") for (let y = Math.max(first(y0, s), area ? -Infinity : s * 3); y < y1; y += s) if (y > 0 || area) hline(y);
-  if (paper === "grid" || paper === "smallgrid") {
-    for (let y = first(y0, s); y < y1; y += s) if (y !== 0 || area) hline(y);
-    for (let x = first(x0, s); x < x1; x += s) if (x !== 0 || area) vline(x);
+  for (const role of ["line", "bold", "accent"]) {
+    ctx.strokeStyle = ink[role];
+    ctx.beginPath();
+    let any = false;
+    for (const sh of paperShapes(paper, w, h, area)) {
+      if (sh.r !== role) continue;
+      any = true;
+      if (sh.k === "h") { ctx.moveTo(sh.x0, sh.y); ctx.lineTo(sh.x1, sh.y); }
+      else if (sh.k === "v") { ctx.moveTo(sh.x, sh.y0); ctx.lineTo(sh.x, sh.y1); }
+      else if (sh.k === "box") ctx.rect(sh.x, sh.y, sh.w, sh.h);
+    }
+    if (any) ctx.stroke();
   }
-  if (paper === "dotted") for (let y = first(y0, s); y < y1; y += s) for (let x = first(x0, s); x < x1; x += s) {
-    if (!area && (x === 0 || y === 0)) continue;
-    ctx.beginPath(); ctx.arc(x, y, 1.3, 0, Math.PI * 2); ctx.fill();
-  }
-  if (paper === "cornell") {
-    // Lines, a cue column on the left and a summary box at the bottom.
-    const bottom = h * 0.8, cue = w * 0.28;
-    for (let y = PAPER_SPACING * 3; y < bottom; y += PAPER_SPACING) hline(y);
-    ctx.strokeStyle = dark ? "rgba(240, 150, 150, 0.5)" : "rgba(220, 90, 90, 0.55)";
-    vline(cue, PAPER_SPACING * 2, bottom);
-    hline(bottom);
-    hline(PAPER_SPACING * 2);
-  }
-  if (paper === "music") {
-    // Five-line staves, 8 points apart, one every 80 points.
-    for (let top = first(y0, 80, 40); top < y1; top += 80) for (let k = 0; k < 5; k++) hline(top + k * s);
+  ctx.fillStyle = ink.dot;
+  for (const sh of paperShapes(paper, w, h, area)) {
+    if (sh.k !== "dot") continue;
+    ctx.beginPath(); ctx.arc(sh.x, sh.y, sh.d, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
