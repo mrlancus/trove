@@ -849,8 +849,8 @@ export class Vault {
 
   /** Every copy and paste event, or one clip's, oldest first. */
   clipEvents(clip = null) {
-    return this.store.visible.filter((r) => r.kind === "clipEvent").map(clipEventView)
-      .filter((e) => e.clip && (!clip || e.clip === clip)).sort((a, b) => a.at - b.at);
+    return this.store.visible.filter((r) => r.kind === "clipEvent").map((r) => ({ ...clipEventView(r), hlc: r.createdHLC }))
+      .filter((e) => e.clip && (!clip || e.clip === clip)).sort((a, b) => a.at - b.at || (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
   }
 
   /**

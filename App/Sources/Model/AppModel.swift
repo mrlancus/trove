@@ -242,10 +242,11 @@ final class AppModel {
         Task { if let library { inkedLayers = await library.inkedLayers() } }
     }
 
-    /// A new sketch, opened in the editor.
-    func newSketch() async {
+    /// A new sketch, opened in the editor (filed in `folder` when given).
+    func newSketch(in folder: String? = nil) async {
         guard let library else { return }
         let id = await library.addSketch()
+        if let folder { await library.move(id, to: folder) }
         await reload()
         selectedItemID = id
         inkTarget = InkTarget(itemId: id, layer: "", title: "Sketch")
@@ -315,6 +316,20 @@ final class AppModel {
     }
 
     func folderPath(_ id: String?) -> [Folder] { id.map { Folder.path(of: $0, in: folders) } ?? [] }
+
+    /// The top "Sketches" folder new sketches are filed in.
+    var sketchesFolder: Folder? { folders.first { $0.parent == nil && $0.name == "Sketches" } }
+
+    /// Whether a folder is inside Sketches (so it offers "New sketch here").
+    func isSketchFolder(_ id: String) -> Bool { sketchesFolder.map { folderPath(id).first?.id == $0.id } ?? false }
+
+    /// A folder inside Sketches (making Sketches itself if there isn't one yet).
+    @discardableResult
+    func createSketchFolder(_ name: String) async -> String? {
+        let top: String?
+        if let existing = sketchesFolder { top = existing.id } else { top = await createFolder("Sketches") }
+        return await createFolder(name, in: top)
+    }
 
     @discardableResult
     func createFolder(_ name: String, in parent: String? = nil) async -> String? {

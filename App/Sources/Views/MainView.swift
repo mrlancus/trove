@@ -447,7 +447,14 @@ struct LibraryView: View {
     }
 
     @ViewBuilder private var header: some View {
-        if case .folder(let id) = model.selection, model.searchResults == nil { FolderHeader(folderId: id) }
+        if case .folder(let id) = model.selection, model.searchResults == nil {
+            FolderHeader(folderId: id)
+            if model.isSketchFolder(id), !model.selecting {
+                Button { Task { await model.newSketch(in: id) } } label: { Label("New sketch here", systemImage: "pencil.tip.crop.circle.badge.plus") }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 8)
+            }
+        }
         if case .smart(.sketches) = model.selection, model.searchResults == nil, !model.selecting { SketchesHeader() }
         if case .unfiled = model.selection, !model.visibleItems.isEmpty, !model.selecting {
             Button { Task { await model.tidyUp() } } label: { Label("Tidy up: file everything", systemImage: "wand.and.stars") }
@@ -480,7 +487,7 @@ struct LibraryView: View {
                     }
                 }
                 .padding(16)
-                .animation(.spring(duration: 0.35), value: items.map(\.id))
+                .animation(.spring(duration: 0.35), value: items.count)
                 if !model.clipResults.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("From your clipboard").font(.headline).padding(.bottom, 4)
@@ -526,7 +533,7 @@ struct LibraryView: View {
             }
         }
         .listStyle(.plain)
-        .animation(.spring(duration: 0.35), value: items.map(\.id))
+        .animation(.spring(duration: 0.35), value: items.count)
     }
 
     /// Opens the item, or in select mode adds it to (or takes it out of) the selection. On the Mac,
@@ -863,25 +870,65 @@ struct FolderHeader: View {
     }
 }
 
-/// The top of Sketches: a big way in to drawing.
+/// The top of Sketches: a big way in to drawing, and its folders (drop sketches on them).
 struct SketchesHeader: View {
     @Environment(AppModel.self) private var model
+    @State private var naming = false
+    @State private var name = ""
 
     var body: some View {
-        Button { Task { await model.newSketch() } } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "pencil.tip.crop.circle.badge.plus").font(.system(size: 34)).foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("New sketch").font(.headline)
-                    Text("Pens, highlighter, shapes, text and pictures, on pages or an endless canvas.")
-                        .font(.subheadline).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            Button { Task { await model.newSketch() } } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "pencil.tip.crop.circle.badge.plus").font(.system(size: 34)).foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("New sketch").font(.headline)
+                        Text("Pens, highlighter, shapes, text and pictures, on pages or an endless canvas.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card(cornerRadius: 16)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .card(cornerRadius: 16)
+            .buttonStyle(.plain)
+            let top = model.sketchesFolder
+            let folders = model.folders.filter { top != nil && $0.parent == top?.id }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                ForEach(folders) { folder in
+                    Button { model.selection = .folder(folder.id) } label: {
+                        HStack {
+                            Image(systemName: "folder.fill").foregroundStyle(FolderStyle.color(for: top?.id))
+                            Text(folder.name).lineLimit(1)
+                            Spacer()
+                            Text("\(model.folderCount(folder.id))").foregroundStyle(.secondary).font(.caption)
+                        }
+                        .padding(12)
+                        .card(cornerRadius: 12)
+                    }
+                    .buttonStyle(.plain)
+                    .dropDestination(for: String.self) { ids, _ in
+                        Task { for id in ids where model.items.contains(where: { $0.id == id }) { await model.move(id, to: folder.id) } }
+                        return true
+                    }
+                }
+                Button { name = ""; naming = true } label: {
+                    HStack {
+                        Image(systemName: "folder.badge.plus")
+                        Text("New folder").lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])).foregroundStyle(.secondary))
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
+        .alert("New folder in Sketches", isPresented: $naming) {
+            TextField("Name", text: $name)
+            Button("Create") { let n = name; Task { if let id = await model.createSketchFolder(n) { model.selection = .folder(id) } } }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 }

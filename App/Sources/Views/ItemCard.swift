@@ -56,12 +56,15 @@ struct ItemCard: View {
         return "\(place) · \(item.createdAt.relative)"
     }
 
+    /// At most a few hundred characters: a card shows three lines, and laying out a whole long note
+    /// for each card is what made scrolling stutter.
     static func snippet(_ item: Item) -> String? {
-        if item.kind == .highlight { return item.body.replacingOccurrences(of: "> ", with: "") }
-        if let s = item.summary, !s.isEmpty { return s }
-        let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        func cut(_ s: String) -> String { s.count > 400 ? String(s.prefix(400)) : s }
+        if item.kind == .highlight { return cut(item.body).replacingOccurrences(of: "> ", with: "") }
+        if let s = item.summary, !s.isEmpty { return cut(s) }
+        let body = cut(item.body).trimmingCharacters(in: .whitespacesAndNewlines)
         if !body.isEmpty { return body }
-        if let ocr = item.ocrText, !ocr.isEmpty { return ocr }
+        if let ocr = item.ocrText, !ocr.isEmpty { return cut(ocr) }
         return nil
     }
 

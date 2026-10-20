@@ -538,6 +538,11 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
     shown = items.filter((i) => inside.has(i.folder));
     title = folderHeading(id, folders, items);
     renderFolderTiles(id, folders, items);
+    if (inSketchFolder(id, folders)) {
+      title = h("div", { class: "heading-row" }, typeof title === "string" ? h("span", { text: title }) : title,
+        h("span", { class: "heading-actions" },
+          h("button", { type: "button", class: "primary", onclick: () => newSketchIn(id) }, icon("pencil"), " New sketch here")));
+    }
   } else if (sel.startsWith("s:")) {
     const source = sel.slice(2);
     // Everything that came from here, including things that were already in Trove from elsewhere.
@@ -553,7 +558,10 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
     title = smart.title;
     if (smart.id === "sketches") {
       title = h("div", { class: "heading-row" }, h("span", { text: "Sketches" }),
-        h("button", { type: "button", class: "primary", onclick: () => $("#new-sketch").click() }, icon("pencil"), " New sketch"));
+        h("span", { class: "heading-actions" },
+          h("button", { type: "button", class: "secondary", onclick: () => newSketchFolder() }, icon("folder"), " New folder"),
+          h("button", { type: "button", class: "primary", onclick: () => $("#new-sketch").click() }, icon("pencil"), " New sketch")));
+      renderSketchFolders(folders, items);
     }
   }
   if (state.query.trim()) {
@@ -760,6 +768,68 @@ function renderFolderTiles(id, folders, items) {
     folderDropTarget(tile, f.id);
     return tile;
   }));
+}
+
+// ---------- sketches in folders ----------
+
+/** The top "Sketches" folder (where new sketches are filed), if there is one. */
+const sketchesFolder = (folders) => folders.find((f) => !f.parent && f.name === "Sketches") ?? null;
+const inSketchFolder = (id, folders) => folderPathOf(id, folders)[0]?.id === sketchesFolder(folders)?.id && Boolean(sketchesFolder(folders));
+
+/** In Sketches: its folders as tiles, plus other folders that hold sketches. */
+function renderSketchFolders(folders, items) {
+  const top = sketchesFolder(folders);
+  const holding = new Set(items.filter((i) => i.kind === "sketch" && i.folder && i.folder !== top?.id).map((i) => i.folder));
+  const counts = folderCounts(folders, items);
+  const shown = folders.filter((f) => (top && f.parent === top.id) || holding.has(f.id))
+    .filter((f, i, all) => all.findIndex((x) => x.id === f.id) === i).sort((a, b) => a.name.localeCompare(b.name));
+  const el = $("#folder-tiles");
+  el.hidden = false;
+  el.replaceChildren(...shown.map((f) => {
+    const tile = h("button", { type: "button", class: "folder-tile", onclick: () => select(`f:${f.id}`) },
+      h("span", { class: "folder-icon", style: `--tint:${folderColor(folderPathOf(f.id, folders)[0]?.id, folders)}`, "aria-hidden": "true" }),
+      h("span", { class: "folder-name", text: f.name }), h("span", { class: "count", text: counts.get(f.id) ?? 0 }));
+    folderDropTarget(tile, f.id);
+    return tile;
+  }), h("button", { type: "button", class: "folder-tile new", onclick: () => newSketchFolder() },
+    h("span", { class: "folder-icon", "aria-hidden": "true" }),
+    h("span", { class: "folder-new" }, h("span", { class: "folder-name", text: "New folder" }), h("span", { class: "hint", text: "Drag sketches onto folders" }))));
+}
+
+function newSketchFolder() {
+  const top = state.vault.ensureFolder(["Sketches"]);
+  newFolder(top);
+}
+
+/** A new sketch filed in this folder, opened straight away. */
+function newSketchIn(folderId) {
+  const vault = state.vault;
+  const id = vault.addSketch();
+  vault.moveItem(id, folderId);
+  syncSoon();
+  openSketch(id, 0, () => openItem(id));
+}
+
+/** Connect a sketch to other things, from inside the editor. */
+function connectDialog(item) {
+  const close = () => backdrop.remove();
+  const list = h("div", { class: "link-chips" });
+  const refresh = () => {
+    const now = state.vault.item(item.id);
+    list.replaceChildren(...(now?.links ?? []).map((id) => state.vault.item(id)).filter(Boolean).map((other) =>
+      h("span", { class: "link-chip" }, h("span", { text: other.displayTitle }),
+        h("button", { type: "button", class: "chip-x", "aria-label": `Disconnect ${other.displayTitle}`, onclick: () => { state.vault.disconnect(item.id, other.id); syncSoon(); refresh(); } }, icon("close")))));
+  };
+  const unsubscribe = state.vault.onChange(refresh);
+  const backdrop = h("div", { class: "dialog-backdrop ink-connect", onclick: (e) => { if (e.target === backdrop) { unsubscribe(); close(); } } },
+    h("div", { class: "dialog connect-dialog", role: "dialog", "aria-label": "Connections" },
+      h("h2", { text: "Connect this sketch" }),
+      h("p", { class: "hint", text: "Link it to notes, files, other sketches or anything else. Connections show on both, and in the Connections graph." }),
+      list, connectPicker(item),
+      h("div", { class: "row" }, h("button", { type: "button", class: "primary", onclick: () => { unsubscribe(); close(); } }, "Done"))));
+  document.body.append(backdrop);
+  refresh();
+  backdrop.querySelector("input")?.focus();
 }
 
 function newFolder(parent = null) {
@@ -1542,6 +1612,7 @@ function openSketch(id, page = 0, after = null) {
   if (!item) return;
   openInkEditor({
     vault, itemId: id, title: item.displayTitle, sketch: true, startPage: page,
+    connect: () => connectDialog(vault.item(id)),
     changed: () => syncSoon(4000),
     onClose: async (edited) => {
       if (edited) {

@@ -587,3 +587,18 @@ body.ink-open { overflow: hidden; }
 .import-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
 .import-steps code { font-size: 12px; overflow-wrap: anywhere; }
 .import-steps kbd { font: 600 11px system-ui; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+.ink-connect { z-index: 1100; }
+.connect-dialog { width: min(460px, 100%); display: grid; gap: 12px; }
+.connect-dialog h2 { margin: 0; }
+.folder-tile.new { border-style: dashed; }
+.folder-tile.new .hint { grid-column: 1 / -1; font-size: 11px; }
+
+.heading-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.heading-row button { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.folder-tile .folder-new { flex: 1; min-width: 0; display: grid; }
+.folder-tile .folder-new .hint { font-size: 11px; }
+
+/* Long lists scroll smoothly: clips off screen aren't laid out or painted (cards sit in balanced
+   columns, which need their real heights, so they keep being laid out). */
+#grid > .clip:not(.open) { content-visibility: auto; contain-intrinsic-size: auto 84px; }
