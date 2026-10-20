@@ -83,10 +83,17 @@ public struct Item: Identifiable, Hashable, Sendable {
     public var category: ItemCategory { ItemCategory(rawValue: record[Field.category]?.string ?? "") ?? .other }
     public var source: ItemSource { ItemSource(rawValue: record[Field.source]?.string ?? "") ?? .app }
     /// Every source this arrived from: where it was first saved, plus later duplicates (PROTOCOL.md §9).
+    /// A GoodNotes notebook counts as GoodNotes however it got here (a zip, a drop, the inbox).
     public var sources: [ItemSource] {
         var out = [source]
         for s in record[Field.alsoFrom]?.stringArray ?? [] { if let s = ItemSource(rawValue: s), !out.contains(s) { out.append(s) } }
+        if !out.contains(.goodnotes), isGoodNotes { out.append(.goodnotes) }
         return out
+    }
+    /// Holds a `.goodnotes` notebook (now or in an earlier version).
+    public var isGoodNotes: Bool {
+        attachments.contains { $0.name.lowercased().hasSuffix(".goodnotes") }
+            || fileVersions.contains { $0.attachment.name.lowercased().hasSuffix(".goodnotes") }
     }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
     public var collections: [String] { record[Field.collections]?.stringArray ?? [] }

@@ -151,6 +151,7 @@ import Testing
         #expect(clip.displayTitle == "Ring Anna" && clip.tags == ["work", "finance"] && clip.note == "before Friday")
         #expect(clip.matches("tag:work anna") && clip.matches("app:chrome") && clip.matches("friday") && clip.matches("story"))
         #expect(!clip.matches("is:pinned") && !clip.matches("tag:home"))
+        #expect(clip.matches("#work Fríday") && !clip.matches("#home") && ClipQuery("#work").tags == ["work"])
 
         box.advance(5)
         await lib.editClip(id, text: "Email anna@example.org about #budget")
@@ -201,4 +202,22 @@ final class ClockBox: @unchecked Sendable {
     init(_ date: Date) { self.date = date }
     var now: Date { lock.withLock { date } }
     func advance(_ seconds: TimeInterval) { lock.withLock { date.addTimeInterval(seconds) } }
+}
+
+@Suite struct TagColourTests {
+    @Test func customTagsSyncTheirColoursAndDeletingCleansUp() async throws {
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()))
+        let id = try #require(await lib.addClip(text: "Invoice 42", sourceApp: nil))
+        #expect(await lib.setTagColor(" Work Stuff ", .blue) == "work-stuff")
+        await lib.setTagColor("home", .green)
+        await lib.setTagColor("#Home", .pink)                        // same tag, new colour
+        #expect(await lib.customTags() == [CustomTag(name: "home", color: .pink), CustomTag(name: "work-stuff", color: .blue)])
+        await lib.toggleClipTag(id, "work-stuff")
+        #expect(try #require(await lib.clip(id)).tags.contains("work-stuff"))
+        #expect(try #require(await lib.clip(id)).matches("#work-stuff invoice"))
+        await lib.deleteTag("work-stuff")
+        #expect(await lib.customTags().map(\.name) == ["home"])
+        #expect(try #require(await lib.clip(id)).tags.contains("work-stuff") == false)
+        #expect(await lib.setTagColor("  ", .red) == nil)
+    }
 }

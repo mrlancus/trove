@@ -94,6 +94,42 @@ extension Library {
         await engine.set(["autoSave": JSONValue(kinds.map(\.rawValue).sorted())], record: Self.clipSettingsId, kind: "setting")
     }
 
+    // MARK: Tags with colours (PROTOCOL.md §8)
+
+    public static let tagSettingsId = "settings.tags"
+
+    /// Your own tags: each has a colour and shows as a section to filter by (clipboard and library).
+    public func customTags() async -> [CustomTag] {
+        guard let r = await engine.record(Self.tagSettingsId), !r.isDeleted else { return [] }
+        return CustomTag.list(from: r.fields)
+    }
+
+    /// Makes a tag (or changes its colour). Returns the cleaned name, nil if it was empty.
+    @discardableResult
+    public func setTagColor(_ name: String, _ color: TagColor) async -> String? {
+        guard let tag = Self.cleanTags([name.split(whereSeparator: \.isWhitespace).joined(separator: "-")]).first, !tag.hasPrefix("_") else { return nil }
+        await engine.set([tag: .string(color.rawValue)], record: Self.tagSettingsId, kind: "setting")
+        return tag
+    }
+
+    /// Removes a tag: its colour, and the tag from every clip and item that has it.
+    public func deleteTag(_ name: String) async {
+        guard let tag = Self.cleanTags([name]).first, !tag.hasPrefix("_") else { return }
+        await engine.set([tag: .null], record: Self.tagSettingsId, kind: "setting")
+        for clip in await clips() where clip.tags.contains(tag) {
+            await setClipTags(clip.id, clip.tags.filter { $0 != tag })
+        }
+        for item in await items() where item.tags.contains(where: { $0.lowercased() == tag }) {
+            await update(item.id, [Field.tags: JSONValue(item.tags.filter { $0.lowercased() != tag })])
+        }
+    }
+
+    /// Adds or removes one tag on a clip.
+    public func toggleClipTag(_ id: String, _ tag: String) async {
+        guard let clip = await clip(id), let tag = Self.cleanTags([tag]).first else { return }
+        await setClipTags(id, clip.tags.contains(tag) ? clip.tags.filter { $0 != tag } : clip.tags + [tag])
+    }
+
     /// Pasting from history moves the clip to the top.
     public func markClipUsed(_ id: String) async {
         let uses = await clip(id)?.uses ?? 0
@@ -220,5 +256,26 @@ public struct ClipSource: Sendable, Equatable {
         if let url, !url.isEmpty { out[Clip.Field.sourceURL] = .string(url) }
         if let title, !title.isEmpty { out[Clip.Field.sourceTitle] = .string(title) }
         return out
+    }
+}
+
+/// The colours a tag can have. The same names on every device; each app picks its own shade.
+public enum TagColor: String, CaseIterable, Sendable {
+    case red, orange, yellow, green, mint, teal, blue, indigo, purple, pink, brown, gray
+}
+
+/// A tag you made, with its colour (fields of the `settings.tags` record: tag → colour name).
+public struct CustomTag: Identifiable, Hashable, Sendable {
+    public let name: String
+    public let color: TagColor
+    public var id: String { name }
+    public init(name: String, color: TagColor) { self.name = name; self.color = color }
+
+    /// Sorted by name; unknown colours read as gray, removed tags (null) are skipped.
+    static func list(from fields: [String: JSONValue]) -> [CustomTag] {
+        fields.compactMap { key, value -> CustomTag? in
+            guard !key.hasPrefix("_"), let name = value.string else { return nil }
+            return CustomTag(name: key, color: TagColor(rawValue: name) ?? .gray)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }

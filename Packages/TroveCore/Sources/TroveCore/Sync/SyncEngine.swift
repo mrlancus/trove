@@ -265,19 +265,37 @@ public actor SyncEngine {
         return id
     }
 
-    public func loadBlob(_ id: String) async throws -> Data {
-        var stored = cachedBlob(id)
-        if stored == nil {
-            var lastError: Error = TransportError.notFound
-            for t in transports {
-                do { stored = try await t.fetchBlob(id); break } catch { lastError = error }
-            }
-            guard let fetched = stored else { throw lastError }
-            try? cacheBlob(id, fetched)
+    /// Reading and decrypting happen off the engine, so opening a big file never holds up syncing,
+    /// search or other files.
+    public nonisolated func loadBlob(_ id: String) async throws -> Data {
+        let keys = self.keys
+        let file = blobCache?.appendingPathComponent(id)
+        var stored: Data? = if let file {
+            await Task.detached(priority: .userInitiated) { try? Data(contentsOf: file) }.value
+        } else {
+            await memoryBlob(id)
         }
+        if stored == nil { stored = try await fetchAndCacheBlob(id) }
         let data = stored!
-        if TRV1.mode(of: data) != nil, let keys { return try TRV1.decrypt(data, key: keys.blobKey) }
-        return data
+        return try await Task.detached(priority: .userInitiated) {
+            if TRV1.mode(of: data) != nil, let keys { return try TRV1.decrypt(data, key: keys.blobKey) }
+            return data
+        }.value
+    }
+
+    private func memoryBlob(_ id: String) -> Data? { memoryBlobs[id] }
+
+    private func fetchAndCacheBlob(_ id: String) async throws -> Data {
+        if let cached = cachedBlob(id) { return cached }
+        var lastError: Error = TransportError.notFound
+        for t in transports {
+            do {
+                let fetched = try await t.fetchBlob(id)
+                try? cacheBlob(id, fetched)
+                return fetched
+            } catch { lastError = error }
+        }
+        throw lastError
     }
 
     private func cachedBlob(_ id: String) -> Data? {

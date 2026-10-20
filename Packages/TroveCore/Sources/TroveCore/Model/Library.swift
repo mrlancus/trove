@@ -30,6 +30,13 @@ public actor Library {
         return index.search(.parse(text), semantic: semantic, limit: limit).map(\.item)
     }
 
+    /// The search index as it stands, for searching on every keystroke without waiting on this actor
+    /// (it's a value, so the copy is cheap and the caller's searches don't block syncing).
+    public func searchIndex() async -> SearchIndex {
+        await refreshIndex()
+        return index
+    }
+
     public func items(in smart: SmartCollection) async -> [Item] {
         await items().filter(smart.contains)
     }
@@ -55,6 +62,7 @@ public actor Library {
                 indexed[id] = record.updatedHLC
             }
         }
+        index.prepare()
     }
 
     // MARK: Adding

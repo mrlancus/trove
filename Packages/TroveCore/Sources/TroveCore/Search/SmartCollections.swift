@@ -2,7 +2,7 @@ import Foundation
 
 /// Collections that fill themselves (RESEARCH.md §6). Each is just a saved query.
 public enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
-    case recent, pinned, toRead, recipes, places, thingsToBuy, events, videos, receipts, quotes, notes, handwriting, needsAttention
+    case recent, pinned, toRead, sketches, recipes, places, thingsToBuy, events, videos, receipts, quotes, notes, handwriting, needsAttention
 
     public var id: String { rawValue }
 
@@ -11,6 +11,7 @@ public enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
         case .recent: "Recent"
         case .pinned: "Pinned"
         case .toRead: "To Read"
+        case .sketches: "Sketches"
         case .recipes: "Recipes"
         case .places: "Places"
         case .thingsToBuy: "Things to Buy"
@@ -30,6 +31,7 @@ public enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
         case .recent: "clock"
         case .pinned: "pin"
         case .toRead: "book"
+        case .sketches: "scribble.variable"
         case .recipes: "fork.knife"
         case .places: "mappin.and.ellipse"
         case .thingsToBuy: "bag"
@@ -48,6 +50,7 @@ public enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
         case .recent: return -item.createdAt.timeIntervalSinceNow < 14 * 86_400
         case .pinned: return item.isPinned
         case .toRead: return item.readAt == nil && (item.category == .article || (item.kind == .link && item.category == .other))
+        case .sketches: return item.kind == .sketch
         case .recipes: return item.category == .recipe
         case .places: return item.category == .place || item.extracted["place"] != nil
         case .thingsToBuy: return item.category == .product
@@ -56,7 +59,7 @@ public enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
         case .receipts: return item.category == .receipt
         case .quotes: return item.kind == .highlight || item.category == .quote
         case .notes: return item.kind == .note
-        case .handwriting: return item.source == .goodnotes
+        case .handwriting: return item.sources.contains(.goodnotes)
         case .needsAttention: return item.hasConflicts
         }
     }

@@ -4,7 +4,7 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
-import { ClipField, cleanTags, clipView, hashImageHex, hashText, insightFields, insights, ruleTags } from "./clips.js";
+import { ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
@@ -759,6 +759,36 @@ export class Vault {
   }
 
   setClipTags(id, tags) { this.set({ [ClipField.tags]: cleanTags(tags) }, id, "clip"); }
+
+  /** Adds or removes one tag on a clip. */
+  toggleClipTag(id, tag) {
+    const clip = this.clip(id), name = cleanTagName(tag);
+    if (!clip || !name) return;
+    this.setClipTags(id, clip.tags.includes(name) ? clip.tags.filter((t) => t !== name) : [...clip.tags, name]);
+  }
+
+  /** Your own tags, each with a colour (Library.customTags). */
+  customTags() {
+    const r = this.store.records.get(TAG_SETTINGS_ID);
+    return r && r.fields._deleted !== true ? customTagList(r.fields) : [];
+  }
+
+  /** Makes a tag or changes its colour; returns the stored name (null if it was empty). */
+  setTagColor(name, color) {
+    const tag = cleanTagName(name);
+    if (!tag || tag.startsWith("_")) return null;
+    this.set({ [tag]: TAG_COLORS.includes(color) ? color : "gray" }, TAG_SETTINGS_ID, "setting");
+    return tag;
+  }
+
+  /** Removes a tag: its colour, and the tag from every clip and item that has it. */
+  deleteTag(name) {
+    const tag = cleanTagName(name);
+    if (!tag || tag.startsWith("_")) return;
+    this.set({ [tag]: null }, TAG_SETTINGS_ID, "setting");
+    for (const clip of this.clips()) if (clip.tags.includes(tag)) this.setClipTags(clip.id, clip.tags.filter((t) => t !== tag));
+    for (const item of this.items()) if (item.tags.some((t) => t.toLowerCase() === tag)) this.update(item.id, { [Field.tags]: item.tags.filter((t) => t.toLowerCase() !== tag) });
+  }
   setClipNote(id, note) { this.set({ [ClipField.note]: note }, id, "clip"); }
   setClipPinned(id, pinned) { this.set({ [ClipField.pinned]: pinned }, id, "clip"); }
   deleteClip(id) { this.set({ _deleted: true }, id, "clip"); }

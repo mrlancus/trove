@@ -201,6 +201,7 @@ test("clips: rename, edit, tag, note, search and save with where they came from"
   assert.deepEqual(clip.tags, ["work", "finance"]);
   assert.ok(clipMatches(clip, "tag:work anna") && clipMatches(clip, "app:chrome") && clipMatches(clip, "friday") && clipMatches(clip, "story"));
   assert.ok(!clipMatches(clip, "is:pinned") && !clipMatches(clip, "tag:home"));
+  assert.ok(clipMatches(clip, "#work Fríday") && !clipMatches(clip, "#home"));
   v.editClip(id, "Email anna@example.org about #budget");
   clip = v.clip(id);
   assert.equal(clip.hash, hashText(clip.text));
@@ -412,6 +413,42 @@ test("a duplicate from another source is listed under that source too", async ()
   vault.addLink("https://example.com/post", { source: "email" });
   assert.deepEqual(vault.item(id).sources, ["import", "email"]);
   assert.deepEqual(search(vault.items(), "from:email", Date.now()).map((i) => i.id), [id]);
+});
+
+test("GoodNotes files count as GoodNotes however they arrived; sketches have their own collection", async () => {
+  const { smartCollections } = await import("../public/core/items.js");
+  const rec = (id, fields) => itemView({ id, fields, texts: {}, conflicts: {}, updatedHLC: "1" });
+  const zipped = rec("gn1", { source: "import", attachments: [{ id: "b", name: "Electricity.goodnotes", mime: "application/octet-stream", size: 1 }] });
+  assert.deepEqual(zipped.sources, ["import", "goodnotes"]);
+  assert.ok(smartCollections.find((s) => s.id === "handwriting").contains(zipped));
+  assert.deepEqual(rec("gn2", { source: "import" }).sources, ["import"]);
+  assert.ok(smartCollections.find((s) => s.id === "sketches").contains(rec("sk", { kind: "sketch" })));
+});
+
+test("tags with colours sync, and deleting one takes it off everything (Library+Clips.swift)", async () => {
+  const { v: vault } = await testVault();
+  const id = vault.addClip("Invoice 42");
+  assert.equal(vault.setTagColor(" Work Stuff ", "blue"), "work-stuff");
+  vault.setTagColor("home", "green");
+  vault.setTagColor("#Home", "pink");
+  assert.deepEqual(vault.customTags(), [{ name: "home", color: "pink" }, { name: "work-stuff", color: "blue" }]);
+  vault.toggleClipTag(id, "work-stuff");
+  assert.ok(vault.clip(id).tags.includes("work-stuff"));
+  const { clipMatches } = await import("../public/core/clips.js");
+  assert.ok(clipMatches(vault.clip(id), "#work-stuff invoice"));
+  vault.deleteTag("work-stuff");
+  assert.deepEqual(vault.customTags().map((t) => t.name), ["home"]);
+  assert.ok(!vault.clip(id).tags.includes("work-stuff"));
+  assert.equal(vault.setTagColor("  ", "red"), null);
+});
+
+test("search keeps up as items change (cached docs)", async () => {
+  const { v: vault } = await testVault();
+  const id = vault.addNote({ title: "Electricity revision" });
+  assert.deepEqual(search(vault.items(), "elec").map((i) => i.id), [id]);
+  vault.update(id, { title: "Magnetism" });
+  assert.deepEqual(search(vault.items(), "elec"), []);
+  assert.deepEqual(search(vault.items(), "magn").map((i) => i.id), [id]);
 });
 
 test("GoodNotes ink: every layout in the shared fixture decodes as GoodNotesInkTests.swift expects", async () => {

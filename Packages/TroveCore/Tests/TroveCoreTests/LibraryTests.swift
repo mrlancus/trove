@@ -39,6 +39,30 @@ import Testing
         #expect(SmartCollection.recent.contains(r))
         #expect(!SmartCollection.places.contains(r))
         #expect(SmartCollection.handwriting.contains(item("2", [Field.source: "goodnotes"])))
+        #expect(SmartCollection.sketches.contains(item("3", [Field.kind: "sketch"])))
+    }
+
+    @Test func goodNotesFilesCountAsGoodNotesHoweverTheyArrived() {
+        let notebook: JSONValue = [Attachment(id: "b", name: "Electricity.goodnotes", mime: "application/octet-stream", size: 1).json]
+        let zipped = item("1", [Field.source: "import", Field.attachments: notebook])
+        #expect(zipped.sources == [.import, .goodnotes])
+        #expect(SmartCollection.handwriting.contains(zipped))
+        #expect(item("2", [Field.source: "import"]).sources == [.import])
+    }
+
+    @Test func prefixesUseTheSortedVocabulary() {
+        var index = SearchIndex()
+        index.update(item("1", [Field.title: "Electricity revision", Field.createdAt: JSONValue(Date())]))
+        index.update(item("2", [Field.title: "Electric guitar", Field.createdAt: JSONValue(Date())]))
+        #expect(Set(index.search(.parse("elec")).map(\.item.id)) == ["1", "2"])   // before prepare: a scan
+        index.prepare()
+        #expect(Set(index.search(.parse("elec")).map(\.item.id)) == ["1", "2"])
+        #expect(index.search(.parse("electricit")).map(\.item.id) == ["1"])
+        #expect(index.search(.parse("guitar elec")).map(\.item.id) == ["2"])
+        index.remove("2")
+        index.prepare()
+        #expect(index.search(.parse("elec")).map(\.item.id) == ["1"])
+        #expect(index.search(.parse("zzz")).isEmpty)
     }
 }
 

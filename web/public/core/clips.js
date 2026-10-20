@@ -110,7 +110,18 @@ export const cleanTags = (tags) => [...new Set(tags.map((t) => t.toLowerCase().r
 export const hashText = (text) => "t:" + sha256Hex(text);
 export const hashImageHex = (hexDigest) => "i:" + hexDigest;
 
+const clipViews = new WeakMap(); // record → { hlc, clip }
+
+/** A read-only view of a clip record (Clip.swift), made once per version of the record. */
 export function clipView(record) {
+  const cached = clipViews.get(record);
+  if (cached && cached.hlc === record.updatedHLC) return cached.clip;
+  const clip = makeClipView(record);
+  clipViews.set(record, { hlc: record.updatedHLC, clip });
+  return clip;
+}
+
+function makeClipView(record) {
   const f = record.fields;
   const text = typeof f.text === "string" ? f.text : "";
   const image = f.image && typeof f.image.id === "string" ? f.image : null;
@@ -145,19 +156,62 @@ export function clipView(record) {
   };
 }
 
-/** Clip.matches: everything known about it; `tag:x`, `app:x` and `is:pinned` narrow it down. */
+/** Clip.matches: everything known about it; `tag:x` (or `#x`), `app:x` and `is:pinned` narrow it down. */
 export function clipMatches(clip, query) {
-  const q = query.trim();
-  if (!q) return true;
-  const hay = [clip.text, clip.displayTitle, clip.autoTitle, clip.aiTitle ?? "", clip.summary ?? "", clip.note, clip.tags.join(" "), clip.ocrText ?? "",
-    clip.sourceApp ?? "", clip.sourceDevice ?? "", clip.sourceTitle ?? "", clip.sourceURL ?? "", clip.files.join(" "), clip.image?.name ?? ""].join("\n").toLowerCase();
-  return q.split(/\s+/).every((w) => {
-    if (w.startsWith("tag:")) return clip.tags.includes(w.slice(4).toLowerCase());
-    if (w.startsWith("app:")) return (clip.sourceApp ?? "").toLowerCase().includes(w.slice(4).toLowerCase());
-    if (w === "is:pinned") return clip.isPinned;
-    return hay.includes(w.toLowerCase());
-  });
+  return clipQueryMatches(parseClipQuery(query), clip, clipSearchText(clip));
 }
+
+export const fold = (text) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+
+const searchTexts = new WeakMap(); // clip view → folded text; views are made once per version (clipView)
+
+/** Everything searchable about a clip in one folded string (Clip.searchText), worked out once per version. */
+export function clipSearchText(clip) {
+  let text = searchTexts.get(clip);
+  if (text === undefined) {
+    text = fold([clip.text, clip.displayTitle, clip.autoTitle, clip.note, clip.tags.join(" "), clip.files.join(" "), clip.aiTitle ?? "", clip.summary ?? "",
+      clip.ocrText ?? "", clip.sourceApp ?? "", clip.sourceDevice ?? "", clip.sourceTitle ?? "", clip.sourceURL ?? "", clip.image?.name ?? ""].join("\n"));
+    searchTexts.set(clip, text);
+  }
+  return text;
+}
+
+/** ClipQuery: free words (all must appear), `tag:x` / `#x`, `app:x`, `is:pinned`. */
+export function parseClipQuery(query) {
+  const q = { words: [], tags: [], apps: [], pinnedOnly: false };
+  for (const w of query.split(/\s+/).filter(Boolean)) {
+    const lower = w.toLowerCase();
+    if (lower.startsWith("tag:") && lower.length > 4) q.tags.push(lower.slice(4).replace(/#/g, ""));
+    else if (lower.startsWith("#") && lower.length > 1) q.tags.push(lower.slice(1));
+    else if (lower.startsWith("app:") && lower.length > 4) q.apps.push(fold(w.slice(4)));
+    else if (lower === "is:pinned") q.pinnedOnly = true;
+    else q.words.push(fold(w));
+  }
+  return q;
+}
+
+export function clipQueryMatches(q, clip, haystack) {
+  if (q.pinnedOnly && !clip.isPinned) return false;
+  if (q.tags.some((t) => !clip.tags.includes(t))) return false;
+  if (q.apps.length) { const app = fold(clip.sourceApp ?? ""); if (q.apps.some((a) => !app.includes(a))) return false; }
+  return q.words.every((w) => haystack.includes(w));
+}
+
+// ---------- tags with colours (PROTOCOL.md §8, Library+Clips.swift) ----------
+
+export const TAG_SETTINGS_ID = "settings.tags";
+export const TAG_COLORS = ["red", "orange", "yellow", "green", "mint", "teal", "blue", "indigo", "purple", "pink", "brown", "gray"];
+
+/** The `settings.tags` record's fields (tag → colour name) as a sorted list; removed tags (null) are skipped. */
+export function customTagList(fields) {
+  return Object.entries(fields ?? {})
+    .filter(([name, color]) => !name.startsWith("_") && typeof color === "string")
+    .map(([name, color]) => ({ name, color: TAG_COLORS.includes(color) ? color : "gray" }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+/** A tag name as stored: lowercase, no `#`, words joined with "-". */
+export const cleanTagName = (name) => cleanTags([name.trim().split(/\s+/).join("-")])[0] ?? null;
 
 export function classify(raw) {
   const s = raw.trim();

@@ -13,6 +13,10 @@ public struct SearchIndex: Sendable {
     private var docs: [String: Doc] = [:]
     private var postings: [String: Set<String>] = [:]
     private var totalLength: Double = 0
+    /// Every term, sorted, so the words that start with what's typed are a binary search away.
+    /// Rebuilt by `prepare()` after changes; until then prefixes fall back to a scan.
+    private var vocabulary: [String] = []
+    private var vocabularyStale = false
 
     public init() {}
 
@@ -38,7 +42,34 @@ public struct SearchIndex: Sendable {
         let length = terms.values.reduce(0, +)
         docs[item.id] = Doc(terms: terms, length: length, item: item)
         totalLength += length
-        for t in terms.keys { postings[t, default: []].insert(item.id) }
+        for t in terms.keys {
+            if postings[t] == nil { vocabularyStale = true }
+            postings[t, default: []].insert(item.id)
+        }
+    }
+
+    /// Sorts the vocabulary after updates. Cheap when nothing changed; call it before handing the
+    /// index to the UI so every keystroke's search is a few lookups.
+    public mutating func prepare() {
+        guard vocabularyStale else { return }
+        vocabulary = postings.keys.sorted()
+        vocabularyStale = false
+    }
+
+    /// Terms starting with `prefix` (the term itself included).
+    func terms(withPrefix prefix: String) -> [String] {
+        if vocabularyStale { return postings.keys.filter { $0.hasPrefix(prefix) } }
+        var lo = 0, hi = vocabulary.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if vocabulary[mid] < prefix { lo = mid + 1 } else { hi = mid }
+        }
+        var out: [String] = []
+        while lo < vocabulary.count, vocabulary[lo].hasPrefix(prefix) {
+            if postings[vocabulary[lo]] != nil { out.append(vocabulary[lo]) }
+            lo += 1
+        }
+        return out
     }
 
     public mutating func remove(_ id: String) {
@@ -46,7 +77,7 @@ public struct SearchIndex: Sendable {
         totalLength -= old.length
         for t in old.terms.keys {
             postings[t]?.remove(id)
-            if postings[t]?.isEmpty == true { postings[t] = nil }
+            if postings[t]?.isEmpty == true { postings[t] = nil; vocabularyStale = true }
         }
     }
 
@@ -57,34 +88,35 @@ public struct SearchIndex: Sendable {
 
     public func search(_ query: SearchQuery, semantic: [String: Double] = [:], limit: Int = 100) -> [Hit] {
         let words = Tokenizer.terms(query.text)
-        let candidates: [String: Doc]
+        // The last word may be a prefix ("rec" → recipe): the words it could be, found once.
+        let lastPrefix: [String] = words.last.map { w in w.count >= 2 ? terms(withPrefix: w) : [w] } ?? []
+        let candidates: [(String, Doc)]
         if words.isEmpty {
-            candidates = docs
+            candidates = docs.map { ($0.key, $0.value) }
         } else {
-            // A doc must match every word; the last word may be a prefix ("rec" → recipe).
-            var sets: [Set<String>] = []
+            // A doc must match every word.
+            var common: Set<String>?
             for (i, w) in words.enumerated() {
                 var ids = postings[w] ?? []
-                if i == words.count - 1, w.count >= 2 {
-                    for (term, p) in postings where term.hasPrefix(w) { ids.formUnion(p) }
-                }
-                sets.append(ids)
+                if i == words.count - 1 { for term in lastPrefix { ids.formUnion(postings[term] ?? []) } }
+                common = common.map { $0.intersection(ids) } ?? ids
+                if common?.isEmpty == true { break }
             }
-            var common = sets.first ?? []
-            for s in sets.dropFirst() { common.formIntersection(s) }
-            for id in semantic.keys where semantic[id]! > 0.35 { common.insert(id) }
-            candidates = docs.filter { common.contains($0.key) }
+            var ids = common ?? []
+            for (id, score) in semantic where score > 0.35 { ids.insert(id) }
+            candidates = ids.compactMap { id in docs[id].map { (id, $0) } }
         }
 
         let n = Double(max(docs.count, 1))
         let avg = totalLength / n
         var hits: [Hit] = []
+        hits.reserveCapacity(candidates.count)
         for (id, doc) in candidates where query.matches(doc.item) {
             var score = 0.0
             for (i, w) in words.enumerated() {
                 var matched: [(String, Double)] = doc.terms[w].map { [(w, $0)] } ?? []
                 if matched.isEmpty, i == words.count - 1 {
-                    matched = doc.terms.filter { $0.key.hasPrefix(w) }.map { ($0.key, $0.value * 0.7) }
+                    matched = lastPrefix.compactMap { term in doc.terms[term].map { (term, $0 * 0.7) } }
                 }
                 for (term, tf) in matched {
                     let df = Double(postings[term]?.count ?? 1)

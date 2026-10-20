@@ -13,8 +13,20 @@ export const Field = {
 
 const isAttachment = (a) => a && typeof a === "object" && typeof a.id === "string";
 
-/** A read-only view of an item record (Item.swift). */
+const views = new WeakMap(); // record → { hlc, item }: records change in place, and each change moves updatedHLC on
+
+/** A read-only view of an item record (Item.swift), made once per version of the record. */
 export function itemView(record) {
+  const cached = views.get(record);
+  if (cached && cached.hlc === record.updatedHLC) return cached.item;
+  const item = makeItemView(record);
+  views.set(record, { hlc: record.updatedHLC, item });
+  return item;
+}
+
+const isGoodNotesName = (a) => typeof a?.name === "string" && a.name.toLowerCase().endsWith(".goodnotes");
+
+function makeItemView(record) {
   const f = record.fields;
   const str = (v) => (typeof v === "string" ? v : null);
   const body = record.texts.body ?? "";
@@ -27,7 +39,10 @@ export function itemView(record) {
     kind: str(f.kind) ?? "note",
     category: str(f.category) ?? "other",
     source: str(f.source) ?? "app",
-    sources: [...new Set([str(f.source) ?? "app", ...(Array.isArray(f.alsoFrom) ? f.alsoFrom.filter((s) => typeof s === "string") : [])])],
+    // A GoodNotes notebook counts as GoodNotes however it got here (Item.sources).
+    sources: [...new Set([str(f.source) ?? "app", ...(Array.isArray(f.alsoFrom) ? f.alsoFrom.filter((s) => typeof s === "string") : []),
+      ...((Array.isArray(f.attachments) && f.attachments.some(isGoodNotesName)) || (Array.isArray(f.fileVersions) && f.fileVersions.some((v) => isGoodNotesName(v?.attachment)))
+        ? ["goodnotes"] : [])])],
     summary: str(f.summary),
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === "string") : [],
     createdAt: typeof f.createdAt === "number" ? f.createdAt : 0,
@@ -151,36 +166,54 @@ export function matchesQuery(q, item) {
   return true;
 }
 
+// Search docs, made once per version of each item and kept with the document frequencies of every
+// term, so a keystroke only scores (like SearchIndex.swift, which keeps one index per device).
+const docs = new Map(); // item id → { hlc, tf, length }
+const df = new Map();
+let totalLength = 0;
+
+function docFor(item) {
+  const hlc = item.record?.updatedHLC ?? "";
+  const cached = docs.get(item.id);
+  if (cached && cached.hlc === hlc && cached.item === item) return cached;
+  if (cached) {
+    totalLength -= cached.length;
+    for (const t of cached.tf.keys()) { const n = (df.get(t) ?? 1) - 1; if (n > 0) df.set(t, n); else df.delete(t); }
+  }
+  const tf = new Map();
+  const add = (text, w) => { for (const t of terms(text ?? "")) tf.set(t, (tf.get(t) ?? 0) + w); };
+  add(item.title, 3); add(item.tags.join(" "), 2.5); add(item.summary, 1.5); add(item.siteName, 1.5);
+  add(item.body, 1); add(item.ocrText, 1); add(item.sketchText, 1); add(item.inkText, 1); add(item.url?.host, 1);
+  const doc = { hlc, item, tf, length: [...tf.values()].reduce((a, b) => a + b, 0) };
+  docs.set(item.id, doc);
+  totalLength += doc.length;
+  for (const t of tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+  return doc;
+}
+
 /** BM25 over weighted fields with a prefix match on the last word, like SearchIndex.swift. */
 export function search(items, input, now = Date.now()) {
   const q = parseQuery(input);
   const words = terms(q.text);
-  const docs = items.map((item) => {
-    const tf = new Map();
-    const add = (text, w) => { for (const t of terms(text ?? "")) tf.set(t, (tf.get(t) ?? 0) + w); };
-    add(item.title, 3); add(item.tags.join(" "), 2.5); add(item.summary, 1.5); add(item.siteName, 1.5);
-    add(item.body, 1); add(item.ocrText, 1); add(item.sketchText, 1); add(item.inkText, 1); add(item.url?.host, 1);
-    return { item, tf, length: [...tf.values()].reduce((a, b) => a + b, 0) };
-  });
-  const n = Math.max(docs.length, 1);
-  const avg = docs.reduce((s, d) => s + d.length, 0) / n;
-  const df = new Map();
-  for (const d of docs) for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+  const shown = items.map(docFor);
+  const n = Math.max(docs.size, 1);
+  const avg = totalLength / n;
   const hits = [];
-  for (const doc of docs) {
+  for (const doc of shown) {
     if (!matchesQuery(q, doc.item)) continue;
     let score = 0, ok = true;
-    words.forEach((w, i) => {
+    for (let i = 0; i < words.length && ok; i++) {
+      const w = words[i];
       let matched = doc.tf.has(w) ? [[w, doc.tf.get(w)]] : [];
       if (!matched.length && i === words.length - 1 && w.length >= 2) {
-        matched = [...doc.tf].filter(([t]) => t.startsWith(w)).map(([t, v]) => [t, v * 0.7]);
+        for (const [t, v] of doc.tf) if (t.startsWith(w)) matched.push([t, v * 0.7]);
       }
       if (!matched.length) ok = false;
       for (const [t, tf] of matched) {
         const d = df.get(t) ?? 1;
         score += Math.log(1 + (n - d + 0.5) / (d + 0.5)) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * doc.length / Math.max(avg, 1)));
       }
-    });
+    }
     if (!ok) continue;
     if (doc.item.isPinned) score += 0.25;
     score += Math.max(0, 0.5 - (now - doc.item.createdAt) / 86_400_000 / 60);
@@ -198,12 +231,13 @@ export const smartCollections = [
   ["pinned", "Pinned", (i) => i.isPinned],
   ["toRead", "To Read", (i) => i.readAt === null && (i.category === "article" || (i.kind === "link" && i.category === "other"))],
   ["notes", "Notes", (i) => i.kind === "note"],
+  ["sketches", "Sketches", (i) => i.kind === "sketch"],
   ["recipes", "Recipes", (i) => i.category === "recipe"],
   ["places", "Places", (i) => i.category === "place" || i.extracted.place !== undefined],
   ["thingsToBuy", "Things to Buy", (i) => i.category === "product"],
   ["events", "Events", (i) => i.category === "event"],
   ["videos", "Videos", (i) => i.category === "video" || i.kind === "video"],
   ["quotes", "Quotes & Highlights", (i) => i.kind === "highlight" || i.category === "quote"],
-  ["handwriting", "Handwriting", (i) => i.source === "goodnotes"],
+  ["handwriting", "Handwriting", (i) => i.sources.includes("goodnotes")],
   ["needsAttention", "Needs Attention", (i) => i.hasConflicts],
 ].map(([id, title, contains]) => ({ id, title, contains }));

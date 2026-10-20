@@ -86,24 +86,19 @@ public struct Clip: Identifiable, Hashable, Sendable {
         }
     }
 
-    /// Searches everything known about the clip. `tag:x`, `app:x` and `is:pinned` narrow it down.
+    /// Searches everything known about the clip. `tag:x` (or `#x`), `app:x` and `is:pinned` narrow it down.
     public func matches(_ query: String) -> Bool {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        if q.isEmpty { return true }
+        ClipQuery(query).matches(self, haystack: searchText)
+    }
+
+    /// Everything searchable about the clip in one folded (lowercase, no accents) string. Lists keep
+    /// it per clip so each keystroke is only `contains` checks (`ClipQuery`).
+    public var searchText: String {
         // Built up in typed pieces: one long literal of `?? ""` is too much for the type checker.
         var parts: [String] = [text, displayTitle, autoTitle, note, tags.joined(separator: " "), files.joined(separator: " ")]
         let optional: [String?] = [aiTitle, summary, ocrText, sourceApp, sourceDevice, sourceTitle, sourceURL?.absoluteString, image?.name]
         parts += optional.compactMap { $0 }
-        let haystack: String = parts.joined(separator: "\n")
-        let app: String = sourceApp ?? ""
-        let fold: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        return q.split(separator: " ").allSatisfy { word in
-            let w = String(word)
-            if w.hasPrefix("tag:") { return tags.contains(String(w.dropFirst(4)).lowercased()) }
-            if w.hasPrefix("app:") { return app.range(of: String(w.dropFirst(4)), options: .caseInsensitive) != nil }
-            if w == "is:pinned" { return isPinned }
-            return haystack.range(of: w, options: fold) != nil
-        }
+        return ClipQuery.fold(parts.joined(separator: "\n"))
     }
 
     /// Stable content hash for de-duplication: the same text copied twice is one clip.
@@ -297,5 +292,45 @@ public enum ClipTransform: String, CaseIterable, Sendable {
             let options: JSONSerialization.WritingOptions = self == .prettyJSON ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys, .withoutEscapingSlashes]
             return (try? JSONSerialization.data(withJSONObject: object, options: options)).map { String(decoding: $0, as: UTF8.self) }
         }
+    }
+}
+
+/// A parsed clipboard search: free words (all must appear), `tag:x` / `#x`, `app:x`, `is:pinned`.
+public struct ClipQuery: Sendable, Equatable {
+    public var words: [String] = []
+    public var tags: [String] = []
+    public var apps: [String] = []
+    public var pinnedOnly = false
+    public var isEmpty: Bool { words.isEmpty && tags.isEmpty && apps.isEmpty && !pinnedOnly }
+
+    public init(_ query: String) {
+        for token in query.split(whereSeparator: \.isWhitespace) {
+            let w = String(token)
+            let lower = w.lowercased()
+            if lower.hasPrefix("tag:"), lower.count > 4 { tags.append(String(lower.dropFirst(4)).replacingOccurrences(of: "#", with: "")) }
+            else if lower.hasPrefix("#"), lower.count > 1 { tags.append(String(lower.dropFirst())) }
+            else if lower.hasPrefix("app:"), lower.count > 4 { apps.append(Self.fold(String(w.dropFirst(4)))) }
+            else if lower == "is:pinned" { pinnedOnly = true }
+            else { words.append(Self.fold(w)) }
+        }
+    }
+
+    public static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// `haystack` is the clip's `searchText`, kept by the caller.
+    public func matches(_ clip: Clip, haystack: String) -> Bool {
+        if pinnedOnly, !clip.isPinned { return false }
+        if !tags.isEmpty {
+            let have = clip.tags
+            for t in tags where !have.contains(t) { return false }
+        }
+        if !apps.isEmpty {
+            let app = Self.fold(clip.sourceApp ?? "")
+            for a in apps where !app.contains(a) { return false }
+        }
+        for w in words where !haystack.contains(w) { return false }
+        return true
     }
 }

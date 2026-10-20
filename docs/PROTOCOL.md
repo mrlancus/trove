@@ -263,6 +263,16 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
 - **Settings:** one synced record, id `settings.clipboard`, kind `setting`: `autoSave` is a sorted
   list of clip kinds (`link`, `image`, `code`, `text`, …). The device that records a new clip of one of
   those kinds saves it to the library at once (below).
+- **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
+  (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
+  `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,
+  `gray` (anything else reads as `gray`). `null` removes the tag; removing also takes the tag off
+  every clip and item. Tags in this record are "your tags": the clipboard shows them as sections
+  to filter by, and they colour the tag wherever it appears. One field per tag, so two devices
+  adding different tags at once both keep theirs.
+- **Search:** words must all appear (case and accents ignored) in the text, titles, note, tags,
+  OCR text, app, device, page and file names; `tag:x` or `#x` keeps clips with that tag, `app:x`
+  clips from that app, `is:pinned` pinned ones (`ClipQuery`, `clips.js parseClipQuery`).
 - **Title shown:** `title`, else `aiTitle`, else the image's name, the files' names, or `autoTitle`.
 - **Editing text** sets `text`, `hash`, `editedAt`, fresh insights and `needsEnrichment: true`, and
   clears `aiTitle` and `summary`. The user's `title`, `tags` and `note` stay.
@@ -313,7 +323,7 @@ ignore them.
 | `links` | ids of items connected by hand. `[[Title]]` links in the body are found from the text and aren't stored |
 | `fileVersions` | earlier files, newest first, at most 50: `[{attachment, at, by}]` (`attachment` is the usual `{id,name,mime,size}`, `at` Unix ms, `by` device id) |
 | `thumbnail` | a small JPEG preview (attachment JSON). Written once by whichever device sees the file first; cleared when the file changes |
-| `alsoFrom` | other sources (`ItemSource` values) the same thing arrived from later. When a link that's already saved comes in again from somewhere else, the existing item gains that source instead of a duplicate being made, so "Sources" lists it under every source it came from (`source` stays the first one) |
+| `alsoFrom` | other sources (`ItemSource` values) the same thing arrived from later. When a link that's already saved comes in again from somewhere else, the existing item gains that source instead of a duplicate being made, so "Sources" lists it under every source it came from (`source` stays the first one). An item whose attachment (or an earlier version of it) is a `.goodnotes` file is also listed under `goodnotes`, however it arrived (`Item.sources`, `items.js itemView`) |
 
 **Filing new items**: `Organizer.swift` and `web/public/core/organize.js`, both checked against
 `Fixtures/organize-cases.json`.
