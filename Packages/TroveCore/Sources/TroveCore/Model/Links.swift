@@ -36,6 +36,8 @@ public enum Links {
         /// item id → `[[targets]]` that match no item yet.
         public var unresolved: [String: [String]] = [:]
 
+        public init() {}
+
         public func neighbours(of id: String) -> [String] {
             Array(Set((outgoing[id] ?? []) + (incoming[id] ?? []))).sorted()
         }
