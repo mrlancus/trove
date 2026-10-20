@@ -197,8 +197,34 @@ test("create a vault in the browser, save the recovery code, add a second browse
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '{\n  "b": 1,\n  "a": 2\n}');
   await page.locator(".clip", { hasText: "#ff8a3d" }).locator(".clip-main").click();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "#ff8a3d");
+  // Rename, tag and edit a clip; it shows up in the main search.
+  const blob = page.locator(".clip.open");
+  await blob.getByLabel("Name").fill("Settings blob");
+  await blob.getByLabel("Name").press("Enter");
+  await page.locator(".clip-title", { hasText: "Settings blob" }).waitFor();
+  await blob.getByLabel("Tags").fill("config, #Work");
+  await blob.getByLabel("Tags").press("Enter");
+  await page.locator(".clip-tags", { hasText: "#config #work" }).waitFor();
+  await blob.getByLabel("Text").fill('{"b":1,"a":3}');
+  await blob.getByRole("button", { name: "Save text" }).click();
+  await page.locator(".clip-preview", { hasText: '{"b":1,"a":3}' }).waitFor();
+  await blob.getByText("Size").waitFor();
   if (shots) await page.screenshot({ path: join(shots, "web-clipboard.png") });
   await page.locator("nav a", { hasText: "Everything" }).click();
+  await page.locator("#search").fill("tag:config");
+  await page.locator("#clip-results .clip", { hasText: "Settings blob" }).waitFor();
+  await page.locator("#search").fill("");
+
+  // Links save themselves into the library once you ask for that.
+  await page.locator("nav a", { hasText: "Clipboard" }).click();
+  await page.locator(".clip-settings summary").click();
+  await page.locator(".clip-settings").getByRole("button", { name: "Links" }).click();
+  await page.locator(".clip-settings").getByRole("button", { name: "Links", pressed: true }).waitFor();
+  await page.evaluate(() => navigator.clipboard.writeText("https://github.com/mrlancus/trove"));
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await page.locator(".clip-tags", { hasText: "#link #github" }).waitFor();
+  await page.locator("nav a", { hasText: "Everything" }).click();
+  await page.locator(".card", { hasText: "github.com" }).waitFor();
 
   // Share link (what the iPhone Shortcut opens).
   await page.goto(BASE + "/#add=" + encodeURIComponent("https://example.net/shared"));

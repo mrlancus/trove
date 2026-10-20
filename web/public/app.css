@@ -161,6 +161,28 @@ textarea { resize: vertical; }
 .clip-details img { max-width: 100%; max-height: 360px; border-radius: 10px; }
 .clip-details .row { margin: 0; }
 .clip-details a.secondary { text-decoration: none; color: var(--fg); }
+.clip-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-tags { margin-left: 8px; color: var(--accent); }
+.clip-field { display: grid; gap: 4px; }
+.clip-field input, .clip-details textarea { width: 100%; box-sizing: border-box; }
+.clip-details textarea { font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+.clip-details textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.clip-details > button.small { justify-self: start; }
+.clip-summary { margin: 0; color: var(--muted); }
+.clip-ocr { display: grid; gap: 6px; }
+.chips.found { align-items: center; }
+.chip-link { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 13px; text-decoration: none; color: var(--fg); overflow-wrap: anywhere; }
+.chip-link:hover { border-color: var(--accent); color: var(--accent); }
+.chip-colour { display: inline-flex; gap: 6px; align-items: center; }
+.chip-colour .swatch { width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--line); }
+.clip-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+.clip-facts dt { color: var(--muted); }
+.clip-facts dd { margin: 0; overflow-wrap: anywhere; }
+.clip-settings summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.clip-settings p { margin: 6px 0; }
+.clip-results { margin-top: 24px; max-width: 860px; }
+.clip-results .grid { margin-top: 6px; }
+.copied-from { margin: 4px 0; color: var(--muted); font-size: 13px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 10; max-width: calc(100% - 32px); }
 .other-tab { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 85%, transparent); display: grid; place-items: center; z-index: 20; text-align: center; padding: 16px; }
 .only-narrow { display: none; }
