@@ -93,14 +93,20 @@ struct MainView: View {
             Group {
                 if model.selection == .importer, model.searchText.isEmpty { ImportView() }
                 else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
-                else if model.selection == .clipboard { ClipboardScreen(embedded: true) }
+                else if model.selection == .clipboard { ClipboardScreen(embedded: true, select: { model.selectedClipID = $0 }) }
                 else { LibraryView() }
             }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 520)
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
                 .toolbar { toolbar }
         } detail: {
-            if let item = model.selectedItem {
+            if model.selection == .clipboard, model.searchText.isEmpty || model.selectedClipID != nil {
+                if let id = model.selectedClipID, let clip = model.clipboard.clips.first(where: { $0.id == id }) {
+                    ClipDetailPanel(clip: clip)
+                } else {
+                    EmptyState(symbol: "doc.on.clipboard", title: "Pick a clip", message: "Its details show here: the text, tags, note, where it came from and where you pasted it. Double-click a clip to copy it.")
+                }
+            } else if let item = model.selectedItem {
                 ItemDetailView(item: item).id(item.id)
             } else {
                 EmptyState(symbol: "sparkles.rectangle.stack", title: "Pick something", message: "Or press ⌘N for a note, or paste a link into Capture.")

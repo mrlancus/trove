@@ -8,6 +8,8 @@ struct ClipboardScreen: View {
     @State private var state = ClipPaletteState()
     /// In the sidebar's column (or pushed on iPhone) instead of a sheet.
     var embedded = false
+    /// Beside a detail column: tapping a clip opens it there instead of copying it.
+    var select: ((String) -> Void)?
 
     var body: some View {
         if embedded {
@@ -30,7 +32,8 @@ struct ClipboardScreen: View {
         #endif
         return ClipsView(style: .list, state: state, store: model.clipboard, thisDevice: model.config?.deviceId,
                          activate: { entry, transform in copy(entry, transform) },
-                         saveToLibrary: { model.saveClip($0) }, ownSearch: !shared)
+                         saveToLibrary: { model.saveClip($0) }, ownSearch: !shared,
+                         select: select, selectedID: select == nil ? nil : model.selectedClipID)
             .navigationTitle("Clipboard")
             .onAppear { if shared { state.query = model.searchText } }
             .onChange(of: model.searchText) { _, text in if shared { state.query = text } }
@@ -44,5 +47,27 @@ struct ClipboardScreen: View {
             }
             model.toast = "Copied"
         }
+    }
+}
+
+/// One clip in the window's detail column: copy it, and everything `ClipDetailForm` shows and edits.
+struct ClipDetailPanel: View {
+    @Environment(AppModel.self) private var model
+    let clip: Clip
+    /// Bumped by Cancel and Save so the form reads the clip again.
+    @State private var round = 0
+
+    var body: some View {
+        ClipDetailForm(clip: clip, store: model.clipboard, thisDevice: model.config?.deviceId, saveToLibrary: { model.saveClip($0) }) { round += 1 }
+            .id("\(clip.id)-\(round)")
+            .navigationTitle(clip.displayTitle)
+            .toolbar {
+                ToolbarItem {
+                    Button {
+                        Task { await model.clipboard.copy(clip, transform: nil); model.toast = "Copied" }
+                    } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    .help("Copy it to the clipboard")
+                }
+            }
     }
 }

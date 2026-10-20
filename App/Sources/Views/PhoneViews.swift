@@ -52,6 +52,10 @@ struct PhoneRootView: View {
                 }
             }
         }
+        // A clip tapped in the Connections graph.
+        .sheet(item: Binding(get: { model.selectedClipID.map(ClipSheetID.init) }, set: { model.selectedClipID = $0?.id })) { sheet in
+            ClipDetailSheet(clipID: sheet.id, store: model.clipboard, thisDevice: model.config?.deviceId, saveToLibrary: { model.saveClip($0) })
+        }
         .onChange(of: model.selectedItemID) { _, id in
             guard let id else { return }
             if tab == .clipboard { tab = .library }

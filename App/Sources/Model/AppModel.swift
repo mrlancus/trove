@@ -74,8 +74,17 @@ final class AppModel {
     var folders: [Folder] = []
     /// Wikilinks and hand-made connections between items, rebuilt on every reload.
     var links = Links.Graph()
-    var selection: Selection? = .smart(.recent)
+    var selection: Selection? = .smart(.recent) {
+        didSet {
+            guard selection != oldValue else { return }
+            // Connections wants the whole window: what was open on the right closes.
+            if selection == .graph { selectedItemID = nil }
+            if selection != .clipboard { selectedClipID = nil }
+        }
+    }
     var selectedItemID: String?
+    /// The clip open in the detail column while the clipboard is showing (Mac and iPad).
+    var selectedClipID: String?
     /// Select mode: tapping toggles items into `picked` for the bulk actions bar.
     var selecting = false { didSet { if !selecting { picked = [] } } }
     var picked: Set<String> = []

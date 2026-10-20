@@ -142,6 +142,9 @@ struct ClipsView: View {
     /// clipboard instead: two search fields in one toolbar made macOS crash ("NSToolbar already
     /// contains an item…").
     var ownSearch = true
+    /// Beside a detail column (Mac, iPad): tapping a clip opens it there; double-click copies.
+    var select: ((String) -> Void)? = nil
+    var selectedID: String? = nil
     @FocusState private var searchFocused: Bool
     /// How many rows are on the page: more arrive as the end comes into view, so a history of tens
     /// of thousands never has every row in the list at once.
@@ -347,11 +350,20 @@ struct ClipsView: View {
             Section {
                 ForEach(Array(page.enumerated()), id: \.element.id) { index, entry in
                     HStack(spacing: 4) {
-                        Button { activate(entry, nil) } label: {
-                            ClipRow(entry: entry, store: store, index: nil, selected: false, stacked: nil)
+                        if let select, let clip = entry.clip {
+                            ClipRow(entry: entry, store: store, index: nil, selected: selectedID == clip.id, stacked: nil)
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { activate(entry, nil) }
+                                .onTapGesture { select(clip.id) }
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityAction(named: "Copy") { activate(entry, nil) }
+                        } else {
+                            Button { activate(entry, nil) } label: {
+                                ClipRow(entry: entry, store: store, index: nil, selected: false, stacked: nil)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        if let clip = entry.clip {
+                        if select == nil, let clip = entry.clip {
                             Button { detail = clip.id } label: { Image(systemName: "info.circle").font(.title3) }
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("Details and edit")
@@ -392,7 +404,7 @@ struct ClipsView: View {
             ForEach(ClipTransform.available(for: clip.text), id: \.self) { t in
                 Button { activate(entry, t) } label: { Text("Copy as \(t.title)") }
             }
-            Button { detail = clip.id } label: { Label("Details and edit…", systemImage: "pencil") }
+            Button { if let select { select(clip.id) } else { detail = clip.id } } label: { Label("Details and edit…", systemImage: "pencil") }
             ClipTagMenu(clip: clip, store: store, state: state)
             Button { Task { await store.togglePin(clip) } } label: { Label(clip.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
             Button { saveToLibrary(clip) } label: { Label("Save to Trove", systemImage: "tray.and.arrow.down") }

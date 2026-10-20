@@ -6,27 +6,61 @@ struct GraphScreen: View {
     @Environment(AppModel.self) private var model
     @AppStorage("graph.tags") private var showTags = true
     @AppStorage("graph.unlinked") private var showUnlinked = false
+    /// Notes (the library) or Clipboard (clips joined to where they were copied and pasted).
+    @AppStorage("graph.source") private var source = "notes"
+    @AppStorage("graph.clipGroups") private var clipGroups = "from,to,place"
+
+    private var groups: Set<ClipGraph.Group> { Set(clipGroups.split(separator: ",").compactMap { ClipGraph.Group(rawValue: String($0)) }) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Toggle("Tags", isOn: $showTags).toggleStyle(.button)
-                Toggle("Unconnected items", isOn: $showUnlinked).toggleStyle(.button)
-                Spacer()
-                ForEach(model.folders.filter { $0.parent == nil }.sorted { $0.name < $1.name }.prefix(8)) { folder in
-                    Label { Text(folder.name) } icon: { Circle().fill(FolderStyle.color(for: folder.id)).frame(width: 8, height: 8) }
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { sourcePicker.fixedSize(); controls }
+                VStack(alignment: .leading, spacing: 8) { sourcePicker; ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 10) { controls } } }
             }
             .controlSize(.small)
-            GraphCanvas(focus: nil, compact: false, showTags: showTags, showUnlinked: showUnlinked)
+            GraphCanvas(focus: nil, compact: false, showTags: showTags, showUnlinked: showUnlinked,
+                        clipGroups: source == "clipboard" ? groups : nil)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.separator))
-            Text("Drag to move around, pinch to zoom, tap a point to open it. Colours are your top folders.")
+            Text(source == "clipboard"
+                 ? "Points are clips, coloured by kind; green: where they were copied, pink: where they were pasted, yellow: places. Tap a clip to open it."
+                 : "Drag to move around, pinch to zoom, tap a point to open it. Colours are your top folders.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(16)
         .navigationTitle("Connections")
+    }
+
+    private var sourcePicker: some View {
+        Picker("Connections between", selection: $source) {
+            Text("Notes").tag("notes")
+            Text("Clipboard").tag("clipboard")
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 220)
+    }
+
+    @ViewBuilder private var controls: some View {
+        if source == "clipboard" {
+            ForEach(ClipGraph.Group.allCases, id: \.self) { g in
+                Toggle(g.title, isOn: Binding(get: { groups.contains(g) }, set: { on in
+                    var next = groups
+                    if on { next.insert(g) } else { next.remove(g) }
+                    clipGroups = ClipGraph.Group.allCases.filter(next.contains).map(\.rawValue).joined(separator: ",")
+                })).toggleStyle(.button)
+            }
+            Spacer(minLength: 0)
+        } else {
+            Toggle("Tags", isOn: $showTags).toggleStyle(.button)
+            Toggle("Unconnected items", isOn: $showUnlinked).toggleStyle(.button)
+            Spacer(minLength: 0)
+            ForEach(model.folders.filter { $0.parent == nil }.sorted { $0.name < $1.name }.prefix(8)) { folder in
+                Label { Text(folder.name) } icon: { Circle().fill(FolderStyle.color(for: folder.id)).frame(width: 8, height: 8) }
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -37,7 +71,15 @@ struct GraphCanvas: View {
     var compact = false
     var showTags = true
     var showUnlinked = false
+    /// Set: the clipboard's graph, joined by these, instead of the library's.
+    var clipGroups: Set<ClipGraph.Group>?
     @Environment(AppModel.self) private var model
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var isCompact: Bool { sizeClass == .compact }
+    #else
+    private let isCompact = false
+    #endif
     @State private var sim: GraphSimulation?
     @State private var tick = 0
     @State private var offset: CGSize = .zero
@@ -83,7 +125,15 @@ struct GraphCanvas: View {
             .gesture(SpatialTapGesture().onEnded { value in
                 guard let hit = snapshot.nodes.min(by: { distance($0, value.location, center) < distance($1, value.location, center) }),
                       distance(hit, value.location, center) < max(14, hit.radius * scale + 8), !hit.isTag, hit.id != focus else { return }
-                model.selectedItemID = hit.id
+                if clipGroups != nil, model.clipboard.clips.contains(where: { $0.id == hit.id }) {
+                    // In the window it opens beside the clipboard; on a phone over the graph.
+                    if !isCompact { model.selection = .clipboard }
+                    model.selectedClipID = hit.id
+                } else if hit.id.contains("|") {
+                    return // a group: where, when or a tag
+                } else {
+                    model.selectedItemID = hit.id
+                }
             })
             .simultaneousGesture(DragGesture(minimumDistance: 4)
                 .onChanged { v in
@@ -100,7 +150,10 @@ struct GraphCanvas: View {
                 }
                 .onEnded { _ in pinchStart = nil })
             .overlay {
-                if let sim, sim.nodes.isEmpty, !compact {
+                if let sim, sim.nodes.isEmpty, !compact, clipGroups != nil {
+                    EmptyState(symbol: "doc.on.clipboard", title: "No clips yet",
+                               message: "Copy something, and it shows here joined to where you copied it, where you pasted it and where you were.")
+                } else if let sim, sim.nodes.isEmpty, !compact {
                     EmptyState(symbol: "point.3.connected.trianglepath.dotted", title: "No connections yet",
                                message: "Link notes by typing [[ and a title, or use Connect to… on any item. Shared #tags show up here too.")
                 }
@@ -108,7 +161,18 @@ struct GraphCanvas: View {
         }
         .background(RadialGradient(colors: [Color.orange.opacity(0.08), .clear], center: .center, startRadius: 0, endRadius: 500))
         .task(id: signature) {
-            let s = GraphSimulation(items: model.items, links: model.links, folders: model.folders, focus: focus, tags: showTags, unlinked: showUnlinked)
+            let s: GraphSimulation
+            if let clipGroups {
+                let clips = Array(model.clipboard.clips.prefix(600)), items = model.items
+                let events = await model.library?.clipEvents() ?? []
+                let graph = await Task.detached(priority: .userInitiated) {
+                    ClipGraph.build(clips, facts: ClipGraph.facts(clips, events: events), groups: clipGroups, items: items)
+                }.value
+                guard !Task.isCancelled else { return }
+                s = GraphSimulation(graph)
+            } else {
+                s = GraphSimulation(items: model.items, links: model.links, folders: model.folders, focus: focus, tags: showTags, unlinked: showUnlinked)
+            }
             sim = s
             scale = compact ? 1.1 : 1
             while s.alpha > 0.004, !Task.isCancelled {
@@ -120,7 +184,7 @@ struct GraphCanvas: View {
     }
 
     private var signature: String {
-        "\(focus ?? "")|\(showTags)|\(showUnlinked)|\(model.items.count)|\(model.links.outgoing.count)|\(model.links.incoming.values.reduce(0) { $0 + $1.count })|\(model.folders.count)"
+        "\(clipGroups.map { $0.map(\.rawValue).sorted().joined() + "|\(model.clipboard.clips.count)|\(model.clipboard.clips.first?.id ?? "")" } ?? "notes")|\(focus ?? "")|\(showTags)|\(showUnlinked)|\(model.items.count)|\(model.links.outgoing.count)|\(model.links.incoming.values.reduce(0) { $0 + $1.count })|\(model.folders.count)"
     }
 
     private func distance(_ n: GraphSimulation.Node, _ p: CGPoint, _ center: CGPoint) -> CGFloat {
@@ -197,6 +261,49 @@ final class GraphSimulation {
             let angle = CGFloat(i) * 2.399963, r = 30 * sqrt(CGFloat(i + 1))
             nodes[i].x = cos(angle) * r
             nodes[i].y = sin(angle) * r
+        }
+    }
+
+    /// The clipboard's graph: clips coloured by kind, the places, apps and days they're joined by.
+    init(_ graph: ClipGraph) {
+        let index = Dictionary(graph.nodes.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        nodes = graph.nodes.map { n in
+            switch n.role {
+            case .clip(let kind): Node(id: n.id, label: n.label, color: Self.color(kind), isTag: false, degree: n.degree)
+            case .item: Node(id: n.id, label: n.label, color: Color(white: 0.78), isTag: false, degree: n.degree)
+            case .group(let g):
+                Node(id: n.id, label: n.label, color: Self.color(g), isTag: g == .place || g == .tag, degree: n.degree)
+            }
+        }
+        edges = graph.edges.compactMap { e in index[e.a].flatMap { a in index[e.b].map { Edge(a: a, b: $0, isLink: e.kind != .group) } } }
+        for i in nodes.indices {
+            let angle = CGFloat(i) * 2.399963, r = 30 * sqrt(CGFloat(i + 1))
+            nodes[i].x = cos(angle) * r
+            nodes[i].y = sin(angle) * r
+        }
+    }
+
+    /// The website's colours (core/clipmap.js CLIP_KIND_COLORS and CLIP_GROUP_COLORS).
+    static func color(_ kind: ClipKind) -> Color {
+        switch kind {
+        case .link: Color(hex: 0x1dd1a1)
+        case .email, .phone: Color(hex: 0xfeca57)
+        case .color: Color(hex: 0xff6b6b)
+        case .code, .json: Color(hex: 0xa55eea)
+        case .number: Color(hex: 0x48dbfb)
+        case .image: Color(hex: 0xff9f43)
+        case .path, .file: Color(hex: 0xc8d6e5)
+        default: Color(hex: 0x54a0ff)
+        }
+    }
+
+    static func color(_ group: ClipGraph.Group) -> Color {
+        switch group {
+        case .from: Color(hex: 0x1dd1a1)
+        case .to: Color(hex: 0xff4f8b)
+        case .place: Color(hex: 0xfeca57)
+        case .day: Color(hex: 0x8395a7)
+        case .tag: Color(hex: 0xa55eea)
         }
     }
 

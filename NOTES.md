@@ -31,7 +31,23 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "sketches getting deleted, better crossing out, precise eraser, zoom 10–1000 %, Pencil squeeze, sketch folders and connections, GoodNotes-level sketching, crashes, clipboard connections with where/when/geolocation, empty 1970 notes, Clipboard under Sketches, laggy scrolling, import from Paste")
+## Latest round (user: "GoodNotes whiteboards open as a huge blank page; Connections should close what's open and switch Notes/Clipboard; Paste imports show as JSON; open clips on the right")
+
+- **GoodNotes whiteboards**: an endless canvas with no background (or a huge blank PDF) and the drawing
+  far from 0, 0. Both decoders now crop such pages to their content plus a margin (`fitToContent`,
+  docs/GOODNOTES.md "Page size and whiteboards"); the viewers draw very big pages softer instead of
+  blank. Not checked against a real whiteboard file: if one still looks wrong, ask the user for it.
+- **Paste's JSON wrapper**: newer Paste stores text as `{"type":"text","text":…,"textLength":…}`.
+  `PasteImport.unwrap` / `pasteimport.js unwrap` take it off on import, and `repairWrappedClips`
+  (Swift: hourly with pruning; website: once per session in the clipboard) fixes clips already
+  imported, folding any that become duplicates into the existing clip.
+- **Connections**: opening it closes the item open on the right (website `select`, apps
+  `AppModel.selection` didSet). A Notes / Clipboard switch shows the clipboard graph there too; the
+  apps use `ClipGraph` (TroveCore, a port of `buildClipGraph`).
+- **Clips open on the right** (Mac and iPad): in the window's clipboard, a click opens the clip in
+  the detail column (`ClipDetailPanel`), double-click copies. iPhone keeps tap-to-copy and the ⓘ sheet.
+
+## Round before (user: "sketches getting deleted, better crossing out, precise eraser, zoom 10–1000 %, Pencil squeeze, sketch folders and connections, GoodNotes-level sketching, crashes, clipboard connections with where/when/geolocation, empty 1970 notes, Clipboard under Sketches, laggy scrolling, import from Paste")
 - **A session ran out before committing**, so this round was redone from scratch and committed step by step.
 - **Drawings vanishing (iPad):** when the Pencil lifted, the canvas could be redrawn from a copy of
   the page taken before the stroke reached the model, wiping it. Now it reads the model fresh and
