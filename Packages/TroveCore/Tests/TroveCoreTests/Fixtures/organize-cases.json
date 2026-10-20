@@ -1,6 +1,7 @@
 {
   "paths": [
     { "kind": "note", "source": "app", "expect": ["Notes"] },
+    { "kind": "sketch", "source": "app", "expect": ["Sketches"] },
     { "kind": "note", "source": "appleNotes", "expect": ["Notes", "Apple Notes"] },
     { "kind": "note", "source": "import", "importPath": ["Export-1b2c3d4e-0000-4000-8000-123456789abc", "Uni 0123456789abcdef0123456789abcdef", "Maths"], "expect": ["Notion", "Uni", "Maths"] },
     { "kind": "pdf", "source": "import", "importPath": ["Photos", "photos", "", ".hidden", "Trip"], "expect": ["Photos", "Trip"] },

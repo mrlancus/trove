@@ -8,6 +8,7 @@ import { ClipField, clipView, hashImageHex, hashText } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
+import { encodePoints, InkField, strokeView } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
 const newId = () => crypto.randomUUID().toLowerCase();
@@ -452,6 +453,49 @@ export class Vault {
     if (!item) return;
     const next = item.collections.includes(collectionId) ? item.collections.filter((c) => c !== collectionId) : [...item.collections, collectionId];
     this.update(itemId, { [Field.collections]: next });
+  }
+
+  // ---------- drawing (PROTOCOL.md §10) ----------
+
+  /** Strokes on an item (a sketch's own pages, or `layer` = a file's attachment id), oldest first. */
+  strokes(on, layer = "", page = null) {
+    return this.store.visible.filter((r) => r.kind === "stroke").map(strokeView)
+      .filter((s) => s.on === on && s.layer === layer && (page === null || s.page === page))
+      .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+  }
+
+  /** Which items have ink, and on which layers: Map(itemId → Set(layer)). */
+  inkedLayers() {
+    const out = new Map();
+    for (const r of this.store.visible) if (r.kind === "stroke") { const s = strokeView(r); if (!out.has(s.on)) out.set(s.on, new Set()); out.get(s.on).add(s.layer); }
+    return out;
+  }
+
+  addStroke({ on, layer = "", page, tool, color, width, points }) {
+    if (!points.length) return null;
+    const id = newId();
+    // Strokes draw in creation order, so each one gets a later time than the last, even within a millisecond (Library.addStroke).
+    const latest = Math.max(0, ...this.store.visible.filter((r) => r.kind === "stroke" && r.fields.on === on).map((r) => r.fields.createdAt).filter((t) => typeof t === "number"));
+    const created = Math.max(this.now(), latest + 1);
+    this.set({ [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
+      [InkField.points]: encodePoints(points), [InkField.createdAt]: created, [InkField.device]: this.journal.device }, id, "stroke");
+    return id;
+  }
+
+  deleteStrokes(ids) { for (const id of ids) this.set({ _deleted: true }, id, "stroke"); }
+
+  /** A new, empty sketch (Library.addSketch). */
+  addSketch({ title = "", paper = "blank", folder = [] } = {}) {
+    const id = newId();
+    this.set({ ...this.baseFields("sketch", title), paper, pages: 1, ...this.filing({ kind: "sketch", source: "web", importPath: folder }) }, id, "item");
+    return id;
+  }
+
+  setSketch(id, { paper, pages } = {}) {
+    const fields = {};
+    if (paper) fields.paper = paper;
+    if (pages) fields.pages = Math.max(1, pages);
+    if (Object.keys(fields).length) this.update(id, fields);
   }
 
   // ---------- clipboard history (PROTOCOL.md §8) ----------

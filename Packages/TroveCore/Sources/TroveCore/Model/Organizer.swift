@@ -12,7 +12,7 @@ public enum Organizer {
         public static let bookmarks = "Bookmarks", documents = "Documents", spreadsheets = "Spreadsheets"
         public static let presentations = "Presentations", handwritten = "Handwritten", images = "Images"
         public static let screenshots = "Screenshots", scans = "Scans", audio = "Audio", voiceNotes = "Voice notes"
-        public static let files = "Files", appleNotes = "Apple Notes"
+        public static let files = "Files", appleNotes = "Apple Notes", sketches = "Sketches"
     }
 
     static let maxDepth = 5
@@ -42,6 +42,8 @@ public enum Organizer {
             return [Name.highlights] + (group.map { [$0] } ?? [])
         case .email:
             return [Name.email]
+        case .sketch:
+            return [Name.sketches]
         case .link:
             if source == .import { return [Name.bookmarks] + (group.map { [$0] } ?? []) }
             switch category {

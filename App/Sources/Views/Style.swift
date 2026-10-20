@@ -28,6 +28,7 @@ enum ItemStyle {
         case .file: return "doc"
         case .highlight: return "highlighter"
         case .email: return "envelope"
+        case .sketch: return "scribble.variable"
         }
     }
 

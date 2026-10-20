@@ -309,3 +309,31 @@ newest first, one per editing session (same device, edits less than 2 minutes ap
 
 **Inbox imports** (§4) use the item id `inbox-<relay entry id, lowercased>`. When the website and an
 app import the same entry at the same time, they write the same item rather than two.
+
+## 10. Drawing (sketches and ink on files)
+Every stroke is its own record with `kind: "stroke"` (`Ink.swift`, `web/public/core/ink.js`, both
+checked against `Fixtures/ink-cases.json`). Two devices drawing at once just add strokes, erasing
+is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `set`):
+
+| Field | Meaning |
+|---|---|
+| `on` | the item id the ink belongs to |
+| `layer` | `""` for a sketch's own pages; the attachment id of a file (PDF or image) drawn on |
+| `page` | 0-based page (a PDF page, or 0 for an image) |
+| `tool` | `pen`, `pencil`, `marker` or `highlighter` |
+| `color` | `"#rrggbb"` |
+| `width` | full width in page points |
+| `points` | base64url of little-endian float32 quadruples `x, y, pressure (0…1), t (ms since the stroke began)` |
+| `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
+| `device` | device id |
+
+- **Coordinates** are page points: a PDF page's points, an image's pixels, or a sketch page
+  (768 × 1024 unless the item's `pageSize` says otherwise).
+- **Look**: pen and pencil widths follow pressure (`width × (0.35 + 0.65 × pressure)`); markers and
+  highlighters are even. Opacity: pencil 0.85, highlighter 0.35 (blended under the ink), others 1.
+- **The file under the ink never changes.** Ink on a new version of a file (a new attachment id) starts
+  empty; the old version keeps its ink.
+
+**Sketch items** have `kind: "sketch"` and are filed in "Sketches". Extra fields: `paper`
+(`blank`, `lined`, `grid` or `dotted`, lines 32 points apart), `pages` (count), and optionally
+`pageSize` `[w, h]`.

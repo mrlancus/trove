@@ -46,7 +46,12 @@ export function itemView(record) {
     conflictingVersions: conflicts,
     hasConflicts: conflicts.length > 0,
   };
-  item.displayTitle = title || body.split("\n").find((l) => l.trim())?.slice(0, 80) || url?.host || "Untitled";
+  if (item.kind === "sketch") {
+    const size = Array.isArray(f.pageSize) && f.pageSize.length === 2 && f.pageSize.every((v) => typeof v === "number" && v > 0) ? f.pageSize : [768, 1024];
+    Object.assign(item, { paper: ["blank", "lined", "grid", "dotted"].includes(f.paper) ? f.paper : "blank",
+      sketchPages: Math.max(1, typeof f.pages === "number" ? Math.floor(f.pages) : 1), pageSize: size });
+  }
+  item.displayTitle = title || body.split("\n").find((l) => l.trim())?.slice(0, 80) || url?.host || (item.kind === "sketch" ? "Sketch" : "Untitled");
   return item;
 }
 

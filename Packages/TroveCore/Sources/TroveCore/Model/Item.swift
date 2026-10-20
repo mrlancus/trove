@@ -3,6 +3,8 @@ import Foundation
 /// What an item physically is.
 public enum ItemKind: String, Codable, CaseIterable, Sendable {
     case note, link, image, pdf, audio, video, file, highlight, email
+    /// A drawing: pages of strokes (PROTOCOL.md §10).
+    case sketch
 }
 
 /// What an item is *about*: drives Smart Collections and card styles.
@@ -72,7 +74,7 @@ public struct Item: Identifiable, Hashable, Sendable {
         if !title.isEmpty { return title }
         if let firstLine = body.split(separator: "\n").first, !firstLine.isEmpty { return String(firstLine.prefix(80)) }
         if let url { return url.host ?? url.absoluteString }
-        return "Untitled"
+        return kind == .sketch ? "Sketch" : "Untitled"
     }
     public var url: URL? { record[Field.url]?.string.flatMap(URL.init(string:)) }
     public var body: String { record.texts[Field.body] ?? "" }

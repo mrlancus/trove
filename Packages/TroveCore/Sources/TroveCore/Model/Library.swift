@@ -61,7 +61,7 @@ public actor Library {
 
     func newId() -> String { UUID().uuidString.lowercased() }
 
-    private func baseFields(kind: ItemKind, source: ItemSource, title: String, createdAt: Date? = nil) async -> [String: JSONValue] {
+    func baseFields(kind: ItemKind, source: ItemSource, title: String, createdAt: Date? = nil) async -> [String: JSONValue] {
         [
             Field.kind: .string(kind.rawValue), Field.source: .string(source.rawValue), Field.title: .string(title),
             Field.createdAt: JSONValue(createdAt ?? now()), Field.capturedOn: .string(await engine.device),

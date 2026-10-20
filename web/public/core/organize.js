@@ -6,6 +6,7 @@ export const FolderName = {
   places: "Places", videos: "Videos", events: "Events", reading: "Reading", links: "Links", code: "Code", bookmarks: "Bookmarks",
   documents: "Documents", spreadsheets: "Spreadsheets", presentations: "Presentations", handwritten: "Handwritten", images: "Images",
   screenshots: "Screenshots", scans: "Scans", audio: "Audio", voiceNotes: "Voice notes", files: "Files", appleNotes: "Apple Notes",
+  sketches: "Sketches",
 };
 const N = FolderName;
 const MAX_DEPTH = 5;
@@ -31,6 +32,7 @@ export function folderPath({ kind, category = null, source, fileName = null, col
     case "note": return source === "appleNotes" ? [N.notes, N.appleNotes] : [N.notes];
     case "highlight": return group ? [N.highlights, group] : [N.highlights];
     case "email": return [N.email];
+    case "sketch": return [N.sketches];
     case "link": {
       if (source === "import") return group ? [N.bookmarks, group] : [N.bookmarks];
       return [{ recipe: N.recipes, product: N.shopping, place: N.places, video: N.videos, event: N.events, article: N.reading, code: N.code }[category] ?? N.links];

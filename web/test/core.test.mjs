@@ -386,3 +386,32 @@ test("GoodNotes ink: every layout in the shared fixture decodes as GoodNotesInkT
   assert.ok(gn.isHighlighter(ink[1]) && ink[3].pencil && ink[4].shape);
   assert.equal(gn.pageText(nb.pages[1]), "Hello world\nagain");
 });
+
+test("drawing: packed points, widths and strokes in the vault match Ink.swift", async () => {
+  const ink = await import("../public/core/ink.js");
+  const cases = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-cases.json", import.meta.url), "utf8"));
+  const points = cases.points.map(([x, y, p, t]) => ({ x, y, p, t }));
+  assert.equal(ink.encodePoints(points), cases.encoded);
+  assert.deepEqual(ink.decodePoints(cases.encoded), points);
+  for (const w of cases.widths) assert.ok(Math.abs(ink.widthAt(w.width, w.tool, w.pressure) - w.expect) < 1e-9);
+
+  const { v: vault } = await testVault();
+  const sketch = vault.addSketch({ paper: "lined" });
+  assert.equal(vault.item(sketch).kind, "sketch");
+  assert.equal(vault.item(sketch).displayTitle, "Sketch");
+  assert.equal(vault.item(sketch).paper, "lined");
+  assert.equal(vault.folders().find((f) => f.id === vault.item(sketch).folder)?.name, "Sketches");
+  const a = vault.addStroke({ on: sketch, page: 0, tool: "pen", color: "#112233", width: 3, points });
+  const b = vault.addStroke({ on: sketch, page: 1, tool: "highlighter", color: "#ffee00", width: 20, points: points.slice(0, 2) });
+  const c = vault.addStroke({ on: "pdf-item", layer: "blob1", page: 0, tool: "marker", color: "#ff0000", width: 6, points });
+  assert.deepEqual(vault.strokes(sketch).map((s) => s.id), [a, b]);
+  assert.deepEqual(vault.strokes(sketch, "", 1).map((s) => s.id), [b]);
+  assert.deepEqual(vault.strokes("pdf-item", "blob1").map((s) => s.id), [c]);
+  assert.ok(ink.hits(vault.strokes(sketch)[0], 10, 21, 1));
+  assert.ok(!ink.hits(vault.strokes(sketch)[0], 500, 500, 5));
+  vault.deleteStrokes([a]);
+  assert.deepEqual(vault.strokes(sketch).map((s) => s.id), [b]);
+  vault.setSketch(sketch, { pages: 3 });
+  assert.equal(vault.item(sketch).sketchPages, 3);
+  assert.deepEqual([...vault.inkedLayers().get("pdf-item")], ["blob1"]);
+});
