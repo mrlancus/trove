@@ -75,6 +75,9 @@ targets:
         NSUserActivityTypes: [com.mrlancus.trove.item]
         TroveAppGroup: $(TROVE_APP_GROUP)
         TroveDefaultRelay: https://trove-relay.lancus.workers.dev
+        # Mac self-updates (Services/Updater.swift) only install zips signed with the matching
+        # private key (GitHub secret UPDATE_SIGNING_KEY). This public half isn't secret.
+        TroveUpdatePublicKey: J1OFeWLoegOcz5Qr1Qmt/8tSSMSLWmO0Q9gW7iPdvTY=
     entitlements:
       path: Config/Trove.entitlements
       properties:

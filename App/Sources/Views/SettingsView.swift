@@ -11,7 +11,7 @@ struct SettingsView: View {
         #if os(macOS)
         // A real Settings window with tabs, so it never outgrows the main window.
         TabView {
-            Form { VaultSection(); AboutSection() }.formStyle(.grouped)
+            Form { VaultSection(); UpdatesSection(); AboutSection() }.formStyle(.grouped)
                 .tabItem { Label("General", systemImage: "gearshape") }
             Form { WebSection(); DevicesSection(); RelaySection() }.formStyle(.grouped)
                 .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
@@ -47,6 +47,39 @@ private struct SettingsList: View {
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+    }
+}
+#endif
+
+#if os(macOS)
+private struct UpdatesSection: View {
+    @State private var updater = Updater.shared
+
+    var body: some View {
+        Section("Updates") {
+            LabeledContent("This version", value: "\(updater.currentVersion) (build \(updater.currentBuild))")
+            Toggle("Download and offer updates automatically", isOn: Binding(get: { updater.automatic }, set: { updater.automatic = $0 }))
+                .disabled(!updater.isEnabled)
+            HStack {
+                Button("Check Now") { Task { await updater.check(userInitiated: true) } }
+                    .disabled(updater.state == .checking)
+                Spacer()
+                Text(status).foregroundStyle(.secondary).font(.callout)
+            }
+        } footer: {
+            FormFooter("New versions come from the latest build on GitHub. Each one is checked against Trove's signing key before it's installed, and permissions you've given Trove stay as they are.")
+        }
+    }
+
+    private var status: String {
+        switch updater.state {
+        case .idle: updater.lastChecked.map { "Checked \($0.formatted(.relative(presentation: .named)))" } ?? ""
+        case .checking: "Checking…"
+        case .upToDate: "Up to date"
+        case .downloading(let v): "Downloading \(v)…"
+        case .ready(let v): "\(v) is ready to install"
+        case .failed(let message): message
+        }
     }
 }
 #endif

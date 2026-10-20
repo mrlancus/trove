@@ -49,6 +49,11 @@ struct TroveApp: App {
                 Button("Capture…") { model.showCapture = true }.keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Sync Now") { Task { await model.syncNow() } }.keyboardShortcut("r", modifiers: .command)
             }
+            #if os(macOS)
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await Updater.shared.check(userInitiated: true) } }
+            }
+            #endif
         }
 
         #if os(macOS)
