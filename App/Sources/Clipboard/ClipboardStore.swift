@@ -12,7 +12,8 @@ struct EphemeralClip: Identifiable, Equatable {
 }
 
 /// Clipboard history for the UI: synced clips from the library plus this device's short-lived
-/// sensitive ones. The Mac's watcher feeds it; the iPhone adds with the Paste button.
+/// sensitive ones. `ClipboardWatcher` feeds it (all the time on the Mac, whenever Trove opens on
+/// iPhone and iPad), and the Paste button adds by hand.
 @MainActor
 @Observable
 final class ClipboardStore {
@@ -23,6 +24,8 @@ final class ClipboardStore {
     var enabled: Bool { didSet { UserDefaults.standard.set(enabled, forKey: "clipboard.enabled") } }
     /// Keep sensitive copies for two minutes on this device (off: ignore them entirely).
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
+    /// iPhone/iPad: save what was copied whenever Trove is opened.
+    var captureOnOpen: Bool { didSet { UserDefaults.standard.set(captureOnOpen, forKey: "clipboard.captureOnOpen") } }
 
     /// The last copy this device recorded, for the status line in Settings.
     private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
@@ -35,6 +38,7 @@ final class ClipboardStore {
     init() {
         enabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
         keepSensitive = UserDefaults.standard.object(forKey: "clipboard.keepSensitive") as? Bool ?? true
+        captureOnOpen = UserDefaults.standard.object(forKey: "clipboard.captureOnOpen") as? Bool ?? true
     }
 
     func attach(_ library: Library) async {

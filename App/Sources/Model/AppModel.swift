@@ -71,6 +71,9 @@ final class AppModel {
     var links = Links.Graph()
     var selection: Selection? = .smart(.recent)
     var selectedItemID: String?
+    /// Select mode: tapping toggles items into `picked` for the bulk actions bar.
+    var selecting = false { didSet { if !selecting { picked = [] } } }
+    var picked: Set<String> = []
     var searchText = "" { didSet { scheduleSearch() } }
     var searchResults: [Item]?
     var sync = SyncStatus()
@@ -85,8 +88,8 @@ final class AppModel {
     private(set) var enrichment: EnrichmentService?
     let semantic = SemanticIndex()
     let clipboard = ClipboardStore()
-    #if os(macOS)
     private var clipboardWatcher: ClipboardWatcher?
+    #if os(macOS)
     private(set) var clipboardPalette: ClipboardPaletteController?
     #endif
     private var syncTask: Task<Void, Never>?
@@ -123,30 +126,28 @@ final class AppModel {
         await engine.observe { _ in Task { @MainActor [weak self] in self?.scheduleSave() } }
         await reload()
         await clipboard.attach(library)
-        #if os(macOS)
         startClipboard()
-        #endif
         startSyncLoop()
         connectLive()
     }
 
     // MARK: Clipboard
 
-    #if os(macOS)
     private func startClipboard() {
         if clipboardWatcher == nil {
             let watcher = ClipboardWatcher(store: clipboard)
             watcher.start()
             clipboardWatcher = watcher
         }
+        #if os(macOS)
         if clipboardPalette == nil {
             let palette = ClipboardPaletteController(store: clipboard, thisDevice: { [weak self] in self?.config?.deviceId },
                                                      saveToLibrary: { [weak self] clip in self?.saveClip(clip) })
             palette.installHotKey()
             clipboardPalette = palette
         }
+        #endif
     }
-    #endif
 
     /// Turns a clip into a library item.
     func saveClip(_ clip: Clip) {
@@ -220,7 +221,7 @@ final class AppModel {
         switch selection {
         case .smart(let s): return items.filter(s.contains)
         case .collection(let id): return items.filter { $0.collections.contains(id) }
-        case .source(let src): return items.filter { $0.source == src }
+        case .source(let src): return items.filter { $0.sources.contains(src) }
         case .folder(let id): return items.filter { $0.folder == id }
         case .unfiled: return unfiledItems
         case .graph, .importer, nil: return items
@@ -422,6 +423,9 @@ final class AppModel {
 
     /// Back from the background: the live socket has usually been dropped by then.
     func becameActive() async {
+        #if os(iOS)
+        clipboardWatcher?.check()
+        #endif
         if !sync.live { connectLive() }
         await syncNow()
     }
@@ -618,6 +622,49 @@ final class AppModel {
         if selectedItemID == item.id { selectedItemID = nil }
         await reload()
         SpotlightIndexer.remove(item.id)
+    }
+
+    // MARK: Several at once
+
+    func togglePicked(_ id: String) {
+        if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+    }
+
+    /// Deletes the picked items (or the ones given) and leaves select mode.
+    func deletePicked(_ ids: Set<String>? = nil) async {
+        guard let library else { return }
+        let ids = ids ?? picked
+        for id in ids { await library.delete(id); SpotlightIndexer.remove(id) }
+        if let selected = selectedItemID, ids.contains(selected) { selectedItemID = nil }
+        selecting = false
+        await reload()
+        toast = ids.count == 1 ? "Deleted 1 item" : "Deleted \(ids.count) items"
+    }
+
+    func movePicked(to folder: String?) async {
+        guard let library else { return }
+        let ids = picked
+        for id in ids { await library.move(id, to: folder) }
+        selecting = false
+        await reload()
+        let name = folder.flatMap { f in folders.first { $0.id == f }?.name }
+        toast = name.map { "Moved \(ids.count) to \($0)" } ?? "Removed \(ids.count) from their folders"
+    }
+
+    func pinPicked(_ pinned: Bool) async {
+        guard let library else { return }
+        for id in picked { await library.setPinned(id, pinned) }
+        selecting = false
+        await reload()
+    }
+
+    func addPicked(to collection: String) async {
+        guard let library else { return }
+        let count = picked.count
+        for id in picked { await library.add(id, to: collection) }
+        selecting = false
+        await reload()
+        toast = "Added \(count) to \(collections.first { $0.id == collection }?.name ?? "the collection")"
     }
 
     // MARK: Price drops and public links

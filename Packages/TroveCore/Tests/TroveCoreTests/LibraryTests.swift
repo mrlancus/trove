@@ -95,6 +95,17 @@ import Testing
         #expect(await lib.items().count == 1)
     }
 
+    @Test func duplicatesFromAnotherSourceAreListedThereToo() async {
+        let lib = makeLibrary()
+        let (id, _) = await lib.addLink(URL(string: "https://example.com/post")!, source: .import)
+        let (again, isNew) = await lib.addLink(URL(string: "https://www.example.com/post/?utm_source=x")!, source: .email)
+        #expect(again == id && !isNew)
+        #expect(await lib.item(id)?.sources == [.import, .email])
+        _ = await lib.addLink(URL(string: "https://example.com/post")!, source: .email)
+        #expect(await lib.item(id)?.sources == [.import, .email])
+        #expect(await lib.search("from:email").map(\.id) == [id])
+    }
+
     @Test func enrichmentRespectsTiersAndUserTitles() async {
         let lib = makeLibrary()
         let (id, _) = await lib.addLink(URL(string: "https://cook.example/r")!, title: "My ramen")

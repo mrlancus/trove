@@ -14,7 +14,8 @@ import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
-  importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false, graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
+  importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false,
+  selecting: false, picked: new Set(), anchor: null, shownIds: [], graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
 
 function loadPref(key, fallback) {
   try { const v = JSON.parse(localStorage.getItem(`trove.${key}`)); return v ?? fallback; } catch { return fallback; }
@@ -217,6 +218,7 @@ function showMain(vault) {
   $("#import-show").addEventListener("click", () => { state.importRun = null; state.selection = "all"; render(); });
   $("#import-more").addEventListener("click", () => { state.importRun = null; render(); });
   $("#menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
+  $("#select-mode").addEventListener("click", () => setSelecting(!state.selecting));
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
   $("#new-folder").addEventListener("click", (e) => { e.stopPropagation(); newFolder(null); });
@@ -249,8 +251,13 @@ function showMain(vault) {
 }
 
 function onKey(e) {
-  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "");
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
   if (e.key === "Escape" && state.openId) { closeItem(); return; }
+  if (e.key === "Escape" && state.selecting) { setSelecting(false); return; }
+  if (state.selecting && !typing) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "a") { e.preventDefault(); state.picked = new Set(state.shownIds); render(); return; }
+    if ((e.key === "Delete" || e.key === "Backspace") && state.picked.size) { e.preventDefault(); deletePicked(); return; }
+  }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === "/") { e.preventDefault(); $("#search").focus(); }
   if (e.key === "n") { e.preventDefault(); $("#new-note").click(); }
@@ -431,6 +438,10 @@ function render() {
   renderFolderNav(folders, items, unfiled);
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
   $("#collection-heading").hidden = !collections.length;
+  const sources = [...new Set(items.flatMap((i) => i.sources))].filter((s) => s !== "app" && s !== "share")
+    .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+  $("#source-list").replaceChildren(...sources.map((s) => navLink(`s:${s}`, sourceLabel(s), items.filter((i) => i.sources.includes(s)).length)));
+  $("#source-heading").hidden = !sources.length;
 
   const mode = state.query.trim() && !["clips", "graph"].includes(state.selection) ? "items"
     : state.selection === "clips" ? "clips" : state.selection === "import" ? "import" : state.selection === "graph" ? "graph" : "items";
@@ -442,6 +453,8 @@ function render() {
   $("#folder-tiles").hidden = true;
   if (mode !== "graph" && graphView) { graphView.stop(); graphView = null; }
   if (mode !== "clips") $("#clip-tools")?.remove();
+  $("#select-mode").hidden = mode !== "items";
+  if (mode !== "items" && state.selecting) { state.selecting = false; state.picked = new Set(); renderBulkBar(); }
   if (mode === "import") { $("#empty").hidden = true; renderImport(); renderDetail(); return; }
   if (mode === "clips") { renderClips(); renderDetail(); return; }
   if (mode === "graph") { $("#empty").hidden = true; renderGraphView(items, folders); renderDetail(); return; }
@@ -460,6 +473,11 @@ function render() {
     shown = items.filter((i) => inside.has(i.folder));
     title = folderHeading(id, folders, items);
     renderFolderTiles(id, folders, items);
+  } else if (sel.startsWith("s:")) {
+    const source = sel.slice(2);
+    // Everything that came from here, including things that were already in Trove from elsewhere.
+    shown = items.filter((i) => i.sources.includes(source));
+    title = sourceLabel(source);
   } else if (sel === "unfiled") {
     shown = unfiled;
     title = h("div", { class: "heading-row" }, h("span", { text: "Unfiled" }),
@@ -476,11 +494,78 @@ function render() {
   if (typeof title === "string") $("#heading").textContent = title; else $("#heading").replaceChildren(title);
   const folderNames = new Map(folders.map((f) => [f.id, f.name]));
   const inFolder = sel.startsWith("f:");
+  state.shownIds = shown.slice(0, MAX_CARDS).map((i) => i.id);
+  for (const id of state.picked) if (!vault.item(id)) state.picked.delete(id);
+  renderBulkBar();
   $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => card(item, inFolder ? null : folderNames.get(item.folder))));
   $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
   $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
   renderDetail();
+}
+
+// ---------- selecting several ----------
+
+function setSelecting(on) {
+  state.selecting = on;
+  state.picked = new Set();
+  state.anchor = null;
+  render();
+}
+
+/** Adds or removes a card; with shift, everything between it and the last one picked. */
+function pick(id, range) {
+  if (!state.selecting) { state.selecting = true; state.picked = new Set(state.openId && state.openId !== id ? [state.openId] : []); }
+  const ids = state.shownIds, a = ids.indexOf(state.anchor), b = ids.indexOf(id);
+  if (range && a >= 0 && b >= 0) for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) state.picked.add(x);
+  else if (state.picked.has(id)) state.picked.delete(id);
+  else state.picked.add(id);
+  state.anchor = id;
+  render();
+}
+
+function deletePicked() {
+  const ids = [...state.picked];
+  if (!ids.length || !confirm(`Delete ${ids.length} item${ids.length === 1 ? "" : "s"} on all your devices?`)) return;
+  for (const id of ids) state.vault.delete(id);
+  if (ids.includes(state.openId)) closeItem();
+  toast(`Deleted ${ids.length} item${ids.length === 1 ? "" : "s"}`);
+  setSelecting(false);
+  syncSoon();
+}
+
+function renderBulkBar() {
+  const bar = $("#bulk-bar");
+  bar.hidden = !state.selecting;
+  $("#select-mode").textContent = state.selecting ? "Done" : "Select";
+  $("#select-mode").classList.toggle("primary", state.selecting);
+  $("#select-mode").classList.toggle("secondary", !state.selecting);
+  if (!state.selecting) { bar.replaceChildren(); return; }
+  const vault = state.vault, ids = [...state.picked], n = ids.length;
+  const all = state.shownIds.length > 0 && state.shownIds.every((id) => state.picked.has(id));
+  const allPinned = n > 0 && ids.every((id) => vault.item(id)?.isPinned);
+  const move = h("select", { class: "folder-select", "aria-label": "Move to folder", disabled: n ? null : true },
+    h("option", { value: "__", text: "Move to…", disabled: true, selected: true }),
+    h("option", { value: "", text: "No folder" }),
+    folderTree(vault.folders()).map(({ folder, depth }) => h("option", { value: folder.id, text: `${" ".repeat(depth * 2)}${folder.name}` })));
+  move.addEventListener("change", () => {
+    const target = move.value || null;
+    for (const id of ids) vault.moveItem(id, target);
+    toast(target ? `Moved ${n} to ${vault.folders().find((f) => f.id === target)?.name}` : `Removed ${n} from their folders`);
+    setSelecting(false);
+    syncSoon();
+  });
+  bar.replaceChildren(
+    h("span", { class: "bulk-count", text: n ? `${n} selected` : "Tap cards to select" }),
+    h("button", { type: "button", class: "secondary small", onclick: () => { state.picked = all ? new Set() : new Set(state.shownIds); render(); } }, all ? "Select none" : "Select all"),
+    move,
+    h("button", { type: "button", class: "secondary small", disabled: n ? null : true, onclick: () => {
+      for (const id of ids) vault.setPinned(id, !allPinned);
+      setSelecting(false);
+      syncSoon();
+    } }, allPinned ? "Unpin" : "Pin"),
+    h("button", { type: "button", class: "secondary small danger", disabled: n ? null : true, onclick: deletePicked }, "Delete"),
+    h("button", { type: "button", class: "primary small", onclick: () => setSelecting(false) }, "Done"));
 }
 
 function navLink(id, title, count) {
@@ -779,6 +864,10 @@ async function pasteFromClipboard() {
   }
 }
 
+const sourceLabels = { app: "Trove", share: "Share sheet", web: "Browser", email: "Email", goodnotes: "GoodNotes", kindle: "Kindle",
+  readwise: "Readwise", obsidian: "Obsidian", appleNotes: "Apple Notes", notion: "Notion", screenshot: "Screenshots", voice: "Voice",
+  scan: "Scan", import: "Import" };
+const sourceLabel = (s) => sourceLabels[s] ?? s;
 const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email" };
 
 function card(item, folderName) {
@@ -795,7 +884,14 @@ function card(item, folderName) {
   } else if (att) {
     thumb = h("div", { class: `thumb-wrap small kind-${item.kind}` }, h("span", { class: "type-tile", text: typeLabel(att.name, att.mime) }));
   }
-  const el = h("button", { type: "button", class: `card ${item.kind}`, draggable: "true", onclick: () => { state.mode = null; openItem(item.id); } },
+  const picked = state.picked.has(item.id);
+  const el = h("button", { type: "button", class: `card ${item.kind}${picked ? " picked" : ""}${state.selecting ? " selecting" : ""}`, draggable: "true",
+    "aria-pressed": state.selecting ? String(picked) : null,
+    onclick: (e) => {
+      if (state.selecting || e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); pick(item.id, e.shiftKey); return; }
+      state.mode = null; openItem(item.id);
+    } },
+    state.selecting ? h("span", { class: "pick-mark", "aria-hidden": "true", text: picked ? "✓" : "" }) : null,
     thumb,
     h("div", { class: "body" },
       h("div", { class: "meta" },

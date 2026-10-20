@@ -230,7 +230,7 @@ private struct DevicesSection: View {
     var body: some View {
         Section("Devices") {
             Button { adding = true } label: { Label("Add a device", systemImage: "qrcode") }
-                .sheet(isPresented: $adding) { AddDeviceView() }
+                .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddDeviceView() }
             ForEach(devices) { d in
                 HStack {
                     Image(systemName: d.kind == "mac" ? "laptopcomputer" : d.kind == "ipad" ? "ipad" : d.kind == "web" ? "globe" : "iphone")
@@ -436,6 +436,9 @@ private struct ClipboardSection: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             #else
+            Toggle("Save what I copied when I open Trove", isOn: $clipboard.captureOnOpen)
+            Text("iOS asks “Allow Paste?” each time unless you choose Settings → Apps → Trove → Paste from Other Apps → Allow.")
+                .font(.caption).foregroundStyle(.secondary)
             Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
                 .font(.caption).foregroundStyle(.secondary)
             #endif

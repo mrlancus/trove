@@ -283,6 +283,7 @@ ignore them.
 | `links` | ids of items connected by hand. `[[Title]]` links in the body are found from the text and aren't stored |
 | `fileVersions` | earlier files, newest first, at most 50: `[{attachment, at, by}]` (`attachment` is the usual `{id,name,mime,size}`, `at` Unix ms, `by` device id) |
 | `thumbnail` | a small JPEG preview (attachment JSON). Written once by whichever device sees the file first; cleared when the file changes |
+| `alsoFrom` | other sources (`ItemSource` values) the same thing arrived from later. When a link that's already saved comes in again from somewhere else, the existing item gains that source instead of a duplicate being made, so "Sources" lists it under every source it came from (`source` stays the first one) |
 
 **Filing new items**: `Organizer.swift` and `web/public/core/organize.js`, both checked against
 `Fixtures/organize-cases.json`.

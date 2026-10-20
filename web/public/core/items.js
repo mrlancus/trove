@@ -26,6 +26,7 @@ export function itemView(record) {
     kind: str(f.kind) ?? "note",
     category: str(f.category) ?? "other",
     source: str(f.source) ?? "app",
+    sources: [...new Set([str(f.source) ?? "app", ...(Array.isArray(f.alsoFrom) ? f.alsoFrom.filter((s) => typeof s === "string") : [])])],
     summary: str(f.summary),
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === "string") : [],
     createdAt: typeof f.createdAt === "number" ? f.createdAt : 0,
@@ -134,7 +135,7 @@ export function matchesQuery(q, item) {
   if (q.kinds.length && !q.kinds.includes(item.kind)) return false;
   if (q.categories.length && !q.categories.includes(item.category)) return false;
   if (q.tags.length && !q.tags.every((t) => item.tags.map((x) => x.toLowerCase()).includes(t))) return false;
-  if (q.sources.length && !q.sources.includes(item.source.toLowerCase())) return false;
+  if (q.sources.length && !item.sources.some((s) => q.sources.includes(s.toLowerCase()))) return false;
   if (q.collection && !item.collections.includes(q.collection)) return false;
   if (q.pinnedOnly && !item.isPinned) return false;
   if (q.unreadOnly && item.readAt !== null) return false;

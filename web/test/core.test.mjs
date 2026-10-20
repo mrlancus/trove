@@ -351,3 +351,15 @@ test("file previews: kinds, GoodNotes, Word, Excel, PowerPoint, iWork and CSV", 
   assert.equal((await f.iworkPreview(read("sample.pages"))).mime, "image/jpeg");
   assert.deepEqual(f.parseDelimited('a,"b, c",d\n1,"say ""hi""",3\r\nlast'), [["a", "b, c", "d"], ["1", 'say "hi"', "3"], ["last"]]);
 });
+
+test("a duplicate from another source is listed under that source too", async () => {
+  const { v: vault } = await testVault();
+  const { id } = vault.addLink("https://example.com/post", { source: "import" });
+  const again = vault.addLink("https://www.example.com/post/?utm_source=x", { source: "email" });
+  assert.equal(again.id, id);
+  assert.equal(again.isNew, false);
+  assert.deepEqual(vault.item(id).sources, ["import", "email"]);
+  vault.addLink("https://example.com/post", { source: "email" });
+  assert.deepEqual(vault.item(id).sources, ["import", "email"]);
+  assert.deepEqual(search(vault.items(), "from:email", Date.now()).map((i) => i.id), [id]);
+});

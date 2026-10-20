@@ -231,7 +231,7 @@ struct ClipsView: View {
                 .labelStyle(.titleAndIcon)
                 .buttonBorderShape(.capsule)
             } footer: {
-                Text("iOS only lets apps read the clipboard when you ask, so tap Paste to add what you copied. Copies on your Mac appear here automatically.")
+                Text("What you copy is saved each time you open Trove (iOS asks “Allow Paste?” unless you allow it in Settings → Apps → Trove → Paste from Other Apps). Copies on your other devices appear here by themselves.")
             }
             Section {
                 Picker("Show", selection: $state.filter) {

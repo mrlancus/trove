@@ -382,11 +382,17 @@ export class Vault {
     const cleaned = cleanURL(url);
     const key = dedupeKey(cleaned.toString());
     const existing = this.items().find((i) => i.url && dedupeKey(i.url.toString()) === key);
-    if (existing) return { id: existing.id, isNew: false };
+    if (existing) { this.noteSource(source, existing); return { id: existing.id, isNew: false }; }
     const id = givenId ?? newId();
     this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source }) }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
+  }
+
+  /** The same thing arrived again from somewhere else: list it under that source too (Library.noteSource). */
+  noteSource(source, item) {
+    if (item.sources.includes(source) || source === "app") return;
+    this.update(item.id, { alsoFrom: [...item.sources.slice(1), source] });
   }
 
   /** Adds imported items (importer.js), skipping ones already imported (like Library.importItems). */

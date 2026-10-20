@@ -55,6 +55,7 @@ public enum Field {
     public static let links = "links"           // ids of items this one is connected to by hand
     public static let fileVersions = "fileVersions" // earlier attachments, newest first: [{attachment, at, by}]
     public static let thumbnail = "thumbnail"   // a small JPEG preview (attachment JSON)
+    public static let alsoFrom = "alsoFrom"     // other sources the same thing arrived from (it was a duplicate)
     // text fields
     public static let body = "body"
 }
@@ -79,6 +80,12 @@ public struct Item: Identifiable, Hashable, Sendable {
     public var tags: [String] { record[Field.tags]?.stringArray ?? [] }
     public var category: ItemCategory { ItemCategory(rawValue: record[Field.category]?.string ?? "") ?? .other }
     public var source: ItemSource { ItemSource(rawValue: record[Field.source]?.string ?? "") ?? .app }
+    /// Every source this arrived from: where it was first saved, plus later duplicates (PROTOCOL.md §9).
+    public var sources: [ItemSource] {
+        var out = [source]
+        for s in record[Field.alsoFrom]?.stringArray ?? [] { if let s = ItemSource(rawValue: s), !out.contains(s) { out.append(s) } }
+        return out
+    }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
     public var collections: [String] { record[Field.collections]?.stringArray ?? [] }
     public var space: String? { record[Field.space]?.string }

@@ -90,6 +90,7 @@ public actor Library {
         let cleaned = URLCleaner.clean(url)
         let key = URLCleaner.dedupeKey(cleaned)
         if let existing = await items().first(where: { $0.url.map(URLCleaner.dedupeKey) == key }) {
+            await noteSource(source, on: existing)
             return (existing.id, false)
         }
         let id = id ?? newId()
@@ -113,6 +114,12 @@ public actor Library {
         fields.merge(await filing(kind: resolvedKind, source: source, fileName: name, importPath: folder)) { _, b in b }
         await engine.set(fields, record: id, kind: "item")
         return id
+    }
+
+    /// The same thing arrived again from somewhere else: list it under that source too.
+    func noteSource(_ source: ItemSource, on item: Item) async {
+        guard !item.sources.contains(source), source != .app else { return }
+        await update(item.id, [Field.alsoFrom: JSONValue(item.sources.dropFirst().map(\.rawValue) + [source.rawValue])])
     }
 
     public static func kind(forMime mime: String) -> ItemKind {

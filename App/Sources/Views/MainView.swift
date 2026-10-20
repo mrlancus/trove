@@ -1,6 +1,9 @@
 import SwiftUI
 import TroveCore
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
@@ -33,26 +36,18 @@ struct MainView: View {
     @State private var showClipboard = false
     @State private var dropTargeted = false
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView(columnVisibility: $columns) {
-            SidebarView(showSettings: $showSettings)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
-        } content: {
-            Group {
-                if model.selection == .importer, model.searchText.isEmpty { ImportView() }
-                else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
-                else { LibraryView() }
-            }
-                .navigationSplitViewColumnWidth(min: 320, ideal: 520)
-                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
-                .toolbar { toolbar }
-        } detail: {
-            if let item = model.selectedItem {
-                ItemDetailView(item: item).id(item.id)
-            } else {
-                EmptyState(symbol: "sparkles.rectangle.stack", title: "Pick something", message: "Or press ⌘N for a note, or paste a link into Capture.")
-            }
+        Group {
+            #if os(iOS)
+            if sizeClass == .compact { PhoneRootView(showSettings: $showSettings, showClipboard: $showClipboard) } else { split }
+            #else
+            split
+            #endif
         }
         .sheet(isPresented: $model.showCapture) { CaptureView().presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showAsk) { AskView() }
@@ -72,6 +67,31 @@ struct MainView: View {
         .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $dropTargeted) { providers in
             DropHandler.handle(providers, model: model)
         }
+        .environment(\.showImporter, { showImporter = true })
+        .environment(\.showAsk, { showAsk = true })
+    }
+
+    private var split: some View {
+        @Bindable var model = model
+        return NavigationSplitView(columnVisibility: $columns) {
+            SidebarView(showSettings: $showSettings)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } content: {
+            Group {
+                if model.selection == .importer, model.searchText.isEmpty { ImportView() }
+                else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
+                else { LibraryView() }
+            }
+                .navigationSplitViewColumnWidth(min: 320, ideal: 520)
+                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
+                .toolbar { toolbar }
+        } detail: {
+            if let item = model.selectedItem {
+                ItemDetailView(item: item).id(item.id)
+            } else {
+                EmptyState(symbol: "sparkles.rectangle.stack", title: "Pick something", message: "Or press ⌘N for a note, or paste a link into Capture.")
+            }
+        }
     }
 
     @ToolbarContentBuilder
@@ -79,16 +99,7 @@ struct MainView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button { model.showCapture = true } label: { Label("Capture", systemImage: "plus") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-            Menu {
-                Button { Task { await model.newNote() } } label: { Label("New note", systemImage: "square.and.pencil") }
-                    .keyboardShortcut("n", modifiers: .command)
-                Button { showImporter = true } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
-                    .keyboardShortcut("i", modifiers: [.command, .shift])
-                VoiceNoteButton()
-                #if os(iOS)
-                ScanDocumentButton()
-                #endif
-            } label: { Label("Add", systemImage: "ellipsis.circle") }
+            Menu { AddMenu() } label: { Label("Add", systemImage: "ellipsis.circle") }
             Button { showAsk = true } label: { Label("Ask Trove", systemImage: "sparkles") }
                 .keyboardShortcut("j", modifiers: .command)
             Button { showClipboard = true } label: { Label("Clipboard", systemImage: "doc.on.clipboard") }
@@ -97,6 +108,28 @@ struct MainView: View {
             SyncIndicator()
         }
     }
+}
+
+/// New note, import, voice note, scan: the "Add" menu everywhere.
+struct AddMenu: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.showImporter) private var showImporter
+
+    var body: some View {
+        Button { Task { await model.newNote() } } label: { Label("New note", systemImage: "square.and.pencil") }
+            .keyboardShortcut("n", modifiers: .command)
+        Button { showImporter() } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+        VoiceNoteButton()
+        #if os(iOS)
+        ScanDocumentButton()
+        #endif
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var showImporter: () -> Void = {}
+    @Entry var showAsk: () -> Void = {}
 }
 
 /// Shown over the whole window while files are dragged over it.
@@ -162,6 +195,8 @@ struct ToastView: View {
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Binding var showSettings: Bool
+    /// On iPhone each row pushes its screen instead of filling a column.
+    var onPick: ((AppModel.Selection) -> Void)? = nil
     @State private var newCollection = ""
     @State private var addingCollection = false
     @State private var folderName = ""
@@ -180,7 +215,7 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var model = model
-        List(selection: $model.selection) {
+        List(selection: onPick.map { pick in Binding(get: { nil }, set: { if let s = $0 { pick(s) } }) } ?? $model.selection) {
             Section {
                 ForEach(primary) { s in row(s) }
                 Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
@@ -224,11 +259,13 @@ struct SidebarView: View {
                     Button { addingCollection = true } label: { Image(systemName: "plus") }.buttonStyle(.borderless)
                 }
             }
-            let sources = Set(model.items.map(\.source)).subtracting([.app, .share]).sorted { $0.rawValue < $1.rawValue }
+            let sources = Set(model.items.flatMap(\.sources)).subtracting([.app, .share]).sorted { ItemStyle.sourceLabel($0) < ItemStyle.sourceLabel($1) }
             if !sources.isEmpty {
                 Section("Sources") {
                     ForEach(sources, id: \.self) { s in
-                        Label(ItemStyle.sourceLabel(s), systemImage: ItemStyle.sourceSymbol(s)).tag(AppModel.Selection.source(s))
+                        Label(ItemStyle.sourceLabel(s), systemImage: ItemStyle.sourceSymbol(s))
+                            .badge(model.items.filter { $0.sources.contains(s) }.count)
+                            .tag(AppModel.Selection.source(s))
                     }
                 }
             }
@@ -252,7 +289,7 @@ struct SidebarView: View {
             }
             Button("Cancel", role: .cancel) { newCollection = "" }
         }
-        .onChange(of: model.selection) { model.searchText = "" }
+        .onChange(of: model.selection) { model.searchText = ""; model.selecting = false }
         .alert(folderAlertTitle, isPresented: Binding(get: { folderAction != nil }, set: { if !$0 { folderAction = nil } })) {
             TextField("Name", text: $folderName)
             Button(folderAlertButton) {
@@ -318,32 +355,100 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Library grid
+// MARK: - Library
+
+enum LibraryLayout: String { case grid, list }
 
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+    @AppStorage("library.layout") private var storedLayout = ""
+    @State private var confirmDelete = false
+    /// The last item clicked in select mode, for ⇧-click ranges on the Mac.
+    @State private var anchor: String?
 
     var body: some View {
-        @Bindable var model = model
         let items = model.visibleItems
+        Group {
+            if layout == .list { list(items) } else { grid(items) }
+        }
+        .navigationTitle(model.selecting ? "\(model.picked.count) selected" : title)
+        .refreshable { await model.syncNow() }
+        .toolbar {
+            ToolbarItemGroup(placement: .secondaryAction) {
+                Picker("Layout", selection: Binding(get: { layout }, set: { storedLayout = $0.rawValue })) {
+                    Label("Grid", systemImage: "square.grid.2x2").tag(LibraryLayout.grid)
+                    Label("List", systemImage: "list.bullet").tag(LibraryLayout.list)
+                }
+                .pickerStyle(.inline)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                if !items.isEmpty || model.selecting {
+                    Button(model.selecting ? "Done" : "Select") { withAnimation(.snappy) { model.selecting.toggle() } }
+                        .keyboardShortcut(model.selecting ? .cancelAction : KeyboardShortcut("e", modifiers: [.command, .shift]))
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if model.selecting { SelectionBar(items: items, confirmDelete: $confirmDelete).transition(.move(edge: .bottom).combined(with: .opacity)) }
+        }
+        .confirmationDialog(deleteQuestion, isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await model.deletePicked() } }
+        } message: {
+            Text("They're removed from all your devices.")
+        }
+        #if os(macOS)
+        .onDeleteCommand {
+            if model.selecting, !model.picked.isEmpty { confirmDelete = true }
+            else if let item = model.selectedItem { model.picked = [item.id]; model.selecting = true; confirmDelete = true }
+        }
+        .onExitCommand { if model.selecting { withAnimation(.snappy) { model.selecting = false } } }
+        #endif
+        .animation(.snappy, value: model.selecting)
+    }
+
+    private var layout: LibraryLayout {
+        if let stored = LibraryLayout(rawValue: storedLayout) { return stored }
+        #if os(iOS)
+        return sizeClass == .compact ? .list : .grid
+        #else
+        return .grid
+        #endif
+    }
+
+    private var deleteQuestion: String {
+        model.picked.count == 1 ? "Delete 1 item?" : "Delete \(model.picked.count) items?"
+    }
+
+    @ViewBuilder private var header: some View {
+        if case .folder(let id) = model.selection, model.searchResults == nil { FolderHeader(folderId: id) }
+        if case .unfiled = model.selection, !model.visibleItems.isEmpty, !model.selecting {
+            Button { Task { await model.tidyUp() } } label: { Label("Tidy up: file everything", systemImage: "wand.and.stars") }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func grid(_ items: [Item]) -> some View {
         ScrollView {
-            if case .folder(let id) = model.selection, model.searchResults == nil { FolderHeader(folderId: id).padding([.horizontal, .top], 16) }
-            if case .unfiled = model.selection, !items.isEmpty {
-                Button { Task { await model.tidyUp() } } label: { Label("Tidy up: file everything", systemImage: "wand.and.stars") }
-                    .buttonStyle(.borderedProminent)
-                    .padding([.horizontal, .top], 16)
+            VStack(alignment: .leading, spacing: 0) {
+                header.padding([.horizontal, .top], 16)
             }
             if items.isEmpty {
                 emptyState.padding(.top, 80)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: 14)], spacing: 14) {
                     ForEach(items) { item in
-                        Button { model.selectedItemID = item.id } label: { ItemCard(item: item) }
+                        Button { tap(item, in: items) } label: { ItemCard(item: item) }
                             .buttonStyle(.plain)
                             .overlay {
-                                if model.selectedItemID == item.id {
-                                    RoundedRectangle(cornerRadius: 18).strokeBorder(.tint, lineWidth: 2)
+                                if model.picked.contains(item.id) || (!model.selecting && model.selectedItemID == item.id) {
+                                    RoundedRectangle(cornerRadius: 18).strokeBorder(.tint, lineWidth: model.picked.contains(item.id) ? 3 : 2)
                                 }
+                            }
+                            .overlay(alignment: .topLeading) {
+                                if model.selecting { PickMark(on: model.picked.contains(item.id)).padding(10) }
                             }
                             .contextMenu { ItemMenu(item: item) }
                             .draggable(item.id) { ItemCard(item: item).frame(width: 220).opacity(0.9) }
@@ -353,8 +458,68 @@ struct LibraryView: View {
                 .animation(.spring(duration: 0.35), value: items.map(\.id))
             }
         }
-        .navigationTitle(title)
-        .refreshable { await model.syncNow() }
+    }
+
+    private func list(_ items: [Item]) -> some View {
+        List {
+            Section { header }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            if items.isEmpty {
+                emptyState.padding(.top, 60).frame(maxWidth: .infinity).listRowBackground(Color.clear)
+            }
+            ForEach(items) { item in
+                Button { tap(item, in: items) } label: {
+                    HStack(spacing: 12) {
+                        if model.selecting { PickMark(on: model.picked.contains(item.id)) }
+                        ItemRow(item: item)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(model.picked.contains(item.id) || (!model.selecting && model.selectedItemID == item.id) ? Color.accentColor.opacity(0.14) : nil)
+                .contextMenu { ItemMenu(item: item) }
+                .draggable(item.id)
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) { Task { await model.delete(item) } } label: { Label("Delete", systemImage: "trash") }
+                }
+                .swipeActions(edge: .leading) {
+                    Button { Task { await model.togglePin(item) } } label: { Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin") }
+                        .tint(.orange)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .animation(.spring(duration: 0.35), value: items.map(\.id))
+    }
+
+    /// Opens the item, or in select mode adds it to (or takes it out of) the selection. On the Mac,
+    /// ⌘-click and ⇧-click select without entering select mode first, like Finder.
+    private func tap(_ item: Item, in items: [Item]) {
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift), let anchor, let a = items.firstIndex(where: { $0.id == anchor }), let b = items.firstIndex(where: { $0.id == item.id }) {
+            if !model.selecting { model.selecting = true }
+            for i in min(a, b)...max(a, b) { model.picked.insert(items[i].id) }
+            return
+        }
+        if flags.contains(.command) {
+            if !model.selecting {
+                model.selecting = true
+                if let current = model.selectedItemID, current != item.id { model.picked.insert(current) }
+            }
+            model.togglePicked(item.id)
+            anchor = item.id
+            return
+        }
+        #endif
+        if model.selecting {
+            model.togglePicked(item.id)
+            anchor = item.id
+        } else {
+            model.selectedItemID = item.id
+            anchor = item.id
+        }
     }
 
     private var title: String {
@@ -375,8 +540,108 @@ struct LibraryView: View {
         if model.searchResults != nil {
             EmptyState(symbol: "magnifyingglass", title: "No matches", message: "Try fewer words, or search by meaning, like “that pasta place”.")
         } else {
-            EmptyState(symbol: "tray", title: "Nothing here yet", message: "Share things to Trove, drop files here, or press ⌘⇧N to capture.")
+            EmptyState(symbol: "tray", title: "Nothing here yet", message: "Share things to Trove, drop files here, or tap + to capture.")
         }
+    }
+}
+
+/// The round checkmark on a card or row in select mode.
+struct PickMark: View {
+    let on: Bool
+    var body: some View {
+        Image(systemName: on ? "checkmark.circle.fill" : "circle")
+            .font(.title2)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(on ? Color.white : Color.secondary, on ? Color.accentColor : Color.clear)
+            .background(Circle().fill(.background.opacity(on ? 0 : 0.8)))
+            .contentTransition(.symbolEffect(.replace))
+    }
+}
+
+/// What you can do to the picked items: shown at the bottom in select mode.
+struct SelectionBar: View {
+    let items: [Item]
+    @Binding var confirmDelete: Bool
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let allPicked = !items.isEmpty && items.allSatisfy { model.picked.contains($0.id) }
+        let none = model.picked.isEmpty
+        HStack(spacing: 6) {
+            Button(allPicked ? "Select none" : "Select all") {
+                if allPicked { model.picked = [] } else { model.picked = Set(items.map(\.id)) }
+            }
+            .keyboardShortcut("a", modifiers: .command)
+            Spacer(minLength: 8)
+            Menu {
+                FolderPicker(current: nil) { folder in Task { await model.movePicked(to: folder) } }
+            } label: { Label("Move", systemImage: "folder") }
+            .disabled(none)
+            if !model.collections.isEmpty {
+                Menu {
+                    ForEach(model.collections) { c in
+                        Button { Task { await model.addPicked(to: c.id) } } label: { Label(c.name, systemImage: c.symbol) }
+                    }
+                } label: { Label("Collection", systemImage: "square.stack") }
+                .disabled(none)
+            }
+            let allPinned = !none && model.items.filter { model.picked.contains($0.id) }.allSatisfy(\.isPinned)
+            Button { Task { await model.pinPicked(!allPinned) } } label: { Label(allPinned ? "Unpin" : "Pin", systemImage: allPinned ? "pin.slash" : "pin") }
+                .disabled(none)
+            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
+                .disabled(none)
+                .tint(.red)
+        }
+        .labelStyle(.iconOnly)
+        .font(.title3)
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .glass(cornerRadius: 26)
+        .padding(.horizontal, 12).padding(.bottom, 8)
+    }
+}
+
+/// "No folder" plus every folder, indented: for Move menus.
+struct FolderPicker: View {
+    let current: String?
+    let pick: (String?) -> Void
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { pick(nil) } label: { Label("No folder", systemImage: "tray") }
+        Divider()
+        ForEach(model.folderEntries) { entry in
+            Button { pick(entry.folder.id) } label: {
+                Label(entry.indentedName, systemImage: current == entry.folder.id ? "checkmark" : "folder")
+            }
+        }
+    }
+}
+
+/// A compact row for the list layout (the iPhone's default).
+struct ItemRow: View {
+    let item: Item
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Thumbnail(item: item, square: 52)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.displayTitle).font(.body.weight(.semibold)).lineLimit(2)
+                if let snippet = ItemCard.snippet(item) {
+                    Text(snippet).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                }
+                HStack(spacing: 5) {
+                    Image(systemName: ItemStyle.symbol(for: item)).foregroundStyle(ItemStyle.tint(for: item))
+                    Text(ItemCard.subtitle(item)).lineLimit(1)
+                    if item.isPinned { Image(systemName: "pin.fill").foregroundStyle(.orange) }
+                    if item.hasConflicts { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow) }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -413,12 +678,7 @@ struct ItemMenu: View {
             }
         }
         Menu {
-            Button { Task { await model.move(item.id, to: nil) } } label: { Label("No folder", systemImage: item.folder == nil ? "checkmark" : "tray") }
-            ForEach(model.folderEntries) { entry in
-                Button { Task { await model.move(item.id, to: entry.folder.id) } } label: {
-                    Label(entry.indentedName, systemImage: item.folder == entry.folder.id ? "checkmark" : "folder")
-                }
-            }
+            FolderPicker(current: item.folder) { folder in Task { await model.move(item.id, to: folder) } }
         } label: { Label("Move to folder", systemImage: "folder") }
         if !model.collections.isEmpty {
             Menu("Collections") {
@@ -433,6 +693,9 @@ struct ItemMenu: View {
         Button { try? AppleNotesBridge.save(item) } label: { Label("Save to Apple Notes", systemImage: "note.text.badge.plus") }
         #endif
         Divider()
+        if !model.selecting {
+            Button { model.selecting = true; model.picked = [item.id] } label: { Label("Select", systemImage: "checkmark.circle") }
+        }
         Button(role: .destructive) { Task { await model.delete(item) } } label: { Label("Delete", systemImage: "trash") }
     }
 }

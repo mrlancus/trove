@@ -69,3 +69,45 @@ final class ClipboardWatcher {
     }
 }
 #endif
+
+#if os(iOS)
+import UIKit
+import TroveCore
+
+/// iOS doesn't let apps watch the clipboard in the background, so this saves whatever was copied
+/// since last time whenever Trove comes to the front (and copies made inside Trove). The change
+/// count is free to read; reading the contents shows iOS's "Allow Paste" question unless the user
+/// chose Settings → Apps → Trove → Paste from Other Apps → Allow.
+@MainActor
+final class ClipboardWatcher {
+    private let store: ClipboardStore
+    private var observer: NSObjectProtocol?
+    private var lastChange: Int {
+        get { UserDefaults.standard.integer(forKey: "clipboard.lastChangeCount") }
+        set { UserDefaults.standard.set(newValue, forKey: "clipboard.lastChangeCount") }
+    }
+
+    init(store: ClipboardStore) { self.store = store }
+
+    func start() {
+        guard observer == nil else { return }
+        observer = NotificationCenter.default.addObserver(forName: UIPasteboard.changedNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.check() }
+        }
+        check()
+    }
+
+    /// Saves the clipboard if it changed since the last look.
+    func check() {
+        let pb = UIPasteboard.general
+        guard pb.changeCount != lastChange else { return }
+        lastChange = pb.changeCount
+        guard store.enabled, store.captureOnOpen, pb.changeCount != ClipPasteboard.ownChangeCount else { return }
+        if pb.hasImages, !pb.hasURLs, let image = pb.image, let png = image.pngData() {
+            Task { await store.capture(image: png, mime: "image/png", sourceApp: nil) }
+        } else if let text = pb.string ?? pb.url?.absoluteString {
+            Task { await store.capture(text: text, sourceApp: nil) }
+        }
+    }
+}
+#endif

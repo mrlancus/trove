@@ -5,36 +5,78 @@ import TroveCore
 import VisionKit
 #endif
 
-/// Shows the QR code (and copyable setup code) that adds another device to this vault.
+/// Shows the QR code (and copyable setup code) that adds another device to this vault. With the
+/// relay it watches the device list and closes itself once the new device has joined.
 struct AddDeviceView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var payload: PairingPayload?
     @State private var error: String?
+    @State private var joined: String?
+    @State private var copied = false
 
     var body: some View {
         VStack(spacing: 18) {
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
             Text("Add a device").font(.title2.bold())
-            Text("On the new device, open Trove → “I already use Trove” and scan this code. It contains your vault key, so only show it to your own devices.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            if let payload {
-                QRCodeView(text: payload.url.absoluteString)
-                    .frame(width: 240, height: 240)
-                    .padding(16)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 20))
-                Button { Pasteboard.copy(payload.setupCode) } label: { Label("Copy setup code instead", systemImage: "doc.on.doc") }
-                if payload.pairingCode != nil {
-                    Text("The relay part of this code works once, for 10 minutes.").font(.caption).foregroundStyle(.secondary)
+            if let joined {
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(.green)
+                        .symbolEffect(.bounce, value: joined)
+                    Text("\(joined) is set up").font(.headline)
                 }
-            } else if let error {
-                Text(error).foregroundStyle(.red)
+                .frame(minHeight: 272)
+                .transition(.scale.combined(with: .opacity))
             } else {
-                ProgressView()
+                Text("On the new device, open Trove → “I already use Trove” and scan this code. It contains your vault key, so only show it to your own devices.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                if let payload {
+                    QRCodeView(text: payload.url.absoluteString)
+                        .frame(width: 240, height: 240)
+                        .padding(16)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+                    Button {
+                        Pasteboard.copy(payload.setupCode)
+                        copied = true
+                    } label: { Label(copied ? "Copied" : "Copy setup code instead", systemImage: copied ? "checkmark" : "doc.on.doc") }
+                    if payload.pairingCode != nil {
+                        Label("Waiting for the new device…", systemImage: "antenna.radiowaves.left.and.right")
+                            .font(.caption).foregroundStyle(.secondary).symbolEffect(.pulse)
+                        Text("The relay part of this code works once, for 10 minutes.").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else if let error {
+                    Text(error).foregroundStyle(.red)
+                } else {
+                    ProgressView()
+                }
             }
         }
         .padding(24)
+        .frame(minWidth: 360)
+        .animation(.spring(duration: 0.4), value: joined)
         .task {
-            do { payload = try await model.vault.pairingPayload() } catch { self.error = error.localizedDescription }
+            func snapshot(_ devices: [RelayClient.Device]) -> [String: Double] {
+                Dictionary(devices.map { ($0.deviceId, $0.createdAt) }, uniquingKeysWith: { a, _ in a })
+            }
+            var before = (try? await model.vault.relayClient?.devices()).map(snapshot)
+            do { payload = try await model.vault.pairingPayload() } catch { self.error = error.localizedDescription; return }
+            guard payload?.pairingCode != nil, let client = model.vault.relayClient else { return }
+            // A device that joined after this opened: a new id, or a re-paired one with a new createdAt.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let devices = try? await client.devices() else { continue }
+                guard let before else { before = snapshot(devices); continue }
+                if let new = devices.first(where: { !$0.revoked && before[$0.deviceId] != $0.createdAt && $0.deviceId != model.config?.deviceId.uppercased() }) {
+                    joined = new.name
+                    try? await Task.sleep(for: .seconds(1.6))
+                    dismiss()
+                    return
+                }
+            }
         }
     }
 }

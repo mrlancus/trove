@@ -6,17 +6,16 @@ import UIKit
 import AppKit
 #endif
 
-/// Writes clips back to the system pasteboard. On the Mac it remembers the change count of its own
-/// writes so the watcher doesn't record them as new copies.
+/// Writes clips back to the system pasteboard. It remembers the change count of its own writes so
+/// the watcher doesn't record them as new copies.
 @MainActor
 enum ClipPasteboard {
-    #if os(macOS)
     static var ownChangeCount = -1
-    #endif
 
     static func write(text: String) {
         #if canImport(UIKit)
         UIPasteboard.general.string = text
+        ownChangeCount = UIPasteboard.general.changeCount
         #else
         let pb = NSPasteboard.general
         pb.clearContents()
@@ -28,6 +27,7 @@ enum ClipPasteboard {
     static func write(image: PlatformImage) {
         #if canImport(UIKit)
         UIPasteboard.general.image = image
+        ownChangeCount = UIPasteboard.general.changeCount
         #else
         let pb = NSPasteboard.general
         pb.clearContents()

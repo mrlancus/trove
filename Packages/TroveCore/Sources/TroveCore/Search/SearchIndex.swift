@@ -186,7 +186,7 @@ public struct SearchQuery: Sendable, Equatable {
         if !kinds.isEmpty, !kinds.contains(item.kind) { return false }
         if !categories.isEmpty, !categories.contains(item.category) { return false }
         if !tags.isEmpty, !tags.isSubset(of: Set(item.tags.map { $0.lowercased() })) { return false }
-        if !sources.isEmpty, !sources.contains(item.source) { return false }
+        if !sources.isEmpty, sources.isDisjoint(with: item.sources) { return false }
         if let collection, !item.collections.contains(collection) { return false }
         if let space, item.space != space { return false }
         if pinnedOnly, !item.isPinned { return false }

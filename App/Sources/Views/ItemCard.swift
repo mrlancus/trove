@@ -47,12 +47,15 @@ struct ItemCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private var subtitle: String {
+    private var subtitle: String { Self.subtitle(item) }
+    private var snippet: String? { Self.snippet(item) }
+
+    static func subtitle(_ item: Item) -> String {
         let place = item.siteName ?? item.url?.host?.replacingOccurrences(of: "www.", with: "") ?? ItemStyle.sourceLabel(item.source)
         return "\(place) · \(item.createdAt.relative)"
     }
 
-    private var snippet: String? {
+    static func snippet(_ item: Item) -> String? {
         if item.kind == .highlight { return item.body.replacingOccurrences(of: "> ", with: "") }
         if let s = item.summary, !s.isEmpty { return s }
         let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -72,9 +75,11 @@ struct ItemCard: View {
     }
 }
 
-/// Image for a card: page preview image, an image attachment, or a tinted symbol.
+/// Image for a card: page preview image, an image attachment, or a tinted symbol. With `square`,
+/// a small rounded tile for list rows that always shows something.
 struct Thumbnail: View {
     let item: Item
+    var square: CGFloat? = nil
     @Environment(AppModel.self) private var model
     @State private var image: PlatformImage?
 
@@ -86,13 +91,11 @@ struct Thumbnail: View {
                 AsyncImage(url: url) { phase in
                     if let img = phase.image { img.resizable().scaledToFill() } else { placeholder }
                 }
-            } else if hasVisual {
+            } else if hasVisual || square != nil {
                 placeholder
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: hasVisual ? 140 : 0)
-        .clipped()
+        .modifier(ThumbnailFrame(square: square, height: hasVisual ? 140 : 0))
         .task(id: item.attachments.first?.id) { await loadAttachment() }
     }
 
@@ -103,7 +106,7 @@ struct Thumbnail: View {
     private var placeholder: some View {
         ZStack {
             LinearGradient(colors: [ItemStyle.tint(for: item).opacity(0.35), ItemStyle.tint(for: item).opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: ItemStyle.symbol(for: item)).font(.largeTitle).foregroundStyle(.white.opacity(0.85))
+            Image(systemName: ItemStyle.symbol(for: item)).font(square == nil ? .largeTitle : .title3).foregroundStyle(.white.opacity(0.85))
         }
     }
 
@@ -123,5 +126,18 @@ struct Thumbnail: View {
         #else
         return img
         #endif
+    }
+}
+
+private struct ThumbnailFrame: ViewModifier {
+    let square: CGFloat?
+    let height: CGFloat
+
+    func body(content: Content) -> some View {
+        if let square {
+            content.frame(width: square, height: square).clipShape(RoundedRectangle(cornerRadius: square / 5, style: .continuous))
+        } else {
+            content.frame(maxWidth: .infinity).frame(height: height).clipped()
+        }
     }
 }
