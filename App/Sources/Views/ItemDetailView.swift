@@ -21,6 +21,7 @@ struct ItemDetailView: View {
                 if item.hasConflicts { ConflictBanner(item: item) }
                 if let summary = item.summary, !summary.isEmpty, item.kind != .note { SummaryCard(item: item, summary: summary) }
                 ExtractedCards(item: item)
+                if item.kind == .sketch { SketchSection(item: item) }
                 if !item.attachments.isEmpty { FilesSection(item: item) }
                 editor
                 if let ocr = item.ocrText, !ocr.isEmpty, item.kind != .note {
@@ -40,6 +41,10 @@ struct ItemDetailView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                if item.kind == .sketch || item.attachments.contains(where: AppModel.canInk) {
+                    Button { model.draw(on: item) } label: { Label("Draw", systemImage: "pencil.tip.crop.circle") }
+                        .help("Draw with Apple Pencil, a finger, the trackpad or the mouse")
+                }
                 Button { Task { await model.togglePin(item) } } label: { Image(systemName: item.isPinned ? "pin.fill" : "pin") }
                 if let url = item.url { ShareLink(item: url) }
                 Menu { ItemMenu(item: item) } label: { Image(systemName: "ellipsis.circle") }

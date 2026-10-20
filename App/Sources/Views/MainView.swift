@@ -53,6 +53,11 @@ struct MainView: View {
         .sheet(isPresented: $showAsk) { AskView() }
         .sheet(isPresented: $showClipboard) { ClipboardScreen() }
         #if os(iOS)
+        .fullScreenCover(item: $model.inkTarget) { target in InkEditorView(target: target, app: model).environment(model) }
+        #else
+        .sheet(item: $model.inkTarget) { target in InkEditorView(target: target, app: model).environment(model) }
+        #endif
+        #if os(iOS)
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
         #endif
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item, .folder], allowsMultipleSelection: true) { result in
@@ -118,6 +123,8 @@ struct AddMenu: View {
     var body: some View {
         Button { Task { await model.newNote() } } label: { Label("New note", systemImage: "square.and.pencil") }
             .keyboardShortcut("n", modifiers: .command)
+        Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "scribble.variable") }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
         Button { showImporter() } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
             .keyboardShortcut("i", modifiers: [.command, .shift])
         VoiceNoteButton()

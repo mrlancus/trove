@@ -96,11 +96,11 @@ struct Thumbnail: View {
             }
         }
         .modifier(ThumbnailFrame(square: square, height: hasVisual ? 140 : 0))
-        .task(id: item.attachments.first?.id) { await loadAttachment() }
+        .task(id: item.thumbnail?.id ?? item.attachments.first?.id) { await loadAttachment() }
     }
 
     private var hasVisual: Bool {
-        image != nil || item.record[Field.imageURL]?.string != nil
+        image != nil || item.thumbnail != nil || item.kind == .sketch || item.record[Field.imageURL]?.string != nil
             || item.attachments.contains { $0.mime.hasPrefix("image/") || $0.mime == "application/pdf" || $0.name.lowercased().hasSuffix(".goodnotes") }
     }
 
@@ -112,6 +112,11 @@ struct Thumbnail: View {
     }
 
     private func loadAttachment() async {
+        // A preview made by a device that's seen the item (a sketch's first page, a document's cover).
+        if let thumb = item.thumbnail, let library = model.library, let data = try? await library.attachmentData(thumb) {
+            image = Self.downscale(data)
+            return
+        }
         guard image == nil, let a = item.attachments.first, let library = model.library else { return }
         if a.mime.hasPrefix("image/"), let data = try? await library.attachmentData(a) {
             image = Self.downscale(data)

@@ -80,6 +80,12 @@ final class AppModel {
     var enriching = false
     var toast: String?
     var showCapture = false
+    /// The drawing editor, when it's open.
+    var inkTarget: InkTarget?
+    /// Bumped when ink changes or a sync brings changes, so drawings redraw.
+    private(set) var inkRevision = 0
+    /// Which items have ink, and on which files ("" = a sketch's own pages).
+    private(set) var inkedLayers: [String: Set<String>] = [:]
     var config: VaultConfig? { vault.config }
 
     // MARK: Services
@@ -214,6 +220,38 @@ final class AppModel {
         if !searchText.isEmpty { await runSearch() }
         publishWidget()
         SpotlightIndexer.index(items)
+        inkedLayers = await library.inkedLayers()
+        inkRevision += 1
+    }
+
+    // MARK: Drawing
+
+    /// Something drew or erased: views showing ink redraw. (Saving and syncing follow from the engine.)
+    func inkChanged() {
+        inkRevision += 1
+        Task { if let library { inkedLayers = await library.inkedLayers() } }
+    }
+
+    /// A new sketch, opened in the editor.
+    func newSketch() async {
+        guard let library else { return }
+        let id = await library.addSketch()
+        await reload()
+        selectedItemID = id
+        inkTarget = InkTarget(itemId: id, layer: "", title: "Sketch")
+    }
+
+    func draw(on item: Item, page: Int = 0) {
+        if item.kind == .sketch {
+            inkTarget = InkTarget(itemId: item.id, layer: "", title: item.displayTitle, startPage: page)
+        } else if let att = item.attachments.first(where: Self.canInk) {
+            inkTarget = InkTarget(itemId: item.id, layer: att.id, title: att.name, startPage: page)
+        }
+    }
+
+    /// Files that can be drawn on: PDFs and images.
+    nonisolated static func canInk(_ attachment: Attachment) -> Bool {
+        attachment.mime == "application/pdf" || (attachment.mime.hasPrefix("image/") && attachment.mime != "image/svg+xml")
     }
 
     var visibleItems: [Item] {

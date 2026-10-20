@@ -55,6 +55,12 @@ struct FilesSection: View {
                         Text(attachment.name).font(.headline).lineLimit(1)
                         Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption).foregroundStyle(.secondary)
                         Spacer()
+                        if AppModel.canInk(attachment) {
+                            Button { model.inkTarget = InkTarget(itemId: item.id, layer: attachment.id, title: attachment.name) } label: {
+                                Label("Draw on it", systemImage: "pencil.tip.crop.circle")
+                            }
+                            .help("Write or draw on this file. The file itself doesn't change.")
+                        }
                         Button { Task { quickLook = await model.temporaryFile(attachment) } } label: { Label("Quick Look", systemImage: "eye") }
                         if index == 0 {
                             Button { choosingVersion = true } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
@@ -63,7 +69,7 @@ struct FilesSection: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    AttachmentView(attachment: attachment)
+                    AttachmentView(attachment: attachment, item: item)
                 }
             }
             if !item.fileVersions.isEmpty {

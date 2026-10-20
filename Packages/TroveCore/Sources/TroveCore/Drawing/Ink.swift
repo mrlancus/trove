@@ -135,11 +135,12 @@ extension Library {
         return out
     }
 
+    /// Adds a stroke. `id` lets a drawing view that tracks its own strokes (PencilKit) name it.
     @discardableResult
-    public func addStroke(on itemId: String, layer: String = "", page: Int, tool: InkTool, color: String, width: Double,
-                          points: [InkPoint]) async -> String? {
+    public func addStroke(id givenId: String? = nil, on itemId: String, layer: String = "", page: Int, tool: InkTool, color: String,
+                          width: Double, points: [InkPoint]) async -> String? {
         guard !points.isEmpty else { return nil }
-        let id = newId()
+        let id = givenId ?? newId()
         // Strokes draw in creation order, so each one gets a later time than the last, even within a millisecond.
         let latest = await engine.records.filter { $0.kind == "stroke" && $0[InkStroke.Field.on]?.string == itemId }
             .compactMap { $0[InkStroke.Field.createdAt]?.number }.max() ?? 0
@@ -151,6 +152,12 @@ extension Library {
             InkStroke.Field.device: .string(await engine.device),
         ], record: id, kind: "stroke")
         return id
+    }
+
+    /// A small preview image for an item's card (shared with every device), e.g. a sketch's first page.
+    public func setThumbnail(_ itemId: String, jpeg: Data) async throws {
+        let blob = try await engine.storeBlob(jpeg)
+        await update(itemId, [Field.thumbnail: Attachment(id: blob, name: "thumbnail.jpg", mime: "image/jpeg", size: jpeg.count).json])
     }
 
     public func deleteStrokes(_ ids: [String]) async {

@@ -13,6 +13,8 @@ enum PDFThumbnail {
 /// Shows an attachment inline: images, PDFs (incl. GoodNotes notebooks), audio, or a file row.
 struct AttachmentView: View {
     let attachment: Attachment
+    /// The item it belongs to, for ink drawn on it.
+    var item: Item? = nil
     @Environment(AppModel.self) private var model
     @State private var data: Data?
     @State private var failed = false
@@ -20,7 +22,9 @@ struct AttachmentView: View {
     var body: some View {
         Group {
             if let data {
-                if attachment.mime.hasPrefix("image/"), let image = PlatformImage(data: data) {
+                if let item, AppModel.canInk(attachment), model.inkedLayers[item.id]?.contains(attachment.id) == true {
+                    InkedFileView(item: item, attachment: attachment, data: data)
+                } else if attachment.mime.hasPrefix("image/"), let image = PlatformImage(data: data) {
                     Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14))
                 } else if attachment.mime == "application/pdf" {
                     PDFKitView(data: data).frame(minHeight: 420).clipShape(RoundedRectangle(cornerRadius: 14))
