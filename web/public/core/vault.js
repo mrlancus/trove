@@ -6,6 +6,13 @@ import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
 import { ClipField, clipView, hashImageHex, hashText } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
+import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
+import { parseHLC } from "./records.js";
+
+const MAX_FILE_VERSIONS = 50;
+const newId = () => crypto.randomUUID().toLowerCase();
+/** The item id for a relay inbox entry, the same on every device (Library.inboxItemId). */
+export const inboxItemId = (entryId) => `inbox-${String(entryId).toLowerCase()}`;
 
 /** Parses a setup or recovery code (or a `trove://pair?d=` link): the apps' `PairingPayload`. */
 export function parsePayload(text) {
@@ -183,6 +190,141 @@ export class Vault {
     return r && r.kind === "item" && r.fields._deleted !== true ? itemView(r) : null;
   }
 
+  // ---------- folders (PROTOCOL.md §9, Library+Folders.swift) ----------
+
+  folders() {
+    return this.store.visible.filter((r) => r.kind === "folder")
+      .map((r) => ({ id: r.id, name: typeof r.fields.name === "string" ? r.fields.name : "Untitled", parent: typeof r.fields.parent === "string" ? r.fields.parent : null,
+        isAuto: r.fields.auto === true, color: r.fields.color ?? null }));
+  }
+
+  /** The fields that file a new item where the organiser says (making folders as needed). */
+  filing(where) {
+    const id = this.ensureFolder(folderPath(where));
+    return id ? { [Field.folder]: id, [Field.folderAuto]: true } : {};
+  }
+
+  /** The folder at this path, made if missing; existing folders match by name under the same parent. */
+  ensureFolder(path, auto = true) {
+    let parent = null;
+    for (const raw of path) {
+      const name = cleanName(raw);
+      if (!name) continue;
+      const existing = this.folders().find((f) => f.parent === parent && f.name.localeCompare(name, undefined, { sensitivity: "accent" }) === 0);
+      if (existing) { parent = existing.id; continue; }
+      parent = this.makeFolder(name, parent, auto);
+    }
+    return parent;
+  }
+
+  makeFolder(name, parent, auto) {
+    let id = folderId(parent, name);
+    const taken = this.store.records.get(id);
+    if (taken && taken.fields._deleted !== true) id += `~${newId().slice(0, 6)}`;
+    this.set({ name, parent, auto, [Field.createdAt]: this.now(), _deleted: false }, id, "folder");
+    return id;
+  }
+
+  createFolder(name, parent = null) {
+    const clean = cleanName(name) || "Untitled";
+    const existing = this.folders().find((f) => f.parent === parent && f.name.localeCompare(clean, undefined, { sensitivity: "accent" }) === 0);
+    return existing ? existing.id : this.makeFolder(clean, parent, false);
+  }
+
+  renameFolder(id, name) {
+    const clean = cleanName(name);
+    if (clean) this.set({ name: clean, auto: false }, id, "folder");
+  }
+
+  /** Moves a folder inside another (null = top level); never into itself. */
+  moveFolder(id, parent) {
+    if (parent && folderPathOf(parent, this.folders()).some((f) => f.id === id)) return false;
+    this.set({ parent }, id, "folder");
+    return true;
+  }
+
+  /** Deletes a folder; what was inside moves up to its parent. */
+  deleteFolder(id) {
+    const folder = this.folders().find((f) => f.id === id);
+    if (!folder) return;
+    for (const child of this.folders()) if (child.parent === id) this.set({ parent: folder.parent }, child.id, "folder");
+    for (const item of this.items()) if (item.folder === id) this.update(item.id, { [Field.folder]: folder.parent });
+    this.set({ _deleted: true }, id, "folder");
+  }
+
+  /** Moves an item by hand (null = no folder); the organiser leaves it alone after that. */
+  moveItem(itemId, folder) { this.update(itemId, { [Field.folder]: folder, [Field.folderAuto]: false }); }
+
+  /** Files every item without a (live) folder. Returns how many it filed. */
+  tidyUp() {
+    const live = new Set(this.folders().map((f) => f.id));
+    let moved = 0;
+    for (const item of this.items()) {
+      if (item.folder && live.has(item.folder)) continue;
+      const fields = this.filing({ kind: item.kind, category: item.record.fields.category ?? null, source: item.source, fileName: item.attachments[0]?.name });
+      if (Object.keys(fields).length) { this.update(item.id, fields); moved++; }
+    }
+    return moved;
+  }
+
+  // ---------- versions ----------
+
+  versionsAdding(old, item) {
+    const entry = { attachment: old, at: this.now(), by: this.journal.device };
+    return [entry, ...item.fileVersions.filter((v) => v.attachment.id !== old.id)].slice(0, MAX_FILE_VERSIONS);
+  }
+
+  /** Saves an edited file as current; the previous file becomes a version. */
+  async replaceFile(itemId, bytes, { name, mime } = {}) {
+    const item = this.item(itemId), current = item?.attachments[0];
+    if (!current) return;
+    const next = await this.storeBlob(bytes, name ?? current.name, mime ?? current.mime);
+    if (next.id === current.id) return;
+    this.update(itemId, { [Field.attachments]: [next, ...item.attachments.slice(1)], [Field.fileVersions]: this.versionsAdding(current, item), [Field.thumbnail]: null });
+  }
+
+  /** Makes an earlier file current again; the current one is kept as a version. */
+  restoreFileVersion(itemId, version) {
+    const item = this.item(itemId), current = item?.attachments[0];
+    if (!current || current.id === version.attachment.id) return;
+    const list = [{ attachment: current, at: this.now(), by: this.journal.device }, ...item.fileVersions.filter((v) => v.attachment.id !== version.attachment.id)];
+    this.update(itemId, { [Field.attachments]: [version.attachment, ...item.attachments.slice(1)], [Field.fileVersions]: list.slice(0, MAX_FILE_VERSIONS), [Field.thumbnail]: null });
+  }
+
+  /** Earlier states of a text field, newest first; one per editing session (same device, < gap apart). */
+  textVersions(itemId, field = Field.body, gapMs = 120_000) {
+    const out = [];
+    for (const op of this.store.ops) {
+      if (op.r !== itemId || op.t !== "text" || op.x?.field !== field) continue;
+      const at = parseHLC(op.h)?.millis ?? 0, last = out.at(-1);
+      if (last && last.device === op.d && at - last.at < gapMs) out[out.length - 1] = { text: op.x.value, at, device: op.d };
+      else out.push({ text: op.x.value, at, device: op.d });
+    }
+    return out.reverse();
+  }
+
+  /** Stores a small preview image for an item (shared with every device). */
+  async setThumbnail(itemId, bytes, mime = "image/jpeg") {
+    const thumb = await this.storeBlob(bytes, "thumbnail.jpg", mime);
+    this.update(itemId, { [Field.thumbnail]: thumb });
+    return thumb;
+  }
+
+  // ---------- connections ----------
+
+  connect(a, b) {
+    const item = this.item(a);
+    if (a === b || !item || item.links.includes(b)) return;
+    this.update(a, { [Field.links]: [...item.links, b] });
+  }
+
+  disconnect(a, b) {
+    for (const [x, y] of [[a, b], [b, a]]) {
+      const item = this.item(x);
+      if (item?.links.includes(y)) this.update(x, { [Field.links]: item.links.filter((l) => l !== y) });
+    }
+  }
+
   collections() {
     return this.store.visible.filter((r) => r.kind === "collection")
       .map((r) => ({ id: r.id, name: r.fields.name ?? "Untitled", symbol: r.fields.symbol, color: r.fields.color }))
@@ -226,9 +368,8 @@ export class Vault {
     };
   }
 
-  addNote({ title = "", body = "", source = "web", tags: extra = [] } = {}) {
-    const id = crypto.randomUUID().toLowerCase();
-    const fields = { ...this.baseFields("note", title), [Field.source]: source, [Field.category]: "note" };
+  addNote({ title = "", body = "", source = "web", tags: extra = [], id = newId(), folder = [] } = {}) {
+    const fields = { ...this.baseFields("note", title), [Field.source]: source, [Field.category]: "note", ...this.filing({ kind: "note", source, importPath: folder }) };
     const tags = [...new Set([...extra.map((t) => t.toLowerCase()), ...hashtags(body)])].sort();
     if (tags.length) fields[Field.tags] = tags;
     this.set(fields, id, "item");
@@ -237,13 +378,13 @@ export class Vault {
   }
 
   /** Adds a link (the apps fetch its title and preview when they next enrich). */
-  addLink(url, { title = "", note = "", source = "web" } = {}) {
+  addLink(url, { title = "", note = "", source = "web", id: givenId } = {}) {
     const cleaned = cleanURL(url);
     const key = dedupeKey(cleaned.toString());
     const existing = this.items().find((i) => i.url && dedupeKey(i.url.toString()) === key);
     if (existing) return { id: existing.id, isNew: false };
-    const id = crypto.randomUUID().toLowerCase();
-    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString() }, id, "item");
+    const id = givenId ?? newId();
+    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source }) }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
   }
@@ -262,6 +403,7 @@ export class Vault {
       if (entry.author) fields.author = entry.author;
       if (entry.kind === "highlight") fields[Field.category] = "quote";
       if (entry.externalId) { fields.origin = { externalId: entry.externalId }; existing.add(entry.externalId); }
+      Object.assign(fields, this.filing({ kind: entry.kind, category: entry.kind === "highlight" ? "quote" : null, source: entry.source, collection: entry.collection }));
       if (entry.collection) fields[Field.collections] = [this.createCollection(entry.collection)];
       this.set(fields, id, "item");
       if (entry.body) this.editText(Field.body, entry.body, id, "item");
@@ -462,25 +604,34 @@ export class Vault {
   /** Turns an inbox envelope into an item, like Library.importInbox in Swift. */
   async importEnvelope(h, body, entry = {}) {
     const text = () => fromUtf8.decode(body);
+    // Made from the relay's entry id, so the website and an app importing the same entry write one item.
+    const newItemId = entry.id ? inboxItemId(entry.id) : newId();
     if (h.source === "webdav") {
       const path = h.meta?.davPath ?? entry.davPath ?? h.name ?? "notebook.pdf";
-      const attachment = await this.storeBlob(body, h.name ?? "notebook.pdf", h.mime ?? "application/pdf");
+      const name = h.name ?? "notebook.pdf";
+      let mime = h.mime ?? mimeForName(name);
+      if (mime === "application/octet-stream" && /\.pdf$/i.test(name)) mime = "application/pdf";
+      const attachment = await this.storeBlob(body, name, mime);
       const existing = this.items().find((i) => i.record.fields.origin?.davPath === path);
       if (existing) {
-        this.update(existing.id, { attachments: [attachment], needsEnrichment: true, ocrText: null, enrichment: null });
+        // A newer backup of the same notebook: the previous one is kept as a version.
+        const fields = { attachments: [attachment], needsEnrichment: true, ocrText: null, enrichment: null, thumbnail: null };
+        const old = existing.attachments[0];
+        if (old && old.id !== attachment.id) fields.fileVersions = this.versionsAdding(old, existing);
+        this.update(existing.id, fields);
         return existing.id;
       }
-      const id = crypto.randomUUID().toLowerCase();
-      this.set({ ...this.baseFields("pdf", titleFromFileName(h.name ?? "Notebook")), source: "goodnotes", attachments: [attachment], origin: { davPath: path } }, id, "item");
-      return id;
+      this.set({ ...this.baseFields(mime === "application/pdf" ? "pdf" : "file", titleFromFileName(name)), source: "goodnotes", attachments: [attachment],
+        origin: { davPath: path }, ...this.filing({ kind: "pdf", source: "goodnotes" }) }, newItemId, "item");
+      return newItemId;
     }
     if (h.source === "email") {
       if (h.mime === "text/html" || h.mime === "text/plain") {
-        const id = crypto.randomUUID().toLowerCase();
+        const id = newItemId;
         const origin = {};
         if (h.groupId) origin.emailGroup = h.groupId;
         if (h.meta?.from) origin.from = h.meta.from;
-        this.set({ ...this.baseFields("email", h.title ?? "Email"), source: "email", origin }, id, "item");
+        this.set({ ...this.baseFields("email", h.title ?? "Email"), source: "email", origin, ...this.filing({ kind: "email", source: "email" }) }, id, "item");
         this.editText(Field.body, h.mime === "text/html" ? htmlToText(text()) : text(), id, "item");
         return id;
       }
@@ -490,18 +641,18 @@ export class Vault {
         this.update(parent.id, { attachments: [...parent.attachments, attachment] });
         return parent.id;
       }
-      return this.addFile(body, attachment.name, attachment.mime, { source: "email" });
+      return this.addFile(body, attachment.name, attachment.mime, { source: "email", id: newItemId });
     }
     const source = h.source === "web" ? "web" : "share";
     if (h.url) {
       const note = h.mime?.startsWith("text/") ? text() : "";
-      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source });
+      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source, id: newItemId });
       const item = this.item(id);
       if (!isNew && note && item) this.setBody(id, item.body ? `${item.body}\n\n${note}` : note);
       return id;
     }
-    if (h.mime && !h.mime.startsWith("text/")) return this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title });
-    return this.addNote({ title: h.title ?? "", body: text(), source });
+    if (h.mime && !h.mime.startsWith("text/")) return this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title, id: newItemId });
+    return this.addNote({ title: h.title ?? "", body: text(), source, id: newItemId });
   }
 
   /** Our own journal on the relay already reaches `last` (another tab, or lost local state): move pending ops past it. */
@@ -532,11 +683,11 @@ export class Vault {
   }
 
   /** Uploads a file as an encrypted blob and adds an item for it (like Library.addFile). */
-  async addFile(bytes, name, mime, { source = "web", title } = {}) {
+  async addFile(bytes, name, mime, { source = "web", title, id: itemId = newId(), folder = [] } = {}) {
     const attachment = await this.storeBlob(bytes, name, mime);
     const kind = mime.startsWith("image/") ? "image" : mime === "application/pdf" ? "pdf" : mime.startsWith("audio/") ? "audio" : mime.startsWith("video/") ? "video" : "file";
-    const itemId = crypto.randomUUID().toLowerCase();
-    this.set({ ...this.baseFields(kind, title ?? titleFromFileName(name)), [Field.source]: source, [Field.attachments]: [attachment] }, itemId, "item");
+    this.set({ ...this.baseFields(kind, title ?? titleFromFileName(name)), [Field.source]: source, [Field.attachments]: [attachment],
+      ...this.filing({ kind, source, fileName: name, importPath: folder }) }, itemId, "item");
     return itemId;
   }
 
@@ -554,6 +705,11 @@ export class Vault {
   }
 }
 
+
+function mimeForName(name) {
+  const ext = /\.([^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? "";
+  return { pdf: "application/pdf", goodnotes: "application/octet-stream", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" }[ext] ?? "application/octet-stream";
+}
 
 function titleFromFileName(name) {
   return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();

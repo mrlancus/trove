@@ -12,12 +12,20 @@ const MAX_TEXT_NOTE = 1_000_000;
  * What to do with one file: `{type: "items", items}`, `{type: "note", title, body, tags}` or
  * `{type: "file", name, bytes, mime}`. Zips (and zips inside zips) are opened.
  */
-export async function importActions(name, bytes) {
+export async function importActions(name, bytes, folder = []) {
   const budget = { left: MAX_UNZIPPED };
-  return actionsFor(name, bytes, 0, budget);
+  return actionsFor(name, bytes, 0, budget, folder);
 }
 
-async function actionsFor(name, bytes, depth, budget) {
+/**
+ * Each action also carries `folder`: the folders it sat in (the dropped folder's, then a zip's
+ * own name and its folders), like FileImport.placed in Swift. The organiser files it there.
+ */
+async function actionsFor(name, bytes, depth, budget, folder) {
+  return (await route(name, bytes, depth, budget, folder)).map((a) => (a.folder ? a : { ...a, folder }));
+}
+
+async function route(name, bytes, depth, budget, folder) {
   const ext = extension(name);
   const base = ext ? name.slice(0, -(ext.length + 1)) : name;
   const file = { type: "file", name, bytes, mime: mimeFor(ext) };
@@ -33,7 +41,7 @@ async function actionsFor(name, bytes, depth, budget) {
         let contents;
         try { contents = await zip.data(entry); } catch { continue; }
         budget.left -= contents.length;
-        out.push(...await actionsFor(entry.name, contents, depth + 1, budget));
+        out.push(...await actionsFor(entry.name, contents, depth + 1, budget, [...folder, base, ...entry.path.split("/").slice(0, -1).filter(Boolean)]));
       }
       return out;
     }

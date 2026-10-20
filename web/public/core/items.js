@@ -7,7 +7,10 @@ export const Field = {
   collections: "collections", pinned: "pinned", readAt: "readAt", enrichment: "enrichment",
   needsEnrichment: "needsEnrichment", ocrText: "ocrText", siteName: "siteName", imageURL: "imageURL",
   kind: "kind", resolvedConflicts: "resolvedConflicts", priceWatch: "priceWatch", published: "published", body: "body",
+  folder: "folder", folderAuto: "folderAuto", links: "links", fileVersions: "fileVersions", thumbnail: "thumbnail", origin: "origin",
 };
+
+const isAttachment = (a) => a && typeof a === "object" && typeof a.id === "string";
 
 /** A read-only view of an item record (Item.swift). */
 export function itemView(record) {
@@ -31,7 +34,12 @@ export function itemView(record) {
     readAt: typeof f.readAt === "number" ? f.readAt : null,
     ocrText: str(f.ocrText), siteName: str(f.siteName), imageURL: str(f.imageURL),
     extracted: f.extracted && typeof f.extracted === "object" ? f.extracted : {},
-    attachments: Array.isArray(f.attachments) ? f.attachments.filter((a) => a && typeof a.id === "string") : [],
+    attachments: Array.isArray(f.attachments) ? f.attachments.filter(isAttachment) : [],
+    folder: str(f.folder),
+    isAutoFiled: f.folderAuto === true,
+    links: Array.isArray(f.links) ? f.links.filter((l) => typeof l === "string") : [],
+    thumbnail: isAttachment(f.thumbnail) ? f.thumbnail : null,
+    fileVersions: Array.isArray(f.fileVersions) ? f.fileVersions.filter((v) => v && isAttachment(v.attachment)) : [],
     priceWatch: f.priceWatch && typeof f.priceWatch === "object" ? f.priceWatch : null,
     published: f.published && typeof f.published === "object" ? f.published : null,
     conflictingVersions: conflicts,

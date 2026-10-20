@@ -191,3 +191,137 @@ test("imports the same zip as FileImportTests.swift", async () => {
   assert.deepEqual(parseMarkdownNote("---\ntags: [ideas]\n---\n# Big ideas\n\nShip it #now\n", "x.md"),
     { title: "Big ideas", tags: ["ideas", "now"], body: "Ship it #now" });
 });
+
+const fixture = (name) => JSON.parse(readFileSync(new URL(`../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/${name}.json`, import.meta.url)));
+
+/** A vault with in-memory storage and a fake relay that keeps blobs. */
+async function testVault(device = "WEB", blobs = new Map()) {
+  const { Vault } = await import("../public/core/vault.js");
+  const storage = { m: new Map(), get: async (k) => storage.m.get(k), set: async (k, v) => { storage.m.set(k, v); }, clear: async () => storage.m.clear() };
+  let t = 1_760_000_000_000;
+  const keys = await importVaultKeys({ vaultKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))) });
+  const fetch = async (url, init = {}) => {
+    const id = /blobs\/([0-9a-f]+)$/.exec(url)?.[1];
+    if (id && init.method === "PUT") { blobs.set(id, init.body); return new Response(null, { status: 204 }); }
+    if (id) return blobs.has(id) ? new Response(blobs.get(id)) : new Response("", { status: 404 });
+    return new Response("{}", { status: 200 });
+  };
+  const v = new Vault(storage, { deviceName: "Chrome", encrypted: true, base: "http://relay", vaultId: "V", token: "T" }, keys, { device }, [], [], [], 0,
+    { now: () => (t += 1000), fetch });
+  return { v, keys, blobs, advance: (ms) => { t += ms; } };
+}
+
+test("the organiser matches the shared Swift cases", async () => {
+  const { folderPath, folderId, folderTree, folderPathOf } = await import("../public/core/organize.js");
+  const f = fixture("organize-cases");
+  for (const c of f.paths) assert.deepEqual(folderPath(c), c.expect, JSON.stringify(c));
+  for (const c of f.ids) assert.equal(folderId(c.parent, c.name), c.expect);
+  const folders = [{ id: "b", name: "beta", parent: null }, { id: "a", name: "Alpha", parent: null }, { id: "c", name: "child", parent: "b" },
+    { id: "x", name: "loop1", parent: "y" }, { id: "y", name: "loop2", parent: "x" }];
+  assert.deepEqual(folderTree(folders).map((e) => `${e.folder.id}${e.depth}`), ["a0", "b0", "c1", "x0", "y1"]);
+  assert.deepEqual(folderPathOf("c", folders).map((x) => x.id), ["b", "c"]);
+});
+
+test("links match the shared Swift cases", async () => {
+  const { wikilinks, linkGraph, mentions, related, neighbours } = await import("../public/core/links.js");
+  const f = fixture("links-cases");
+  for (const c of f.wikilinks) assert.deepEqual(wikilinks(c.text), c.expect, c.text);
+  const items = f.items.map((o) => itemView({ id: o.id, fields: { title: o.title, createdAt: o.createdAt, tags: o.tags ?? [], ...(o.links ? { links: o.links } : {}) },
+    texts: { body: o.body }, conflicts: {} }));
+  const graph = linkGraph(items);
+  assert.deepEqual(graph, f.graph);
+  assert.deepEqual(mentions(items[0], items, new Set(neighbours(graph, "a"))).map((i) => i.id), f.mentions.a);
+  assert.deepEqual(related(items[0], items).map((i) => i.id), f.related.a);
+});
+
+test("vault: new items are filed, folders can be moved, renamed, deleted and tidied", async () => {
+  const { v } = await testVault();
+  const pdf = await v.addFile(utf8.encode("pdf"), "Tax.pdf", "application/pdf");
+  const sheet = await v.addFile(utf8.encode("x"), "Budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  const note = v.addNote({ body: "hello" });
+  const imported = v.addNote({ title: "Week 1", body: "x", source: "import", folder: ["Uni", "Maths"] });
+  const { folderPathOf } = await import("../public/core/organize.js");
+  const path = (id) => folderPathOf(v.item(id).folder, v.folders()).map((f) => f.name);
+  assert.deepEqual(path(pdf), ["Documents"]);
+  assert.deepEqual(path(sheet), ["Documents", "Spreadsheets"]);
+  assert.deepEqual(path(note), ["Notes"]);
+  assert.deepEqual(path(imported), ["Uni", "Maths"]);
+  assert.equal(v.item(pdf).folder, "folder:documents");
+  assert.equal(v.item(pdf).isAutoFiled, true);
+  const uni = v.createFolder("Uni");
+  assert.equal(uni, "folder:uni");
+  const maths = v.ensureFolder(["uni", "MATHS"]);
+  v.moveItem(note, maths);
+  assert.equal(v.item(note).isAutoFiled, false);
+  v.renameFolder(uni, "University");
+  assert.equal(v.ensureFolder(["University", "maths"]), maths);
+  assert.equal(v.moveFolder(uni, maths), false);
+  v.deleteFolder(maths);
+  assert.equal(v.item(note).folder, uni);
+  v.deleteFolder(uni);
+  assert.equal(v.item(note).folder, null);
+  assert.equal(v.tidyUp(), 2); // the note, and "Week 1" whose folders were deleted
+  assert.equal(v.item(note).folder, "folder:notes");
+  assert.equal(v.tidyUp(), 0);
+});
+
+test("vault: file versions, text versions, connections and thumbnails", async () => {
+  const { v, advance } = await testVault();
+  const id = await v.addFile(utf8.encode("v1"), "notes.txt", "text/plain");
+  await v.replaceFile(id, utf8.encode("v2"));
+  await v.replaceFile(id, utf8.encode("v3"));
+  let item = v.item(id);
+  assert.equal(new TextDecoder().decode(await v.attachment(item.attachments[0].id)), "v3");
+  assert.equal(item.fileVersions.length, 2);
+  v.restoreFileVersion(id, item.fileVersions[1]);
+  item = v.item(id);
+  assert.equal(new TextDecoder().decode(await v.attachment(item.attachments[0].id)), "v1");
+  assert.equal(item.fileVersions.length, 2);
+
+  const n = v.addNote({ body: "a" });
+  advance(10_000); v.setBody(n, "ab");
+  advance(10_000); v.setBody(n, "abc");
+  advance(600_000); v.setBody(n, "abcd");
+  assert.deepEqual(v.textVersions(n).map((x) => x.text), ["abcd", "abc"]);
+
+  v.connect(n, id);
+  v.connect(n, id);
+  assert.deepEqual(v.item(n).links, [id]);
+  v.disconnect(id, n);
+  assert.deepEqual(v.item(n).links, []);
+  await v.setThumbnail(id, utf8.encode("jpeg"));
+  assert.equal(v.item(id).thumbnail.name, "thumbnail.jpg");
+});
+
+test("vault: an inbox entry imported by two devices is one item; GoodNotes backups keep versions", async () => {
+  const blobs = new Map();
+  const a = (await testVault("WEB", blobs)).v, b = (await testVault("MAC", blobs)).v;
+  const header = { v: 1, source: "web", mime: "text/plain", title: "A thought" };
+  const ida = await a.importEnvelope(header, utf8.encode("remember this"), { id: "E1" });
+  const idb = await b.importEnvelope(header, utf8.encode("remember this"), { id: "E1" });
+  assert.equal(ida, "inbox-e1");
+  assert.equal(ida, idb);
+  a.store.apply(b.journal.pending);
+  b.store.apply(a.journal.pending);
+  assert.equal(a.items().length, 1);
+  assert.equal(a.item(ida).body, "remember this");
+  assert.equal(a.item(ida).hasConflicts, false);
+  assert.deepEqual(a.item(ida).record.fields, b.item(ida).record.fields);
+
+  const nb = { v: 1, source: "webdav", name: "Bio.goodnotes", meta: { davPath: "/Bio.goodnotes" } };
+  const first = await a.importEnvelope(nb, utf8.encode("one"), { id: "G1" });
+  assert.equal(await a.importEnvelope(nb, utf8.encode("two"), { id: "G2" }), first);
+  const notebook = a.item(first);
+  assert.equal(notebook.kind, "file");
+  assert.equal(notebook.source, "goodnotes");
+  assert.equal(notebook.folder, "folder:handwritten");
+  assert.equal(notebook.fileVersions.length, 1);
+});
+
+test("zip imports keep their folders, like FileImport.placed", async () => {
+  const { importActions } = await import("../public/core/importer.js");
+  const bytes = new Uint8Array(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/import-sample.zip", import.meta.url)));
+  const actions = await importActions("import-sample.zip", bytes, ["Dropped"]);
+  assert.deepEqual(actions.find((a) => a.name === "photo.png").folder, ["Dropped", "import-sample", "Export"]);
+  assert.ok(actions.some((a) => a.type === "note" && a.folder.join("/") === "Dropped/import-sample/Export/nested"));
+});
