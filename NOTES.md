@@ -72,7 +72,11 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   `settings.clipboard` (`keepDays`, `keepCount`). Apps: Settings → Clipboard. Website: Clipboard →
   "How much history to keep". Changing it prunes at once. **Older app builds still prune at 30
   days / 1,000**, so update every device before choosing more.
-- Tests: TroveCore 86 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
+- **Settings follow you** (the user: "settings like that should auto sync across all devices"):
+  clipboard history on/off, hold passwords briefly, save copies on open, record page and window,
+  automatic updates and cloud AI now live in the synced `settings.app` record (`SharedSetting`,
+  `AppModel.setShared`). Folder paths, permissions and layout stay per device.
+- Tests: TroveCore 87 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
   web 31 unit + 9 Chromium e2e (new: tag sections, type-to-search, Sketches section).
 - **Website not deployed this round**: the deploy was blocked by the session's permission
   settings. Deploy with `cd server && npx wrangler deploy` (the token is in the cloud environment).

@@ -324,3 +324,30 @@ public struct ClipKeep: Equatable, Hashable, Sendable {
         count == 0 ? "No limit" : "\(count.formatted()) clips"
     }
 }
+
+// MARK: - Settings that follow you to every device (PROTOCOL.md §8, `settings.app`)
+
+/// A preference kept in the vault, so changing it on one device changes it on all of them.
+/// (Things that belong to one machine, like a folder path or a permission, stay on that machine.)
+public enum SharedSetting: String, CaseIterable, Sendable {
+    case clipboardHistory, holdSensitive, saveCopiesOnOpen, recordPages, autoUpdate, cloudAI
+
+    /// The value before anyone has changed it.
+    public var standard: Bool { self != .cloudAI }
+}
+
+extension Library {
+    public static let appSettingsId = "settings.app"
+
+    /// The shared settings someone has set (missing ones are at their `standard` value).
+    public func sharedSettings() async -> [SharedSetting: Bool] {
+        guard let r = await engine.record(Self.appSettingsId), !r.isDeleted else { return [:] }
+        var out: [SharedSetting: Bool] = [:]
+        for key in SharedSetting.allCases { if let value = r[key.rawValue]?.bool { out[key] = value } }
+        return out
+    }
+
+    public func setSharedSetting(_ key: SharedSetting, _ value: Bool) async {
+        await engine.set([key.rawValue: .bool(value)], record: Self.appSettingsId, kind: "setting")
+    }
+}

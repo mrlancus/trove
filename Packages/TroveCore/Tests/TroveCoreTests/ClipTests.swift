@@ -238,3 +238,20 @@ final class ClockBox: @unchecked Sendable {
         #expect(await lib.setTagColor("  ", .red) == nil)
     }
 }
+
+@Suite struct SharedSettingTests {
+    @Test func settingsMadeOnOneDeviceReachTheOthers() async {
+        let keys = VaultKeys.generate()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let mac = Library(engine: SyncEngine(device: "MAC", keys: keys, transports: [FolderTransport(root: folder)]))
+        let ipad = Library(engine: SyncEngine(device: "IPAD", keys: keys, transports: [FolderTransport(root: folder)]))
+        #expect(await mac.sharedSettings().isEmpty && SharedSetting.clipboardHistory.standard && !SharedSetting.cloudAI.standard)
+        await mac.setSharedSetting(.holdSensitive, false)
+        await mac.setSharedSetting(.cloudAI, true)
+        await mac.setClipKeep(ClipKeep(days: 365, count: 0))
+        _ = await mac.engine.sync()
+        _ = await ipad.engine.sync()
+        #expect(await ipad.sharedSettings() == [.holdSensitive: false, .cloudAI: true])
+        #expect(await ipad.clipKeep() == ClipKeep(days: 365, count: 0))
+    }
+}

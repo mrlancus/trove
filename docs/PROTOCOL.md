@@ -264,6 +264,12 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   list of clip kinds (`link`, `image`, `code`, `text`, …). The device that records a new clip of one of
   those kinds saves it to the library at once (below). `keepDays` and `keepCount` say how much
   history to keep (numbers; 0 = no limit; missing = 30 days and 1,000 clips).
+- **Shared app settings:** one synced record, id `settings.app`, kind `setting`, booleans that
+  every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
+  never leave the device), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
+  (Mac), `cloudAI`. A missing field means the default (all on, except `cloudAI`). A device whose
+  own value differs from the default before the field exists writes it once. Things that belong
+  to one machine (folder paths, permissions, layout) aren't shared.
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
   (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
   `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,

@@ -54,11 +54,12 @@ private struct SettingsList: View {
 #if os(macOS)
 private struct UpdatesSection: View {
     @State private var updater = Updater.shared
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         Section {
             LabeledContent("This version", value: "\(updater.currentVersion) (build \(updater.currentBuild))")
-            Toggle("Download and offer updates automatically", isOn: Binding(get: { updater.automatic }, set: { updater.automatic = $0 }))
+            Toggle("Download and offer updates automatically", isOn: Binding(get: { model.isOn(.autoUpdate) }, set: { model.setShared(.autoUpdate, $0) }))
                 .disabled(!updater.isEnabled)
             HStack {
                 Button("Check Now") { Task { await updater.check(userInitiated: true) } }
@@ -311,8 +312,8 @@ private struct AISection: View {
                 Text(OnDeviceAI.unavailableReason).font(.caption).foregroundStyle(.secondary)
             }
             Toggle("Use cloud AI when no device can (opt-in)", isOn: Binding(
-                get: { model.config?.cloudAI ?? false },
-                set: { on in Task { await model.setCloudAI(on) } }))
+                get: { model.isOn(.cloudAI) },
+                set: { model.setShared(.cloudAI, $0) }))
             .disabled(model.config?.relay == nil)
             if model.enriching { HStack { ProgressView().controlSize(.small); Text("Organising…") } }
         } header: {
@@ -403,18 +404,22 @@ private struct ClipboardSection: View {
     @State private var confirmClear = false
     static let autoSaveKinds: [(kind: ClipKind, title: String)] = [(.link, "Links"), (.image, "Images"), (.code, "Code"), (.text, "Text"), (.color, "Colours")]
 
+    /// A toggle for a setting every device shares.
+    private func shared(_ key: SharedSetting) -> Binding<Bool> {
+        Binding(get: { model.isOn(key) }, set: { model.setShared(key, $0) })
+    }
+
     /// The usual choices, plus whatever another device set if it isn't one of them.
     static func choices(_ list: [Int], current: Int) -> [Int] { list.contains(current) ? list : list + [current] }
     #if os(macOS)
     @State private var trusted = AXIsProcessTrusted()
-    @State private var recordPages = ClipSourceProbe.recordPages
     #endif
 
     var body: some View {
         @Bindable var clipboard = model.clipboard
         Section {
-            Toggle("Keep clipboard history", isOn: $clipboard.enabled)
-            Toggle("Hold passwords and codes briefly (this device only)", isOn: $clipboard.keepSensitive)
+            Toggle("Keep clipboard history", isOn: shared(.clipboardHistory))
+            Toggle("Hold passwords and codes briefly (never synced)", isOn: shared(.holdSensitive))
             #if os(macOS)
             if clipboard.enabled {
                 LabeledContent("Last copy recorded") {
@@ -441,14 +446,14 @@ private struct ClipboardSection: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             #else
-            Toggle("Save what I copied when I open Trove", isOn: $clipboard.captureOnOpen)
+            Toggle("Save what I copied when I open Trove", isOn: shared(.saveCopiesOnOpen))
             Text("iOS asks “Allow Paste?” each time unless you choose Settings → Apps → Trove → Paste from Other Apps → Allow.")
                 .font(.caption).foregroundStyle(.secondary)
             Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
                 .font(.caption).foregroundStyle(.secondary)
             #endif
             #if os(macOS)
-            Toggle("Record the page and window each copy came from", isOn: Binding(get: { recordPages }, set: { recordPages = $0; ClipSourceProbe.recordPages = $0 }))
+            Toggle("Record the page and window each copy came from", isOn: shared(.recordPages))
             Text("The window title needs Accessibility (above). For Safari and other browsers, macOS asks once whether Trove may read the front page's address.")
                 .font(.caption).foregroundStyle(.secondary)
             #endif
@@ -479,7 +484,7 @@ private struct ClipboardSection: View {
         } header: {
             Text("Clipboard")
         } footer: {
-            FormFooter("Copies sync end-to-end encrypted to your other devices. Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
+            FormFooter("These settings apply on all your devices. Copies sync end-to-end encrypted to your other devices. Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
         }
     }
 }

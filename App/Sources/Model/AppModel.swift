@@ -223,6 +223,7 @@ final class AppModel {
         links = Links.graph(items)
         index = await library.searchIndex()
         if !searchText.isEmpty { searchNow() }
+        await applySharedSettings()
         // Search by meaning catches up in the background; keyword search never waits for it.
         let snapshot = self.items, semantic = self.semantic
         Task.detached(priority: .utility) { await semantic.update(snapshot) }
@@ -457,6 +458,70 @@ final class AppModel {
         sync.syncing = false
         await enrichSoon()
         await mirrorIfOwner()
+    }
+
+    // MARK: Settings that follow you (PROTOCOL.md §8, `settings.app`)
+
+    /// Shared settings without a home of their own on this platform (the Mac's page recording and
+    /// updates, seen from an iPhone), so the toggles still show and pass on the right value.
+    private var sharedValues: [SharedSetting: Bool] = [:]
+
+    /// A shared setting's value on this device.
+    func isOn(_ key: SharedSetting) -> Bool {
+        switch key {
+        case .clipboardHistory: return clipboard.enabled
+        case .holdSensitive: return clipboard.keepSensitive
+        case .saveCopiesOnOpen: return clipboard.captureOnOpen
+        case .cloudAI: return config?.cloudAI ?? false
+        #if os(macOS)
+        case .recordPages: return sharedValues[key] ?? ClipSourceProbe.recordPages
+        case .autoUpdate: return sharedValues[key] ?? Updater.shared.automatic
+        #else
+        case .recordPages, .autoUpdate: return sharedValues[key] ?? key.standard
+        #endif
+        }
+    }
+
+    /// Changes a setting here at once, then in the vault, so every device follows.
+    func setShared(_ key: SharedSetting, _ on: Bool) {
+        apply(key, on)
+        Task {
+            await library?.setSharedSetting(key, on)
+            if key == .cloudAI { try? await vault.relayClient?.setAIEnabled(on) }
+            pushSoon()
+        }
+    }
+
+    private func apply(_ key: SharedSetting, _ on: Bool) {
+        sharedValues[key] = on
+        switch key {
+        case .clipboardHistory: if clipboard.enabled != on { clipboard.enabled = on }
+        case .holdSensitive: if clipboard.keepSensitive != on { clipboard.keepSensitive = on }
+        case .saveCopiesOnOpen: if clipboard.captureOnOpen != on { clipboard.captureOnOpen = on }
+        case .cloudAI: if config?.cloudAI != on { updateConfig { $0.cloudAI = on } }
+        case .recordPages:
+            #if os(macOS)
+            ClipSourceProbe.recordPages = on
+            #endif
+        case .autoUpdate:
+            #if os(macOS)
+            if Updater.shared.automatic != on { Updater.shared.automatic = on }
+            #endif
+        }
+    }
+
+    /// After loading: take on what other devices set. A value only this device has (changed before
+    /// settings synced) is shared the first time, so nobody loses a choice they made.
+    private func applySharedSettings() async {
+        guard let library else { return }
+        let synced = await library.sharedSettings()
+        for key in SharedSetting.allCases {
+            if let value = synced[key] {
+                if isOn(key) != value || sharedValues[key] == nil { apply(key, value) }
+            } else if isOn(key) != key.standard {
+                await library.setSharedSetting(key, isOn(key))
+            }
+        }
     }
 
     /// Pushes local edits a moment after they're made, like the website does.
