@@ -88,6 +88,16 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Mac lag** (follow-up, Intel MacBook): every sync (30 s) replaced `items`, folders, links, the index
   and bumped `inkRevision` even when nothing changed, redrawing every screen and card; now
   `Library.stamp(of:)` gates each refresh. The Import drop zone's border animated 30×/s forever; now still.
+- **Mac crash (0.1.50, NSToolbar insert exception):** the Clipboard moved into the window's content
+  column brought its own `.searchable` next to the window's; two search fields in one toolbar is a
+  known SwiftUI/AppKit crash. In the window the clipboard now uses the window's search box
+  (`ClipsView.ownSearch`). The report also showed memory allocation failures (MALLOC ~780 MB on an
+  8 GB Mac); watch for memory if it crashes again.
+- Paste imports show the Import screen's progress ring (`ImportRun.unit`/`destination`); the sidebar's
+  section buttons line up with the count pills (`sidebarHeaderButton`).
+- **Asked the user:** which Obsidian-style AI features to build (local MCP server on the Mac for
+  Claude Desktop/Code, Ask Trove with citations, link suggestions, digests). Notes are already
+  Markdown with Preview/Edit. Re-importing the same folder makes second cards (blobs are deduped).
 - **Scrolling:** card snippets cut to 400 characters, no whole-grid animation diff on every sync
   (apps); off-screen clips skip layout (website).
 - **img1** from the user's message never reached the session; ask them to send it again.
