@@ -48,19 +48,25 @@ final class ClipboardWatcher {
         guard types.isDisjoint(with: Self.skipTypes) else { return }
         let app = NSWorkspace.shared.frontmostApplication
         if let id = app?.bundleIdentifier, Self.ignoredApps.contains(id) { return }
-        let source = app?.localizedName
+        let name = app?.localizedName
 
         if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
-            Task { await store.capture(files: urls.map(\.path), sourceApp: source) }
+            Task { await store.capture(files: urls.map(\.path), sourceApp: name) }
             return
         }
         let text = pb.string(forType: .string)
         let imageData = pb.data(forType: .png) ?? pb.data(forType: .tiff).flatMap(Self.png(fromTIFF:))
-        // An image copied from a browser often comes with its address as text; keep the image.
-        if let imageData, text == nil || ClipClassifier.classify(text ?? "") == .link {
-            Task { await store.capture(image: imageData, mime: "image/png", sourceApp: source) }
-        } else if let text {
-            Task { await store.capture(text: text, sourceApp: source) }
+        // The window and page it came from: read now, while that window is still in front.
+        let (found, askBrowser) = ClipSourceProbe.immediate(app: app, pasteboard: pb)
+        Task {
+            var source = found
+            if askBrowser, let bundle = found.bundle, let page = await ClipSourceProbe.pageURL(bundle: bundle) { source.url = page }
+            // An image copied from a browser often comes with its address as text; keep the image.
+            if let imageData, text == nil || ClipClassifier.classify(text ?? "") == .link {
+                await store.capture(image: imageData, mime: "image/png", sourceApp: name, source: source)
+            } else if let text {
+                await store.capture(text: text, sourceApp: name, source: source)
+            }
         }
     }
 

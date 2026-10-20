@@ -401,8 +401,10 @@ struct CopyRow: View {
 private struct ClipboardSection: View {
     @Environment(AppModel.self) private var model
     @State private var confirmClear = false
+    static let autoSaveKinds: [(kind: ClipKind, title: String)] = [(.link, "Links"), (.image, "Images"), (.code, "Code"), (.text, "Text"), (.color, "Colours")]
     #if os(macOS)
     @State private var trusted = AXIsProcessTrusted()
+    @State private var recordPages = ClipSourceProbe.recordPages
     #endif
 
     var body: some View {
@@ -442,6 +444,21 @@ private struct ClipboardSection: View {
             Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
                 .font(.caption).foregroundStyle(.secondary)
             #endif
+            #if os(macOS)
+            Toggle("Record the page and window each copy came from", isOn: Binding(get: { recordPages }, set: { recordPages = $0; ClipSourceProbe.recordPages = $0 }))
+            Text("The window title needs Accessibility (above). For Safari and other browsers, macOS asks once whether Trove may read the front page's address.")
+                .font(.caption).foregroundStyle(.secondary)
+            #endif
+            LabeledContent("Save to Trove automatically") {
+                VStack(alignment: .trailing, spacing: 4) {
+                    ForEach(Self.autoSaveKinds, id: \.kind) { option in
+                        Toggle(option.title, isOn: Binding(get: { clipboard.autoSave.contains(option.kind) },
+                                                           set: { on in Task { await clipboard.setAutoSave(option.kind, on) } }))
+                    }
+                }
+            }
+            Text("Copies of these kinds go straight into your library, with where they came from. Applies on all your devices.")
+                .font(.caption).foregroundStyle(.secondary)
             Button("Clear history…", role: .destructive) { confirmClear = true }
                 .confirmationDialog("Delete every unpinned clip on all your devices?", isPresented: $confirmClear) {
                     Button("Clear history", role: .destructive) { Task { await model.clipboard.clearHistory() } }

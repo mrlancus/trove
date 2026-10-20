@@ -442,7 +442,7 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header.padding([.horizontal, .top], 16)
             }
-            if items.isEmpty {
+            if items.isEmpty && model.clipResults.isEmpty {
                 emptyState.padding(.top, 80)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: 14)], spacing: 14) {
@@ -463,6 +463,14 @@ struct LibraryView: View {
                 }
                 .padding(16)
                 .animation(.spring(duration: 0.35), value: items.map(\.id))
+                if !model.clipResults.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("From your clipboard").font(.headline).padding(.bottom, 4)
+                        ClipSearchRows()
+                    }
+                    .frame(maxWidth: 640, alignment: .leading)
+                    .padding([.horizontal, .bottom], 16)
+                }
             }
         }
     }
@@ -472,7 +480,7 @@ struct LibraryView: View {
             Section { header }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-            if items.isEmpty {
+            if items.isEmpty && model.clipResults.isEmpty {
                 emptyState.padding(.top, 60).frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
             ForEach(items) { item in
@@ -494,6 +502,10 @@ struct LibraryView: View {
                     Button { Task { await model.togglePin(item) } } label: { Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin") }
                         .tint(.orange)
                 }
+            }
+        }
+            if !model.clipResults.isEmpty {
+                Section("From your clipboard") { ClipSearchRows() }
             }
         }
         .listStyle(.plain)

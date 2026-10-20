@@ -143,7 +143,7 @@ struct PhoneSearch: View {
                     }
                 }
             } else if let results = model.searchResults {
-                if results.isEmpty {
+                if results.isEmpty && model.clipResults.isEmpty {
                     EmptyState(symbol: "magnifyingglass", title: "No matches", message: "Try fewer words, or search by meaning, like “that pasta place”.")
                         .listRowBackground(Color.clear)
                 }
@@ -151,6 +151,9 @@ struct PhoneSearch: View {
                     Button { model.selectedItemID = item.id } label: { ItemRow(item: item) }
                         .buttonStyle(.plain)
                         .swipeActions { Button(role: .destructive) { Task { await model.delete(item) } } label: { Label("Delete", systemImage: "trash") } }
+                }
+                if !model.clipResults.isEmpty {
+                    Section("From your clipboard") { ClipSearchRows() }
                 }
             }
         }

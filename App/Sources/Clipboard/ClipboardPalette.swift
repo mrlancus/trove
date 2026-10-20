@@ -74,6 +74,7 @@ final class ClipboardPaletteController {
         state.query = ""
         state.filter = .all
         state.stack = []
+        state.editing = nil
         state.selection = state.entries(store, thisDevice: thisDevice()).first?.id
         // Centre on the screen with the mouse, a little above the middle (like Spotlight).
         let mouse = NSEvent.mouseLocation
@@ -137,6 +138,11 @@ final class ClipboardPaletteController {
         let current = entries.first { $0.id == state.selection } ?? entries.first
         let command = event.command
 
+        // Editing a clip: keys go to its fields; esc goes back to the preview.
+        if state.editing != nil {
+            if event.code == kVK_Escape { state.editing = nil; return true }
+            return false
+        }
         switch event.code {
         case kVK_Escape:
             if !state.query.isEmpty { state.query = "" } else { hide() }
@@ -174,6 +180,9 @@ final class ClipboardPaletteController {
             return true
         case "s":
             if let clip = current?.clip { saveToLibrary(clip) }
+            return true
+        case "e":
+            if let clip = current?.clip { state.selection = clip.id; state.editing = clip.id }
             return true
         case "[":
             shiftFilter(-1); return true

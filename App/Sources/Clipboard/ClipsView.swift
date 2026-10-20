@@ -63,6 +63,8 @@ final class ClipPaletteState {
     var selection: String?
     /// Clips marked with ⇥ to paste together, in the order they were marked.
     var stack: [String] = []
+    /// The clip being edited in place of the preview (⌘E).
+    var editing: String?
 
     func entries(_ store: ClipboardStore, thisDevice: String?) -> [ClipEntry] {
         let sensitive = store.ephemeral.map(ClipEntry.sensitive)
@@ -139,8 +141,12 @@ struct ClipsView: View {
                 rows.frame(width: 330)
                 Divider()
                 Group {
-                    if let selected { ClipPreview(entry: selected, store: store, thisDevice: thisDevice, activate: activate, saveToLibrary: saveToLibrary) }
-                    else { emptyState }
+                    if let clip = selected?.clip, state.editing == clip.id {
+                        ClipDetailForm(clip: clip, store: store, thisDevice: thisDevice, saveToLibrary: saveToLibrary) { state.editing = nil }
+                    } else if let selected {
+                        ClipPreview(entry: selected, store: store, thisDevice: thisDevice, activate: activate, saveToLibrary: saveToLibrary,
+                                    edit: { state.editing = $0.id })
+                    } else { emptyState }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -149,6 +155,7 @@ struct ClipsView: View {
         }
         .onAppear { searchFocused = true }
         .onChange(of: state.query) { state.selection = entries.first?.id }
+        .onChange(of: state.selection) { if state.editing != state.selection { state.editing = nil } }
         .onChange(of: state.filter) { state.selection = entries.first?.id }
     }
 
@@ -195,6 +202,7 @@ struct ClipsView: View {
             hint("⌥⏎", "Copy")
             hint("⇥", "Stack")
             hint("⌘P", "Pin")
+            hint("⌘E", "Edit")
             hint("⌘S", "Save to Trove")
             hint("⌘⌫", "Delete")
             Spacer()
@@ -222,6 +230,8 @@ struct ClipsView: View {
 
     // MARK: List (iPhone / iPad)
 
+    @State private var detail: String?
+
     private var list: some View {
         List {
             Section {
@@ -240,10 +250,17 @@ struct ClipsView: View {
             }
             Section {
                 ForEach(entries) { entry in
-                    Button { activate(entry, nil) } label: {
-                        ClipRow(entry: entry, store: store, index: nil, selected: false, stacked: nil)
+                    HStack(spacing: 4) {
+                        Button { activate(entry, nil) } label: {
+                            ClipRow(entry: entry, store: store, index: nil, selected: false, stacked: nil)
+                        }
+                        .buttonStyle(.plain)
+                        if let clip = entry.clip {
+                            Button { detail = clip.id } label: { Image(systemName: "info.circle").font(.title3) }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Details and edit")
+                        }
                     }
-                    .buttonStyle(.plain)
                     .contextMenu { menu(for: entry) }
                     .swipeActions(edge: .leading) {
                         if let clip = entry.clip {
@@ -257,11 +274,15 @@ struct ClipsView: View {
                 }
             }
         }
-        .searchable(text: $state.query, prompt: "Search your clipboard")
+        .searchable(text: $state.query, prompt: "Search your clipboard, or tag:, app:")
         .overlay {
             if entries.isEmpty { emptyState }
         }
+        .sheet(item: Binding(get: { detail.map(ClipSheetID.init) }, set: { detail = $0?.id })) { sheet in
+            ClipDetailSheet(clipID: sheet.id, store: store, thisDevice: thisDevice, saveToLibrary: saveToLibrary)
+        }
     }
+
 
     @ViewBuilder
     private func menu(for entry: ClipEntry) -> some View {
@@ -270,6 +291,7 @@ struct ClipsView: View {
             ForEach(ClipTransform.available(for: clip.text), id: \.self) { t in
                 Button { activate(entry, t) } label: { Text("Copy as \(t.title)") }
             }
+            Button { detail = clip.id } label: { Label("Details and edit…", systemImage: "pencil") }
             Button { Task { await store.togglePin(clip) } } label: { Label(clip.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
             Button { saveToLibrary(clip) } label: { Label("Save to Trove", systemImage: "tray.and.arrow.down") }
         }
@@ -297,9 +319,18 @@ struct ClipRow: View {
         HStack(spacing: 10) {
             ClipBadge(entry: entry, store: store).frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).lineLimit(2)
-                    .font(entry.clip.map { [.code, .json].contains($0.kind) } == true ? .callout.monospaced() : .callout)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(title).lineLimit(1).font(.callout.weight(entry.clip == nil ? .regular : .medium))
+                if let snippet {
+                    Text(snippet).lineLimit(1).foregroundStyle(.secondary)
+                        .font(entry.clip.map { [.code, .json].contains($0.kind) } == true ? .caption.monospaced() : .caption)
+                }
+                HStack(spacing: 6) {
+                    Text(subtitle).foregroundStyle(.secondary)
+                    if let tags = entry.clip?.tags, !tags.isEmpty {
+                        Text(tags.prefix(3).map { "#" + $0 }.joined(separator: " ")).foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption).lineLimit(1)
             }
             Spacer(minLength: 4)
             if let stacked {
@@ -317,15 +348,24 @@ struct ClipRow: View {
 
     private var title: String {
         switch entry {
-        case .clip(let c): c.preview.isEmpty ? c.kind.title : c.preview
+        case .clip(let c): c.displayTitle
         case .sensitive: "Hidden: looks like a password or code"
         }
+    }
+
+    /// The summary, the start of the text, or the text found in an image, when it isn't the title.
+    private var snippet: String? {
+        guard let c = entry.clip else { return nil }
+        let s = c.summary ?? (c.kind == .image ? c.ocrText?.split(separator: "\n").first.map(String.init) : c.preview)
+        guard let s, !s.isEmpty, s != c.displayTitle else { return nil }
+        return s
     }
 
     private var subtitle: String {
         switch entry {
         case .clip(let c):
-            let from = [c.sourceApp, c.device == nil ? nil : c.sourceDevice].compactMap { $0 }.joined(separator: " · ")
+            let app = [c.sourceApp, c.sourceTitle].compactMap { $0 }.joined(separator: " — ")
+            let from = [app.isEmpty ? nil : app, c.device == nil ? nil : c.sourceDevice].compactMap { $0 }.joined(separator: " · ")
             return [from.isEmpty ? nil : from, c.sortDate.relative].compactMap { $0 }.joined(separator: " · ")
         case .sensitive(let e):
             return "This device only · gone \(e.expires.relative)"
@@ -373,10 +413,18 @@ struct ClipPreview: View {
     let thisDevice: String?
     var activate: (ClipEntry, ClipTransform?) -> Void
     var saveToLibrary: (Clip) -> Void
+    var edit: (Clip) -> Void = { _ in }
     @State private var image: PlatformImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let clip = entry.clip {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(clip.displayTitle).font(.headline).lineLimit(2)
+                    if let summary = clip.summary { Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(3) }
+                    if !clip.tags.isEmpty { Text(clip.tags.map { "#" + $0 }.joined(separator: " ")).font(.caption).foregroundStyle(.orange) }
+                }
+            }
             content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             if let clip = entry.clip {
                 let transforms = ClipTransform.available(for: clip.text)
@@ -393,6 +441,8 @@ struct ClipPreview: View {
                 HStack {
                     Text(meta(clip)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
+                    Button { edit(clip) } label: { Image(systemName: "pencil") }
+                        .help("Details and edit (⌘E)")
                     Button { Task { await store.togglePin(clip) } } label: { Image(systemName: clip.isPinned ? "pin.slash" : "pin") }
                         .help(clip.isPinned ? "Unpin" : "Pin")
                     Button { saveToLibrary(clip) } label: { Image(systemName: clip.savedItem == nil ? "tray.and.arrow.down" : "checkmark.circle") }
@@ -424,8 +474,11 @@ struct ClipPreview: View {
         case .clip(let clip):
             switch clip.kind {
             case .image:
-                if let image { Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 10)) }
-                else { ProgressView() }
+                VStack(alignment: .leading, spacing: 8) {
+                    if let image { Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 10)) }
+                    else { ProgressView() }
+                    if let ocr = clip.ocrText { Text(ocr).font(.caption).foregroundStyle(.secondary).lineLimit(4).textSelection(.enabled) }
+                }
             case .color:
                 if let c = ClipClassifier.color(clip.text) { ColorDetails(text: clip.text, r: c.r, g: c.g, b: c.b, a: c.a) }
             case .link:
@@ -453,11 +506,12 @@ struct ClipPreview: View {
     private func meta(_ clip: Clip) -> String {
         var parts: [String] = []
         if let app = clip.sourceApp { parts.append(app) }
+        if let page = clip.sourceURL?.host ?? clip.sourceTitle { parts.append(page) }
         if clip.device != thisDevice, let device = clip.sourceDevice { parts.append("from \(device)") }
         parts.append(clip.createdAt.relative)
         if clip.image == nil, clip.files.isEmpty {
-            let words = clip.text.split(whereSeparator: \.isWhitespace).count
-            parts.append("\(clip.text.count) characters · \(words) words")
+            let i = clip.insights
+            parts.append("\(i.chars) character\(i.chars == 1 ? "" : "s") · \(i.words) word\(i.words == 1 ? "" : "s")")
         }
         return parts.joined(separator: " · ")
     }

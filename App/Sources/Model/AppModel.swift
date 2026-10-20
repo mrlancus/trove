@@ -76,6 +76,12 @@ final class AppModel {
     var picked: Set<String> = []
     var searchText = "" { didSet { scheduleSearch() } }
     var searchResults: [Item]?
+    /// Clips matching the search, shown under the library's results.
+    var clipResults: [Clip] {
+        let q = searchText.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        return Array(clipboard.clips.lazy.filter { $0.matches(q) }.prefix(8))
+    }
     var sync = SyncStatus()
     var enriching = false
     var toast: String?

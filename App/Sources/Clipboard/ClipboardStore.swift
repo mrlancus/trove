@@ -53,6 +53,7 @@ final class ClipboardStore {
             await library.pruneClips()
         }
         clips = await library.clips()
+        autoSave = await library.clipAutoSaveKinds()
         #if os(iOS)
         publishForKeyboard()
         #endif
@@ -60,7 +61,7 @@ final class ClipboardStore {
 
     // MARK: Adding
 
-    func capture(text: String, sourceApp: String?) async {
+    func capture(text: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if SensitiveDetector.isSensitive(text) {
             guard keepSensitive else { return }
@@ -70,14 +71,14 @@ final class ClipboardStore {
             scheduleExpiry()
             return
         }
-        await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
         lastCaptured = (Date(), false)
         await reload()
     }
 
-    func capture(image data: Data, mime: String, sourceApp: String?) async {
+    func capture(image data: Data, mime: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library else { return }
-        _ = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        _ = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
         lastCaptured = (Date(), false)
         await reload()
     }
@@ -141,6 +142,38 @@ final class ClipboardStore {
     func clearHistory() async {
         ephemeral = []
         for clip in clips where !clip.isPinned { await library?.deleteClip(clip.id) }
+        await reload()
+    }
+
+    // MARK: Editing
+
+    func rename(_ clip: Clip, to title: String) async {
+        await library?.renameClip(clip.id, to: title)
+        await reload()
+    }
+
+    func edit(_ clip: Clip, text: String) async {
+        await library?.editClip(clip.id, text: text)
+        await reload()
+    }
+
+    func setTags(_ clip: Clip, _ tags: [String]) async {
+        await library?.setClipTags(clip.id, tags)
+        await reload()
+    }
+
+    func setNote(_ clip: Clip, _ note: String) async {
+        await library?.setClipNote(clip.id, note)
+        await reload()
+    }
+
+    /// Kinds saved into the library as they're copied (synced to every device).
+    private(set) var autoSave: Set<ClipKind> = []
+
+    func setAutoSave(_ kind: ClipKind, _ on: Bool) async {
+        var kinds = autoSave
+        if on { kinds.insert(kind) } else { kinds.remove(kind) }
+        await library?.setClipAutoSave(kinds)
         await reload()
     }
 

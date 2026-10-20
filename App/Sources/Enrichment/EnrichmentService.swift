@@ -43,7 +43,49 @@ actor EnrichmentService {
             if Task.isCancelled { break }
             if await enrich(item) { changed += 1 }
         }
+        for clip in await library.clipsNeedingEnrichment(upTo: bestTier, limit: 10) {
+            if Task.isCancelled { break }
+            await enrich(clip)
+            changed += 1
+        }
         return changed
+    }
+
+    /// Clips (PROTOCOL.md §8): read the text in images, then name, summarise and tag with the best
+    /// tier here. Short copies get the rules only: AI has nothing to add to a phone number.
+    private func enrich(_ clip: Clip) async {
+        var ocr: String?
+        var text = clip.text
+        if let image = clip.image {
+            if let found = clip.ocrText {
+                ocr = found
+            } else if let data = try? await library.attachmentData(image), let cg = PlatformImage.fromData(data)?.cgImageForVision {
+                let recognized = await AppleEnricher.recognizeText(in: cg).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !recognized.isEmpty { ocr = String(recognized.prefix(20_000)) }
+            }
+            text = ocr ?? ""
+        }
+        let rulesTitle = clip.image != nil ? text.split(separator: "\n").first.map { ClipInsights.of(String($0)).autoTitle } : nil
+        let rulesTags = clip.image != nil && !text.isEmpty ? ClipInsights.ruleTags(text) : []
+        let material = [clip.sourceTitle ?? "", text].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let tier = bestTier
+        guard tier > .basic, material.count >= 40, clip.kind != .color, clip.kind != .file else {
+            // Nothing more to learn: record it at this device's best tier so no one asks again.
+            await library.applyClipEnrichment(clip.id, title: rulesTitle, tags: rulesTags, ocrText: ocr,
+                                              tier: material.count >= 40 && clip.kind != .file ? .basic : tier, by: deviceId)
+            return
+        }
+        let url = clip.kind == .link ? clip.text.trimmingCharacters(in: .whitespacesAndNewlines) : clip.sourceURL?.absoluteString
+        let from = clip.sourceApp.map { " (from " + $0 + ")" } ?? ""
+        let prompt = "A copy from the clipboard" + from + ". Name it for a clipboard history list.\n\n" + material
+        if tier == .onDevice, let d = try? await OnDeviceAI.describe(text: prompt, url: url, existingTitle: nil) {
+            await library.applyClipEnrichment(clip.id, title: d.title, summary: d.summary, tags: rulesTags + d.tags, ocrText: ocr, tier: .onDevice, by: deviceId)
+        } else if tier == .cloud, let relay, let e = try? await relay.enrich(text: prompt, url: url, title: nil) {
+            await library.applyClipEnrichment(clip.id, title: e.title, summary: e.summary, tags: rulesTags + e.tags, ocrText: ocr, tier: .cloud, by: e.model ?? "cloud")
+        } else {
+            // AI failed this time (offline, busy): keep what the rules found and try again later.
+            await library.applyClipEnrichment(clip.id, title: rulesTitle, tags: rulesTags, ocrText: ocr, tier: .basic, by: deviceId)
+        }
     }
 
     private func enrich(_ item: Item) async -> Bool {
