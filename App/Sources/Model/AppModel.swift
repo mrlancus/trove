@@ -861,13 +861,6 @@ final class AppModel {
 
     // MARK: Settings helpers
 
-    func setCloudAI(_ on: Bool) async {
-        guard var c = vault.config else { return }
-        c.cloudAI = on
-        vault.save(c)
-        try? await vault.relayClient?.setAIEnabled(on)
-    }
-
     /// The user's own relay, baked in at build time (`TroveDefaultRelay` in project.yml).
     nonisolated static var defaultRelay: String? {
         (Bundle.main.object(forInfoDictionaryKey: "TroveDefaultRelay") as? String).flatMap { $0.isEmpty ? nil : $0 }
