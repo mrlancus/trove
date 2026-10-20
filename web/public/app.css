@@ -291,7 +291,7 @@ label.secondary { cursor: pointer; display: inline-flex; align-items: center; }
 .viewer > p, .viewer > button { margin: 12px; }
 .zoomable { cursor: zoom-in; }
 .viewer-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1; }
-.pdf-pages { max-height: 78vh; overflow: auto; padding: 10px; display: grid; gap: 10px; justify-items: center; }
+.pdf-pages { max-height: 78vh; overflow: auto; padding: 10px; display: grid; gap: 10px; justify-items: center; grid-auto-rows: max-content; align-content: start; }
 .detail.wide .pdf-pages { max-height: calc(100vh - 200px); }
 .pdf-page { width: calc(100% * var(--zoom, 1)); max-width: none; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15); border-radius: 3px; overflow: hidden; }
 .pdf-pages { --zoom: 1; }

@@ -3,6 +3,7 @@
 // audio and video. Plus small JPEG thumbnails for cards.
 import { h } from "./dom.js";
 import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
+import { GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
 import { renderMarkdown } from "./markdown.js";
 
 let pdfjs = null;
@@ -75,6 +76,104 @@ export async function pdfViewer(bytes, { onExpand } = {}) {
   return h("div", { class: "pdf-viewer" }, bar, pages);
 }
 
+/**
+ * A GoodNotes notebook drawn from its own data (core/goodnotes.js): each page's PDF or image
+ * background, then its ink, shapes, typed text and pictures in GoodNotes' order. Pages draw as they
+ * scroll into view.
+ */
+export function notebookViewer(notebook, { onExpand } = {}) {
+  let zoom = 1;
+  const pdfs = new Map(), bitmaps = new Map();
+  const pdfFor = (id) => { if (!pdfs.has(id)) pdfs.set(id, openPdf(notebook.attachments.get(id).bytes)); return pdfs.get(id); };
+  const bitmapFor = (id) => {
+    if (!bitmaps.has(id)) { const a = notebook.attachments.get(id); bitmaps.set(id, createImageBitmap(new Blob([a.bytes], { type: a.mime }))); }
+    return bitmaps.get(id);
+  };
+  const pages = h("div", { class: "pdf-pages notebook-pages" });
+  const count = notebook.pages.length;
+  const setZoom = (z) => { zoom = Math.min(4, Math.max(0.5, z)); pages.style.setProperty("--zoom", zoom); for (const p of pages.children) p.dataset.rendered = ""; observeAll(); };
+  const bar = h("div", { class: "viewer-bar" },
+    h("span", { class: "saved", text: `GoodNotes notebook · ${count} page${count === 1 ? "" : "s"}` }), h("span", { class: "spacer" }),
+    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.25) }, "−"),
+    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.25) }, "+"),
+    onExpand ? h("button", { type: "button", class: "secondary small", onclick: onExpand }, "⤢ Wide") : null);
+  notebook.pages.forEach((page, i) => pages.append(h("div", { class: "pdf-page", "data-page": i, style: `aspect-ratio: ${page.width} / ${page.height}` })));
+
+  const render = async (el) => {
+    const page = notebook.pages[Number(el.dataset.page)];
+    const width = el.clientWidth;
+    if (!width || el.dataset.rendered === String(width)) return;
+    el.dataset.rendered = String(width);
+    let size = { width: page.width, height: page.height };
+    const bg = page.background && notebook.attachments.get(page.background.attachment);
+    let pdfPage = null;
+    if (bg?.mime === "application/pdf") {
+      try {
+        const doc = await pdfFor(page.background.attachment);
+        pdfPage = await doc.getPage(Math.min(Math.max(1, page.background.page), doc.numPages));
+        const vp = pdfPage.getViewport({ scale: 1 });
+        size = { width: vp.width, height: vp.height };
+        el.style.aspectRatio = `${size.width} / ${size.height}`;
+      } catch { pdfPage = null; }
+    }
+    const px = (width / size.width) * Math.min(devicePixelRatio || 1, 2);
+    const canvas = h("canvas", { width: Math.floor(size.width * px), height: Math.floor(size.height * px), "aria-label": `Page ${Number(el.dataset.page) + 1}` });
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (pdfPage) await pdfPage.render({ canvasContext: ctx, viewport: pdfPage.getViewport({ scale: px }) }).promise;
+    else if (bg?.mime.startsWith("image/")) { try { ctx.drawImage(await bitmapFor(page.background.attachment), 0, 0, canvas.width, canvas.height); } catch { /* no background */ } }
+    const k = px * GN_SCALE;
+    for (const layer of page.layers) {
+      if (layer.kind === "ink") {
+        ctx.save();
+        ctx.strokeStyle = `rgb(${layer.rgb.map((c) => Math.round(c * 255)).join(",")})`;
+        ctx.globalAlpha = strokeOpacity(layer);
+        if (isHighlighter(layer)) ctx.globalCompositeOperation = "multiply";
+        ctx.lineWidth = strokeWidth(layer) * k;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        for (const run of layer.runs) ctx.stroke(new Path2D(runPath(run, k, layer.shape)));
+        ctx.restore();
+      } else if (layer.kind === "image") {
+        try { ctx.drawImage(await bitmapFor(layer.attachment), layer.x * k, layer.y * k, layer.w * k, layer.h * k); } catch { /* missing picture */ }
+      } else if (layer.kind === "text") {
+        drawTextBox(ctx, layer, k);
+      }
+    }
+    el.replaceChildren(canvas);
+  };
+  const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
+  const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
+  observeAll();
+  return h("div", { class: "pdf-viewer notebook" }, bar, pages);
+}
+
+/** Typed text, wrapped to its box. Style runs flow on inside a paragraph; "\n" starts a new one. */
+function drawTextBox(ctx, box, k) {
+  const left = box.x * k, maxWidth = Math.max(box.w * k, 40);
+  let x = 0, y = box.y * k, lineHeight = 0;
+  const newLine = () => { y += (lineHeight || box.runs[0].size * k) * 1.25; x = 0; lineHeight = 0; };
+  ctx.save();
+  ctx.textBaseline = "top";
+  for (const run of box.runs) {
+    const size = run.size * k;
+    ctx.font = `${run.italic ? "italic " : ""}${run.bold ? "700" : "400"} ${size}px -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    ctx.fillStyle = `rgb(${run.rgb.map((c) => Math.round(c * 255)).join(",")})`;
+    for (const token of run.text.split(/(\n|[^\S\n]+)/)) {
+      if (!token) continue;
+      if (token === "\n") { newLine(); continue; }
+      const w = ctx.measureText(token).width;
+      if (x > 0 && x + w > maxWidth && token.trim()) newLine();
+      if (x === 0 && !token.trim()) continue;
+      lineHeight = Math.max(lineHeight, size);
+      ctx.fillText(token, left + x, y);
+      x += w;
+    }
+  }
+  ctx.restore();
+}
+
 function table(rows) {
   const width = Math.max(0, ...rows.map((r) => r.length));
   return h("div", { class: "table-wrap" }, h("table", { class: "sheet" },
@@ -113,6 +212,9 @@ async function build(kind, att, bytes, { edit, onExpand }) {
     case "pdf": return pdfViewer(bytes, { onExpand });
     case "audio": case "video": return h(kind, { src: urlFor(bytes, att.mime), controls: true, preload: "metadata" });
     case "goodnotes": {
+      let notebook = null;
+      try { notebook = await readNotebook(bytes); } catch { notebook = null; }
+      if (notebook?.pages.length) return notebookViewer(notebook, { onExpand });
       const parts = await goodnotesParts(bytes);
       const out = h("div", { class: "goodnotes" });
       const head = h("div", { class: "goodnotes-head" });
@@ -121,8 +223,7 @@ async function build(kind, att, bytes, { edit, onExpand }) {
         head.append(h("img", { src: url, alt: "Notebook cover", class: "cover zoomable", onclick: () => lightbox(url, att.name) }));
       }
       head.append(h("div", {}, h("strong", { text: "GoodNotes notebook" }),
-        h("p", { class: "saved", text: `${parts.pages} page${parts.pages === 1 ? "" : "s"}${parts.attachments.length ? ` · ${parts.attachments.length} document${parts.attachments.length === 1 ? "" : "s"} inside` : ""}` }),
-        h("p", { class: "hint", text: "Handwriting is stored in GoodNotes' own format. To see your ink here, set GoodNotes → Settings → Auto Backup → Format to PDF." })));
+        h("p", { class: "saved", text: "Couldn't read the pages of this notebook. Its cover and the documents inside are below." })));
       out.append(head);
       for (const a of parts.attachments) {
         if (a.mime === "application/pdf") out.append(h("p", { class: "section-title", text: "Document inside" }), await pdfViewer(a.bytes, { onExpand }));

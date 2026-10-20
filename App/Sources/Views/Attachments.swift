@@ -26,8 +26,8 @@ struct AttachmentView: View {
                     PDFKitView(data: data).frame(minHeight: 420).clipShape(RoundedRectangle(cornerRadius: 14))
                 } else if attachment.mime.hasPrefix("audio/") {
                     AudioPlayerView(data: data)
-                } else if attachment.name.lowercased().hasSuffix(".goodnotes"), let notebook = FilePreview.goodnotes(data) {
-                    GoodNotesPreview(preview: notebook)
+                } else if attachment.name.lowercased().hasSuffix(".goodnotes") {
+                    GoodNotesView(data: data, name: attachment.name)
                 } else if ["pages", "key", "numbers"].contains((attachment.name as NSString).pathExtension.lowercased()),
                           let preview = FilePreview.iworkPreview(data), let image = PlatformImage(data: preview) {
                     Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14))

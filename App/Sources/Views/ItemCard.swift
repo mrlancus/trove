@@ -100,7 +100,8 @@ struct Thumbnail: View {
     }
 
     private var hasVisual: Bool {
-        image != nil || item.record[Field.imageURL]?.string != nil || item.attachments.contains { $0.mime.hasPrefix("image/") || $0.mime == "application/pdf" }
+        image != nil || item.record[Field.imageURL]?.string != nil
+            || item.attachments.contains { $0.mime.hasPrefix("image/") || $0.mime == "application/pdf" || $0.name.lowercased().hasSuffix(".goodnotes") }
     }
 
     private var placeholder: some View {
@@ -116,6 +117,9 @@ struct Thumbnail: View {
             image = Self.downscale(data)
         } else if a.mime == "application/pdf", let data = try? await library.attachmentData(a) {
             image = PDFThumbnail.make(data)
+        } else if a.name.lowercased().hasSuffix(".goodnotes"), let data = try? await library.attachmentData(a) {
+            let cover = await Task.detached(priority: .utility) { FilePreview.goodnotes(data)?.thumbnail }.value
+            image = cover.flatMap(Self.downscale)
         }
     }
 

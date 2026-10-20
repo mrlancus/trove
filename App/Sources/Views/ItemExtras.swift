@@ -109,7 +109,7 @@ struct GoodNotesPreview: View {
                     Text("GoodNotes notebook").font(.headline)
                     Text("\(preview.pages) page\(preview.pages == 1 ? "" : "s")\(preview.documents.isEmpty ? "" : " · \(preview.documents.count) document\(preview.documents.count == 1 ? "" : "s") inside")")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Handwriting is stored in GoodNotes' own format. To see your ink here, set GoodNotes → Settings → Auto Backup → Format to PDF.")
+                    Text("Couldn't read the pages of this notebook, so here are its cover and the documents inside.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

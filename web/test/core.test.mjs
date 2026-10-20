@@ -363,3 +363,26 @@ test("a duplicate from another source is listed under that source too", async ()
   assert.deepEqual(vault.item(id).sources, ["import", "email"]);
   assert.deepEqual(search(vault.items(), "from:email", Date.now()).map((i) => i.id), [id]);
 });
+
+test("GoodNotes ink: every layout in the shared fixture decodes as GoodNotesInkTests.swift expects", async () => {
+  const gn = await import("../public/core/goodnotes.js");
+  const fixtures = new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/", import.meta.url);
+  const expected = JSON.parse(readFileSync(new URL("ink-expected.json", fixtures), "utf8"));
+  assert.equal(new TextDecoder().decode(gn.appleLZ4(Uint8Array.from(Buffer.from(expected.lz4.frame, "base64"))).bytes), expected.lz4.text);
+  const nb = await gn.readNotebook(new Uint8Array(readFileSync(new URL("ink.goodnotes", fixtures))));
+  const r2 = (v) => Math.round(v * 100) / 100;
+  assert.deepEqual(nb.pages.map((p) => p.id), expected.pages.map((p) => p.id));
+  nb.pages.forEach((p, i) => {
+    const want = expected.pages[i];
+    assert.deepEqual(p.background, want.background);
+    assert.deepEqual(p.layers.map((l) => l.kind), want.layers.map((l) => l.kind));
+    p.layers.forEach((l, j) => {
+      if (l.kind === "ink") assert.deepEqual(l.runs.map((run) => run.map((pt) => pt.map(r2))), want.layers[j].runs);
+      if (l.kind === "text") assert.deepEqual(l.runs.map((t) => t.text), want.layers[j].runs.map((t) => t.text));
+    });
+  });
+  const ink = nb.pages[1].layers.filter((l) => l.kind === "ink");
+  assert.equal(ink[1].runs.length, 2, "the highlighter lifts once");
+  assert.ok(gn.isHighlighter(ink[1]) && ink[3].pencil && ink[4].shape);
+  assert.equal(gn.pageText(nb.pages[1]), "Hello world\nagain");
+});
