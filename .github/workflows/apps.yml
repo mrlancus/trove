@@ -42,8 +42,16 @@ jobs:
 
       - name: TroveCore tests
         run: |
-          set -o pipefail
-          cd Packages/TroveCore && swift test 2>&1 | tail -15
+          # On failure, show the compiler's errors (they come long before the end of the log) and keep
+          # the whole log on the ci-logs branch as core-test.log.
+          mkdir -p build/logs
+          if ! (cd Packages/TroveCore && swift test > ../../build/logs/core-test.log 2>&1); then
+            grep -E -B2 -A8 "error:|✘|recorded an issue" build/logs/core-test.log | head -200
+            grep -E "error:|✘" build/logs/core-test.log | head -60 > build/logs/core-errors.txt
+            tail -20 build/logs/core-test.log
+            exit 1
+          fi
+          tail -15 build/logs/core-test.log
 
       - name: Build apps
         id: build
