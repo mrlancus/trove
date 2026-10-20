@@ -6,20 +6,31 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 /// The drawing surface on iPhone and iPad. Pens are PencilKit's, so Apple Pencil gets its
-/// pressure, tilt, low latency and palm rejection (a finger draws on iPhone). The eraser, lasso and
-/// text tools are Trove's own (`InkToolGesture` → the editor model), so they act on the shared
-/// strokes exactly like the website and the Mac. Paper, PDF pages and pictures sit underneath; text
-/// boxes, the lasso and the selection are drawn on top. Holding the pen still at the end of a line
-/// snaps it into a shape; tapping with two fingers undoes and with three redoes.
+/// pressure, tilt, low latency and palm rejection (a finger draws on iPhone). The eraser, lasso,
+/// laser and text tools are Trove's own (`InkToolGesture` → the editor model), so they act on the
+/// shared strokes exactly like the website and the Mac.
+///
+/// A sketch's pages sit on one canvas: down in a column, across in a row, or one at a time (flip,
+/// with a page turn), like the website (`InkPageLayout`). Each page's strokes are placed at the
+/// page's spot (`Slot.offset`); a new stroke belongs to the page it starts on. Paper, PDF pages
+/// and pictures are drawn underneath for what's on screen only; text boxes, the lasso, the
+/// selection and the laser on top. Zoom runs from 10 % to 1000 % (1 = a page point per screen
+/// point) and starts fitted to the page. Holding the pen still at the end of a line snaps it into a
+/// shape; tapping with two fingers undoes and with three redoes. Squeezing Apple Pencil (or
+/// double-tapping it) does what the person chose in Settings → Apple Pencil: the eraser, the last
+/// tool, or Trove's tool palette at the Pencil's tip.
 struct PencilCanvas: UIViewRepresentable {
     let editor: InkEditorModel
-    let page: InkPageSpec
+    let pages: [InkPageSpec]
+    let current: Int
+    let layout: InkPageLayout
     let pagesRevision: Int
     let revision: Int
     let overlayRevision: Int
     let tool: InkEditorTool
     let color: String
     let width: Double
+    let zoomRequest: InkZoomRequest?
 
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
 
@@ -27,13 +38,16 @@ struct PencilCanvas: UIViewRepresentable {
         let canvas = TroveCanvasView()
         let c = context.coordinator
         canvas.delegate = c
-        canvas.backgroundColor = .clear
-        canvas.isOpaque = false
+        canvas.backgroundColor = UIColor.systemGray5
+        canvas.isOpaque = true
         canvas.overrideUserInterfaceStyle = .light // keep ink colours true on white paper
         canvas.drawingPolicy = UIDevice.current.userInterfaceIdiom == .pad ? .default : .anyInput
         canvas.showsVerticalScrollIndicator = true
+        canvas.showsHorizontalScrollIndicator = true
         canvas.contentInsetAdjustmentBehavior = .never
-        canvas.insertSubview(c.backgroundView, at: 0)
+        canvas.minimumZoomScale = InkEditorModel.minZoom
+        canvas.maximumZoomScale = InkEditorModel.maxZoom
+        canvas.bouncesZoom = true
         canvas.insertSubview(c.paperView, at: 0)
         canvas.addSubview(c.overlayView)
         canvas.addInteraction(UIPencilInteraction(delegate: c))
@@ -57,7 +71,17 @@ struct PencilCanvas: UIViewRepresentable {
             let tap = UITapGestureRecognizer(target: c, action: action)
             tap.numberOfTouchesRequired = fingers
             tap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+            tap.delegate = c
             canvas.addGestureRecognizer(tap)
+        }
+        // Flip mode: a sideways swipe turns the page (one finger when the Pencil draws, else two).
+        for direction in [UISwipeGestureRecognizer.Direction.left, .right] {
+            let swipe = UISwipeGestureRecognizer(target: c, action: #selector(Coordinator.swiped(_:)))
+            swipe.direction = direction
+            swipe.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+            swipe.delegate = c
+            canvas.addGestureRecognizer(swipe)
+            c.swipes.append(swipe)
         }
         return canvas
     }
@@ -65,8 +89,10 @@ struct PencilCanvas: UIViewRepresentable {
     func updateUIView(_ canvas: TroveCanvasView, context: Context) {
         let c = context.coordinator
         c.editor = editor
-        c.show(page, key: "\(page.key)-\(pagesRevision)-\(page.width)x\(page.height)", in: canvas)
-        c.apply(editor.display(page.key), version: revision, to: canvas)
+        c.updating = true
+        defer { c.updating = false }
+        c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)
+        c.apply(version: revision, to: canvas)
         c.overlayView.setNeedsDisplay()
         let pen = tool.ink != nil
         if let ink = tool.ink { canvas.tool = Self.pkTool(ink, color: color, width: width) }
@@ -78,6 +104,11 @@ struct PencilCanvas: UIViewRepresentable {
             ? [NSNumber(value: UITouch.TouchType.pencil.rawValue), NSNumber(value: UITouch.TouchType.direct.rawValue)]
             : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
         canvas.panGestureRecognizer.minimumNumberOfTouches = !pen && fingers ? 2 : 1
+        for s in c.swipes { s.numberOfTouchesRequired = fingers ? 2 : 1 }
+        if let zoomRequest, zoomRequest.id != c.handledZoom {
+            c.handledZoom = zoomRequest.id
+            c.zoom(zoomRequest.kind, in: canvas)
+        }
         canvas.bringSubviewToFront(c.overlayView)
     }
 
@@ -107,8 +138,8 @@ struct PencilCanvas: UIViewRepresentable {
         return String(format: "#%02x%02x%02x", byte(r), byte(g), byte(b))
     }
 
-    /// A Trove stroke as PencilKit's, moved by the page's origin (the endless canvas).
-    static func pkStroke(_ s: InkLine, origin: Double) -> PKStroke {
+    /// A Trove stroke as PencilKit's, moved to its page's spot on the canvas. Nil for one with no points.
+    static func pkStroke(_ s: InkLine, offset: CGPoint) -> PKStroke? {
         let inkType: PKInk.InkType = switch s.tool {
         case .pen: .pen
         case .pencil: .pencil
@@ -117,15 +148,17 @@ struct PencilCanvas: UIViewRepresentable {
         case .fountain: .fountainPen
         case .brush: .watercolor
         }
-        let points = s.points.map { p in
-            let w = s.shape != nil ? s.width : InkStroke.width(s.width, tool: s.tool, pressure: p.pressure)
-            return PKStrokePoint(location: CGPoint(x: p.x + origin, y: p.y + origin), timeOffset: p.t / 1000, size: CGSize(width: w, height: w),
-                                 opacity: 1, force: p.pressure * 2, azimuth: 0, altitude: .pi / 2)
+        let points = s.points.compactMap { p -> PKStrokePoint? in
+            guard p.x.isFinite, p.y.isFinite else { return nil }
+            let w = max(0.1, s.shape != nil ? s.width : InkStroke.width(s.width, tool: s.tool, pressure: p.pressure))
+            return PKStrokePoint(location: CGPoint(x: p.x + offset.x, y: p.y + offset.y), timeOffset: max(0, p.t / 1000), size: CGSize(width: w, height: w),
+                                 opacity: 1, force: max(0, p.pressure * 2), azimuth: 0, altitude: .pi / 2)
         }
+        guard !points.isEmpty else { return nil }
         return PKStroke(ink: PKInk(inkType, color: uiColor(s.color)), path: PKStrokePath(controlPoints: points, creationDate: Date()))
     }
 
-    static func convert(_ s: PKStroke, origin: Double) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
+    static func convert(_ s: PKStroke, offset: CGPoint) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
         let tool: InkTool = switch s.ink.inkType {
         case .pencil: .pencil
         case .marker: .highlighter
@@ -140,7 +173,7 @@ struct PencilCanvas: UIViewRepresentable {
         let points = zip(raw, sizes).map { p, size in
             let at = p.location.applying(s.transform)
             let pressure = tool.usesPressure ? min(1, max(0, (size / width - 0.35) / 0.65)) : 0.5
-            return InkPoint(x: at.x - origin, y: at.y - origin, pressure: pressure, t: p.timeOffset * 1000)
+            return InkPoint(x: at.x - offset.x, y: at.y - offset.y, pressure: pressure, t: p.timeOffset * 1000)
         }
         return (tool, hex(s.ink.color), width, points)
     }
@@ -154,92 +187,175 @@ struct PencilCanvas: UIViewRepresentable {
 
     // MARK: Coordinator
 
+    /// A page's place on the canvas, in canvas points at 100 %.
+    struct Slot {
+        var spec: InkPageSpec
+        var index: Int
+        var frame: CGRect
+        /// Canvas points = page points + offset.
+        var offset: CGPoint { spec.infinite ? CGPoint(x: spec.origin, y: spec.origin) : frame.origin }
+    }
+
     @MainActor
     final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
         var editor: InkEditorModel
-        /// A page's paper, PDF page or image, with its pictures (a bitmap).
-        let backgroundView = UIImageView()
-        /// The endless canvas's paper, drawn for what's on screen.
+        /// Paper, PDF pages and pictures for what's on screen.
         let paperView = InkAreaView()
-        /// Text boxes, the lasso, the selection and the eraser, over the ink.
+        /// Text boxes, the lasso, the selection, the eraser and the laser, over the ink.
         let overlayView = InkAreaView()
         var toolGesture: InkToolGesture?
         var holdWatcher: HoldWatcher?
-        private var page: InkPageSpec?
-        private var pageKey = ""
+        var swipes: [UISwipeGestureRecognizer] = []
+        var handledZoom: UUID?
+        var updating = false
+        private(set) var slots: [Slot] = []
+        private var layoutMode: InkPageLayout = .vertical
+        private var shownSig = ""
         private var fittedWidth: CGFloat = 0
+        private var zoomedByHand = false
+        /// The page index this canvas last showed as current (so a jump from the page list scrolls there).
+        private var shownCurrent = -1
         /// Signature → Trove stroke id for what's on the canvas.
         private var ids: [String: String] = [:]
         private var shownVersion = -1
         private var applying = false
         private var drawing = false
-        /// Ink changed while the pen was down: show it once the pen lifts, read fresh then (an older
-        /// copy kept from before would wipe the stroke just drawn).
+        /// Ink changed while the pen was down: shown once it lifts, read fresh then (an older copy
+        /// kept from before would wipe the stroke just drawn).
         private var pending = false
         /// Strokes just drawn that haven't reached the model yet (it hears of them a moment later).
         private var handingOver: Set<String> = []
-        private var backgroundTask: Task<Void, Never>?
-        private var backgroundKey = ""
+        /// A Trove tool's gesture stays on the page it started on.
+        private var toolSlot: Slot?
+        /// File pages (PDF, image) as pictures, made for pages on or near the screen.
+        private var bitmaps: [String: CGImage] = [:]
+        private var rendering: Set<String> = []
+        static let gap: CGFloat = 24, margin: CGFloat = 24
 
         init(editor: InkEditorModel) {
             self.editor = editor
             super.init()
-            backgroundView.contentMode = .scaleToFill
-            backgroundView.backgroundColor = .white
-            paperView.isHidden = true
-            paperView.painter = { [weak self] ctx, area, scale in self?.drawPaper(ctx, area: area, scale: scale) }
-            overlayView.painter = { [weak self] ctx, _, scale in self?.drawOverlay(ctx, scale: scale) }
+            paperView.painter = { [weak self] ctx, area, scale in self?.drawUnder(ctx, area: area, scale: scale) }
+            overlayView.painter = { [weak self] ctx, area, scale in self?.drawOver(ctx, area: area, scale: scale) }
         }
 
-        private var origin: Double { page?.origin ?? 0 }
+        private var isEndless: Bool { slots.first?.spec.infinite ?? false }
 
-        func show(_ spec: InkPageSpec, key: String, in canvas: TroveCanvasView) {
-            guard key != pageKey else { refreshBackground(canvas); return }
-            let samePage = page?.key == spec.key && page?.infinite == spec.infinite
-            pageKey = key
-            page = spec
-            paperView.isHidden = !spec.infinite
-            backgroundView.isHidden = spec.infinite
-            if !samePage {
-                fittedWidth = 0
+        // MARK: Pages on the canvas
+
+        /// Places the pages for the layout (only the current one when flipping).
+        func show(_ pages: [InkPageSpec], current: Int, layout: InkPageLayout, revision: Int, in canvas: TroveCanvasView) {
+            let flip = layout == .flip
+            let sig = "\(revision)|\(layout.rawValue)|\(pages.map { "\($0.key):\($0.width)x\($0.height)" }.joined(separator: ","))|\(flip ? current : -1)"
+            let turned = flip && layoutMode == .flip && shownCurrent >= 0 && shownCurrent != current && sig != shownSig
+            let wasEndless = isEndless
+            if sig != shownSig {
+                let previous = shownSig
+                shownSig = sig
+                layoutMode = layout
+                var out: [Slot] = []
+                if let first = pages.first, first.infinite {
+                    out = [Slot(spec: first, index: 0, frame: CGRect(x: 0, y: 0, width: first.width, height: first.height))]
+                } else if flip, pages.indices.contains(current) {
+                    let p = pages[current]
+                    out = [Slot(spec: p, index: current, frame: CGRect(x: Self.margin, y: Self.margin, width: p.width, height: p.height))]
+                } else if layout == .horizontal {
+                    let tallest = pages.map(\.height).max() ?? 0
+                    var x = Self.margin
+                    for (i, p) in pages.enumerated() {
+                        out.append(Slot(spec: p, index: i, frame: CGRect(x: x, y: Self.margin + (tallest - p.height) / 2, width: p.width, height: p.height)))
+                        x += p.width + Self.gap
+                    }
+                } else {
+                    let widest = pages.map(\.width).max() ?? 0
+                    var y = Self.margin
+                    for (i, p) in pages.enumerated() {
+                        out.append(Slot(spec: p, index: i, frame: CGRect(x: Self.margin + (widest - p.width) / 2, y: y, width: p.width, height: p.height)))
+                        y += p.height + Self.gap
+                    }
+                }
+                slots = out
                 ids = [:]
                 shownVersion = -1
-                applying = true
-                canvas.drawing = PKDrawing()
-                applying = false
-                backgroundView.image = nil
-                layout(canvas)
-                if spec.infinite {
-                    canvas.setContentOffset(CGPoint(x: (spec.origin - 40) * canvas.zoomScale, y: (spec.origin - 40) * canvas.zoomScale), animated: false)
-                } else {
-                    canvas.setContentOffset(.zero, animated: false)
+                bitmaps = bitmaps.filter { k, _ in pages.contains { $0.key == k } }
+                if previous.isEmpty || isEndless != wasEndless { fittedWidth = 0 }
+                resize(canvas)
+                if turned {
+                    UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
                 }
             }
-            backgroundKey = ""
-            refreshBackground(canvas)
+            if fittedWidth == 0 || canvas.bounds.width != fittedWidth { layout(canvas) }
+            if current != shownCurrent {
+                let first = shownCurrent < 0
+                shownCurrent = current
+                if !flip && !isEndless, let slot = slots.first(where: { $0.index == current }), !first || current > 0 { scroll(to: slot, in: canvas, animated: !first) }
+            }
         }
 
-        /// Fits the page's width to the view (and again on rotation); zoom from there.
+        /// Fits the page in view (and again on rotation), unless zoomed by hand.
         func layout(_ canvas: TroveCanvasView) {
-            guard let page, canvas.bounds.width > 0 else { return }
+            guard !slots.isEmpty, canvas.bounds.width > 0 else { return }
             if fittedWidth != canvas.bounds.width {
+                let first = fittedWidth == 0
                 fittedWidth = canvas.bounds.width
-                let fit = page.infinite ? 1 : canvas.bounds.width / page.width
-                canvas.minimumZoomScale = page.infinite ? 0.2 : fit * 0.75
-                canvas.maximumZoomScale = page.infinite ? 4 : fit * 6
-                canvas.zoomScale = fit
+                if isEndless {
+                    if first {
+                        canvas.zoomScale = 1
+                        let o = slots[0].offset
+                        canvas.setContentOffset(CGPoint(x: o.x - 40, y: o.y - 40), animated: false)
+                    }
+                } else if first || !zoomedByHand {
+                    canvas.zoomScale = fit(editor.fitWholePage, in: canvas)
+                    if let slot = slots.first(where: { $0.index == editor.page }) ?? slots.first { scroll(to: slot, in: canvas, animated: false) }
+                }
+                let z = Double(canvas.zoomScale)
+                DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
             }
             resize(canvas)
         }
 
-        private func resize(_ canvas: PKCanvasView) {
-            guard let page else { return }
-            let size = CGSize(width: page.width * canvas.zoomScale, height: page.height * canvas.zoomScale)
+        /// The zoom that shows the whole current page, or its width.
+        private func fit(_ whole: Bool, in canvas: UIScrollView) -> CGFloat {
+            guard let slot = slots.first(where: { $0.index == editor.page }) ?? slots.first else { return 1 }
+            let w = max(100, canvas.bounds.width - Self.margin * 2), h = max(100, canvas.bounds.height - Self.margin * 2)
+            let z = whole ? min(w / slot.frame.width, h / slot.frame.height) : w / slot.frame.width
+            return min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, z))
+        }
+
+        func zoom(_ kind: InkZoomRequest.Kind, in canvas: TroveCanvasView) {
+            switch kind {
+            case .scale(let z):
+                zoomedByHand = true
+                canvas.setZoomScale(min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, z)), animated: true)
+            case .wholePage, .pageWidth:
+                zoomedByHand = false
+                canvas.setZoomScale(fit(kind == .wholePage, in: canvas), animated: true)
+                if let slot = slots.first(where: { $0.index == editor.page }) { scroll(to: slot, in: canvas, animated: true) }
+            }
+        }
+
+        private func scroll(to slot: Slot, in canvas: UIScrollView, animated: Bool) {
+            let z = canvas.zoomScale
+            let x = layoutMode == .horizontal ? slot.frame.minX * z - Self.margin : canvas.contentOffset.x
+            let y = layoutMode == .horizontal ? canvas.contentOffset.y : slot.frame.minY * z - Self.margin
+            let maxX = max(-canvas.contentInset.left, canvas.contentSize.width - canvas.bounds.width + canvas.contentInset.right)
+            let maxY = max(-canvas.contentInset.top, canvas.contentSize.height - canvas.bounds.height + canvas.contentInset.bottom)
+            canvas.setContentOffset(CGPoint(x: min(maxX, max(-canvas.contentInset.left, x)), y: min(maxY, max(-canvas.contentInset.top, y))), animated: animated)
+        }
+
+        private func resize(_ canvas: UIScrollView) {
+            guard !slots.isEmpty else { return }
+            let z = canvas.zoomScale
+            let box = slots.reduce(CGRect.null) { $0.union($1.frame) }
+            let size = isEndless
+                ? CGSize(width: box.width * z, height: box.height * z)
+                : CGSize(width: (box.maxX + Self.margin) * z, height: (box.maxY + Self.margin) * z)
             if canvas.contentSize != size { canvas.contentSize = size }
-            backgroundView.frame = CGRect(origin: .zero, size: size)
-            // Centre a page narrower than the view.
-            let inset = page.infinite ? 0 : max(0, (canvas.bounds.width - size.width) / 2)
-            canvas.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+            // Centre pages smaller than the view.
+            let left = isEndless ? 0 : max(0, (canvas.bounds.width - size.width) / 2)
+            let top = isEndless || layoutMode == .vertical ? 0 : max(0, (canvas.bounds.height - size.height) / 2)
+            let inset = UIEdgeInsets(top: top, left: left, bottom: 0, right: left)
+            if canvas.contentInset != inset { canvas.contentInset = inset }
             follow(canvas)
         }
 
@@ -249,60 +365,132 @@ struct PencilCanvas: UIViewRepresentable {
             for v in [paperView, overlayView] {
                 v.frame = visible
                 v.zoom = canvas.zoomScale
-                v.origin = origin
                 v.setNeedsDisplay()
             }
-            if let page, page.infinite {
-                let z = canvas.zoomScale
-                editor.visibleCenter = InkPoint(x: visible.midX / z - page.origin, y: visible.midY / z - page.origin)
+            let z = canvas.zoomScale
+            if isEndless, let slot = slots.first {
+                editor.visibleCenter = InkPoint(x: visible.midX / z - slot.offset.x, y: visible.midY / z - slot.offset.y)
+            }
+            prepareBitmaps(visible: CGRect(x: visible.minX / z, y: visible.minY / z, width: visible.width / z, height: visible.height / z))
+        }
+
+        /// The page under a canvas point (at 100 %), or the nearest one.
+        private func slot(at p: CGPoint) -> Slot? {
+            if let hit = slots.first(where: { $0.frame.insetBy(dx: -Self.gap / 2, dy: -Self.gap / 2).contains(p) }) { return hit }
+            return slots.min { a, b in distance(a.frame, p) < distance(b.frame, p) }
+        }
+
+        private func distance(_ r: CGRect, _ p: CGPoint) -> CGFloat {
+            hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY))
+        }
+
+        /// The page most in view becomes the current one (new pages, pictures and pastes go there).
+        private func trackCurrent(_ canvas: UIScrollView) {
+            guard layoutMode != .flip, !isEndless, slots.count > 1, !updating else { return }
+            let z = canvas.zoomScale
+            let probe = CGPoint(x: (canvas.bounds.minX + canvas.bounds.width / 3) / z, y: (canvas.bounds.minY + canvas.bounds.height / 3) / z)
+            guard let s = slot(at: probe), s.index != editor.page else { return }
+            shownCurrent = s.index
+            let index = s.index
+            DispatchQueue.main.async { [weak self] in self?.editor.page = index }
+        }
+
+        // MARK: Drawing under and over the ink
+
+        private func visibleSlots(_ area: InkGeometry.Rect) -> [Slot] {
+            let r = CGRect(x: area.x, y: area.y, width: area.width, height: area.height)
+            return slots.filter { $0.frame.intersects(r) }
+        }
+
+        private func drawUnder(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
+            for slot in visibleSlots(area) {
+                let o = slot.offset
+                ctx.saveGState()
+                if !slot.spec.infinite {
+                    // A soft shadow under the page.
+                    ctx.setShadow(offset: CGSize(width: 0, height: 1.5 / scale), blur: 8 / scale, color: UIColor.black.withAlphaComponent(0.18).cgColor)
+                    ctx.setFillColor(UIColor.white.cgColor)
+                    ctx.fill(slot.frame)
+                    ctx.setShadow(offset: .zero, blur: 0)
+                    ctx.clip(to: slot.frame)
+                }
+                ctx.translateBy(x: o.x, y: o.y)
+                let local = InkGeometry.Rect(x: area.x - o.x, y: area.y - o.y, width: area.width, height: area.height)
+                switch slot.spec.background {
+                case .paper:
+                    InkRenderer.drawBackground(slot.spec, area: local, in: ctx)
+                case .pdf, .image:
+                    if let image = bitmaps[slot.spec.key] {
+                        InkRenderer.drawImage(image, in: CGRect(x: 0, y: 0, width: slot.spec.width, height: slot.spec.height), ctx: ctx)
+                    }
+                }
+                let c = editor.display(slot.spec.key)
+                InkRenderer.drawPictures(c.elements, pictures: c.pictures, in: ctx)
+                ctx.restoreGState()
             }
         }
 
-        /// A page's bitmap: paper or file, with the pictures on it.
-        private func refreshBackground(_ canvas: PKCanvasView) {
-            guard let page, !page.infinite else { return }
-            let pictures = editor.display(page.key).elements.filter { $0.kind == .image }
-            let key = pageKey + pictures.map { "\($0.id)\($0.frame.x),\($0.frame.y),\($0.frame.width)" }.joined()
-            guard key != backgroundKey else { return }
-            backgroundKey = key
-            backgroundTask?.cancel()
-            let width = max(canvas.bounds.width, 600)
-            let pixels = Int(min(4096, width * max(2, UITraitCollection.current.displayScale) * 1.5))
-            let content = InkContent(elements: pictures, pictures: editor.pictures)
-            backgroundTask = Task { [weak self] in
-                let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(page, content: content, pixelWidth: pixels).map(InkImage.init) }.value
-                guard !Task.isCancelled, let rendered else { return }
-                self?.backgroundView.image = UIImage(cgImage: rendered.image)
+        private func drawOver(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
+            for slot in visibleSlots(area) {
+                let o = slot.offset
+                ctx.saveGState()
+                ctx.translateBy(x: o.x, y: o.y)
+                InkRenderer.drawTexts(editor.display(slot.spec.key).elements, in: ctx)
+                InkRenderer.drawOverlay(editor.overlay(slot.spec.key), scale: scale, in: ctx)
+                ctx.restoreGState()
             }
         }
 
-        private func drawPaper(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
-            guard let page else { return }
-            InkRenderer.drawBackground(page, area: area, in: ctx)
-            let c = editor.display(page.key)
-            InkRenderer.drawPictures(c.elements, pictures: c.pictures, in: ctx)
+        /// File pages near the screen are made into pictures (once each); far ones are let go.
+        private func prepareBitmaps(visible: CGRect) {
+            let near = visible.insetBy(dx: -visible.width, dy: -visible.height)
+            for slot in slots {
+                let key = slot.spec.key
+                switch slot.spec.background {
+                case .paper:
+                    continue
+                case .pdf, .image:
+                    guard slot.frame.intersects(near) else { bitmaps[key] = nil; continue }
+                    guard bitmaps[key] == nil, !rendering.contains(key) else { continue }
+                    rendering.insert(key)
+                    let spec = slot.spec
+                    let pixels = Int(min(2400, spec.width * 2.5))
+                    Task { [weak self] in
+                        let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(spec, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
+                        guard let self else { return }
+                        self.rendering.remove(key)
+                        if let rendered { self.bitmaps[key] = rendered.image; self.paperView.setNeedsDisplay() }
+                    }
+                }
+            }
         }
 
-        private func drawOverlay(_ ctx: CGContext, scale: Double) {
-            guard let page else { return }
-            InkRenderer.drawTexts(editor.display(page.key).elements, in: ctx)
-            InkRenderer.drawOverlay(editor.overlay(page.key), scale: scale, in: ctx)
-        }
+        // MARK: Ink
 
-        /// Shows the page's strokes, unless the canvas already has this version of them.
-        func apply(_ content: InkContent, version: Int, to canvas: PKCanvasView) {
-            refreshBackground(canvas)
+        /// Shows every page's strokes, unless the canvas already has this version of them.
+        func apply(version: Int, to canvas: PKCanvasView) {
             paperView.setNeedsDisplay()
             guard version != shownVersion else { return }
             if drawing { pending = true; return }
             applying = true
+            var pk: [PKStroke] = []
+            var map: [String: String] = [:]
+            var modelIds: Set<String> = []
+            for slot in slots {
+                for line in editor.display(slot.spec.key).strokes {
+                    modelIds.insert(line.id)
+                    guard let s = PencilCanvas.pkStroke(line, offset: slot.offset) else { continue }
+                    pk.append(s)
+                    map[PencilCanvas.signature(s)] = line.id
+                }
+            }
             // Keep what was just drawn and is still on its way to the model.
-            let modelIds = Set(content.strokes.map(\.id))
-            let keep = canvas.drawing.strokes.filter { s in ids[PencilCanvas.signature(s)].map { handingOver.contains($0) && !modelIds.contains($0) } ?? false }
-            let kept = keep.map { (PencilCanvas.signature($0), ids[PencilCanvas.signature($0)] ?? "") }
-            let pk = content.strokes.map { PencilCanvas.pkStroke($0, origin: origin) }
-            canvas.drawing = PKDrawing(strokes: pk + keep)
-            ids = Dictionary(zip(pk.map(PencilCanvas.signature), content.strokes.map(\.id)) + kept, uniquingKeysWith: { a, _ in a })
+            for s in canvas.drawing.strokes {
+                let sig = PencilCanvas.signature(s)
+                if let id = ids[sig], handingOver.contains(id), !modelIds.contains(id) { pk.append(s); map[sig] = id }
+            }
+            canvas.drawing = PKDrawing(strokes: pk)
+            ids = map
             shownVersion = version
             applying = false
         }
@@ -311,28 +499,30 @@ struct PencilCanvas: UIViewRepresentable {
 
         func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
             drawing = false
-            guard pending, let page else { return }
+            guard pending else { return }
             pending = false
-            // After PencilKit has reported the new stroke (it does so before or after this call),
-            // so the stroke is in the model by the time the canvas is redrawn from it.
+            // After PencilKit has reported the new stroke (it does so before or after this call).
             DispatchQueue.main.async { [weak self, weak canvasView] in
-                guard let self, let canvasView, !self.drawing, self.page?.key == page.key else { return }
+                guard let self, let canvasView, !self.drawing else { return }
                 self.canvasViewDrawingDidChange(canvasView)
                 self.shownVersion = -1
-                self.apply(self.editor.display(page.key), version: self.editor.revision, to: canvasView)
+                self.apply(version: self.editor.revision, to: canvasView)
             }
         }
 
-        /// New strokes are added to Trove (snapped into shapes if asked); others' changes are applied
-        /// from the model, so this only ever adds.
+        /// New strokes are added to Trove (snapped into shapes, or a scratch-out, if asked); others'
+        /// changes are applied from the model, so this only ever adds.
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            guard !applying, let page else { return }
+            guard !applying, !slots.isEmpty else { return }
             var added: [PKStroke] = []
             for s in canvasView.drawing.strokes where ids[PencilCanvas.signature(s)] == nil { added.append(s) }
             guard !added.isEmpty else { return }
-            let key = page.key, origin = origin
             // Trove's copies, made now; saved a moment later, once the hold watcher has seen the pen lift.
-            let strokes = added.map { s in (signature: PencilCanvas.signature(s), id: UUID().uuidString.lowercased(), ink: PencilCanvas.convert(s, origin: origin)) }
+            var strokes: [(signature: String, id: String, key: String, ink: (tool: InkTool, color: String, width: Double, points: [InkPoint]))] = []
+            for s in added {
+                guard let start = Array(s.path).first?.location.applying(s.transform), let slot = slot(at: start) else { continue }
+                strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, PencilCanvas.convert(s, offset: slot.offset)))
+            }
             for s in strokes { ids[s.signature] = s.id; handingOver.insert(s.id) }
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -340,31 +530,47 @@ struct PencilCanvas: UIViewRepresentable {
                 for s in strokes {
                     self.handingOver.remove(s.id)
                     let c = s.ink
-                    if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: key, held: held) != nil {
-                        // Snapped: show the clean shape instead of the rough line.
+                    // Snapped or scribbled out: show what was kept instead of the rough line.
+                    if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: s.key, held: held) {
                         self.shownVersion = -1
                     }
                 }
             }
         }
 
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { zoomedByHand = true }
+
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            if let canvas = scrollView as? PKCanvasView { resize(canvas) }
+            resize(scrollView)
+            let z = Double(scrollView.zoomScale)
+            if !updating, abs(z - editor.zoom) > 0.004 { DispatchQueue.main.async { [weak self] in self?.editor.zoom = z } }
         }
 
-        func scrollViewDidScroll(_ scrollView: UIScrollView) { follow(scrollView) }
+        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            let z = Double(scale)
+            DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
+        }
 
-        // MARK: Trove's tools: eraser, lasso, text
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            follow(scrollView)
+            trackCurrent(scrollView)
+        }
+
+        // MARK: Trove's tools: eraser, lasso, laser, text
 
         func toolTouch(_ phase: UITouch.Phase, at point: CGPoint, in canvas: PKCanvasView) {
-            guard let page else { return }
             let z = canvas.zoomScale
-            let p = InkPoint(x: point.x / z - page.origin, y: point.y / z - page.origin)
+            let at = CGPoint(x: point.x / z, y: point.y / z)
+            if phase == .began { toolSlot = slot(at: at) }
+            guard let slot = toolSlot else { return }
+            let p = InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y)
             switch phase {
-            case .began: editor.pointerDown(p, pageKey: page.key, scale: z)
+            case .began:
+                if slot.index != editor.page { shownCurrent = slot.index; editor.page = slot.index }
+                editor.pointerDown(p, pageKey: slot.spec.key, scale: z)
             case .moved: editor.pointerMoved(p)
-            case .ended: editor.pointerUp()
-            default: editor.pointerCancelled()
+            case .ended: editor.pointerUp(); toolSlot = nil
+            default: editor.pointerCancelled(); toolSlot = nil
             }
             overlayView.setNeedsDisplay()
         }
@@ -372,25 +578,40 @@ struct PencilCanvas: UIViewRepresentable {
         @objc func undoTap() { editor.undo() }
         @objc func redoTap() { editor.redo() }
 
+        @objc func swiped(_ g: UISwipeGestureRecognizer) {
+            guard layoutMode == .flip, let canvas = g.view as? UIScrollView else { return }
+            // Only when the whole page is in view; zoomed in, a swipe scrolls.
+            guard canvas.contentSize.width <= canvas.bounds.width + 2 else { return }
+            let next = g.direction == .left ? editor.page + 1 : editor.page - 1
+            if editor.pages.indices.contains(next) { editor.page = next }
+        }
+
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
         // MARK: Apple Pencil double-tap and squeeze
 
-        func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
-            switch UIPencilInteraction.preferredTapAction {
+        /// What the person chose for the Pencil (Settings → Apple Pencil), like GoodNotes and Notes.
+        private func perform(_ action: UIPencilPreferredAction, at location: CGPoint?, in view: UIView?) {
+            switch action {
             case .switchEraser: editor.pencilTap(switchEraser: true)
             case .switchPrevious: editor.pencilTap(switchEraser: false)
-            default: break
+            case .ignore, .runSystemShortcut: break
+            default:
+                // The contextual palette, the colour palette and ink attributes: Trove's palette at the tip.
+                let origin = (view as? UIScrollView)?.contentOffset ?? .zero
+                let size = view?.bounds.size ?? .zero
+                let p = location.map { CGPoint(x: $0.x - origin.x, y: $0.y - origin.y) } ?? CGPoint(x: size.width / 2, y: size.height / 2)
+                editor.palette = editor.palette == nil ? p : nil
             }
+        }
+
+        func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
+            perform(UIPencilInteraction.preferredTapAction, at: tap.hoverPose?.location, in: interaction.view)
         }
 
         func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
             guard squeeze.phase == .ended else { return }
-            switch UIPencilInteraction.preferredSqueezeAction {
-            case .switchEraser: editor.pencilTap(switchEraser: true)
-            case .switchPrevious: editor.pencilTap(switchEraser: false)
-            default: editor.pencilTap(switchEraser: true)
-            }
+            perform(UIPencilInteraction.preferredSqueezeAction, at: squeeze.hoverPose?.location, in: interaction.view)
         }
     }
 }
@@ -404,11 +625,10 @@ final class TroveCanvasView: PKCanvasView {
     }
 }
 
-/// A view over what's on screen of a zoomed page, drawing in page points.
+/// A view over what's on screen of the zoomed canvas, drawing in canvas points at 100 %.
 final class InkAreaView: UIView {
     var painter: ((CGContext, InkGeometry.Rect, Double) -> Void)?
     var zoom: CGFloat = 1
-    var origin: Double = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -423,16 +643,15 @@ final class InkAreaView: UIView {
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let z = Double(max(0.01, zoom))
-        // This view sits at frame.origin in the zoomed content; page points are content / zoom − origin.
+        // This view sits at frame.origin in the zoomed content; canvas points are content / zoom.
         ctx.translateBy(x: -frame.minX, y: -frame.minY)
         ctx.scaleBy(x: z, y: z)
-        ctx.translateBy(x: origin, y: origin)
-        let area = InkGeometry.Rect(x: Double(frame.minX) / z - origin, y: Double(frame.minY) / z - origin, width: Double(frame.width) / z, height: Double(frame.height) / z)
+        let area = InkGeometry.Rect(x: Double(frame.minX) / z, y: Double(frame.minY) / z, width: Double(frame.width) / z, height: Double(frame.height) / z)
         painter?(ctx, area, z)
     }
 }
 
-/// One finger or the Pencil working Trove's eraser, lasso or text tool (PencilKit's drawing is off then).
+/// One finger or the Pencil working Trove's eraser, lasso, laser or text tool (PencilKit's drawing is off then).
 final class InkToolGesture: UIGestureRecognizer {
     var onTouch: ((UITouch.Phase, CGPoint) -> Void)?
     private weak var touch: UITouch?

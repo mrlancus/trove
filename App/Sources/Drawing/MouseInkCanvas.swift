@@ -17,6 +17,14 @@ struct MouseInkCanvas: NSViewRepresentable {
     let tool: InkEditorTool
     let color: String
     let width: Double
+    let zoomRequest: InkZoomRequest?
+
+    final class Coordinator {
+        var handledZoom: UUID?
+        var observer: NSObjectProtocol?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
@@ -24,11 +32,24 @@ struct MouseInkCanvas: NSViewRepresentable {
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.allowsMagnification = true
-        scroll.minMagnification = 0.1
-        scroll.maxMagnification = 6
+        scroll.minMagnification = InkEditorModel.minZoom
+        scroll.maxMagnification = InkEditorModel.maxZoom
         scroll.backgroundColor = NSColor.underPageBackgroundColor
         scroll.documentView = InkNSView()
+        // The zoom shown bottom left follows pinching and ⌘-scrolling.
+        let editor = editor
+        context.coordinator.observer = NotificationCenter.default.addObserver(forName: NSScrollView.didEndLiveMagnifyNotification, object: scroll, queue: .main) { [weak scroll] _ in
+            let z = Double(scroll?.magnification ?? 1)
+            MainActor.assumeIsolated { editor.zoom = z }
+        }
         return scroll
+    }
+
+    /// The zoom that fits the page (all of it, or its width) in the window.
+    private func fit(_ whole: Bool, in scroll: NSScrollView) -> Double {
+        let w = Double(scroll.contentSize.width) - 40, h = Double(scroll.contentSize.height) - 40
+        let z = whole ? min(w / page.width, h / page.height) : w / page.width
+        return min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, z))
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
@@ -47,11 +68,24 @@ struct MouseInkCanvas: NSViewRepresentable {
                         scroll.magnification = 1
                         view.scroll(CGPoint(x: page.origin - 40, y: page.origin - 40))
                     } else {
-                        let fit = max(0.25, (Double(scroll.contentSize.width) - 40) / page.width)
-                        scroll.magnification = min(fit, 3)
+                        scroll.magnification = fit(editor.fitWholePage, in: scroll)
                         view.scroll(.zero)
                     }
+                    editor.zoom = Double(scroll.magnification)
                 }
+            }
+        }
+        if let zoomRequest, zoomRequest.id != context.coordinator.handledZoom {
+            context.coordinator.handledZoom = zoomRequest.id
+            let z: Double = switch zoomRequest.kind {
+            case .scale(let v): min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, v))
+            case .wholePage: fit(true, in: scroll)
+            case .pageWidth: fit(false, in: scroll)
+            }
+            let editor = editor
+            DispatchQueue.main.async {
+                scroll.animator().magnification = z
+                editor.zoom = z
             }
         }
         view.needsDisplay = true

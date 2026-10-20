@@ -16,7 +16,7 @@ struct InkTarget: Identifiable, Hashable, Codable {
 
 /// The tools in the editor's toolbar, like the website's (web/public/draw.js).
 enum InkEditorTool: String, CaseIterable, Identifiable {
-    case pen, pencil, fountain, brush, marker, highlighter, eraser, lasso, text
+    case pen, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser
     var id: String { rawValue }
 
     var ink: InkTool? { InkTool(rawValue: rawValue) }
@@ -31,6 +31,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .eraser: "Eraser"
         case .lasso: "Lasso"
         case .text: "Text"
+        case .laser: "Laser pointer"
         }
     }
     var symbol: String {
@@ -44,6 +45,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .eraser: "eraser"
         case .lasso: "lasso"
         case .text: "character.textbox"
+        case .laser: "cursorarrow.rays"
         }
     }
     var defaultWidth: Double {
@@ -57,10 +59,12 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .eraser: 10
         case .lasso: 1
         case .text: 20
+        case .laser: 6
         }
     }
     var defaultColor: String {
         switch self {
+        case .laser: "#ff3b30"
         case .marker: "#0a84ff"
         case .highlighter: "#ffd60a"
         case .fountain: "#1c3d8f"
@@ -68,14 +72,41 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         }
     }
     /// Pens and text have a colour; pens, text and the eraser a size.
-    var hasColor: Bool { ink != nil || self == .text }
+    var hasColor: Bool { ink != nil || self == .text || self == .laser }
     var hasSize: Bool { hasColor || self == .eraser }
 }
 
 enum InkEraserMode: String, CaseIterable, Identifiable {
-    case stroke, partial
+    case stroke, partial, precise
     var id: String { rawValue }
-    var label: String { self == .stroke ? "Whole strokes" : "Partial" }
+    var label: String {
+        switch self {
+        case .stroke: "Whole strokes"
+        case .partial: "Partial"
+        case .precise: "Precise"
+        }
+    }
+}
+
+/// How a sketch's pages show (like the website's): down in a column, across in a row, or one at a
+/// time with a page turn.
+enum InkPageLayout: String, CaseIterable, Identifiable {
+    case vertical, horizontal, flip
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .vertical: "Scroll down"
+        case .horizontal: "Scroll sideways"
+        case .flip: "Flip pages"
+        }
+    }
+}
+
+/// A zoom asked for from the zoom menu; the canvas carries it out once (by `id`).
+struct InkZoomRequest: Equatable {
+    enum Kind: Equatable { case scale(Double), wholePage, pageWidth }
+    var id = UUID()
+    var kind: Kind
 }
 
 /// What the lasso picked up on a page.
@@ -123,6 +154,17 @@ final class InkEditorModel {
     var eraserMode: InkEraserMode { didSet { UserDefaults.standard.set(eraserMode.rawValue, forKey: "ink.eraserMode") } }
     var highlighterOnly: Bool { didSet { UserDefaults.standard.set(highlighterOnly, forKey: "ink.highlighterOnly") } }
     var shapeMode: Bool { didSet { UserDefaults.standard.set(shapeMode, forKey: "ink.shapes") } }
+    /// Scratching back and forth over strokes deletes them (off unless turned on).
+    var scribbleToErase: Bool { didSet { UserDefaults.standard.set(scribbleToErase, forKey: "ink.scribble") } }
+    var layout: InkPageLayout { didSet { UserDefaults.standard.set(layout.rawValue, forKey: "ink.layout") } }
+    /// Zoom when a drawing opens: the whole page (true) or its width.
+    var fitWholePage: Bool { didSet { UserDefaults.standard.set(!fitWholePage, forKey: "ink.fitWidth") } }
+    /// Screen points per page point, as the canvas shows it (1 = 100 %).
+    var zoom = 1.0
+    var zoomRequest: InkZoomRequest?
+    /// Where Apple Pencil's squeeze opened the tool palette, in the canvas's on-screen coordinates.
+    var palette: CGPoint?
+    static let minZoom = 0.1, maxZoom = 10.0
     private(set) var previousTool: InkEditorTool = .pen
     private(set) var loaded = false
     private(set) var failed: String?
@@ -161,6 +203,7 @@ final class InkEditorModel {
         case erase(key: String, last: InkPoint, removed: Set<String>)
         case partial(key: String, last: InkPoint)
         case lasso(key: String)
+        case laser(key: String)
         case drag(key: String, start: InkPoint, corner: Int?, box: InkGeometry.Rect)
     }
     private var gesture: Gesture?
@@ -180,7 +223,12 @@ final class InkEditorModel {
         eraserMode = InkEraserMode(rawValue: d.string(forKey: "ink.eraserMode") ?? "") ?? .stroke
         highlighterOnly = d.bool(forKey: "ink.highlighterOnly")
         shapeMode = d.bool(forKey: "ink.shapes")
+        scribbleToErase = d.bool(forKey: "ink.scribble")
+        layout = InkPageLayout(rawValue: d.string(forKey: "ink.layout") ?? "") ?? .vertical
+        fitWholePage = !d.bool(forKey: "ink.fitWidth")
     }
+
+    func requestZoom(_ kind: InkZoomRequest.Kind) { zoomRequest = InkZoomRequest(kind: kind) }
 
     var isSketch: Bool { target.layer.isEmpty }
     var isInfinite: Bool { pages.first?.infinite ?? false }
@@ -193,9 +241,11 @@ final class InkEditorModel {
 
     func color(for t: InkEditorTool) -> String { UserDefaults.standard.string(forKey: "ink.color.\(t.rawValue)") ?? t.defaultColor }
     func width(for t: InkEditorTool) -> Double {
-        let w = UserDefaults.standard.double(forKey: "ink.width.\(t.rawValue)")
-        return w > 0 ? w : t.defaultWidth
+        let w = UserDefaults.standard.double(forKey: "ink.width.\(widthKey(t))")
+        return w > 0 ? w : (widthKey(t) == "eraserPrecise" ? 3 : t.defaultWidth)
     }
+    /// The precise eraser keeps its own, small size.
+    private func widthKey(_ t: InkEditorTool) -> String { t == .eraser && eraserMode == .precise ? "eraserPrecise" : t.rawValue }
     var color: String {
         get { color(for: tool.hasColor ? tool : .pen) }
         set {
@@ -207,7 +257,7 @@ final class InkEditorModel {
     }
     var width: Double {
         get { width(for: tool) }
-        set { UserDefaults.standard.set(newValue, forKey: "ink.width.\(tool.rawValue)"); revision += 1 }
+        set { UserDefaults.standard.set(newValue, forKey: "ink.width.\(widthKey(tool))"); revision += 1 }
     }
 
     func select(_ t: InkEditorTool) {
@@ -302,6 +352,10 @@ final class InkEditorModel {
     /// The lasso, selection and eraser over a page.
     func overlay(_ key: String) -> InkOverlay {
         var o = InkOverlay(eraser: eraserAt, eraserRadius: eraserRadius)
+        let now = Date()
+        o.lasers = lasers.filter { $0.key == key }.map { l in
+            (points: l.points, color: l.color, width: l.width, alpha: l.ended.map { max(0, 1 - now.timeIntervalSince($0) / Self.laserFade) } ?? 1)
+        }
         if case .lasso(let k)? = gesture, k == key { o.lasso = lassoPath }
         if selection?.pageKey == key { o.selection = selectionBox() }
         return o
@@ -311,13 +365,30 @@ final class InkEditorModel {
 
     /// A finished pen stroke from a canvas. Shape mode, or holding still at the end (`held`), turns
     /// it into a clean shape; the result says so, so a canvas showing the rough line can redraw.
+    /// Returns true when what's kept differs from the line drawn (a clean shape, or a scratch-out
+    /// that deleted what it crossed and isn't kept), so a canvas showing the rough line redraws.
     @discardableResult
-    func addStroke(points: [InkPoint], tool: InkTool, color: String, width: Double, id: String? = nil, pageKey: String? = nil, held: Bool = false) -> InkShapes.Result? {
-        guard !points.isEmpty, let library = app?.library else { return nil }
+    func addStroke(points: [InkPoint], tool: InkTool, color: String, width: Double, id: String? = nil, pageKey: String? = nil, held: Bool = false) -> Bool {
+        guard !points.isEmpty, let library = app?.library else { return false }
+        let key = pageKey ?? currentKey
+        if scribbleToErase, tool != .highlighter, !held,
+           let gone = InkScribble.targets(points, strokes: (content[key]?.strokes ?? []).map { ($0.id, $0.points) }) {
+            if let id { unsavedStrokes[id] = nil }
+            content[key]?.strokes.removeAll { gone.contains($0.id) }
+            unsavedDeletes.formUnion(gone)
+            revision += 1
+            record(Action(remove: gone.map { Ref(id: $0, kind: "stroke") }))
+            Task {
+                await library.deleteStrokes(gone)
+                unsavedDeletes.subtract(gone)
+                await reloadInk()
+                app?.inkChanged()
+            }
+            return true
+        }
         let snapped = shapeMode || held ? InkShapes.recognize(points) : nil
         let pts = snapped?.points ?? points
         let shape = snapped?.shape.rawValue
-        let key = pageKey ?? currentKey
         let id = id ?? UUID().uuidString.lowercased()
         let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape)
         content[key, default: InkContent()].strokes.append(line)
@@ -331,7 +402,7 @@ final class InkEditorModel {
             await reloadInk()
             app?.inkChanged()
         }
-        return snapped
+        return snapped != nil
     }
 
     /// Strokes PencilKit's own eraser removed (not used while Trove's eraser is on, but kept in step).
@@ -371,10 +442,14 @@ final class InkEditorModel {
             lassoPath = [p]
             gesture = .lasso(key: key)
             overlayRevision += 1
+        case .laser:
+            lasers.append(LaserLine(key: key, points: [p], color: color(for: .laser), width: width(for: .laser), ended: nil))
+            gesture = .laser(key: key)
+            overlayRevision += 1
         case .eraser:
-            eraserRadius = (width(for: .eraser) / 2 + 4) / s
+            eraserRadius = eraserSize / s
             eraserAt = p
-            if eraserMode == .partial { gesture = .partial(key: key, last: p) } else { gesture = .erase(key: key, last: p, removed: []) }
+            if eraserMode != .stroke { gesture = .partial(key: key, last: p) } else { gesture = .erase(key: key, last: p, removed: []) }
             eraseTo(p)
         default:
             break
@@ -387,6 +462,9 @@ final class InkEditorModel {
             eraseTo(p)
         case .lasso:
             lassoPath.append(p)
+            overlayRevision += 1
+        case .laser:
+            if !lasers.isEmpty { lasers[lasers.count - 1].points.append(p) }
             overlayRevision += 1
         case .drag(_, let start, let corner, let box):
             if let corner {
@@ -417,10 +495,38 @@ final class InkEditorModel {
             commitPartialErase()
         case .lasso(let key):
             finishLasso(key)
+        case .laser:
+            endLaser()
         case .drag:
             commitDrag()
         case nil:
             break
+        }
+    }
+
+    // MARK: Laser pointer
+
+    struct LaserLine {
+        var key: String
+        var points: [InkPoint]
+        var color: String
+        var width: Double
+        var ended: Date?
+    }
+    static let laserFade: TimeInterval = 1.1
+    private(set) var lasers: [LaserLine] = []
+
+    /// The line fades out over a second; it's never saved.
+    private func endLaser() {
+        if !lasers.isEmpty, lasers[lasers.count - 1].ended == nil { lasers[lasers.count - 1].ended = Date() }
+        Task { @MainActor [weak self] in
+            while let self, !self.lasers.isEmpty {
+                try? await Task.sleep(for: .milliseconds(33))
+                let now = Date()
+                self.lasers.removeAll { $0.ended.map { now.timeIntervalSince($0) > Self.laserFade } ?? false }
+                self.overlayRevision += 1
+                if self.lasers.allSatisfy({ $0.ended == nil }) { break }
+            }
         }
     }
 
@@ -429,6 +535,7 @@ final class InkEditorModel {
         case .partial: erasePreview = [:]
         case .drag: dragTransform = nil
         case .lasso: lassoPath = []
+        case .laser: endLaser()
         default: break
         }
         if case .erase(_, _, let removed) = gesture, !removed.isEmpty { record(Action(remove: removed.map { Ref(id: $0, kind: "stroke") })) }
@@ -441,10 +548,13 @@ final class InkEditorModel {
     /// The eraser's circle under a hovering pen or mouse.
     func hover(_ p: InkPoint?, scale: Double) {
         guard tool == .eraser, gesture == nil else { if eraserAt != nil && gesture == nil { eraserAt = nil; overlayRevision += 1 }; return }
-        eraserRadius = (width(for: .eraser) / 2 + 4) / max(0.05, scale)
+        eraserRadius = eraserSize / max(0.05, scale)
         eraserAt = p
         overlayRevision += 1
     }
+
+    /// The eraser's radius in screen points: the precise one exactly its size, the others a little bigger to be easy to hit.
+    private var eraserSize: Double { eraserMode == .precise ? max(0.25, width(for: .eraser) / 2) : width(for: .eraser) / 2 + 4 }
 
     private func eraseTo(_ p: InkPoint) {
         eraserAt = p
@@ -802,13 +912,29 @@ final class InkEditorModel {
         }
     }
 
-    func setPage(_ key: String, paper: InkPaper? = nil, color: String? = nil) {
+    func setPage(_ key: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) {
         guard isSketch, let library = app?.library else { return }
         let itemId = target.itemId
         Task {
-            await library.setPage(key, of: itemId, paper: paper, color: color)
+            await library.setPage(key, of: itemId, paper: paper, color: color, size: size)
             await pagesChanged()
         }
+    }
+
+    /// Paper, colour ("" = white) or size for every page at once.
+    func setAllPages(paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) {
+        guard isSketch, let library = app?.library else { return }
+        let itemId = target.itemId
+        Task {
+            await library.setAllPages(of: itemId, paper: paper, color: color, size: size)
+            await pagesChanged()
+        }
+    }
+
+    /// The current page's own colour (nil = white).
+    var pageColor: String? {
+        if case .paper(_, let color)? = currentPage?.background { return color }
+        return nil
     }
 
     /// One paper for every page.

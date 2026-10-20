@@ -14,6 +14,7 @@ struct InkEditorView: View {
     @State private var photo: PhotosPickerItem?
     @State private var exportFile: PDFFile?
     @State private var confirmDeletePage: String?
+    @State private var pageSettings = false
 
     init(target: InkTarget, app: AppModel) {
         _editor = State(initialValue: InkEditorModel(target: target, app: app))
@@ -34,8 +35,18 @@ struct InkEditorView: View {
                     ProgressView("Opening…")
                 }
                 if let selection = editor.selection { selectionBar(selection).padding(.bottom, 16) }
+                if editor.loaded { corner }
+                if let p = editor.palette {
+                    GeometryReader { geo in
+                        // Tap anywhere else to close it.
+                        Color.black.opacity(0.001).onTapGesture { editor.palette = nil }
+                        InkPalette(editor: editor)
+                            .position(x: min(max(p.x, 170), geo.size.width - 170), y: min(max(p.y - 120, 130), geo.size.height - 130))
+                    }
+                    .transition(.opacity)
+                }
             }
-            if editor.pages.count > 1 || (editor.isSketch && !editor.isInfinite) { pageBar }
+            if showsPageBar { pageBar }
         }
         .task { await editor.load() }
         .task(id: app.inkRevision) { if editor.loaded { await editor.reloadInk() } }
@@ -72,13 +83,61 @@ struct InkEditorView: View {
 
     @ViewBuilder private func canvas(_ page: InkPageSpec) -> some View {
         #if os(iOS)
-        PencilCanvas(editor: editor, page: page, pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
-                     tool: editor.tool, color: editor.color, width: editor.width)
+        PencilCanvas(editor: editor, pages: editor.pages, current: editor.page, layout: editor.isInfinite ? .vertical : editor.layout,
+                     pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
+                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest)
             .ignoresSafeArea(edges: .bottom)
         #else
         MouseInkCanvas(editor: editor, page: page, pageIndex: editor.page, pagesRevision: editor.pagesRevision, revision: editor.revision,
-                       overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width)
+                       overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest)
         #endif
+    }
+
+    /// Page by page with arrows: files and flipping (and on the Mac, which shows one page at a time).
+    private var showsPageBar: Bool {
+        #if os(macOS)
+        return editor.pages.count > 1 || (editor.isSketch && !editor.isInfinite)
+        #else
+        return editor.layout == .flip && !editor.isInfinite && (editor.pages.count > 1 || editor.isSketch)
+        #endif
+    }
+
+    /// Bottom left: the zoom (10 % to 1000 %, back to 100 %) and which page this is.
+    private var corner: some View {
+        HStack(spacing: 6) {
+            Menu {
+                Button("Reset to 100%") { editor.requestZoom(.scale(1)) }
+                if !editor.isInfinite {
+                    Button("Whole page") { editor.requestZoom(.wholePage) }
+                    Button("Page width") { editor.requestZoom(.pageWidth) }
+                }
+                Divider()
+                ForEach([0.1, 0.25, 0.5, 2, 4, 10], id: \.self) { z in Button("\(Int(z * 100))%") { editor.requestZoom(.scale(z)) } }
+                Divider()
+                Button { editor.requestZoom(.scale(editor.zoom * 1.25)) } label: { Label("Zoom in", systemImage: "plus.magnifyingglass") }
+                Button { editor.requestZoom(.scale(editor.zoom / 1.25)) } label: { Label("Zoom out", systemImage: "minus.magnifyingglass") }
+            } label: {
+                Text("\(Int((editor.zoom * 100).rounded()))%")
+                    .font(.callout.weight(.semibold).monospacedDigit())
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 58, minHeight: 32)
+                    .background(.regularMaterial, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.gray.opacity(0.25)))
+            }
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Zoom \(Int((editor.zoom * 100).rounded())) percent")
+            if editor.pages.count > 1, !editor.isInfinite {
+                Text("\(editor.page + 1) / \(editor.pages.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 32)
+                    .background(.regularMaterial, in: Capsule())
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     // MARK: Toolbar
@@ -162,21 +221,27 @@ struct InkEditorView: View {
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.bordered)
-                    if editor.isSketch {
-                        Menu {
-                            Picker("Paper for every page", selection: Binding(get: { editor.paper }, set: { editor.setPaper($0) })) {
-                                ForEach(InkPaper.allCases, id: \.self) { Text($0.title).tag($0) }
-                            }
-                            Picker("Layout", selection: Binding(get: { editor.isInfinite }, set: { editor.setInfinite($0) })) {
-                                Text("Pages").tag(false)
-                                Text("Endless canvas").tag(true)
-                            }
-                            if !editor.isInfinite {
-                                Button { editor.showPages.toggle() } label: { Label("Pages…", systemImage: "rectangle.stack") }
-                            }
-                        } label: { Label("Paper", systemImage: "doc.plaintext") }
+                    Button { pageSettings = true } label: { Label(editor.isSketch ? "Page" : "View", systemImage: "doc.richtext") }
+                        .buttonStyle(.bordered)
                         .fixedSize()
+                        .popover(isPresented: $pageSettings) { InkPageSettings(editor: editor).frame(minWidth: 320, idealWidth: 360, minHeight: 420) }
+                    if editor.isSketch && !editor.isInfinite {
+                        Button { editor.showPages.toggle() } label: { Label("Pages", systemImage: "rectangle.stack") }
+                            .buttonStyle(.bordered)
+                            .labelStyle(.iconOnly)
+                            .help("All pages")
                     }
+                    Menu {
+                        Toggle("Scribble to erase", isOn: $editor.scribbleToErase)
+                        Toggle("Shapes come out clean", isOn: $editor.shapeMode)
+                        Picker("When a drawing opens", selection: $editor.fitWholePage) {
+                            Text("Show the whole page").tag(true)
+                            Text("Fit the page width").tag(false)
+                        }
+                    } label: { Label("Settings", systemImage: "gearshape") }
+                    .labelStyle(.iconOnly)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                     Button { editor.exportPDF() } label: { Label("Export PDF", systemImage: "square.and.arrow.up") }
                         .disabled(editor.exporting)
                         .buttonStyle(.bordered)

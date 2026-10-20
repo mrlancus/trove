@@ -399,6 +399,8 @@ struct InkOverlay {
     var selection: InkGeometry.Rect?
     var eraser: InkPoint?
     var eraserRadius = 10.0
+    /// Laser pointer lines: points, colour, width in screen points, and how faded (1 = solid).
+    var lasers: [(points: [InkPoint], color: String, width: Double, alpha: Double)] = []
 }
 
 extension InkRenderer {
@@ -429,6 +431,13 @@ extension InkRenderer {
                 ctx.fillEllipse(in: dot)
                 ctx.strokeEllipse(in: dot)
             }
+        }
+        for l in o.lasers where l.alpha > 0 {
+            ctx.saveGState()
+            ctx.setAlpha(l.alpha)
+            ctx.setShadow(offset: .zero, blur: 10, color: cgColor(l.color))
+            draw(tool: .marker, color: l.color, width: l.width * Double(px) * 1.5, points: l.points, in: ctx)
+            ctx.restoreGState()
         }
         if let e = o.eraser {
             ctx.setLineDash(phase: 0, lengths: [])
