@@ -77,7 +77,7 @@ test("sketches and ink on files: draw, undo, erase, pages, and it all reaches an
   await page.locator("#search").waitFor();
 
   // A new sketch opens straight in the editor.
-  await page.getByRole("button", { name: "✎ Sketch" }).click();
+  await page.getByRole("button", { name: "Sketch", exact: true }).click();
   const live = page.locator(".ink-page .ink-live").first();
   await live.waitFor();
   await until(async () => (await live.boundingBox())?.width > 300, "the page laid out");
@@ -91,8 +91,8 @@ test("sketches and ink on files: draw, undo, erase, pages, and it all reaches an
   assert.equal(await count(), 1);
 
   // Undo, redo, then erase the red marker line.
-  await page.getByRole("button", { name: "↶ Undo" }).click();
-  await page.getByRole("button", { name: "↷ Redo" }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
   await page.getByRole("button", { name: "Eraser" }).click();
   await mouseStroke(page, live, [0.45, 0.25], [0.45, 0.42], 8);
 
@@ -135,7 +135,7 @@ test("sketches and ink on files: draw, undo, erase, pages, and it all reaches an
   await page.getByRole("button", { name: "Sync now" }).click();
   await until(async () => (await page.locator("#grid .card", { hasText: "Worksheet" }).count()) === 1, "the PDF on the website", 15000);
   await page.locator("#grid .card", { hasText: "Worksheet" }).click();
-  await page.getByRole("button", { name: "✎ Draw on it" }).click();
+  await page.getByRole("button", { name: "Draw on it" }).click();
   await page.locator(".ink-page .ink-live").first().waitFor();
   await until(async () => (await page.locator(".ink-page .ink-live").first().boundingBox())?.width > 300, "the PDF page laid out");
   await page.getByRole("button", { name: "Highlighter" }).click();
@@ -203,7 +203,7 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
   await page.locator("#search").waitFor();
   await page.evaluate(() => localStorage.removeItem("trove.ink"));
 
-  await page.getByRole("button", { name: "✎ Sketch" }).click();
+  await page.getByRole("button", { name: "Sketch", exact: true }).click();
   const live = ".ink-page .ink-live";
   await page.locator(live).first().waitFor();
   await until(async () => (await page.locator(live).first().boundingBox())?.width > 300, "the page laid out");
@@ -262,9 +262,9 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
   await page.getByRole("button", { name: "Pen", exact: true }).click();
   await pointerPath(page, live, [[0.7, 0.1], [0.9, 0.12]]);
   await fingerTap(page, live, 2);
-  await until(() => page.locator("button", { hasText: "↷ Redo" }).isEnabled(), "undo by two fingers");
+  await until(() => page.locator("button", { hasText: /^\s*Redo$/ }).isEnabled(), "undo by two fingers");
   await fingerTap(page, live, 3);
-  await until(async () => !(await page.locator("button", { hasText: "↷ Redo" }).isEnabled()), "redo by three fingers");
+  await until(async () => !(await page.locator("button", { hasText: /^\s*Redo$/ }).isEnabled()), "redo by three fingers");
 
   // Pages: duplicate this one, move the copy up, colour it cream, and give it music paper.
   await page.getByRole("button", { name: "Duplicate page" }).click();
@@ -309,7 +309,7 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
 
   // An endless canvas: draw far out, scroll with the wheel.
   await page.locator("#grid .card.sketch").first().click();
-  await page.getByRole("button", { name: "✎ Draw" }).click();
+  await page.getByRole("button", { name: "Draw", exact: true }).click();
   await page.getByLabel("Layout").selectOption("infinite");
   await page.locator(".ink-infinite").waitFor();
   await page.getByRole("button", { name: "Pen", exact: true }).click();

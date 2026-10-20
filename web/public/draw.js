@@ -9,6 +9,7 @@
 //   and two scroll and pinch. Two-finger tap undoes, three-finger tap redoes. A mouse or trackpad
 //   draws, the wheel scrolls, ⌘/Ctrl + wheel zooms.
 import { h } from "./dom.js";
+import { icon as lineIcon } from "./icons.js";
 import {
   bounds, drawPaper, drawStroke, drawTextElement, hits, lassoSelects, lassoSelectsBox, moveBy,
   PAGE_COLORS, PAPER_TITLES, PAPERS, recognizeShape, textFont, transformPoint, transformRect, unionRect, widthScale, wrapText,
@@ -165,8 +166,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   eraserMode.addEventListener("change", () => { prefs.eraser = eraserMode.value; savePrefs(prefs); });
   const highlighterOnly = h("label", { class: "ink-check" }, h("input", { type: "checkbox" }), "Highlighter only");
   highlighterOnly.firstChild.addEventListener("change", (e) => { prefs.highlighterOnly = e.target.checked; savePrefs(prefs); });
-  const undoButton = h("button", { type: "button", class: "secondary small", title: "Undo (⌘Z, or tap with two fingers)", onclick: doUndo }, "↶ Undo");
-  const redoButton = h("button", { type: "button", class: "secondary small", title: "Redo (⇧⌘Z, or tap with three fingers)", onclick: doRedo }, "↷ Redo");
+  const undoButton = h("button", { type: "button", class: "secondary small", title: "Undo (⌘Z, or tap with two fingers)", onclick: doUndo }, lineIcon("undo"), " Undo");
+  const redoButton = h("button", { type: "button", class: "secondary small", title: "Redo (⇧⌘Z, or tap with three fingers)", onclick: doRedo }, lineIcon("redo"), " Redo");
   const pasteButton = h("button", { type: "button", class: "secondary small", title: "Paste (⌘V)", onclick: () => paste() }, "Paste");
   const zoomLabel = h("span", { class: "saved ink-zoom" });
   const exportButton = h("button", { type: "button", class: "secondary small", onclick: () => exportPDF() }, "Export PDF");
@@ -184,7 +185,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     layoutSelect = h("select", { class: "folder-select", "aria-label": "Layout" },
       h("option", { value: "pages", text: "Pages" }), h("option", { value: "infinite", text: "Endless canvas" }));
     layoutSelect.addEventListener("change", () => { clearSelection(); vault.setSketchCanvas(itemId, layoutSelect.value === "infinite"); afterPagesChanged(); });
-    panelButton = h("button", { type: "button", class: "secondary small", "aria-label": "Pages panel", onclick: () => { prefs.panel = !prefs.panel; savePrefs(prefs); refreshPanel(); } }, "▤ Pages");
+    panelButton = h("button", { type: "button", class: "secondary small", "aria-label": "Pages panel", onclick: () => { prefs.panel = !prefs.panel; savePrefs(prefs); refreshPanel(); } }, lineIcon("pages"), " Pages");
   }
   const bar = h("div", { class: "ink-bar", role: "toolbar", "aria-label": "Drawing tools" },
     h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
@@ -211,7 +212,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     h("button", { type: "button", class: "secondary small", onclick: () => copySelection() }, "Copy"),
     h("button", { type: "button", class: "secondary small", onclick: () => { copySelection(); deleteSelection(); } }, "Cut"),
     h("button", { type: "button", class: "secondary small danger", onclick: () => deleteSelection() }, "Delete"),
-    h("button", { type: "button", class: "secondary small", "aria-label": "Deselect", onclick: () => clearSelection() }, "✕"));
+    h("button", { type: "button", class: "secondary small", "aria-label": "Deselect", onclick: () => clearSelection() }, lineIcon("close")));
 
   // ---------- pages ----------
   const stack = h("div", { class: "ink-pages" });

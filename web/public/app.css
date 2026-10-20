@@ -480,3 +480,24 @@ body.ink-open { overflow: hidden; }
 .inked-image img { display: block; width: 100%; }
 .inked-image .ink-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .thumb-wrap.kind-sketch { background: repeating-linear-gradient(0deg, #fff 0 23px, rgba(90,130,200,.18) 23px 24px); }
+.icon { display: inline-block; vertical-align: -0.14em; flex: none; }
+.icon-button .icon { vertical-align: middle; }
+.pin .icon { width: 0.9em; height: 0.9em; }
+.done-mark .icon { width: 40px; height: 40px; stroke-width: 3; }
+.drop-arrow .icon { width: 56px; height: 56px; }
+.pick-mark .icon { width: 14px; height: 14px; stroke-width: 3; }
+/* Your tags, in their colours (PROTOCOL.md §8). */
+.tag-chips { flex-wrap: wrap; }
+.tag-filter { display: inline-flex; align-items: center; gap: 6px; }
+.tag-filter .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tag, var(--muted)); }
+.tag-filter .count { color: var(--muted); font-size: 12px; }
+.chips .tag-filter.coloured { background: color-mix(in srgb, var(--tag) 14%, transparent); }
+.chips .tag-filter.coloured[aria-pressed="true"] { background: color-mix(in srgb, var(--tag) 30%, transparent); border-color: var(--tag); color: var(--fg); box-shadow: inset 0 0 0 1px var(--tag); }
+.chips .tag-add { display: inline-flex; align-items: center; gap: 4px; background: none; border: 1px dashed var(--line); color: var(--muted); }
+.tag-edit:empty { display: none; }
+.tag-edit .row { flex-wrap: wrap; gap: 8px; align-items: center; }
+.tag-edit input { max-width: 200px; }
+.swatches { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.swatch-button { width: 20px; height: 20px; min-width: 0; padding: 0; border-radius: 50%; border: 0; background: var(--tag); cursor: pointer; }
+.swatch-button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--panel, #fff), 0 0 0 4px var(--tag); }
+.clip-tag.coloured, .tag-chip.coloured { color: var(--tag); background: color-mix(in srgb, var(--tag) 15%, transparent); border-radius: 999px; padding: 0 6px; }

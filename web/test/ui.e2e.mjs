@@ -215,6 +215,33 @@ test("create a vault in the browser, save the recovery code, add a second browse
   await page.locator("#clip-results .clip", { hasText: "Settings blob" }).waitFor();
   await page.locator("#search").fill("");
 
+  // Your tags: make one with a colour, put a clip in it, filter by it, find it with #tag.
+  await page.locator("nav a", { hasText: "Clipboard" }).click();
+  await page.locator(".clip-main", { hasText: "Settings blob" }).waitFor();
+  await page.locator("#clip-tools .tag-add").click();
+  await page.getByLabel("Tag name").fill("Receipts");
+  await page.locator(".tag-edit").getByRole("radio", { name: "green" }).click();
+  await page.locator(".tag-edit").getByRole("button", { name: "Add" }).click();
+  await page.locator("#clip-tools .tag-filter", { hasText: "receipts" }).waitFor();
+  if (!(await page.locator(".clip.open", { hasText: "Settings blob" }).count())) {
+    await page.locator(".clip", { hasText: "Settings blob" }).getByRole("button", { name: "More" }).click();
+  }
+  await page.locator(".clip.open .tag-filter", { hasText: "receipts" }).click();
+  await page.locator(".clip-tag.coloured", { hasText: "#receipts" }).waitFor();
+  await page.locator("#clip-tools .tag-filter", { hasText: "receipts" }).click();
+  await until(async () => (await page.locator("#grid .clip").count()) === 1, "only the tagged clip");
+  await page.locator("#clip-tools .tag-filter", { hasText: "receipts" }).click();
+  // Typing anywhere in the clipboard goes to the search box.
+  await page.locator("#heading").click();
+  await page.keyboard.type("#receipts");
+  assert.equal(await page.locator("#search").inputValue(), "#receipts");
+  await until(async () => (await page.locator("#grid .clip").count()) === 1, "#tag search");
+  await page.locator("#search").fill("");
+
+  // Sketches have their own section with a way in.
+  await page.locator("nav a", { hasText: "Sketches" }).click();
+  await page.getByRole("button", { name: "New sketch" }).waitFor();
+
   // Links save themselves into the library once you ask for that.
   await page.locator("nav a", { hasText: "Clipboard" }).click();
   await page.locator(".clip-settings summary").click();

@@ -2,6 +2,7 @@
 // Excel, PowerPoint, Pages/Keynote/Numbers, text and CSV (editable, each save a new version),
 // audio and video. Plus small JPEG thumbnails for cards.
 import { h } from "./dom.js";
+import { icon } from "./icons.js";
 import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
 import { GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
 import { drawStrokes } from "./core/ink.js";
@@ -35,7 +36,7 @@ export function lightbox(src, alt = "") {
   const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
   const img = h("img", { src, alt });
   const box = h("div", { class: "lightbox", role: "dialog", "aria-label": alt || "Image", onclick: (e) => { if (e.target !== img || !img.classList.contains("zoomed")) close(); } }, img,
-    h("button", { type: "button", class: "icon-button lightbox-close", "aria-label": "Close", onclick: close }, "✕"));
+    h("button", { type: "button", class: "icon-button lightbox-close", "aria-label": "Close", onclick: close }, icon("close")));
   img.addEventListener("dblclick", (e) => { e.stopPropagation(); img.classList.toggle("zoomed"); });
   addEventListener("keydown", onKey);
   document.body.append(box);

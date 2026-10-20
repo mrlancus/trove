@@ -1,11 +1,12 @@
 // Trove for any browser. Vanilla modules, no build step; the relay serves these files.
 import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
-import { availableTransforms, clipMatches, color, colorFormats, isSensitive } from "./core/clips.js";
+import { availableTransforms, clipQueryMatches, clipSearchText, color, colorFormats, isSensitive, parseClipQuery, TAG_COLORS } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
 import { importActions } from "./core/importer.js";
 import { renderMarkdown } from "./markdown.js";
 import { $, ago, fileSize, h } from "./dom.js";
+import { fillIcons, icon } from "./icons.js";
 import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.js";
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
@@ -15,6 +16,7 @@ import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
+  clipTag: null, newTag: null, tags: [], tagSig: "", dataVersion: 0, sidebarKey: null, memo: new Map(),
   importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false,
   selecting: false, picked: new Set(), anchor: null, shownIds: [], graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
 
@@ -53,6 +55,7 @@ function guessDeviceName() {
 // ---------- boot ----------
 
 async function boot() {
+  fillIcons(document);
   let vault = null;
   try { vault = await Vault.open(storage); } catch (e) { console.error(e); }
   app.classList.remove("loading");
@@ -183,7 +186,8 @@ function handleSharedAdd() {
 function showMain(vault) {
   state.vault = vault;
   app.replaceChildren($("#main-view").content.cloneNode(true));
-  vault.onChange(queueRender);
+  fillIcons(app);
+  vault.onChange(() => { state.dataVersion++; queueRender(); });
 
   $("#search").addEventListener("input", (e) => { state.query = e.target.value; queueRender(); });
   $("#new-sketch").addEventListener("click", () => {
@@ -265,6 +269,8 @@ function onKey(e) {
     if ((e.key === "Delete" || e.key === "Backspace") && state.picked.size) { e.preventDefault(); deletePicked(); return; }
   }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  // In the clipboard, typing anything searches it (the key lands in the search box).
+  if (state.selection === "clips" && !state.openId && e.key.length === 1 && e.key !== " ") { $("#search").focus(); return; }
   if (e.key === "/") { e.preventDefault(); $("#search").focus(); }
   if (e.key === "n") { e.preventDefault(); $("#new-note").click(); }
 }
@@ -405,7 +411,7 @@ function renderImport() {
   run.celebrated = true;
   $(".dz-summary", view).textContent = run.added === 0 ? "Nothing new to add" : run.added === 1 ? "Added 1 thing" : `Added ${run.added} things`;
   $(".done-mark", view).classList.toggle("none", run.added === 0);
-  $(".done-mark", view).textContent = run.added ? "✓" : "?";
+  $(".done-mark", view).replaceChildren(run.added ? icon("check") : "?");
   $("#import-show").hidden = run.added === 0;
   const colors = ["#ff9f43", "#ff4f8b", "#a55eea", "#feca57", "#1dd1a1", "#54a0ff"];
   $(".burst", view).replaceChildren(...Array.from({ length: 14 }, (_, i) => {
@@ -424,20 +430,43 @@ function queueRender() {
   requestAnimationFrame(() => { state.renderQueued = false; render(); });
 }
 
+/** Work that only depends on the vault's contents, done once per change rather than per keystroke. */
+function memo(key, make) {
+  const hit = state.memo.get(key);
+  if (hit && hit.version === state.dataVersion) return hit.value;
+  const value = make();
+  state.memo.set(key, { version: state.dataVersion, value });
+  return value;
+}
+
 function render() {
   const vault = state.vault;
-  const items = vault.items();
-  const collections = vault.collections();
-  const folders = vault.folders();
+  const items = memo("items", () => vault.items());
+  const collections = memo("collections", () => vault.collections());
+  const folders = memo("folders", () => vault.folders());
+  state.tags = memo("tags", () => vault.customTags());
+  state.tagSig = memo("tagSig", () => state.tags.map((t) => `${t.name}:${t.color}`).join(","));
   const now = Date.now();
   const liveFolders = new Set(folders.map((f) => f.id));
-  const unfiled = items.filter((i) => !i.folder || !liveFolders.has(i.folder));
-  const graph = linkGraph(items);
+  const unfiled = memo("unfiled", () => items.filter((i) => !i.folder || !liveFolders.has(i.folder)));
+
+  // The sidebar only changes with the vault or the selection, not with each letter typed.
+  const sidebarKey = `${state.dataVersion}|${state.selection}|${state.importRun ? `${state.importRun.done}/${state.importRun.total}/${state.importRun.finished}` : ""}|${[...state.expanded].join(",")}`;
+  if (sidebarKey !== state.sidebarKey) {
+    state.sidebarKey = sidebarKey;
+    renderSidebar(items, collections, folders, unfiled, now);
+  }
+  renderMain(items, collections, folders, unfiled, liveFolders, now);
+}
+
+function renderSidebar(items, collections, folders, unfiled, now) {
+  const vault = state.vault;
+  const graph = memo("graph", () => linkGraph(items));
   const connected = items.filter((i) => graph.outgoing[i.id] || graph.incoming[i.id]).length;
 
   $("#smart-list").replaceChildren(...smartCollections.map((s) => {
     const count = items.filter((i) => s.contains(i, now)).length;
-    if (!count && !["all", "notes", "pinned"].includes(s.id)) return null;
+    if (!count && !["all", "notes", "sketches", "pinned"].includes(s.id)) return null;
     return navLink(s.id, s.title, count);
   }).filter(Boolean), navLink("graph", "Connections", connected || ""), navLink("clips", "Clipboard", vault.clips().length),
   navLink("import", "Import", state.importRun && !state.importRun.finished ? state.importRun.total - state.importRun.done : ""));
@@ -448,7 +477,10 @@ function render() {
     .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
   $("#source-list").replaceChildren(...sources.map((s) => navLink(`s:${s}`, sourceLabel(s), items.filter((i) => i.sources.includes(s)).length)));
   $("#source-heading").hidden = !sources.length;
+}
 
+function renderMain(items, collections, folders, unfiled, liveFolders, now) {
+  const vault = state.vault;
   const mode = state.query.trim() && !["clips", "graph"].includes(state.selection) ? "items"
     : state.selection === "clips" ? "clips" : state.selection === "import" ? "import" : state.selection === "graph" ? "graph" : "items";
   $("#grid").classList.toggle("clip-list", mode === "clips");
@@ -493,6 +525,10 @@ function render() {
     const smart = smartCollections.find((s) => s.id === sel) ?? smartCollections[0];
     shown = items.filter((i) => smart.contains(i, now));
     title = smart.title;
+    if (smart.id === "sketches") {
+      title = h("div", { class: "heading-row" }, h("span", { text: "Sketches" }),
+        h("button", { type: "button", class: "primary", onclick: () => $("#new-sketch").click() }, icon("pencil"), " New sketch"));
+    }
   }
   if (state.query.trim()) {
     shown = search(shown, state.query, now);
@@ -504,7 +540,7 @@ function render() {
   state.shownIds = shown.slice(0, MAX_CARDS).map((i) => i.id);
   for (const id of state.picked) if (!vault.item(id)) state.picked.delete(id);
   renderBulkBar();
-  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => card(item, inFolder ? null : folderNames.get(item.folder))));
+  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => cachedCard(item, inFolder ? null : folderNames.get(item.folder))));
   $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
   $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
@@ -753,7 +789,9 @@ const clipFilters = [
   ["color", "Colors", (c) => c.kind === "color"], ["text", "Text", (c) => ["text", "email", "phone", "number", "path"].includes(c.kind)],
   ["other", "Other devices", (c) => c.device && c.device !== state.vault.config.deviceId],
 ];
-const clipSymbol = { text: "¶", link: "🔗", email: "@", phone: "☎", color: "◐", code: "</>", json: "{ }", number: "#", path: "/", image: "▣", file: "▤" };
+// Each kind's badge: a few characters, or a line icon (never emoji).
+const clipSymbol = { text: "¶", link: "link", email: "@", phone: "phone", color: "palette", code: "</>", json: "{ }", number: "#", path: "/", image: "image", file: "file" };
+const clipBadgeContent = (kind) => { const s = clipSymbol[kind] ?? "¶"; return /^[a-z]+$/.test(s) ? icon(s) : s; };
 
 const autoSaveKinds = [["link", "Links"], ["image", "Images"], ["code", "Code"], ["text", "Text"], ["color", "Colours"]];
 
@@ -762,7 +800,10 @@ function renderClips() {
   const filter = clipFilters.find(([id]) => id === state.clipFilter) ?? clipFilters[0];
   const q = state.query.trim();
   const all = vault.clips();
-  const shown = all.filter((c) => filter[2](c) && clipMatches(c, q));
+  const tags = vault.customTags();
+  if (state.clipTag && !tags.some((t) => t.name === state.clipTag)) state.clipTag = null;
+  const parsed = parseClipQuery(q);
+  const shown = all.filter((c) => filter[2](c) && (!state.clipTag || c.tags.includes(state.clipTag)) && clipQueryMatches(parsed, c, clipSearchText(c)));
   const pinned = !q && state.clipFilter === "all" ? [...shown.filter((c) => c.isPinned), ...shown.filter((c) => !c.isPinned)] : shown;
 
   $("#heading").textContent = q ? `${shown.length} clip${shown.length === 1 ? "" : "s"}` : "Clipboard";
@@ -770,9 +811,11 @@ function renderClips() {
   if (!tools) {
     tools = h("div", { id: "clip-tools", class: "clip-tools" },
       h("div", { class: "chips", role: "group", "aria-label": "Filter" }),
+      h("div", { class: "chips tag-chips", role: "group", "aria-label": "Your tags" }),
+      h("div", { class: "tag-edit" }),
       h("div", { class: "row" },
         h("button", { type: "button", class: "primary", onclick: pasteFromClipboard }, "Paste"),
-        h("span", { class: "hint", text: "…or press ⌘V / Ctrl+V anywhere on this page. Copies on your Mac show up here by themselves. Search with tag:, app: or is:pinned." })),
+        h("span", { class: "hint", text: "…or press ⌘V / Ctrl+V anywhere on this page. Copies on your Mac show up here by themselves. Just type to search; #tag, app: and is:pinned narrow it down." })),
       h("details", { class: "clip-settings" }, h("summary", {}, "Save to Trove automatically"),
         h("p", { class: "hint", text: "Copies of these kinds go straight into your library, with where they came from. Applies on every device." }),
         h("div", { class: "chips", role: "group", "aria-label": "Save automatically" })));
@@ -780,6 +823,7 @@ function renderClips() {
   }
   $(".chips", tools).replaceChildren(...clipFilters.map(([id, title]) =>
     h("button", { type: "button", "aria-pressed": String(state.clipFilter === id), onclick: () => { state.clipFilter = id; render(); } }, title)));
+  renderTagChips(tools, tags, all);
   const auto = vault.clipAutoSaveKinds();
   $(".clip-settings .chips", tools).replaceChildren(...autoSaveKinds.map(([kind, title]) => {
     const on = auto.includes(kind);
@@ -796,9 +840,71 @@ function renderClips() {
   $("#empty").textContent = all.length ? "No clips match." : "Nothing copied yet. Copy something on your Mac, or paste here.";
 }
 
+// ---------- your tags, with colours (PROTOCOL.md §8) ----------
+
+const tagHex = { red: "#ff3b30", orange: "#ff9500", yellow: "#ffcc00", green: "#34c759", mint: "#00c7be", teal: "#30b0c7",
+  blue: "#007aff", indigo: "#5856d6", purple: "#af52de", pink: "#ff2d55", brown: "#a2845e", gray: "#8e8e93" };
+
+/** Colours a chip (or anything) in a tag's colour, if it's one of your tags. */
+function tagColour(el, name, tags = state.vault.customTags()) {
+  const t = tags.find((x) => x.name === name.toLowerCase());
+  if (t) { el.classList.add("coloured"); el.style.setProperty("--tag", tagHex[t.color]); }
+  return el;
+}
+
+function colourSwatches(selected, pick) {
+  return h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" }, TAG_COLORS.map((c) => {
+    const b = h("button", { type: "button", class: "swatch-button", role: "radio", "aria-checked": String(c === selected), "aria-label": c, title: c,
+      onclick: () => pick(c) });
+    b.style.setProperty("--tag", tagHex[c]);
+    return b;
+  }));
+}
+
+/** The tag sections: your tags in their colours (click to show only their clips), "+ Tag" to make one. */
+function renderTagChips(tools, tags, clips) {
+  const vault = state.vault;
+  $(".tag-chips", tools).replaceChildren(...tags.map((t) => {
+    const count = clips.filter((c) => c.tags.includes(t.name)).length;
+    return tagColour(h("button", { type: "button", class: "tag-filter", "aria-pressed": String(state.clipTag === t.name),
+      onclick: () => { state.clipTag = state.clipTag === t.name ? null : t.name; state.newTag = null; render(); } },
+    h("span", { class: "dot" }), t.name, h("span", { class: "count", text: String(count) })), t.name, tags);
+  }), h("button", { type: "button", class: "tag-add", onclick: () => { state.newTag = { name: "", color: "blue" }; render(); $(".tag-edit input", tools)?.focus(); } },
+    icon("plus"), " Tag"));
+  const edit = $(".tag-edit", tools);
+  if (state.newTag && edit.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // naming it: leave the field be
+  if (state.newTag) {
+    const draft = state.newTag;
+    const create = () => {
+      const name = vault.setTagColor(draft.name, draft.color);
+      if (!name) return;
+      if (draft.forClip) { const clip = vault.clip(draft.forClip); if (clip && !clip.tags.includes(name)) vault.toggleClipTag(clip.id, name); }
+      state.newTag = null;
+      syncSoon();
+      render();
+    };
+    const input = h("input", { type: "text", value: draft.name, placeholder: "New tag", "aria-label": "Tag name",
+      oninput: (e) => { draft.name = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") create(); if (e.key === "Escape") { state.newTag = null; render(); } } });
+    edit.replaceChildren(h("div", { class: "row" }, input, colourSwatches(draft.color, (c) => { draft.color = c; render(); $(".tag-edit input", tools)?.focus(); }),
+      h("button", { type: "button", class: "primary small", onclick: create }, "Add"),
+      h("button", { type: "button", class: "secondary small", onclick: () => { state.newTag = null; render(); } }, "Cancel")));
+  } else if (state.clipTag) {
+    const t = tags.find((x) => x.name === state.clipTag);
+    edit.replaceChildren(h("div", { class: "row" }, h("span", { class: "hint", text: `#${t.name}` }),
+      colourSwatches(t.color, (c) => { vault.setTagColor(t.name, c); syncSoon(); }),
+      h("button", { type: "button", class: "secondary small danger", onclick: () => {
+        if (!confirm(`Delete the tag "${t.name}"? It comes off every clip and item that has it.`)) return;
+        vault.deleteTag(t.name); state.clipTag = null; syncSoon();
+      } }, "Delete tag")));
+  } else {
+    edit.replaceChildren();
+  }
+}
+
 /** Clips matching a search of the library, under the items. */
 function clipResults(query) {
-  const found = state.vault.clips().filter((c) => clipMatches(c, query));
+  const parsed = parseClipQuery(query);
+  const found = state.vault.clips().filter((c) => clipQueryMatches(parsed, c, clipSearchText(c)));
   if (!found.length) return null;
   return h("section", { class: "clip-results" },
     h("h2", { class: "side-heading" }, h("button", { type: "button", class: "link-button", onclick: () => { state.selection = "clips"; render(); } },
@@ -809,7 +915,7 @@ function clipResults(query) {
 function clipRow(clip) {
   const open = state.openClip === clip.id;
   const c = clip.kind === "color" ? color(clip.text) : null;
-  const badge = h("span", { class: "clip-badge", "aria-hidden": "true" }, c ? "" : clipSymbol[clip.kind] ?? "¶");
+  const badge = h("span", { class: "clip-badge", "aria-hidden": "true" }, c ? "" : clipBadgeContent(clip.kind));
   if (c) badge.style.setProperty("background", `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${c.a})`);
   if (clip.image) blobURL(clip.image).then((url) => badge.replaceChildren(h("img", { src: url, alt: "" }))).catch(() => {});
   const where = clip.sourceTitle && clip.sourceTitle !== clip.sourceApp ? `${clip.sourceApp ?? ""} — ${clip.sourceTitle}`.replace(/^ — /, "") : clip.sourceApp;
@@ -821,10 +927,10 @@ function clipRow(clip) {
       h("span", { class: "clip-text" },
         h("span", { class: "clip-title", text: clip.displayTitle }),
         snippet && snippet !== clip.displayTitle ? h("span", { class: `clip-preview${["code", "json"].includes(clip.kind) ? " mono" : ""}`, text: snippet }) : null,
-        h("span", { class: "clip-meta" }, meta, clip.tags.length ? h("span", { class: "clip-tags", text: clip.tags.map((t) => `#${t}`).join(" ") }) : null)),
-      clip.isPinned ? h("span", { class: "pin", "aria-label": "Pinned", text: "●" }) : null),
+        h("span", { class: "clip-meta" }, meta, clip.tags.length ? h("span", { class: "clip-tags" }, clip.tags.flatMap((t, i) => [i ? " " : null, tagColour(h("span", { class: "clip-tag", text: `#${t}` }), t, state.tags)])) : null)),
+      clip.isPinned ? h("span", { class: "pin" }, icon("pin", "Pinned")) : null),
     h("button", { type: "button", class: "icon-button clip-more", "aria-label": open ? "Less" : "More", "aria-expanded": String(open),
-      onclick: () => { state.openClip = open ? null : clip.id; render(); } }, open ? "▴" : "▾"));
+      onclick: () => { state.openClip = open ? null : clip.id; render(); } }, icon(open ? "chevronUp" : "chevronDown")));
   if (open) row.append(clipDetails(clip, c));
   return row;
 }
@@ -880,9 +986,16 @@ function clipDetails(clip, c) {
     if (found.length && clip.kind !== "link" && clip.kind !== "color") details.append(h("div", { class: "chips found" }, h("span", { class: "hint", text: "Found" }), found));
   }
 
-  details.append(h("label", { class: "clip-field" }, h("span", { class: "hint", text: "Tags" }),
-    h("input", { type: "text", value: clip.tags.join(", "), placeholder: "work, ideas", "aria-label": "Tags",
-      onchange: (ev) => save(() => vault.setClipTags(clip.id, ev.target.value.split(/[,\s]+/))), onkeydown: blurOnEnter })));
+  const mine = vault.customTags();
+  details.append(h("div", { class: "clip-field" }, h("span", { class: "hint", text: "Your tags" }),
+    h("div", { class: "chips tag-chips" }, mine.map((t) => tagColour(h("button", { type: "button", class: "tag-filter", "aria-pressed": String(clip.tags.includes(t.name)),
+      onclick: () => save(() => vault.toggleClipTag(clip.id, t.name)) }, h("span", { class: "dot" }), t.name), t.name, mine)),
+    h("button", { type: "button", class: "tag-add", onclick: () => { state.newTag = { name: "", color: "blue", forClip: clip.id }; render(); $("#clip-tools .tag-edit input")?.focus(); } },
+      icon("plus"), " New tag"))));
+  const otherTags = clip.tags.filter((t) => !mine.some((m) => m.name === t));
+  details.append(h("label", { class: "clip-field" }, h("span", { class: "hint", text: "Other tags" }),
+    h("input", { type: "text", value: otherTags.join(", "), placeholder: "work, ideas", "aria-label": "Other tags",
+      onchange: (ev) => save(() => vault.setClipTags(clip.id, [...clip.tags.filter((t) => mine.some((m) => m.name === t)), ...ev.target.value.split(/[,\s]+/)])), onkeydown: blurOnEnter })));
   const note = h("textarea", { rows: "2", placeholder: "Add a note…", "aria-label": "Note", onchange: (ev) => save(() => vault.setClipNote(clip.id, ev.target.value)) });
   note.value = clip.note;
   details.append(h("label", { class: "clip-field" }, h("span", { class: "hint", text: "Note" }), note));
@@ -935,7 +1048,7 @@ async function copyClip(clip) {
       syncSoon();
       toast("Image copied");
     } catch {
-      toast("Your browser can't copy images here. Open it with ▾ instead.");
+      toast("Your browser can't copy images here. Open it with the arrow on its right instead.");
     }
     return;
   }
@@ -978,13 +1091,28 @@ const sourceLabels = { app: "Trove", share: "Share sheet", web: "Browser", email
 const sourceLabel = (s) => sourceLabels[s] ?? s;
 const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email", sketch: "Sketch" };
 
+// Cards are kept and reused while their item hasn't changed, so typing a search reshuffles existing
+// cards (pictures already loaded) instead of building hundreds of new ones per letter.
+const cardCache = new Map(); // item id → { key, el }
+
+function cachedCard(item, folderName) {
+  const key = `${item.record.updatedHLC}|${folderName ?? ""}|${state.selecting}|${state.picked.has(item.id)}|${state.tagSig}`;
+  const hit = cardCache.get(item.id);
+  if (hit && hit.key === key) return hit.el;
+  const el = card(item, folderName);
+  cardCache.set(item.id, { key, el });
+  return el;
+}
+
 function card(item, folderName) {
   const snippet = item.kind === "highlight" ? item.body.replace(/^> /gm, "") : item.summary || item.body.trim() || item.ocrText || "";
   const price = item.priceWatch?.price ?? item.extracted.product?.price;
   const currency = item.priceWatch?.currency ?? item.extracted.product?.currency;
   const att = item.attachments[0];
   let thumb = null;
-  if (item.thumbnail || (att && wantsThumbnail(att))) {
+  if (item.thumbnail && blobURLs.has(item.thumbnail.id)) {
+    thumb = h("div", { class: `thumb-wrap loaded kind-${item.kind}` }, h("img", { src: blobURLs.get(item.thumbnail.id), alt: "", class: "thumb" }));
+  } else if (item.thumbnail || (att && wantsThumbnail(att))) {
     thumb = h("div", { class: `thumb-wrap kind-${item.kind}`, "data-id": item.id }, h("span", { class: "type-tile", text: typeLabel(att?.name ?? "", att?.mime ?? "") }));
     thumbObserver.observe(thumb);
   } else if (item.imageURL?.startsWith("https://")) {
@@ -992,7 +1120,7 @@ function card(item, folderName) {
   } else if (att) {
     thumb = h("div", { class: `thumb-wrap small kind-${item.kind}` }, h("span", { class: "type-tile", text: typeLabel(att.name, att.mime) }));
   } else if (item.kind === "sketch") {
-    thumb = h("div", { class: "thumb-wrap small kind-sketch" }, h("span", { class: "type-tile", text: "✎ Sketch" }));
+    thumb = h("div", { class: "thumb-wrap small kind-sketch" }, h("span", { class: "type-tile" }, icon("pencil"), " Sketch"));
   }
   const picked = state.picked.has(item.id);
   const el = h("button", { type: "button", class: `card ${item.kind}${picked ? " picked" : ""}${state.selecting ? " selecting" : ""}`, draggable: "true",
@@ -1001,18 +1129,18 @@ function card(item, folderName) {
       if (state.selecting || e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); pick(item.id, e.shiftKey); return; }
       state.mode = null; openItem(item.id);
     } },
-    state.selecting ? h("span", { class: "pick-mark", "aria-hidden": "true", text: picked ? "✓" : "" }) : null,
+    state.selecting ? h("span", { class: "pick-mark", "aria-hidden": "true" }, picked ? icon("check") : null) : null,
     thumb,
     h("div", { class: "body" },
       h("div", { class: "meta" },
-        item.isPinned ? h("span", { class: "pin", "aria-label": "Pinned", text: "●" }) : null,
+        item.isPinned ? h("span", { class: "pin" }, icon("pin", "Pinned")) : null,
         h("span", { text: [kindLabel[item.kind] ?? item.kind, item.siteName || item.url?.hostname.replace(/^www\./, ""), item.createdAt ? ago(item.createdAt) : null].filter(Boolean).join(" · ") }),
         item.hasConflicts ? h("span", { class: "danger", text: "· needs attention" }) : null),
       h("div", { class: "title", text: item.displayTitle }),
       snippet && snippet !== item.displayTitle ? h("div", { class: "snippet", text: snippet.slice(0, 400) }) : null,
       typeof price === "number" ? h("div", { class: "price", text: money(price, currency) }) : null,
       item.tags.length || folderName ? h("div", { class: "tags" }, folderName ? h("span", { class: "folder-chip", text: folderName }) : null,
-        item.tags.slice(0, 4).map((t) => h("span", { class: "tag-chip", text: `#${t}` }))) : null));
+        item.tags.slice(0, 4).map((t) => tagColour(h("span", { class: "tag-chip", text: `#${t}` }), t, state.tags))) : null));
   el.addEventListener("dragstart", (e) => {
     e.dataTransfer.setData(ITEM_DRAG, item.id);
     e.dataTransfer.setData("text/plain", item.displayTitle);
@@ -1112,7 +1240,7 @@ function renderDetail(force = false) {
     h("button", { type: "button", class: "icon-button only-wide", "aria-label": state.wide ? "Narrow panel" : "Widen panel", title: state.wide ? "Narrow" : "Widen",
       onclick: toggleWide }, state.wide ? "⤡" : "⤢"),
     h("button", { type: "button", class: "secondary danger", onclick: () => { if (confirm("Delete this item on all your devices?")) { vault.delete(item.id); closeItem(); syncSoon(); } } }, "Delete"),
-    h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: closeItem }, "✕"));
+    h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: closeItem }, icon("close")));
 
   const title = h("input", { class: "title-input", value: item.title, placeholder: item.displayTitle, "aria-label": "Title" });
   title.addEventListener("change", () => { vault.update(item.id, { title: title.value.trim() }); syncSoon(); });
@@ -1222,10 +1350,10 @@ function sketchSection(item) {
   });
   return h("section", { class: "sketch" },
     h("div", { class: "file-head" },
-      h("span", { class: "type-tile mini", text: "✎" }),
+      h("span", { class: "type-tile mini" }, icon("pencil")),
       h("span", { class: "file-name", text: item.infinite ? "Endless canvas" : `${item.sketchPages} page${item.sketchPages === 1 ? "" : "s"}` }),
       h("span", { class: "spacer" }),
-      h("button", { type: "button", class: "primary small", onclick: () => openSketch(item.id, 0) }, "✎ Draw")),
+      h("button", { type: "button", class: "primary small", onclick: () => openSketch(item.id, 0) }, icon("pencil"), " Draw")),
     grid);
 }
 
@@ -1312,7 +1440,7 @@ function filesSection(item) {
       h("span", { class: "type-tile mini", text: typeLabel(att.name, att.mime) }),
       h("span", { class: "file-name", text: att.name }), h("span", { class: "saved", text: fileSize(att.size) }),
       h("span", { class: "spacer" }),
-      canInk(att) ? h("button", { type: "button", class: "secondary small", title: "Write or draw on this file. The file itself doesn't change.", onclick: () => markUp(item, att) }, "✎ Draw on it") : null,
+      canInk(att) ? h("button", { type: "button", class: "secondary small", title: "Write or draw on this file. The file itself doesn't change.", onclick: () => markUp(item, att) }, icon("pencil"), " Draw on it") : null,
       h("button", { type: "button", class: "secondary small", onclick: () => download(att) }, "Download"),
       index === 0 ? h("label", { class: "secondary small", title: "Upload an edited copy; the current file is kept as a version" }, "New version", upload) : null);
     const cacheKey = `${att.id}:${vault.strokes(item.id, att.id).length}`;
@@ -1358,7 +1486,7 @@ async function openVersion(att) {
   const kind = previewKind(att.name, att.mime);
   if (kind === "image") { try { lightbox(await blobURL(att), att.name); } catch (e) { toast(e.message); } return; }
   const box = h("div", { class: "dialog version-dialog", role: "dialog", "aria-modal": "true" },
-    h("div", { class: "dialog-head" }, h("h2", { text: `${att.name} (earlier version)` }), h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: () => backdrop.remove() }, "✕")),
+    h("div", { class: "dialog-head" }, h("h2", { text: `${att.name} (earlier version)` }), h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: () => backdrop.remove() }, icon("close"))),
     attachmentPreview(att, { load: () => state.vault.attachment(att.id) }));
   const backdrop = h("div", { class: "dialog-backdrop", onclick: (e) => { if (e.target === backdrop) backdrop.remove(); } }, box);
   backdrop.addEventListener("keydown", (e) => { if (e.key === "Escape") backdrop.remove(); });

@@ -77,7 +77,7 @@
 <template id="devices-view">
   <div class="dialog-backdrop">
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="devices-title">
-      <div class="dialog-head"><h2 id="devices-title">Devices &amp; extension</h2><button type="button" class="icon-button" data-close aria-label="Close">✕</button></div>
+      <div class="dialog-head"><h2 id="devices-title">Devices &amp; extension</h2><button type="button" class="icon-button" data-close aria-label="Close"><span data-icon="close"></span></button></div>
       <section>
         <h3 class="section-title">Add a phone, tablet or computer</h3>
         <p class="hint">Paste your recovery code to make a single-use setup code (valid 10 minutes). Use it on the new device's “Setup code” tab here, or in the Trove app.</p>
@@ -124,13 +124,13 @@
     </aside>
     <div class="main">
       <header class="toolbar">
-        <button id="menu" type="button" class="icon-button only-narrow" aria-label="Show library">☰</button>
+        <button id="menu" type="button" class="icon-button only-narrow" aria-label="Show library"><span data-icon="menu"></span></button>
         <label class="search">
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input id="search" type="search" placeholder="Search, or try tag:food is:pinned type:note" aria-label="Search">
         </label>
         <button id="select-mode" type="button" class="secondary" title="Select several (or ⌘/Ctrl-click a card)">Select</button>
-        <button id="new-sketch" type="button" class="secondary" title="Draw with a pen, finger, mouse or trackpad">✎ Sketch</button>
+        <button id="new-sketch" type="button" class="secondary" title="New sketch: draw with a pen, finger, mouse or trackpad"><span data-icon="pencil"></span> Sketch</button>
         <button id="new-note" type="button" class="primary">New note</button>
       </header>
       <form id="capture" class="capture">
@@ -171,7 +171,7 @@
             <ul class="arrivals" aria-live="polite"></ul>
           </div>
           <div class="dz-done" hidden>
-            <div class="mark-wrap" aria-hidden="true"><div class="burst"></div><div class="done-mark">✓</div></div>
+            <div class="mark-wrap" aria-hidden="true"><div class="burst"></div><div class="done-mark"><span data-icon="check"></span></div></div>
             <p class="dz-title dz-summary"></p>
             <ul class="arrivals"></ul>
             <div class="row center"><button type="button" class="primary" id="import-show">Show them</button><button type="button" class="secondary" id="import-more">Import more</button></div>
@@ -189,7 +189,7 @@
   </div>
   <div id="toast" class="toast" role="status" hidden></div>
   <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
-    <div><div class="drop-arrow">↓</div><p class="dz-title">Drop to add to Trove</p><p class="hint">Files, folders, zips, links or text</p></div>
+    <div><div class="drop-arrow"><span data-icon="arrowDown"></span></div><p class="dz-title">Drop to add to Trove</p><p class="hint">Files, folders, zips, links or text</p></div>
   </div>
   <div id="other-tab" class="other-tab" hidden>
     <div><p>Trove is open in another tab.</p><button id="use-here" type="button" class="primary">Use it here</button></div>
