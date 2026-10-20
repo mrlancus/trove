@@ -110,6 +110,10 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
     failing step and fingerprints of the secrets (never their values).
   - **First time only:** download Trove-macOS.zip by hand, use Open Anyway, and grant Accessibility
     again. After that it updates itself.
+- **SideStore sign-in error -80045** (Apple changed sign-in for all sideloading tools in Oct 2026). What
+  fixed it for the user: Settings → User Customizations → turn off On-Device Anisette; Anisette
+  Servers → "SideStore (new)", auto rotation off; User Customizations → Reset adi.pb (untick keep
+  headers); restart SideStore; sign in once. Don't retry repeatedly: Apple can lock the account (-20209).
 - **iPhone/iPad with SideStore (instead of Sideloadly):** install SideStore once (needs the Mac for the
   pairing file). Then in SideStore → Sources add
   `https://github.com/mrlancus/trove/releases/download/latest/sidestore.json`. New builds show up as
