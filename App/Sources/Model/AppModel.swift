@@ -16,7 +16,25 @@ final class AppModel {
         case smart(SmartCollection)
         case collection(String)
         case source(ItemSource)
+        case folder(String)
+        case unfiled
+        case graph
         case importer
+    }
+
+    /// A folder and its subfolders, for the sidebar's outline.
+    struct FolderNode: Identifiable, Hashable {
+        let folder: Folder
+        var children: [FolderNode]?
+        var id: String { folder.id }
+    }
+
+    /// A folder with how deep it sits, for flat pickers ("Move to folder").
+    struct FolderEntry: Identifiable, Hashable {
+        let folder: Folder
+        let depth: Int
+        var id: String { folder.id }
+        var indentedName: String { String(repeating: "    ", count: depth) + folder.name }
     }
 
     /// A running or finished import, which the Import screen animates.
@@ -48,6 +66,9 @@ final class AppModel {
     var phase: Phase = .loading
     var items: [Item] = []
     var collections: [ItemCollection] = []
+    var folders: [Folder] = []
+    /// Wikilinks and hand-made connections between items, rebuilt on every reload.
+    var links = Links.Graph()
     var selection: Selection? = .smart(.recent)
     var selectedItemID: String?
     var searchText = "" { didSet { scheduleSearch() } }
@@ -183,6 +204,8 @@ final class AppModel {
         await clipboard.reload()
         items = await library.items()
         collections = await library.collections()
+        folders = await library.folders()
+        links = Links.graph(items)
         await semantic.update(items)
         if !searchText.isEmpty { await runSearch() }
         publishWidget()
@@ -195,13 +218,130 @@ final class AppModel {
         case .smart(let s): return items.filter(s.contains)
         case .collection(let id): return items.filter { $0.collections.contains(id) }
         case .source(let src): return items.filter { $0.source == src }
-        case .importer, nil: return items
+        case .folder(let id): return items.filter { $0.folder == id }
+        case .unfiled: return unfiledItems
+        case .graph, .importer, nil: return items
         }
     }
 
     var selectedItem: Item? { selectedItemID.flatMap { id in items.first { $0.id == id } } }
 
     func count(_ smart: SmartCollection) -> Int { items.filter(smart.contains).count }
+
+    // MARK: Folders
+
+    var folderEntries: [FolderEntry] { Folder.tree(folders).map { FolderEntry(folder: $0.folder, depth: $0.depth) } }
+
+    var folderNodes: [FolderNode] {
+        let ids = Set(folders.map(\.id))
+        let byParent = Dictionary(grouping: folders) { f in f.parent.flatMap { ids.contains($0) && $0 != f.id ? $0 : nil } ?? "" }
+        var seen: Set<String> = []
+        func nodes(_ key: String) -> [FolderNode] {
+            (byParent[key] ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                .filter { seen.insert($0.id).inserted }
+                .map { f in
+                    let kids = nodes(f.id)
+                    return FolderNode(folder: f, children: kids.isEmpty ? nil : kids)
+                }
+        }
+        return nodes("")
+    }
+
+    var unfiledItems: [Item] {
+        let ids = Set(folders.map(\.id))
+        return items.filter { $0.folder.map { !ids.contains($0) } ?? true }
+    }
+
+    /// Items in a folder and everything inside it.
+    func folderCount(_ id: String) -> Int {
+        let parent = Dictionary(folders.map { ($0.id, $0.parent) }, uniquingKeysWith: { a, _ in a })
+        return items.filter { item in
+            var current = item.folder, hops = 0
+            while let c = current, hops < 32 { if c == id { return true }; current = parent[c] ?? nil; hops += 1 }
+            return false
+        }.count
+    }
+
+    func folderPath(_ id: String?) -> [Folder] { id.map { Folder.path(of: $0, in: folders) } ?? [] }
+
+    @discardableResult
+    func createFolder(_ name: String, in parent: String? = nil) async -> String? {
+        guard let library, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        let id = await library.createFolder(name, in: parent)
+        await reload()
+        return id
+    }
+
+    func renameFolder(_ id: String, to name: String) async { await library?.renameFolder(id, to: name); await reload() }
+
+    func deleteFolder(_ id: String) async {
+        let parent = folders.first { $0.id == id }?.parent
+        await library?.deleteFolder(id)
+        if selection == .folder(id) { selection = parent.map { .folder($0) } ?? .smart(.recent) }
+        await reload()
+    }
+
+    func moveFolder(_ id: String, into parent: String?) async { await library?.moveFolder(id, into: parent); await reload() }
+
+    func move(_ itemId: String, to folder: String?) async {
+        await library?.move(itemId, to: folder)
+        await reload()
+        toast = folder.flatMap { f in folders.first { $0.id == f }?.name }.map { "Moved to \($0)" } ?? "Removed from its folder"
+    }
+
+    func tidyUp() async {
+        guard let library else { return }
+        let n = await library.tidyUp()
+        await reload()
+        toast = n == 0 ? "Everything is already filed" : "Filed \(n) thing\(n == 1 ? "" : "s") into folders"
+    }
+
+    // MARK: Versions and connections
+
+    func replaceFile(_ item: Item, with url: URL) async {
+        guard let library else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { toast = "Couldn't read that file"; return }
+        let name = url.lastPathComponent
+        do {
+            try await library.replaceFile(item.id, data: data, name: name, mime: FileImport.mime(forExtension: url.pathExtension))
+            toast = "Saved as a new version"
+        } catch {
+            toast = "Couldn't save: \(error.localizedDescription)"
+        }
+        await reload()
+    }
+
+    func restore(_ item: Item, _ version: FileVersion) async {
+        await library?.restoreFileVersion(item.id, version)
+        await reload()
+        toast = "Restored. The file you had is kept as a version too."
+    }
+
+    func textVersions(_ item: Item) async -> [TextVersion] { await library?.textVersions(item.id) ?? [] }
+
+    /// A decrypted copy of an attachment in the temporary folder, for Quick Look and sharing.
+    func temporaryFile(_ attachment: Attachment) async -> URL? {
+        guard let data = try? await library?.attachmentData(attachment) else { toast = "Couldn't open \(attachment.name)"; return nil }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("QuickLook/\(attachment.id.prefix(12))", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent(attachment.name.isEmpty ? "file" : attachment.name)
+        do { try data.write(to: url, options: .atomic) } catch { toast = "Couldn't open \(attachment.name)"; return nil }
+        return url
+    }
+
+    func connect(_ a: String, _ b: String) async { await library?.connect(a, b); await reload() }
+    func disconnect(_ a: String, _ b: String) async { await library?.disconnect(a, b); await reload() }
+
+    /// Opens the item a `[[wikilink]]` points at, or makes a note with that title.
+    func openWikilink(_ title: String) async {
+        let key = title.trimmingCharacters(in: .whitespaces).lowercased()
+        if let id = Links.titleIndex(items)[key] { selectedItemID = id; return }
+        guard let library else { return }
+        selectedItemID = await library.addNote(title: title.trimmingCharacters(in: .whitespaces), body: "")
+        await reload()
+    }
 
     // MARK: Search
 
@@ -313,7 +453,8 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             self?.saveNow()
             await self?.reload()
-            if let engine = self?.library?.engine, await engine.hasUnsentChanges { self?.pushSoon() }
+            guard let library = self?.library else { return }
+            if await library.engine.hasUnsentChanges { self?.pushSoon() }
         }
     }
 

@@ -40,7 +40,9 @@ struct MainView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } content: {
             Group {
-                if model.selection == .importer, model.searchText.isEmpty { ImportView() } else { LibraryView() }
+                if model.selection == .importer, model.searchText.isEmpty { ImportView() }
+                else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
+                else { LibraryView() }
             }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 520)
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
@@ -162,6 +164,16 @@ struct SidebarView: View {
     @Binding var showSettings: Bool
     @State private var newCollection = ""
     @State private var addingCollection = false
+    @State private var folderName = ""
+    @State private var folderAction: FolderAction?
+
+    /// What the folder name alert is for.
+    enum FolderAction: Identifiable {
+        case create(parent: String?), rename(String)
+        var id: String {
+            switch self { case .create(let p): "new-\(p ?? "")"; case .rename(let id): "rename-\(id)" }
+        }
+    }
 
     private let primary: [SmartCollection] = [.recent, .pinned, .toRead, .notes]
     private let smart: [SmartCollection] = [.recipes, .places, .thingsToBuy, .events, .videos, .quotes, .receipts, .handwriting, .needsAttention]
@@ -171,9 +183,29 @@ struct SidebarView: View {
         List(selection: $model.selection) {
             Section {
                 ForEach(primary) { s in row(s) }
+                Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
+                    .tag(AppModel.Selection.graph)
                 Label("Import", systemImage: "square.and.arrow.down.on.square")
                     .badge(model.importRun.map { $0.finished ? 0 : $0.total - $0.done } ?? 0)
                     .tag(AppModel.Selection.importer)
+            }
+            Section {
+                OutlineGroup(model.folderNodes, children: \.children) { node in
+                    folderRow(node.folder)
+                }
+                let unfiled = model.unfiledItems.count
+                if unfiled > 0 {
+                    Label("Unfiled", systemImage: "tray").badge(unfiled).tag(AppModel.Selection.unfiled)
+                        .contextMenu { Button("Tidy up: file everything") { Task { await model.tidyUp() } } }
+                }
+            } header: {
+                HStack {
+                    Text("Folders")
+                    Spacer()
+                    Button { folderName = ""; folderAction = .create(parent: nil) } label: { Image(systemName: "folder.badge.plus") }
+                        .buttonStyle(.borderless)
+                        .help("New folder")
+                }
             }
             Section("Smart Collections") {
                 ForEach(smart.filter { model.count($0) > 0 || $0 == .recipes || $0 == .places }) { s in row(s) }
@@ -221,6 +253,62 @@ struct SidebarView: View {
             Button("Cancel", role: .cancel) { newCollection = "" }
         }
         .onChange(of: model.selection) { model.searchText = "" }
+        .alert(folderAlertTitle, isPresented: Binding(get: { folderAction != nil }, set: { if !$0 { folderAction = nil } })) {
+            TextField("Name", text: $folderName)
+            Button(folderAlertButton) {
+                let name = folderName, action = folderAction
+                folderName = ""
+                Task {
+                    switch action {
+                    case .create(let parent): if let id = await model.createFolder(name, in: parent) { model.selection = .folder(id) }
+                    case .rename(let id): await model.renameFolder(id, to: name)
+                    case nil: break
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { folderName = "" }
+        }
+    }
+
+    private var folderAlertTitle: String {
+        if case .rename = folderAction { return "Rename folder" }
+        return "New folder"
+    }
+
+    private var folderAlertButton: String {
+        if case .rename = folderAction { return "Rename" }
+        return "Create"
+    }
+
+    private func folderRow(_ folder: Folder) -> some View {
+        Label {
+            Text(folder.name)
+        } icon: {
+            Image(systemName: "folder.fill").foregroundStyle(FolderStyle.color(for: model.folderPath(folder.id).first?.id))
+        }
+            .badge(model.folderCount(folder.id))
+            .tag(AppModel.Selection.folder(folder.id))
+            .dropDestination(for: String.self) { ids, _ in
+                let itemIds = ids.filter { id in model.items.contains { $0.id == id } }
+                let folderIds = ids.filter { id in model.folders.contains { $0.id == id } && id != folder.id }
+                Task {
+                    for id in itemIds { await model.move(id, to: folder.id) }
+                    for id in folderIds { await model.moveFolder(id, into: folder.id) }
+                }
+                return !(itemIds.isEmpty && folderIds.isEmpty)
+            }
+            .draggable(folder.id)
+            .contextMenu {
+                Button { folderName = ""; folderAction = .create(parent: folder.id) } label: { Label("New folder inside", systemImage: "folder.badge.plus") }
+                Button { folderName = folder.name; folderAction = .rename(folder.id) } label: { Label("Rename", systemImage: "pencil") }
+                if folder.parent != nil {
+                    Button { Task { await model.moveFolder(folder.id, into: nil) } } label: { Label("Move to top level", systemImage: "arrow.up.to.line") }
+                }
+                Divider()
+                Button(role: .destructive) { Task { await model.deleteFolder(folder.id) } } label: {
+                    Label("Delete folder (keeps what's inside)", systemImage: "trash")
+                }
+            }
     }
 
     private func row(_ s: SmartCollection) -> some View {
@@ -239,6 +327,12 @@ struct LibraryView: View {
         @Bindable var model = model
         let items = model.visibleItems
         ScrollView {
+            if case .folder(let id) = model.selection, model.searchResults == nil { FolderHeader(folderId: id).padding([.horizontal, .top], 16) }
+            if case .unfiled = model.selection, !items.isEmpty {
+                Button { Task { await model.tidyUp() } } label: { Label("Tidy up: file everything", systemImage: "wand.and.stars") }
+                    .buttonStyle(.borderedProminent)
+                    .padding([.horizontal, .top], 16)
+            }
             if items.isEmpty {
                 emptyState.padding(.top, 80)
             } else {
@@ -252,6 +346,7 @@ struct LibraryView: View {
                                 }
                             }
                             .contextMenu { ItemMenu(item: item) }
+                            .draggable(item.id) { ItemCard(item: item).frame(width: 220).opacity(0.9) }
                     }
                 }
                 .padding(16)
@@ -268,6 +363,9 @@ struct LibraryView: View {
         case .smart(let s): return s.title
         case .collection(let id): return model.collections.first { $0.id == id }?.name ?? "Collection"
         case .source(let s): return ItemStyle.sourceLabel(s)
+        case .folder(let id): return model.folders.first { $0.id == id }?.name ?? "Folder"
+        case .unfiled: return "Unfiled"
+        case .graph: return "Connections"
         case .importer: return "Import"
         case nil: return "Trove"
         }
@@ -314,6 +412,14 @@ struct ItemMenu: View {
                 Button { Task { await model.unpublish(item) } } label: { Label("Remove public link", systemImage: "eye.slash") }
             }
         }
+        Menu {
+            Button { Task { await model.move(item.id, to: nil) } } label: { Label("No folder", systemImage: item.folder == nil ? "checkmark" : "tray") }
+            ForEach(model.folderEntries) { entry in
+                Button { Task { await model.move(item.id, to: entry.folder.id) } } label: {
+                    Label(entry.indentedName, systemImage: item.folder == entry.folder.id ? "checkmark" : "folder")
+                }
+            }
+        } label: { Label("Move to folder", systemImage: "folder") }
         if !model.collections.isEmpty {
             Menu("Collections") {
                 ForEach(model.collections) { c in
@@ -343,7 +449,10 @@ enum DropHandler {
                 } else if provider.canLoadObject(ofClass: URL.self) {
                     if let url = await loadURL(provider) { await model.capture(url.absoluteString) }
                 } else if provider.canLoadObject(ofClass: String.self) {
-                    if let text = await loadString(provider) { await model.capture(text) }
+                    // A card or folder dragged inside the app carries its id; folders handle those.
+                    if let text = await loadString(provider), !model.items.contains(where: { $0.id == text }), !model.folders.contains(where: { $0.id == text }) {
+                        await model.capture(text)
+                    }
                 }
             }
             guard !files.isEmpty else { return }
@@ -385,5 +494,71 @@ enum DropHandler {
             }
         }
         #endif
+    }
+}
+
+// MARK: - Folders
+
+enum FolderStyle {
+    /// Same palette and hashing as the website (web/public/graph.js), so a folder has one colour everywhere.
+    static let palette: [Color] = [.init(hex: 0xFF9F43), .init(hex: 0xFF4F8B), .init(hex: 0xA55EEA), .init(hex: 0x54A0FF),
+                                   .init(hex: 0x1DD1A1), .init(hex: 0xFECA57), .init(hex: 0xFF6B6B), .init(hex: 0x48DBFB)]
+
+    static func color(for topFolderId: String?) -> Color {
+        guard let id = topFolderId else { return .secondary }
+        var hash: UInt32 = 0
+        for scalar in id.unicodeScalars { hash = hash &* 31 &+ scalar.value }
+        return palette[Int(hash % UInt32(palette.count))]
+    }
+}
+
+extension Color {
+    init(hex: UInt32) {
+        self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+}
+
+/// Breadcrumbs and subfolders at the top of a folder.
+struct FolderHeader: View {
+    let folderId: String
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let path = model.folderPath(folderId)
+        let children = model.folders.filter { $0.parent == folderId }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        VStack(alignment: .leading, spacing: 12) {
+            if path.count > 1 {
+                HStack(spacing: 4) {
+                    ForEach(Array(path.enumerated()), id: \.element.id) { index, folder in
+                        if index > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary) }
+                        Button(folder.name) { model.selection = .folder(folder.id) }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(index == path.count - 1 ? .primary : .secondary)
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+            }
+            if !children.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(children) { child in
+                        Button { model.selection = .folder(child.id) } label: {
+                            HStack {
+                                Image(systemName: "folder.fill").foregroundStyle(FolderStyle.color(for: path.first?.id))
+                                Text(child.name).lineLimit(1)
+                                Spacer()
+                                Text("\(model.folderCount(child.id))").foregroundStyle(.secondary).font(.caption)
+                            }
+                            .padding(12)
+                            .card(cornerRadius: 12)
+                        }
+                        .buttonStyle(.plain)
+                        .dropDestination(for: String.self) { ids, _ in
+                            Task { for id in ids where model.items.contains(where: { $0.id == id }) { await model.move(id, to: child.id) } }
+                            return true
+                        }
+                    }
+                }
+            }
+        }
     }
 }

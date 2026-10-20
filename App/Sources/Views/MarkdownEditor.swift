@@ -89,9 +89,26 @@ struct MarkdownText: View {
         return out
     }
 
-    /// Inline bold/italic/links via AttributedString; [[wikilinks]] shown as links to search.
+    /// Inline bold/italic/links via AttributedString. `[[wikilinks]]` become `trove://link?t=Title`
+    /// links, which ItemDetailView opens (the item with that title, or a new note).
     private func inline(_ text: String) -> AttributedString {
-        let linked = text.replacingOccurrences(of: #"\[\[([^\]|]+)(\|([^\]]+))?\]\]"#, with: "[$1](trove://search?q=$1)", options: .regularExpression)
+        var linked = ""
+        var rest = text[...]
+        while let open = rest.range(of: "[["), let close = rest[open.upperBound...].range(of: "]]") {
+            linked += rest[..<open.lowerBound]
+            let inner = rest[open.upperBound..<close.lowerBound]
+            let parts = inner.split(separator: "|", maxSplits: 1).map(String.init)
+            let target = parts.first?.split(separator: "#").first.map(String.init) ?? ""
+            var c = URLComponents()
+            c.scheme = "trove"; c.host = "link"; c.queryItems = [URLQueryItem(name: "t", value: target)]
+            if let url = c.url?.absoluteString, !target.isEmpty {
+                linked += "[\((parts.count > 1 ? parts[1] : target).replacingOccurrences(of: "]", with: ""))](\(url))"
+            } else {
+                linked += rest[open.lowerBound..<close.upperBound]
+            }
+            rest = rest[close.upperBound...]
+        }
+        linked += rest
         return (try? AttributedString(markdown: linked, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
 }

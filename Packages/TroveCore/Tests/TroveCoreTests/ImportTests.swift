@@ -82,3 +82,20 @@ import Testing
         #expect(!FileImport.isJunk("a/b.md"))
     }
 }
+
+/// The same files web/test/core.test.mjs reads (web/test/fixtures/files).
+@Suite struct FilePreviewTests {
+    func webFixture(_ name: String) throws -> Data {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("web/test/fixtures/files/\(name)")
+        return try Data(contentsOf: url)
+    }
+
+    @Test func goodNotesAndIWork() throws {
+        let gn = try #require(FilePreview.goodnotes(try webFixture("sample.goodnotes")))
+        #expect(gn.pages == 2 && gn.thumbnail != nil)
+        #expect(gn.documents.map(\.mime) == ["application/pdf", "image/png"])
+        #expect(FilePreview.iworkPreview(try webFixture("sample.pages")).map { FilePreview.sniff($0) } == "image/jpeg")
+        #expect(FilePreview.goodnotes(Data("not a zip".utf8)) == nil)
+    }
+}

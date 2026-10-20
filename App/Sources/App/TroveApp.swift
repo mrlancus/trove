@@ -81,6 +81,10 @@ struct TroveApp: App {
             model.selectedItemID = url.pathComponents.dropFirst().first
         case "search":
             model.searchText = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value ?? ""
+        case "link":
+            if let title = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "t" })?.value {
+                Task { await model.openWikilink(title) }
+            }
         case "pair":
             break // handled by onboarding's PairingInput when not set up
         default:

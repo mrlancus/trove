@@ -11,15 +11,17 @@ struct ItemDetailView: View {
     @State private var saveTask: Task<Void, Never>?
     @State private var similar: [Item] = []
     @State private var newTag = ""
+    @State private var showHistory = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                FolderLine(item: item)
                 if item.hasConflicts { ConflictBanner(item: item) }
                 if let summary = item.summary, !summary.isEmpty, item.kind != .note { SummaryCard(item: item, summary: summary) }
                 ExtractedCards(item: item)
-                ForEach(item.attachments, id: \.id) { AttachmentView(attachment: $0) }
+                if !item.attachments.isEmpty { FilesSection(item: item) }
                 editor
                 if let ocr = item.ocrText, !ocr.isEmpty, item.kind != .note {
                     DisclosureGroup("Text found in this item") {
@@ -29,6 +31,7 @@ struct ItemDetailView: View {
                     .card(cornerRadius: 14)
                 }
                 tags
+                ConnectionsSection(item: item)
                 if !similar.isEmpty { similarSection }
             }
             .padding(20)
@@ -52,6 +55,14 @@ struct ItemDetailView: View {
             similar = ids.compactMap { id in model.items.first { $0.id == id } }
         }
         .onDisappear { flush() }
+        .sheet(isPresented: $showHistory) { HistorySheet(item: item) }
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.scheme == "trove", url.host == "link",
+                  let title = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "t" })?.value else { return .systemAction }
+            flush()
+            Task { await model.openWikilink(title) }
+            return .handled
+        })
     }
 
     // MARK: Sections
@@ -92,6 +103,9 @@ struct ItemDetailView: View {
             HStack {
                 Text(item.kind == .note ? "Note" : "Your notes").font(.headline)
                 Spacer()
+                Button { flush(); showHistory = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
+                    .buttonStyle(.borderless)
+                    .help("Earlier versions of this text")
                 Picker("", selection: $editing) {
                     Text("Read").tag(false)
                     Text("Edit").tag(true)
