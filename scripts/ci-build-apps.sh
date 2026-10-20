@@ -34,15 +34,20 @@ sign_mac() {
   security create-keychain -p "$kcpass" "$kc" || return 1
   security set-keychain-settings -lut 3600 "$kc"
   security unlock-keychain -p "$kcpass" "$kc"
+  # codesign only finds the key in keychains on the search list, whatever --keychain says.
+  # shellcheck disable=SC2046
+  security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"') || { echo "step failed: list-keychains"; return 1; }
   # Pasted secrets often pick up a stray space or newline; base64 and the hex password have none.
   local password
   password=$(printf '%s' "$MAC_CERT_PASSWORD" | tr -d '[:space:]')
   printf '%s' "$MAC_CERT_P12" | tr -d '[:space:]' | base64 --decode > "$TMP/trove-cert.p12"
   # Fingerprints only (no secret values), to compare with the file the secrets came from.
   echo "certificate file: $(wc -c < "$TMP/trove-cert.p12" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$TMP/trove-cert.p12" | cut -c1-12); password: ${#password} characters"
-  security import "$TMP/trove-cert.p12" -k "$kc" -P "$password" -T /usr/bin/codesign || return 1
+  security import "$TMP/trove-cert.p12" -k "$kc" -P "$password" -T /usr/bin/codesign || { echo "step failed: import"; return 1; }
   rm -f "$TMP/trove-cert.p12"
-  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" > /dev/null
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" > /dev/null || { echo "step failed: set-key-partition-list"; return 1; }
+  # Names and hashes of the identities (public), to see what the certificate is called.
+  security find-identity -p codesigning "$kc"
   local identity
   identity=$(security find-identity -p codesigning "$kc" | awk '/Trove Self-Signed/ { print $2; exit }')
   [ -n "$identity" ] || { echo "no signing identity in the keychain"; return 1; }
@@ -52,10 +57,10 @@ sign_mac() {
     rm -f "$ent"
     codesign -d --entitlements - --xml "$bundle" > "$ent" 2>/dev/null || true
     [ -s "$ent" ] && args+=(--entitlements "$ent")
-    codesign "${args[@]}" "$bundle" || return 1
+    codesign "${args[@]}" "$bundle" || { echo "step failed: codesign $bundle"; return 1; }
   done
   shopt -u nullglob
-  codesign --verify --deep --strict "$app" && codesign -d -r- "$app"
+  codesign --verify --deep --strict "$app" && codesign -d -r- "$app" || { echo "step failed: verify"; return 1; }
 }
 
 echo "▶ macOS"
