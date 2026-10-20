@@ -6,15 +6,15 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing) | ✅ Done | 76 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights) | ✅ Done | 82 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
-| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing | ✅ Done | 24 unit/interop tests; 8 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. **This round's website changes aren't deployed yet** (see Next steps 0) |
+| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing, sketch tools, clip editor | ✅ Done | 28 unit/interop tests; 9 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. **The last two rounds' website changes aren't deployed yet** (see Next steps 0) |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS; not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
-| **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8) | 🟡 Core + website tested; apps building on CI, not yet run on a device | 6 Swift + 2 JS unit tests, interop fixture, Chromium e2e |
+| **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps written, see CI | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
-| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10) | 🟡 Core + website tested; apps written (PencilKit on iPad/iPhone, mouse/trackpad on Mac), building on CI, not yet run on a device | 2 Swift + 1 JS unit tests on `ink-cases.json`, Chromium e2e |
+| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, erasers, lasso, shapes, text, pictures, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), see CI | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
@@ -31,7 +31,39 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
+## Latest round (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
+- **Clipboard** (PROTOCOL.md §8):
+  - Each copy keeps the app, and on the Mac the window title (Accessibility) and page address
+    (Chromium's pasteboard marker, else a quick AppleScript to Safari/Chrome/Arc/Brave/Edge; macOS asks
+    once per browser; Settings → Clipboard can turn it off), plus device and time.
+  - Insights on copy (title, counts, links, emails, phones, colours, hashtags) and **rule tags** (kind,
+    site, code language, `contact`), the same in Swift and JS (`clip-cases.json`).
+  - Enrichment: Vision reads images; Apple Intelligence (iPad), cloud AI (if on) or the rules name,
+    summarise and tag. Devices with AI pick up clips only the rules have seen (last 14 days).
+  - Rename, edit text, tags, note (website: open a clip; Mac palette: ⌘E; iPhone/iPad: ⓘ). Clips show
+    in the main search ("From your clipboard"). Saved clips keep `origin` (app, page, window).
+  - **Save to Trove automatically**: a synced setting (website: Clipboard → "Save to Trove
+    automatically"; apps: Settings → Clipboard). Chosen without asking: off by default; the device
+    that made the copy saves it.
+- **Sketching** (PROTOCOL.md §10; website `draw.js`, apps `App/Sources/Drawing`):
+  - Pens: pen, pencil, fountain pen, brush pen, marker, highlighter. Eraser: whole strokes or partial,
+    optionally highlighter only. Lasso: move, resize (corner handles), recolour, duplicate, copy, cut,
+    paste, delete. Shapes: a shape mode, and holding still at the end of a line snaps it (line, joined
+    lines, triangle, rectangle, polygon, circle, ellipse; `ink-geometry.json` keeps Swift and JS alike).
+  - Text boxes and pictures (`element` records). Pages have ids: a page panel adds, duplicates,
+    reorders and deletes them, with paper (8 styles) and colour per page. A sketch can be one
+    **endless canvas** instead. Two-finger tap undoes, three-finger tap redoes. Export to PDF (website:
+    a vector PDF writer, `pdfwrite.js`; apps: Core Graphics).
+  - Handwriting search: Apple devices read sketches with Vision into `inkText` (when the editor closes,
+    and from enrichment for sketches drawn on the website). Text boxes are searchable everywhere (`sketchText`).
+  - Apps: iPad/iPhone keep PencilKit for pens (best Pencil latency) with Trove's own eraser, lasso and
+    text over it; the Mac draws every tool itself. Text is typed in a sheet. **Written on Linux; check
+    CI** (`ci-logs` branch) and fix what doesn't compile.
+- CI now prints TroveCore's real compiler errors (`core-errors.txt` on `ci-logs`). The Mac compiler
+  timed out type-checking a long `?? ""` array in `Clip.matches` that Swift 6.3 on Linux accepts: keep
+  such expressions split into typed pieces.
+
+## Round before (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
 - **Add a device** (Settings → Devices): waits for the new device on the relay, shows "… is set up" and closes. Done button.
 - **iPhone**: tabs (Library, Clipboard, Search) on navigation stacks. Tapping an item now opens it
   (the split view never pushed the detail on iPhone). List layout by default, swipe to pin/delete.
@@ -93,11 +125,15 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 
 ## Next steps
 0. **Deploy the website**: `cd server && npx wrangler deploy` (all web tests pass). The cloud
-   session's permission check blocked a production deploy, so it needs the user's OK.
+   session's permission check blocked a production deploy, so it needs the user's OK. Two rounds
+   (clipboard + sketching) are waiting.
 1. **This round on devices**: the user tries drawing with Apple Pencil on the iPad (app and Safari),
    GoodNotes notebooks, select mode, the iPhone tabs and clipboard; we fix what breaks.
-   - Drawing, later phases: handwriting recognition into `ocrText` for search (Vision on rendered
-     pages), "export with markup" as a new file version, partial (pixel) eraser, lasso, shapes.
+   - Sketching next: inline text editing in the apps (now a sheet), a ruler, rotating selections,
+     handwriting recognition on the website (no on-device OCR in browsers; could use the relay's AI),
+     "export with markup" saved back as a new file version, page templates/sizes (A4, letter).
+   - Clipboard next: check the Mac's page/window capture with real browsers; the website can't watch
+     the clipboard or run OCR/AI itself.
    - GoodNotes, not drawn yet: sticky notes, rotated lasso items, audio recordings.
 2. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
    - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
