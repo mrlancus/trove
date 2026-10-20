@@ -554,7 +554,7 @@ export class Vault {
     const clip = this.clip(id);
     if (!clip || clip.image || clip.text === text || !text) return;
     this.set({ [ClipField.text]: text, [ClipField.hash]: hashText(text), [ClipField.editedAt]: this.now(), [ClipField.needsEnrichment]: true,
-      [ClipField.aiTitle]: null, [ClipField.summary]: null, ...insightFields(insights(text)) }, id, "clip");
+      [ClipField.aiTitle]: null, [ClipField.summary]: null, [ClipField.enrichment]: null, ...insightFields(insights(text)) }, id, "clip");
   }
 
   setClipTags(id, tags) { this.set({ [ClipField.tags]: cleanTags(tags) }, id, "clip"); }

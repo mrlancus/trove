@@ -94,7 +94,7 @@ extension Library {
         guard let clip = await clip(id), clip.image == nil, clip.text != text, !text.isEmpty else { return }
         var fields: [String: JSONValue] = [Clip.Field.text: .string(text), Clip.Field.hash: .string(Clip.hash(text: text)),
                                            Clip.Field.editedAt: JSONValue(now()), Clip.Field.needsEnrichment: true,
-                                           Clip.Field.aiTitle: .null, Clip.Field.summary: .null]
+                                           Clip.Field.aiTitle: .null, Clip.Field.summary: .null, Clip.Field.enrichment: .null]
         fields.merge(ClipInsights.of(text).json) { _, b in b }
         await engine.set(fields, record: id, kind: "clip")
     }
@@ -115,16 +115,24 @@ extension Library {
 
     // MARK: Enrichment
 
-    /// Clips that AI (or text recognition) hasn't looked at yet, newest first.
-    public func clipsNeedingEnrichment(limit: Int = 10) async -> [Clip] {
-        Array(await clips().filter(\.needsEnrichment).prefix(limit))
+    /// Clips a device producing `tier` results should look at, newest first: never looked at, or
+    /// still waiting for AI and only looked at by a weaker tier (like items, PROTOCOL.md §5).
+    public func clipsNeedingEnrichment(below tier: Enrichment.Tier = .cloud, limit: Int = 10) async -> [Clip] {
+        Array(await clips().filter { clip in
+            guard let current = clip.enrichment else { return clip.needsEnrichment }
+            return clip.needsEnrichment && current.tier < tier
+        }.prefix(limit))
     }
 
     /// What enrichment found: a better title, a summary, tags (added to yours) and text in an image.
+    /// Results from a weaker tier than the clip already has are dropped. It keeps waiting for AI
+    /// until an on-device or cloud tier has looked at it.
     public func applyClipEnrichment(_ id: String, title: String? = nil, summary: String? = nil, tags: [String] = [], ocrText: String? = nil,
                                     tier: Enrichment.Tier, by: String) async {
         guard let clip = await clip(id) else { return }
-        var fields: [String: JSONValue] = [Clip.Field.needsEnrichment: false, Clip.Field.enrichment: Enrichment(tier: tier, by: by, at: now()).json]
+        if let current = clip.enrichment, current.tier > tier { return }
+        var fields: [String: JSONValue] = [Clip.Field.needsEnrichment: .bool(tier < .onDevice),
+                                           Clip.Field.enrichment: Enrichment(tier: tier, by: by, at: now()).json]
         if let title, !title.isEmpty { fields[Clip.Field.aiTitle] = .string(title) }
         if let summary, !summary.isEmpty { fields[Clip.Field.summary] = .string(summary) }
         if !tags.isEmpty { fields[Clip.Field.tags] = JSONValue(Self.cleanTags(clip.tags + tags)) }

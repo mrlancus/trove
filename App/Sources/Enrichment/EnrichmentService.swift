@@ -101,6 +101,43 @@ actor EnrichmentService {
         return true
     }
 
+    /// Clipboard history: text in copied images, then (with on-device AI, or cloud AI when the
+    /// clipboard is allowed to use it) a title, a one-line summary and tags, so clips can be found
+    /// by what they're about. Returns how many changed.
+    @discardableResult
+    func runClips(limit: Int = 15, cloudForClips: Bool) async -> Int {
+        let tier: Enrichment.Tier = OnDeviceAI.isAvailable ? .onDevice : (cloudForClips && cloudEnabled && relay != nil ? .cloud : .basic)
+        var changed = 0
+        for clip in await library.clipsNeedingEnrichment(below: tier, limit: limit) {
+            if Task.isCancelled { break }
+            var ocr: String?
+            if let image = clip.image, clip.ocrText == nil, let data = try? await library.attachmentData(image),
+               let cg = PlatformImage.fromData(data)?.cgImageForVision {
+                ocr = String(await AppleEnricher.recognizeText(in: cg).prefix(20_000))
+            }
+            let material = [clip.title ?? "", clip.text, ocr ?? clip.ocrText ?? "", clip.sourceTitle ?? "", clip.note]
+                .filter { !$0.isEmpty }.joined(separator: "\n")
+            var title: String?, summary: String?, tags: [String] = []
+            let source = [clip.sourceApp, clip.sourceURL?.absoluteString].compactMap { $0 }.joined(separator: " · ")
+            // Short copies (a word, a number, a colour) say all there is to say already. If the
+            // model fails it isn't retried, so one awkward clip can't hold up the rest.
+            if material.count < 25 || clip.kind == .color || clip.kind == .number {
+            } else if tier == .onDevice {
+                if let d = try? await OnDeviceAI.describe(text: material, url: source.isEmpty ? nil : "Copied from " + source, existingTitle: nil) {
+                    title = d.title; summary = d.summary; tags = d.tags
+                }
+            } else if tier == .cloud, let relay {
+                if let e = try? await relay.enrich(text: material, url: clip.sourceURL?.absoluteString, title: clip.sourceTitle) {
+                    title = e.title; summary = e.summary; tags = e.tags
+                }
+            }
+            await library.applyClipEnrichment(clip.id, title: title, summary: summary, tags: Array(tags.prefix(4)), ocrText: ocr,
+                                              tier: tier, by: deviceId)
+            changed += 1
+        }
+        return changed
+    }
+
     private func aiFields(_ title: String, _ summary: String, _ tags: [String], _ category: String) -> [String: JSONValue] {
         var f: [String: JSONValue] = [Field.summary: .string(summary), Field.tags: JSONValue(tags)]
         f[Field.title] = .string(title)  // Library keeps a title the user typed

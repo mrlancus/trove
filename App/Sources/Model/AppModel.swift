@@ -140,6 +140,17 @@ final class AppModel {
     // MARK: Clipboard
 
     private func startClipboard() {
+        clipboard.onCaptured = { [weak self] clip in
+            guard let self else { return }
+            if clipboard.shouldAutoSave(clip) { saveClip(clip, quietly: true) }
+            clipEnrichTask?.cancel()
+            // A few seconds after copying stops, so a burst of copies is looked at once.
+            clipEnrichTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                await self?.enrichSoon()
+            }
+        }
         if clipboardWatcher == nil {
             let watcher = ClipboardWatcher(store: clipboard)
             watcher.start()
@@ -518,8 +529,9 @@ final class AppModel {
         enriching = true
         await enrichment.configure(relay: vault.relayClient, cloudEnabled: vault.config?.cloudAI ?? false)
         let changed = await enrichment.run(limit: 20)
+        let clipsChanged = await enrichment.runClips(cloudForClips: clipboard.cloudAI)
         enriching = false
-        if changed > 0 { await reload() }
+        if changed > 0 { await reload() } else if clipsChanged > 0 { await clipboard.reload() }
     }
 
     var aiStatus: String {

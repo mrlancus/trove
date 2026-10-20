@@ -26,6 +26,15 @@ final class ClipboardStore {
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
     /// iPhone/iPad: save what was copied whenever Trove is opened.
     var captureOnOpen: Bool { didSet { UserDefaults.standard.set(captureOnOpen, forKey: "clipboard.captureOnOpen") } }
+    /// Let cloud AI (through your relay) name and tag clips when no on-device model is around. Off
+    /// by default: copies can be private in ways the sensitive-text filter can't see.
+    var cloudAI: Bool { didSet { UserDefaults.standard.set(cloudAI, forKey: "clipboard.cloudAI") } }
+    /// Copies of these kinds also go straight into the library (as they're copied on this device).
+    var autoSaveLinks: Bool { didSet { UserDefaults.standard.set(autoSaveLinks, forKey: "clipboard.autoSaveLinks") } }
+    var autoSaveImages: Bool { didSet { UserDefaults.standard.set(autoSaveImages, forKey: "clipboard.autoSaveImages") } }
+
+    /// Called with a clip's id after this device records a copy (auto-save, enrichment).
+    @ObservationIgnored var onCaptured: ((Clip) -> Void)?
 
     /// The last copy this device recorded, for the status line in Settings.
     private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
@@ -39,6 +48,9 @@ final class ClipboardStore {
         enabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
         keepSensitive = UserDefaults.standard.object(forKey: "clipboard.keepSensitive") as? Bool ?? true
         captureOnOpen = UserDefaults.standard.object(forKey: "clipboard.captureOnOpen") as? Bool ?? true
+        cloudAI = UserDefaults.standard.bool(forKey: "clipboard.cloudAI")
+        autoSaveLinks = UserDefaults.standard.bool(forKey: "clipboard.autoSaveLinks")
+        autoSaveImages = UserDefaults.standard.bool(forKey: "clipboard.autoSaveImages")
     }
 
     func attach(_ library: Library) async {
@@ -60,7 +72,7 @@ final class ClipboardStore {
 
     // MARK: Adding
 
-    func capture(text: String, sourceApp: String?) async {
+    func capture(text: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if SensitiveDetector.isSensitive(text) {
             guard keepSensitive else { return }
@@ -70,22 +82,54 @@ final class ClipboardStore {
             scheduleExpiry()
             return
         }
-        await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
-        lastCaptured = (Date(), false)
-        await reload()
+        let id = await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
+        await captured(id)
     }
 
-    func capture(image data: Data, mime: String, sourceApp: String?) async {
+    func capture(image data: Data, mime: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library else { return }
-        _ = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
-        lastCaptured = (Date(), false)
-        await reload()
+        let id = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
+        await captured(id ?? nil)
     }
 
     func capture(files: [String], sourceApp: String?) async {
         guard enabled, let library else { return }
-        await library.addClip(files: files, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        let id = await library.addClip(files: files, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        await captured(id)
+    }
+
+    private func captured(_ id: String?) async {
         lastCaptured = (Date(), false)
+        await reload()
+        guard let id, let clip = clips.first(where: { $0.id == id }) else { return }
+        onCaptured?(clip)
+    }
+
+    /// The auto-save rules in Settings: should this fresh copy also go into the library?
+    func shouldAutoSave(_ clip: Clip) -> Bool {
+        guard clip.savedItem == nil else { return false }
+        return (autoSaveLinks && clip.kind == .link) || (autoSaveImages && clip.kind == .image)
+    }
+
+    // MARK: Editing
+
+    func rename(_ clip: Clip, to title: String) async {
+        await library?.renameClip(clip.id, to: title)
+        await reload()
+    }
+
+    func edit(_ clip: Clip, text: String) async {
+        await library?.editClip(clip.id, text: text)
+        await reload()
+    }
+
+    func setTags(_ clip: Clip, _ tags: [String]) async {
+        await library?.setClipTags(clip.id, tags)
+        await reload()
+    }
+
+    func setNote(_ clip: Clip, _ note: String) async {
+        await library?.setClipNote(clip.id, note)
         await reload()
     }
 

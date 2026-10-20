@@ -103,7 +103,11 @@ import Testing
         #expect(clip.sourceURL?.absoluteString == "https://news.example.com/story" && clip.sourceTitle == "A story")
         #expect(clip.sourceBundle == "com.google.Chrome" && clip.needsEnrichment && clip.uses == 0)
 
+        await lib.applyClipEnrichment(id, ocrText: "", tier: .basic, by: "PHONE")
+        #expect(await lib.clipsNeedingEnrichment(below: .basic).isEmpty)            // the phone has done what it can
+        #expect(await lib.clipsNeedingEnrichment(below: .onDevice).map(\.id) == [id])  // the iPad still looks
         await lib.applyClipEnrichment(id, title: "Budget call", summary: "Ring about the budget.", tags: ["Finance"], tier: .onDevice, by: "IPAD")
+        await lib.applyClipEnrichment(id, title: "Worse", tier: .basic, by: "PHONE")  // a weaker tier never overwrites
         clip = try #require(await lib.clip(id))
         #expect(clip.displayTitle == "Budget call" && !clip.needsEnrichment && clip.enrichment?.tier == .onDevice)
         #expect(await lib.clipsNeedingEnrichment().isEmpty)
@@ -121,7 +125,8 @@ import Testing
         clip = try #require(await lib.clip(id))
         #expect(clip.text == "Email anna@example.org about #budget" && clip.hash == Clip.hash(text: clip.text))
         #expect(clip.insights.emails == ["anna@example.org"] && clip.insights.phones.isEmpty)
-        #expect(clip.aiTitle == nil && clip.summary == nil && clip.needsEnrichment && clip.editedAt != nil)
+        #expect(clip.aiTitle == nil && clip.summary == nil && clip.needsEnrichment && clip.editedAt != nil && clip.enrichment == nil)
+        #expect(await lib.clipsNeedingEnrichment(below: .onDevice).map(\.id) == [id])
         #expect(clip.displayTitle == "Ring Anna")                                      // your name survives an edit
 
         _ = await lib.addClip(text: "Email anna@example.org about #budget")
