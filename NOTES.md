@@ -16,7 +16,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, erasers, lasso, shapes, text, pictures, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
-| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (not yet with the search/tags round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
@@ -31,7 +31,48 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
+## Latest round (user: "sheet off the page, clipboard tags, GoodNotes source, type to search, where's sketching, no emoji, faster search, Liquid Glass icon")
+- **Mac sheets ran off the screen** (the GoodNotes reader asked for 700×800 at least, and its
+  two-way scroll view grew the sheet). Sheets now use `.sheetSize(width:height:)` (Style.swift):
+  the wanted size, shrunk to the window and screen when the sheet opens.
+- **Search speed** (the user: "even with a couple of items it's incredibly slow"). Causes found:
+  - Apps: every keystroke waited 150 ms, then queued behind the Library and SyncEngine actors,
+    which were busy decrypting full files for every result card (no thumbnail cache; Macs drew
+    full-size images; GoodNotes covers parsed the whole notebook). Now: `AppModel` keeps a copy of
+    the `SearchIndex` (a value) and searches it on the main actor each keystroke; prefixes come from
+    a sorted vocabulary (binary search); semantic scores are blended in 250 ms later; card pictures
+    are made once per file at card size (ImageIO) and cached (`ThumbnailCache`); `loadBlob` reads
+    and decrypts off the engine actor; clips keep their folded search text per version.
+  - Website: every keystroke rebuilt the item views, the whole search index, the link graph, the
+    sidebar and every card. Now item/clip views and search docs are cached per record version,
+    the sidebar redraws only when the vault or selection changes, and cards are reused. About
+    3-12 ms per keystroke for 3,000 items in Node.
+- **Clipboard tags with colours** (PROTOCOL.md §8 "Tags with colours", record `settings.tags`):
+  "+ Tag" makes a tag with one of 12 colours; tags show as sections above the clips (click to
+  filter); a clip's menu (apps) or its details (website) ticks tags on and off; right-click a
+  tag (apps) or select it (website) to recolour or delete it. `#tag` searches by tag in the
+  clipboard and the library. Item tag chips use the colour too.
+- **Type to search** in the clipboard: the Mac palette refocuses its search box on every open and
+  sends stray typing there; the Mac clipboard sheet and an iPad with a keyboard put the cursor in
+  the search box; the website sends typing to the search box in the Clipboard view.
+- **GoodNotes source**: notebooks imported by zip were only under "Import". Any item holding a
+  `.goodnotes` file is now listed under GoodNotes too (derived, so it covers what's already there;
+  also the Handwriting collection).
+- **Sketching was hard to find** (it was only in the "…" Add menu). Now: a **Sketches** section in
+  the sidebar (apps + website) with a New sketch banner, a pencil button in the toolbar (Mac,
+  iPad, iPhone), and on the Mac a sketch opens in **its own window** instead of a sheet.
+- **No emoji**: website glyphs (✎ ✓ ✕ ☰ 🔗 ☎ ▣ ● ▾ ↶ ↷ ▤) are inline SVG line icons (`icons.js`);
+  app strings with ✓/☁︎ are plain text; the extension's badge says "OK".
+- **Icon**: the iOS app icon gained dark and tinted variants (Contents.json appearances), so
+  iOS 26's tinted/clear Liquid Glass modes show the box as a glyph like other apps instead of a
+  grey square. Not done: an Icon Composer `.icon` file (true layered Liquid Glass, also for macOS
+  26). It can't be made or checked without Icon Composer; try it if the variants aren't enough.
+- Tests: TroveCore 85 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
+  web 31 unit + 9 Chromium e2e (new: tag sections, type-to-search, Sketches section).
+- **Website not deployed this round**: the deploy was blocked by the session's permission
+  settings. Deploy with `cd server && npx wrangler deploy` (the token is in the cloud environment).
+
+## Round before (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
 - **Clipboard** (PROTOCOL.md §8):
   - Each copy keeps the app, and on the Mac the window title (Accessibility) and page address
     (Chromium's pasteboard marker, else a quick AppleScript to Safari/Chrome/Arc/Brave/Edge; macOS asks
@@ -63,7 +104,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   timed out type-checking a long `?? ""` array in `Clip.matches` that Swift 6.3 on Linux accepts: keep
   such expressions split into typed pieces.
 
-## Round before (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
+## Two rounds before (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
 - **Add a device** (Settings → Devices): waits for the new device on the relay, shows "… is set up" and closes. Done button.
 - **iPhone**: tabs (Library, Clipboard, Search) on navigation stacks. Tapping an item now opens it
   (the split view never pushed the detail on iPhone). List layout by default, swipe to pin/delete.

@@ -412,12 +412,13 @@ struct ClipRow: View {
                 HStack(spacing: 6) {
                     Text(subtitle).foregroundStyle(.secondary)
                     if let tags = entry.clip?.tags, !tags.isEmpty {
-                        let mine = tags.compactMap { t in store.color(ofTag: t).map { (t, $0) } }
-                        ForEach(Array(mine.prefix(3)), id: \.0) { name, color in
+                        let mine: [String] = Array(tags.filter { store.color(ofTag: $0) != nil }.prefix(3))
+                        ForEach(mine, id: \.self) { name in
+                            let color = (store.color(ofTag: name) ?? .gray).color
                             Text(name).font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6).padding(.vertical, 1)
-                                .background(color.color.opacity(0.2), in: Capsule())
-                                .foregroundStyle(color.color)
+                                .background(color.opacity(0.2), in: Capsule())
+                                .foregroundStyle(color)
                         }
                         let rest = tags.filter { store.color(ofTag: $0) == nil }
                         if mine.count < 3, !rest.isEmpty {
@@ -536,7 +537,8 @@ struct ClipPreview: View {
                 HStack {
                     Text(meta(clip)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
-                    Menu { ClipTagMenu(clip: clip, store: store, state: nil) } label: { Image(systemName: "tag") }
+                    ClipTagMenu(clip: clip, store: store, state: nil)
+                        .labelStyle(.iconOnly)
                         .menuIndicator(.hidden)
                         .fixedSize()
                         .help("Tags")
