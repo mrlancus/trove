@@ -503,7 +503,6 @@ struct LibraryView: View {
                         .tint(.orange)
                 }
             }
-        }
             if !model.clipResults.isEmpty {
                 Section("From your clipboard") { ClipSearchRows() }
             }

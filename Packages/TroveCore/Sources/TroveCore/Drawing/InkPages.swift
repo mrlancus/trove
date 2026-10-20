@@ -41,10 +41,10 @@ extension Library {
     /// Adds a stroke on a sketch page by its id. `createdAt` keeps a stroke's place when the partial
     /// eraser replaces it with its pieces; `shape` names a snapped shape.
     @discardableResult
-    public func addStroke(on itemId: String, layer: String = "", pageKey: String, tool: InkTool, color: String, width: Double,
+    public func addStroke(id givenId: String? = nil, on itemId: String, layer: String = "", pageKey: String, tool: InkTool, color: String, width: Double,
                           points: [InkPoint], shape: String? = nil, createdAt: Double? = nil) async -> String? {
         guard !points.isEmpty else { return nil }
-        let id = newId()
+        let id = givenId ?? newId()
         let created: Double
         if let createdAt { created = createdAt } else { created = await nextInkTime(on: itemId) }
         var fields: [String: JSONValue] = [
@@ -97,6 +97,21 @@ extension Library {
             }
         }
         return added
+    }
+
+    /// Replaces a stroke with pieces of it, drawn in its place (a partial erase the editor already
+    /// worked out while showing it). No pieces deletes it. Returns the pieces' ids.
+    @discardableResult
+    public func replaceStroke(_ id: String, with pieces: [[InkPoint]]) async -> [String] {
+        guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { return [] }
+        let s = InkStroke(r)
+        await engine.delete(id)
+        var out: [String] = []
+        for piece in pieces where piece.count >= 2 {
+            if let new = await addStroke(on: s.on, layer: s.layer, pageKey: s.pageKey, tool: s.tool, color: s.color, width: s.width, points: piece,
+                                         createdAt: s.createdAt.timeIntervalSince1970 * 1000) { out.append(new) }
+        }
+        return out
     }
 
     /// Copies of strokes and elements on a page (duplicate, paste), moved by `offset`.
@@ -205,6 +220,47 @@ extension Library {
     public func setInkText(_ itemId: String, _ text: String) async {
         guard await item(itemId)?.inkText != text else { return }
         await update(itemId, [Item.SketchField.inkText: .string(text)])
+    }
+
+    // MARK: Undo
+
+    /// Brings ink back (`alive`) or removes it, keeping the same ids: the drawing editor's undo and redo.
+    public func setInk(_ ids: [(id: String, kind: String)], alive: Bool) async {
+        var items: Set<String> = []
+        for (id, kind) in ids where kind == "stroke" || kind == "element" {
+            await engine.set(["_deleted": .bool(!alive)], record: id, kind: kind)
+            if kind == "element", let r = await engine.record(id) { items.insert(InkElement(r).on) }
+        }
+        for item in items { await refreshSketchText(item) }
+    }
+
+    /// Some fields of an ink record, to put back on undo.
+    public func inkFields(_ id: String, _ names: [String]) async -> [String: JSONValue] {
+        guard let r = await engine.record(id) else { return [:] }
+        var out: [String: JSONValue] = [:]
+        for name in names { if let v = r[name] { out[name] = v } }
+        return out
+    }
+
+    public func setInkFields(_ id: String, kind: String, _ fields: [String: JSONValue]) async {
+        guard kind == "stroke" || kind == "element", !fields.isEmpty else { return }
+        await engine.set(fields, record: id, kind: kind)
+        if kind == "element", fields[InkElement.Field.text] != nil, let r = await engine.record(id) { await refreshSketchText(InkElement(r).on) }
+    }
+
+    /// Everything drawn on a page, as a box in page points (the endless canvas, exports).
+    public func inkBounds(on itemId: String, layer: String = "", pageKey: String) async -> InkGeometry.Rect? {
+        var box: InkGeometry.Rect?
+        for s in await strokes(on: itemId, layer: layer, pageKey: pageKey) { box = InkGeometry.union(box, InkGeometry.bounds(s.points, pad: s.width / 2)) }
+        for e in await elements(on: itemId, layer: layer, pageKey: pageKey) { box = InkGeometry.union(box, e.frame) }
+        return box
+    }
+
+    /// Changes whenever a sketch's ink does, so handwriting is read again only when needed.
+    public func inkSignature(_ itemId: String) async -> String {
+        let records = await engine.records.filter { ($0.kind == "stroke" || $0.kind == "element") && $0[InkStroke.Field.on]?.string == itemId }
+        let latest = records.map(\.updatedHLC).max() ?? ""
+        return "\(records.count)-\(latest)"
     }
 
     // MARK: Pages

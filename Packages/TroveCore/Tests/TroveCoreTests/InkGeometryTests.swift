@@ -117,6 +117,23 @@ import Testing
         let highlighterOnly = await lib.eraseStrokes(on: sketch, pageKey: "0", along: [InkPoint(x: 50, y: 0)], radius: 5, only: [.highlighter])
         #expect(highlighterOnly.isEmpty)
 
+        // Undo brings back the very same records and fields.
+        let sig = await lib.inkSignature(sketch)
+        let kept = try #require(after.first)
+        let saved = await lib.inkFields(kept.id, ["points", "color"])
+        await lib.transformStrokes([kept.id], by: .move(100, 0), color: "#00ff00")
+        await lib.setInkFields(kept.id, kind: "stroke", saved)
+        let restored = try #require(await lib.strokes(on: sketch, pageKey: "0").first { $0.id == kept.id })
+        #expect(restored.color == kept.color && restored.points == kept.points)
+        await lib.setInk([(kept.id, "stroke")], alive: false)
+        let gone = await lib.strokes(on: sketch, pageKey: "0").count
+        await lib.setInk([(kept.id, "stroke")], alive: true)
+        let back = await lib.strokes(on: sketch, pageKey: "0").count
+        #expect(gone == 1 && back == 2)
+        #expect(await lib.inkSignature(sketch) != sig)
+        let inked = try #require(await lib.inkBounds(on: sketch, pageKey: "0"))
+        #expect(inked.x < 0 && inked.maxX > 200)
+
         await lib.setSketchCanvas(sketch, infinite: true)
         #expect(await lib.item(sketch)?.isInfiniteCanvas == true)
         await lib.deleteElements([box])

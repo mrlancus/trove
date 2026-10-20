@@ -48,6 +48,15 @@ actor EnrichmentService {
             await enrich(clip)
             changed += 1
         }
+        // Handwriting in sketches, wherever they were drawn (it's read again only when the ink changed).
+        var sketches = 0
+        for item in await library.items() where item.kind == .sketch && sketches < 5 {
+            if Task.isCancelled { break }
+            guard item.record[Handwriting.signatureField]?.string != (await library.inkSignature(item.id)) else { continue }
+            await Handwriting.read(item.id, library: library)
+            sketches += 1
+            changed += 1
+        }
         return changed
     }
 

@@ -1,24 +1,30 @@
+import PhotosUI
 import SwiftUI
 import TroveCore
+import UniformTypeIdentifiers
 
-/// The drawing editor: a sketch's pages, or a PDF or image to write on. Pen, pencil, marker,
-/// highlighter and eraser; colours and sizes; undo and redo; paper and pages for sketches. The same
-/// tools as the website's (web/public/draw.js).
+/// The drawing editor: a sketch's pages (or endless canvas), or a PDF or image to write on. Pens,
+/// the eraser, the lasso, shapes, text and pictures; colours and sizes; undo and redo; a page panel;
+/// export to PDF. The same tools as the website's (web/public/draw.js).
 struct InkEditorView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var editor: InkEditorModel
-    @State private var showColors = false
+    @State private var importingPicture = false
+    @State private var photo: PhotosPickerItem?
+    @State private var exportFile: PDFFile?
+    @State private var confirmDeletePage: String?
 
     init(target: InkTarget, app: AppModel) {
         _editor = State(initialValue: InkEditorModel(target: target, app: app))
     }
 
     var body: some View {
+        @Bindable var editor = editor
         VStack(spacing: 0) {
             toolbar
             Divider()
-            ZStack {
+            ZStack(alignment: .bottom) {
                 Color.gray.opacity(0.18).ignoresSafeArea()
                 if let page = editor.currentPage, editor.loaded {
                     canvas(page)
@@ -27,11 +33,37 @@ struct InkEditorView: View {
                 } else {
                     ProgressView("Opening…")
                 }
+                if let selection = editor.selection { selectionBar(selection).padding(.bottom, 16) }
             }
-            if editor.pages.count > 1 || editor.isSketch { pageBar }
+            if editor.pages.count > 1 || (editor.isSketch && !editor.isInfinite) { pageBar }
         }
         .task { await editor.load() }
-        .task(id: app.inkRevision) { if editor.loaded { await editor.reloadStrokes() } }
+        .task(id: app.inkRevision) { if editor.loaded { await editor.reloadInk() } }
+        .inspector(isPresented: $editor.showPages) { InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage) }
+        .sheet(item: $editor.textEdit) { edit in InkTextSheet(edit: edit) { editor.commitText($0) } }
+        .fileImporter(isPresented: $importingPicture, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            if let data = try? Data(contentsOf: url) { editor.insertPicture(data, mime: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "image/png") }
+        }
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            photo = nil
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    editor.insertPicture(data, mime: item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg")
+                }
+            }
+        }
+        .onChange(of: editor.exportedPDF) { _, data in
+            if let data { exportFile = PDFFile(data: data); editor.exportedPDF = nil }
+        }
+        .fileExporter(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } }), document: exportFile,
+                      contentType: .pdf, defaultFilename: editor.target.title) { _ in exportFile = nil }
+        .confirmationDialog("Delete this page and everything on it?", isPresented: Binding(get: { confirmDeletePage != nil }, set: { if !$0 { confirmDeletePage = nil } })) {
+            Button("Delete page", role: .destructive) { if let key = confirmDeletePage { editor.deletePage(key) }; confirmDeletePage = nil }
+        }
         #if os(macOS)
         .frame(minWidth: 900, minHeight: 700)
         #endif
@@ -39,12 +71,12 @@ struct InkEditorView: View {
 
     @ViewBuilder private func canvas(_ page: InkPageSpec) -> some View {
         #if os(iOS)
-        PencilCanvas(editor: editor, page: page, pageIndex: editor.page, strokes: editor.currentStrokes,
+        PencilCanvas(editor: editor, page: page, pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
                      tool: editor.tool, color: editor.color, width: editor.width)
             .ignoresSafeArea(edges: .bottom)
         #else
-        MouseInkCanvas(editor: editor, page: page, pageIndex: editor.page, strokes: editor.currentStrokes,
-                       tool: editor.tool, color: editor.color, width: editor.width)
+        MouseInkCanvas(editor: editor, page: page, pageIndex: editor.page, pagesRevision: editor.pagesRevision, revision: editor.revision,
+                       overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width)
         #endif
     }
 
@@ -54,67 +86,103 @@ struct InkEditorView: View {
         @Bindable var editor = editor
         return HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                HStack(spacing: 2) {
-                    ForEach(InkEditorTool.allCases) { t in
-                        Button { editor.select(t) } label: {
-                            Image(systemName: t.symbol)
-                                .font(.title3)
-                                .frame(width: 40, height: 36)
-                                .foregroundStyle(editor.tool == t ? Color.accentColor : Color.primary)
-                                .background(editor.tool == t ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 9))
+                HStack(spacing: 14) {
+                    HStack(spacing: 2) {
+                        ForEach(InkEditorTool.allCases) { t in
+                            Button { editor.select(t) } label: {
+                                Image(systemName: t.symbol)
+                                    .font(.title3)
+                                    .frame(width: 38, height: 36)
+                                    .foregroundStyle(editor.tool == t ? Color.accentColor : Color.primary)
+                                    .background(editor.tool == t ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 9))
+                            }
+                            .buttonStyle(.plain)
+                            .help(t.label)
+                            .accessibilityLabel(t.label)
+                            .accessibilityAddTraits(editor.tool == t ? .isSelected : [])
                         }
-                        .buttonStyle(.plain)
-                        .help(t.label)
-                        .accessibilityLabel(t.label)
-                        .accessibilityAddTraits(editor.tool == t ? .isSelected : [])
+                        Toggle(isOn: $editor.shapeMode) { Image(systemName: "triangle") }
+                            .toggleStyle(.button)
+                            .help("Shapes: lines and shapes come out clean (or hold the pen still at the end of one)")
+                            .accessibilityLabel("Shapes")
+                        Menu {
+                            #if os(iOS)
+                            PhotosPicker(selection: $photo, matching: .images) { Label("From Photos", systemImage: "photo") }
+                            #endif
+                            Button { importingPicture = true } label: { Label("From Files…", systemImage: "folder") }
+                        } label: { Image(systemName: "photo.badge.plus").font(.title3) }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Insert a picture")
+                        .accessibilityLabel("Picture")
                     }
-                }
-                HStack(spacing: 6) {
-                    ForEach(InkEditorModel.colors, id: \.self) { c in
-                        Button { editor.color = c } label: {
-                            Circle().fill(Color(inkHex: c)).frame(width: 24, height: 24)
-                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                                .overlay(Circle().strokeBorder(editor.tool != .eraser && editor.color == c ? Color.accentColor : .gray.opacity(0.4), lineWidth: editor.color == c ? 2 : 1).padding(-2))
+                    if editor.tool.hasColor || editor.tool == .lasso {
+                        HStack(spacing: 6) {
+                            ForEach(InkEditorModel.colors, id: \.self) { c in
+                                Button { editor.color = c } label: {
+                                    Circle().fill(Color(inkHex: c)).frame(width: 24, height: 24)
+                                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                                        .overlay(Circle().strokeBorder(editor.tool.hasColor && editor.color == c ? Color.accentColor : .gray.opacity(0.4),
+                                                                       lineWidth: editor.tool.hasColor && editor.color == c ? 2 : 1).padding(-2))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Colour \(c)")
+                            }
+                            ColorPicker("Any colour", selection: Binding(get: { Color(inkHex: editor.color) }, set: { editor.color = $0.inkHex }), supportsOpacity: false)
+                                .labelsHidden()
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Colour \(c)")
                     }
-                    ColorPicker("Any colour", selection: Binding(get: { Color(inkHex: editor.color) }, set: { editor.color = $0.inkHex }), supportsOpacity: false)
-                        .labelsHidden()
-                }
-                .disabled(editor.tool == .eraser)
-                .opacity(editor.tool == .eraser ? 0.4 : 1)
-                HStack(spacing: 6) {
-                    Circle().fill(Color(inkHex: editor.color).opacity(editor.tool == .highlighter ? 0.5 : 1))
-                        .frame(width: min(22, max(4, editor.width)), height: min(22, max(4, editor.width)))
-                        .frame(width: 24)
-                    Slider(value: $editor.width, in: 1...40).frame(width: 110)
-                        .disabled(editor.tool == .eraser)
-                }
-                HStack(spacing: 4) {
-                    Button { editor.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
-                        .disabled(!editor.canUndo).keyboardShortcut("z", modifiers: .command)
-                    Button { editor.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
-                        .disabled(!editor.canRedo).keyboardShortcut("z", modifiers: [.command, .shift])
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                if editor.isSketch {
-                    Menu {
-                        Picker("Paper", selection: Binding(get: { editor.paper }, set: { editor.setPaper($0) })) {
-                            Text("Blank").tag(InkPaper.blank)
-                            Text("Lined").tag(InkPaper.lined)
-                            Text("Squared").tag(InkPaper.grid)
-                            Text("Dotted").tag(InkPaper.dotted)
+                    if editor.tool.hasSize {
+                        HStack(spacing: 6) {
+                            Circle().fill(editor.tool == .eraser ? Color.clear : Color(inkHex: editor.color).opacity(editor.tool == .highlighter ? 0.5 : 1))
+                                .overlay(Circle().strokeBorder(.gray.opacity(editor.tool == .eraser ? 0.6 : 0)))
+                                .frame(width: min(22, max(4, editor.width)), height: min(22, max(4, editor.width)))
+                                .frame(width: 24)
+                            Slider(value: $editor.width, in: 1...(editor.tool == .text ? 72 : 60)).frame(width: 110)
                         }
-                    } label: { Label("Paper", systemImage: "doc.plaintext") }
-                    .fixedSize()
+                    }
+                    if editor.tool == .eraser {
+                        Picker("Eraser", selection: $editor.eraserMode) {
+                            ForEach(InkEraserMode.allCases) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        Toggle("Highlighter only", isOn: $editor.highlighterOnly).fixedSize()
+                    }
+                    HStack(spacing: 4) {
+                        Button { editor.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                            .disabled(!editor.canUndo).keyboardShortcut("z", modifiers: .command)
+                        Button { editor.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+                            .disabled(!editor.canRedo).keyboardShortcut("z", modifiers: [.command, .shift])
+                        if editor.canPaste {
+                            Button { editor.paste() } label: { Label("Paste", systemImage: "doc.on.clipboard") }
+                                .keyboardShortcut("v", modifiers: .command)
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.bordered)
+                    if editor.isSketch {
+                        Menu {
+                            Picker("Paper for every page", selection: Binding(get: { editor.paper }, set: { editor.setPaper($0) })) {
+                                ForEach(InkPaper.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            Picker("Layout", selection: Binding(get: { editor.isInfinite }, set: { editor.setInfinite($0) })) {
+                                Text("Pages").tag(false)
+                                Text("Endless canvas").tag(true)
+                            }
+                            if !editor.isInfinite {
+                                Button { editor.showPages.toggle() } label: { Label("Pages…", systemImage: "rectangle.stack") }
+                            }
+                        } label: { Label("Paper", systemImage: "doc.plaintext") }
+                        .fixedSize()
+                    }
+                    Button { editor.exportPDF() } label: { Label("Export PDF", systemImage: "square.and.arrow.up") }
+                        .disabled(editor.exporting)
+                        .buttonStyle(.bordered)
+                    Text(editor.target.title).font(.headline).lineLimit(1).foregroundStyle(.secondary)
                 }
-                Text(editor.target.title).font(.headline).lineLimit(1).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
             Button("Done") { Task { await editor.finish() }; dismiss() }
                 .buttonStyle(.borderedProminent)
@@ -122,6 +190,42 @@ struct InkEditorView: View {
                 .padding(.horizontal, 12)
         }
         .background(.bar)
+        // The lasso's keys (the Mac and iPad keyboards).
+        .background {
+            Group {
+                Button("Select all") { editor.selectAll() }.keyboardShortcut("a", modifiers: .command)
+                Button("Copy") { editor.copySelection() }.keyboardShortcut("c", modifiers: .command).disabled(editor.selection == nil)
+                Button("Cut") { editor.cutSelection() }.keyboardShortcut("x", modifiers: .command).disabled(editor.selection == nil)
+                Button("Duplicate") { editor.duplicateSelection() }.keyboardShortcut("d", modifiers: .command).disabled(editor.selection == nil)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// The lasso's actions while something is selected.
+    private func selectionBar(_ selection: InkSelection) -> some View {
+        HStack(spacing: 10) {
+            Text("\(selection.count) selected").font(.callout).foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                ForEach(InkEditorModel.colors, id: \.self) { c in
+                    Button { editor.recolourSelection(c) } label: { Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Recolour \(c)")
+                }
+            }
+            Button("Duplicate") { editor.duplicateSelection() }
+            Button("Copy") { editor.copySelection() }
+            Button("Cut") { editor.cutSelection() }
+            Button("Delete", role: .destructive) { editor.deleteSelection() }
+            Button { editor.clearSelection() } label: { Image(systemName: "xmark") }.accessibilityLabel("Deselect")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
     }
 
     private var pageBar: some View {
@@ -134,7 +238,8 @@ struct InkEditorView: View {
                 .disabled(editor.page >= editor.pages.count - 1)
                 .keyboardShortcut(.rightArrow, modifiers: .command)
             if editor.isSketch {
-                Button { editor.addPage() } label: { Label("Page", systemImage: "plus") }.buttonStyle(.bordered)
+                Button { editor.addPage(after: editor.currentKey) } label: { Label("Page", systemImage: "plus") }.buttonStyle(.bordered)
+                Button { editor.showPages.toggle() } label: { Label("Pages", systemImage: "rectangle.stack") }.buttonStyle(.bordered)
             }
         }
         .buttonStyle(.borderless)
@@ -142,6 +247,130 @@ struct InkEditorView: View {
         .frame(maxWidth: .infinity)
         .background(.bar)
     }
+}
+
+// MARK: - The page panel
+
+/// A sketch's pages: tap to go to one, drag to reorder, and per page: add after, duplicate, delete,
+/// paper and colour.
+struct InkPagesPanel: View {
+    let editor: InkEditorModel
+    @Binding var confirmDelete: String?
+    @State private var thumbs: [String: InkImage] = [:]
+
+    var body: some View {
+        List {
+            Section("Pages") {
+                ForEach(Array(editor.pages.enumerated()), id: \.element.key) { index, page in
+                    Button { editor.page = index } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Color.white
+                                if let t = thumbs[page.key] { Image(decorative: t.image, scale: 2).resizable() }
+                            }
+                            .aspectRatio(page.width / page.height, contentMode: .fit)
+                            .frame(width: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(index == editor.page ? Color.accentColor : .gray.opacity(0.3), lineWidth: index == editor.page ? 2 : 1))
+                            Text("\(index + 1)").font(.callout.monospacedDigit())
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button { editor.addPage(after: page.key) } label: { Label("Add page after", systemImage: "plus") }
+                        Button { editor.duplicatePage(page.key) } label: { Label("Duplicate page", systemImage: "plus.square.on.square") }
+                        if editor.pages.count > 1 {
+                            Button(role: .destructive) { confirmDelete = page.key } label: { Label("Delete page", systemImage: "trash") }
+                        }
+                    }
+                }
+                .onMove { from, to in
+                    guard let first = from.first else { return }
+                    let key = editor.pages[first].key
+                    editor.movePage(key, to: to > first ? to - 1 : to)
+                }
+            }
+            if let page = editor.currentPage, case .paper(let paper, let color) = page.background {
+                Section("This page") {
+                    Picker("Paper", selection: Binding(get: { paper }, set: { editor.setPage(page.key, paper: $0) })) {
+                        ForEach(InkPaper.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    HStack(spacing: 8) {
+                        ForEach(InkPage.colors, id: \.self) { c in
+                            Button { editor.setPage(page.key, color: c == "#ffffff" ? "" : c) } label: {
+                                Circle().fill(Color(inkHex: c)).frame(width: 24, height: 24)
+                                    .overlay(Circle().strokeBorder((color ?? "#ffffff") == c ? Color.accentColor : .gray.opacity(0.4), lineWidth: (color ?? "#ffffff") == c ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Page colour \(c)")
+                        }
+                    }
+                    Button { editor.addPage(after: page.key) } label: { Label("Add page after", systemImage: "plus") }
+                    Button { editor.duplicatePage(page.key) } label: { Label("Duplicate page", systemImage: "plus.square.on.square") }
+                    if editor.pages.count > 1 {
+                        Button(role: .destructive) { confirmDelete = page.key } label: { Label("Delete page", systemImage: "trash") }
+                    }
+                }
+            }
+        }
+        .task(id: "\(editor.revision)-\(editor.pagesRevision)") { await renderThumbs() }
+        .inspectorColumnWidth(min: 200, ideal: 240, max: 320)
+    }
+
+    private func renderThumbs() async {
+        for page in editor.pages where !page.infinite {
+            let content = editor.display(page.key)
+            if let image = await Task.detached(priority: .utility, operation: { InkRenderer.render(page, content: content, pixelWidth: 160).map(InkImage.init) }).value {
+                thumbs[page.key] = image
+            }
+        }
+    }
+}
+
+// MARK: - Text boxes
+
+/// Typing in a text box: its words, size and colour.
+struct InkTextSheet: View {
+    @State var edit: InkTextEdit
+    var done: (InkTextEdit) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextEditor(text: $edit.text)
+                    .font(.system(size: min(28, max(13, edit.size * 0.8))))
+                    .foregroundStyle(Color(inkHex: edit.color))
+                    .frame(minHeight: 140)
+                LabeledContent("Size") {
+                    Slider(value: $edit.size, in: 8...72)
+                }
+                ColorPicker("Colour", selection: Binding(get: { Color(inkHex: edit.color) }, set: { edit.color = $0.inkHex }), supportsOpacity: false)
+                if edit.elementId != nil {
+                    Text("Delete all the text to remove the box.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(edit.elementId == nil ? "New text" : "Edit text")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { done(edit); dismiss() } }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 360)
+        #endif
+    }
+}
+
+/// An exported drawing, for the save panel.
+struct PDFFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.pdf] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
 extension Color {
@@ -162,51 +391,75 @@ extension Color {
     }
 }
 
+// MARK: - Previews in the item view
+
 /// A sketch's pages in its item view: tap one to draw on it.
 struct SketchSection: View {
     let item: Item
     @Environment(AppModel.self) private var model
-    @State private var images: [Int: InkImage] = [:]
+    @State private var images: [String: InkImage] = [:]
+
+    private var pages: [InkPageSpec] { InkRenderer.sketchPages(item) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("\(item.sketchPages) page\(item.sketchPages == 1 ? "" : "s")", systemImage: "scribble.variable").font(.headline)
+                Label(item.isInfiniteCanvas ? "Endless canvas" : "\(item.sketchPages) page\(item.sketchPages == 1 ? "" : "s")", systemImage: "scribble.variable").font(.headline)
                 Spacer()
                 Button { model.draw(on: item) } label: { Label("Draw", systemImage: "pencil.tip") }
                     .buttonStyle(.borderedProminent)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                ForEach(0..<item.sketchPages, id: \.self) { page in
-                    Button { model.draw(on: item, page: page) } label: {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: item.isInfiniteCanvas ? 280 : 140), spacing: 12)], spacing: 12) {
+                ForEach(Array(pages.enumerated()), id: \.element.key) { index, page in
+                    Button { model.draw(on: item, page: index) } label: {
                         VStack(spacing: 4) {
                             ZStack {
                                 Color.white
-                                if let image = images[page] { Image(decorative: image.image, scale: 2).resizable() }
+                                if let image = images[page.key] { Image(decorative: image.image, scale: 2).resizable().scaledToFit() }
                             }
-                            .aspectRatio(item.sketchPageSize.width / item.sketchPageSize.height, contentMode: .fit)
+                            .aspectRatio(page.infinite ? 4 / 3 : page.width / page.height, contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                             .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                            if item.sketchPages > 1 { Text("\(page + 1)").font(.caption).foregroundStyle(.secondary) }
+                            if pages.count > 1 { Text("\(index + 1)").font(.caption).foregroundStyle(.secondary) }
                         }
                     }
                     .buttonStyle(.plain)
                 }
             }
+            if let text = item.inkText, !text.isEmpty {
+                Label("Handwriting read for search: \(text.prefix(140))\(text.count > 140 ? "…" : "")", systemImage: "text.viewfinder")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
         }
         .padding(16)
         .card(cornerRadius: 16)
-        .task(id: "\(model.inkRevision)-\(item.paper.rawValue)-\(item.sketchPages)") { await render() }
+        .task(id: "\(model.inkRevision)-\(item.record.updatedHLC)") { await render() }
     }
 
     private func render() async {
         guard let library = model.library else { return }
-        let size = item.sketchPageSize, paper = item.paper
-        for page in 0..<item.sketchPages {
-            let strokes = await library.strokes(on: item.id, page: page)
-            let spec = InkPageSpec(width: size.width, height: size.height, background: .paper(paper))
-            images[page] = await Task.detached(priority: .utility) { InkRenderer.render(spec, strokes: strokes, pixelWidth: 360).map(InkImage.init) }.value
+        for page in pages {
+            let content = await Self.content(library, itemId: item.id, layer: "", key: page.key)
+            var area: InkGeometry.Rect?
+            if page.infinite {
+                let b = await library.inkBounds(on: item.id, pageKey: page.key) ?? InkGeometry.Rect(x: 0, y: 0, width: 800, height: 600)
+                area = InkGeometry.Rect(x: b.x - 24, y: b.y - 24, width: max(300, b.width + 48), height: max(225, b.height + 48))
+            }
+            let box = area
+            images[page.key] = await Task.detached(priority: .utility) { InkRenderer.render(page, content: content, pixelWidth: 480, area: box).map(InkImage.init) }.value
         }
+    }
+
+    /// A page's ink with its pictures, for previews.
+    static func content(_ library: Library, itemId: String, layer: String, key: String) async -> InkContent {
+        var c = InkContent()
+        c.strokes = await library.strokes(on: itemId, layer: layer, pageKey: key).map(InkLine.init)
+        let elements = await library.elements(on: itemId, layer: layer, pageKey: key)
+        c.elements = elements.map(InkBox.init)
+        for e in elements {
+            if let att = e.image, let data = try? await library.attachmentData(att), let image = InkRenderer.cgImage(data) { c.pictures[att.id] = image }
+        }
+        return c
     }
 }
 
@@ -217,14 +470,14 @@ struct InkedFileView: View {
     let data: Data
     @Environment(AppModel.self) private var model
     @State private var pages: [InkPageSpec] = []
-    @State private var images: [Int: InkImage] = [:]
+    @State private var images: [String: InkImage] = [:]
 
     var body: some View {
         VStack(spacing: 12) {
-            ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+            ForEach(Array(pages.enumerated()), id: \.element.key) { index, page in
                 ZStack {
                     Color.white
-                    if let image = images[index] { Image(decorative: image.image, scale: 2).resizable() } else { ProgressView() }
+                    if let image = images[page.key] { Image(decorative: image.image, scale: 2).resizable() } else { ProgressView() }
                 }
                 .aspectRatio(page.width / page.height, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -239,11 +492,10 @@ struct InkedFileView: View {
         guard let library = model.library else { return }
         let data = data, mime = attachment.mime
         if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime) }.value }
-        let all = await library.strokes(on: item.id, layer: attachment.id)
-        for (index, page) in pages.enumerated() {
-            let strokes = all.filter { $0.page == index }
+        for page in pages {
+            let content = await SketchSection.content(library, itemId: item.id, layer: attachment.id, key: page.key)
             let width = Int(min(2400, page.width * 2))
-            images[index] = await Task.detached(priority: .userInitiated) { InkRenderer.render(page, strokes: strokes, pixelWidth: width).map(InkImage.init) }.value
+            images[page.key] = await Task.detached(priority: .userInitiated) { InkRenderer.render(page, content: content, pixelWidth: width).map(InkImage.init) }.value
         }
     }
 }

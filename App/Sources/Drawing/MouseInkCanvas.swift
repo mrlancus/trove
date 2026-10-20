@@ -5,12 +5,15 @@ import TroveCore
 
 /// The drawing surface on the Mac: the mouse or trackpad draws (with pressure on Force Touch
 /// trackpads and drawing tablets), pinch or ⌘-scroll zooms, and the page's paper, PDF page or
-/// image sits underneath.
+/// image sits underneath. Pens are drawn here (holding still at the end snaps a shape); the eraser,
+/// lasso and text tools go to the editor model, like on the website.
 struct MouseInkCanvas: NSViewRepresentable {
     let editor: InkEditorModel
     let page: InkPageSpec
     let pageIndex: Int
-    let strokes: [InkStroke]
+    let pagesRevision: Int
+    let revision: Int
+    let overlayRevision: Int
     let tool: InkEditorTool
     let color: String
     let width: Double
@@ -21,7 +24,7 @@ struct MouseInkCanvas: NSViewRepresentable {
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.allowsMagnification = true
-        scroll.minMagnification = 0.25
+        scroll.minMagnification = 0.1
         scroll.maxMagnification = 6
         scroll.backgroundColor = NSColor.underPageBackgroundColor
         scroll.documentView = InkNSView()
@@ -31,19 +34,24 @@ struct MouseInkCanvas: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? InkNSView else { return }
         view.editor = editor
-        view.strokes = strokes
         view.tool = tool
         view.color = color
         view.width = width
-        let key = "\(pageIndex)-\(editor.paper.rawValue)"
-        if view.pageKey != key {
-            let newPage = view.pageIndex != pageIndex
-            view.show(page, index: pageIndex, key: key)
-            guard newPage else { return }
-            DispatchQueue.main.async {
-                let fit = max(0.25, (Double(scroll.contentSize.width) - 40) / page.width)
-                scroll.magnification = min(fit, 3)
-                view.scroll(.zero)
+        let key = "\(page.key)-\(pagesRevision)-\(page.width)x\(page.height)"
+        if view.shownKey != key {
+            let newPage = view.page?.key != page.key || view.page?.infinite != page.infinite
+            view.show(page, key: key)
+            if newPage {
+                DispatchQueue.main.async {
+                    if page.infinite {
+                        scroll.magnification = 1
+                        view.scroll(CGPoint(x: page.origin - 40, y: page.origin - 40))
+                    } else {
+                        let fit = max(0.25, (Double(scroll.contentSize.width) - 40) / page.width)
+                        scroll.magnification = min(fit, 3)
+                        view.scroll(.zero)
+                    }
+                }
             }
         }
         view.needsDisplay = true
@@ -52,20 +60,20 @@ struct MouseInkCanvas: NSViewRepresentable {
 
 final class InkNSView: NSView {
     var editor: InkEditorModel?
-    var strokes: [InkStroke] = []
-    var tool: InkEditorTool = .pen
+    var tool: InkEditorTool = .pen { didSet { if tool != oldValue { window?.invalidateCursorRects(for: self) } } }
     var color = "#1c1c1e"
     var width = 2.5
-    private(set) var pageIndex = -1
-    private(set) var pageKey = ""
-    private var page: InkPageSpec?
-    /// Strokes just drawn, shown until the editor's copy of them arrives.
-    private var pending: [(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint])] = []
+    private(set) var page: InkPageSpec?
+    private(set) var shownKey = ""
     private var background: CGImage?
     private var points: [InkPoint] = []
     private var started: TimeInterval = 0
     private var pressure = 0.5
-    private var eraserAt: CGPoint?
+    /// Hold-to-snap: when the pen last moved, and whether the line has become a clean shape.
+    private var lastMove = Date()
+    private var snapped = false
+    private var snapTimer: Timer?
+    private var drawingPen = false
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -78,49 +86,50 @@ final class InkNSView: NSView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func show(_ spec: InkPageSpec, index: Int, key: String) {
-        if index != pageIndex { points = []; pending = [] }
-        pageIndex = index
-        pageKey = key
+    private var origin: Double { page?.origin ?? 0 }
+    private var scale: Double { max(0.05, Double(enclosingScrollView?.magnification ?? 1)) }
+
+    func show(_ spec: InkPageSpec, key: String) {
+        if spec.key != page?.key { points = [] }
+        shownKey = key
         page = spec
         background = nil
         setFrameSize(NSSize(width: spec.width, height: spec.height))
+        guard !spec.infinite else { needsDisplay = true; return }
         let pixels = Int(min(4096, spec.width * 2.5))
         Task { @MainActor [weak self] in
-            let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(spec, strokes: [], pixelWidth: pixels).map(InkImage.init) }.value
-            guard let self, self.pageIndex == index else { return }
+            let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(spec, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
+            guard let self, self.shownKey == key else { return }
             self.background = rendered?.image
             self.needsDisplay = true
         }
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext, let page else { return }
-        ctx.setFillColor(NSColor.white.cgColor)
-        ctx.fill(bounds)
-        if let background {
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: page.height)
-            ctx.scaleBy(x: 1, y: -1)
-            ctx.draw(background, in: CGRect(x: 0, y: 0, width: page.width, height: page.height))
-            ctx.restoreGState()
+        guard let ctx = NSGraphicsContext.current?.cgContext, let page, let editor else { return }
+        ctx.saveGState()
+        ctx.translateBy(x: origin, y: origin)
+        if page.infinite {
+            let area = InkGeometry.Rect(x: dirtyRect.minX - origin, y: dirtyRect.minY - origin, width: dirtyRect.width, height: dirtyRect.height)
+            InkRenderer.drawBackground(page, area: area, in: ctx)
+        } else if let background {
+            InkRenderer.drawImage(background, in: CGRect(x: 0, y: 0, width: page.width, height: page.height), ctx: ctx)
+        } else {
+            ctx.setFillColor(NSColor.white.cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: page.width, height: page.height))
         }
-        InkRenderer.draw(strokes, in: ctx)
-        let have = Set(strokes.map(\.id))
-        pending.removeAll { have.contains($0.id) }
-        for p in pending { InkRenderer.draw(tool: p.tool, color: p.color, width: p.width, points: p.points, in: ctx) }
-        if let ink = tool.ink, !points.isEmpty { InkRenderer.draw(tool: ink, color: color, width: width, points: points, in: ctx) }
-        if tool == .eraser, let at = eraserAt {
-            ctx.setStrokeColor(NSColor.secondaryLabelColor.cgColor)
-            ctx.setLineWidth(1)
-            let r = eraserRadius
-            ctx.strokeEllipse(in: CGRect(x: at.x - r, y: at.y - r, width: r * 2, height: r * 2))
+        InkRenderer.drawContent(editor.display(page.key), in: ctx)
+        if let ink = tool.ink, !points.isEmpty {
+            InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, in: ctx)
         }
+        InkRenderer.drawOverlay(editor.overlay(page.key), scale: scale, in: ctx)
+        ctx.restoreGState()
     }
 
-    private var eraserRadius: Double { 9 / max(0.1, enclosingScrollView?.magnification ?? 1) }
-
-    private func location(_ event: NSEvent) -> CGPoint { convert(event.locationInWindow, from: nil) }
+    private func location(_ event: NSEvent) -> InkPoint {
+        let at = convert(event.locationInWindow, from: nil)
+        return InkPoint(x: at.x - origin, y: at.y - origin)
+    }
 
     private func pointerPressure(_ event: NSEvent) -> Double {
         if event.subtype == .tabletPoint { return Double(event.pressure) }
@@ -129,47 +138,73 @@ final class InkNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        guard let page, let editor else { return }
         let at = location(event)
-        if tool == .eraser {
-            eraserAt = at
-            editor?.eraseAt(x: at.x, y: at.y, radius: eraserRadius)
+        editor.visibleCenter = at
+        guard tool.ink != nil else {
+            editor.pointerDown(at, pageKey: page.key, scale: scale)
             needsDisplay = true
             return
         }
+        editor.clearSelection()
+        drawingPen = true
         pressure = 0.5
         started = event.timestamp
+        snapped = false
+        lastMove = Date()
         points = [InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: 0)]
+        armSnap()
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
         let at = location(event)
-        if tool == .eraser {
-            eraserAt = at
-            editor?.eraseAt(x: at.x, y: at.y, radius: eraserRadius)
+        guard drawingPen else {
+            editor?.pointerMoved(at)
             needsDisplay = true
             return
         }
-        guard !points.isEmpty else { return }
-        let minGap = 0.6 / max(0.1, enclosingScrollView?.magnification ?? 1)
+        guard !points.isEmpty, !snapped else { return }
+        let minGap = 0.6 / scale
         if let last = points.last, hypot(last.x - at.x, last.y - at.y) < minGap { return }
+        if let last = points.last, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); armSnap() }
         points.append(InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: (event.timestamp - started) * 1000))
         needsDisplay = true
     }
 
+    /// Holding the mouse still at the end of a line turns it into a clean shape there and then.
+    private func armSnap() {
+        snapTimer?.invalidate()
+        snapTimer = Timer.scheduledTimer(withTimeInterval: InkEditorModel.holdToSnap, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.drawingPen, !self.snapped, self.points.count >= 3,
+                      Date().timeIntervalSince(self.lastMove) >= InkEditorModel.holdToSnap * 0.9,
+                      let shape = InkShapes.recognize(self.points) else { return }
+                self.points = shape.points
+                self.snapped = true
+                self.needsDisplay = true
+            }
+        }
+    }
+
     override func mouseUp(with event: NSEvent) {
-        if tool == .eraser { eraserAt = nil; needsDisplay = true; return }
-        guard let ink = tool.ink, !points.isEmpty else { return }
+        snapTimer?.invalidate()
+        guard drawingPen else {
+            editor?.pointerUp()
+            needsDisplay = true
+            return
+        }
+        drawingPen = false
+        guard let ink = tool.ink, !points.isEmpty, let page else { return }
         let finished = points
-        let id = UUID().uuidString.lowercased()
         points = []
-        pending.append((id, ink, color, width, finished))
-        editor?.add(points: finished, tool: ink, color: color, width: width, id: id, on: pageIndex)
+        editor?.addStroke(points: finished, tool: ink, color: color, width: width, pageKey: page.key, held: snapped)
+        snapped = false
         needsDisplay = true
     }
 
     override func mouseMoved(with event: NSEvent) {
-        if tool == .eraser { eraserAt = location(event); needsDisplay = true }
+        if tool == .eraser { editor?.hover(location(event), scale: scale); needsDisplay = true }
     }
 
     /// Force Touch trackpads report how hard you press while drawing.
@@ -183,8 +218,22 @@ final class InkNSView: NSView {
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited], owner: self))
     }
 
-    override func mouseExited(with event: NSEvent) { eraserAt = nil; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { editor?.hover(nil, scale: scale); needsDisplay = true }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: tool == .eraser ? .arrow : .crosshair) }
+    override func resetCursorRects() {
+        let cursor: NSCursor = switch tool {
+        case .eraser, .lasso: .arrow
+        case .text: .iBeam
+        default: .crosshair
+        }
+        addCursorRect(visibleRect, cursor: cursor)
+    }
+
+    // Delete removes what the lasso picked up.
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 51 || event.keyCode == 117, editor?.selection != nil { editor?.deleteSelection(); return }
+        if event.keyCode == 53, editor?.selection != nil { editor?.clearSelection(); needsDisplay = true; return }
+        super.keyDown(with: event)
+    }
 }
 #endif
