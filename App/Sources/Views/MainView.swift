@@ -261,6 +261,7 @@ struct SidebarView: View {
                     Button { folderName = ""; folderAction = .create(parent: nil) } label: { Image(systemName: "folder.badge.plus") }
                         .buttonStyle(.borderless)
                         .help("New folder")
+                        .sidebarHeaderButton()
                 }
             }
             Section("Smart Collections") {
@@ -277,7 +278,7 @@ struct SidebarView: View {
                 HStack {
                     Text("Collections")
                     Spacer()
-                    Button { addingCollection = true } label: { Image(systemName: "plus") }.buttonStyle(.borderless)
+                    Button { addingCollection = true } label: { Image(systemName: "plus") }.buttonStyle(.borderless).sidebarHeaderButton()
                 }
             }
             let sources = Set(model.items.flatMap(\.sources)).subtracting([.app, .share]).sorted { ItemStyle.sourceLabel($0) < ItemStyle.sourceLabel($1) }
@@ -930,5 +931,16 @@ struct SketchesHeader: View {
             Button("Create") { let n = name; Task { if let id = await model.createSketchFolder(n) { model.selection = .folder(id) } } }
             Button("Cancel", role: .cancel) {}
         }
+    }
+}
+
+extension View {
+    /// A sidebar section's button, centred over the rows' count pills instead of out at the edge.
+    func sidebarHeaderButton() -> some View {
+        #if os(macOS)
+        frame(width: 24).padding(.trailing, 9)
+        #else
+        self
+        #endif
     }
 }

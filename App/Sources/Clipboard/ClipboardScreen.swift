@@ -22,10 +22,18 @@ struct ClipboardScreen: View {
     }
 
     private var clips: some View {
-        ClipsView(style: .list, state: state, store: model.clipboard, thisDevice: model.config?.deviceId,
-                  activate: { entry, transform in copy(entry, transform) },
-                  saveToLibrary: { model.saveClip($0) })
+        #if os(macOS)
+        // In the window, its search box (one per toolbar) searches the clipboard.
+        let shared = embedded
+        #else
+        let shared = false
+        #endif
+        return ClipsView(style: .list, state: state, store: model.clipboard, thisDevice: model.config?.deviceId,
+                         activate: { entry, transform in copy(entry, transform) },
+                         saveToLibrary: { model.saveClip($0) }, ownSearch: !shared)
             .navigationTitle("Clipboard")
+            .onAppear { if shared { state.query = model.searchText } }
+            .onChange(of: model.searchText) { _, text in if shared { state.query = text } }
     }
 
     private func copy(_ entry: ClipEntry, _ transform: ClipTransform?) {

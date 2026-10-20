@@ -45,6 +45,10 @@ final class AppModel {
         var added = 0
         var current: String?
         var finished = false
+        /// What "Show them" opens (the clipboard for a Paste import).
+        var destination: Selection = .source(.import)
+        /// "files" or "clips", for the counts.
+        var unit = "files"
         /// The latest things that came in, newest first.
         var recent: [Arrival] = []
 
@@ -689,16 +693,37 @@ final class AppModel {
     /// this Mac or picked. Times, apps and pinboards (as tags) are kept.
     func importFromPaste(db: URL, wal: URL?) async {
         guard let library, !importingPaste else { return }
+        guard importRun?.finished != false else { toast = "Still importing. Try again when it's done."; return }
         importingPaste = true
         defer { importingPaste = false }
         let scoped = [db, wal].compactMap { $0 }.filter { $0.startAccessingSecurityScopedResource() }
         defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
         pasteImportStatus = "Reading Paste's history…"
+        // The Import screen's progress ring follows along, like any other import.
+        var run = ImportRun(total: 1, current: "Paste's history", destination: .clipboard, unit: "clips")
+        importRun = run
         do {
             let data = try Data(contentsOf: db), walData = wal.flatMap { try? Data(contentsOf: $0) }
             let read = try await Task.detached(priority: .userInitiated) { try PasteImport.read(data, wal: walData) }.value
             pasteImportStatus = "Adding \(read.entries.count) clips…"
-            let result = await library.importClips(read.entries)
+            run.total = max(1, read.entries.count)
+            run.current = "your Paste clips"
+            importRun = run
+            let result = await library.importClips(read.entries) { [weak self] done, added, latest in
+                await MainActor.run {
+                    guard let self, var now = self.importRun else { return }
+                    now.done = done
+                    now.added = added
+                    if let latest, !latest.isEmpty { now.recent = Array(([ImportRun.Arrival(label: latest)] + now.recent).prefix(8)) }
+                    self.importRun = now
+                }
+            }
+            run = importRun ?? run
+            run.done = run.total
+            run.added = result.added
+            run.current = nil
+            run.finished = true
+            importRun = run
             await clipboard.reload()
             var message = "Added \(result.added) clip\(result.added == 1 ? "" : "s") to your clipboard"
             if result.merged > 0 { message += ", \(result.merged) already here" }
@@ -709,6 +734,7 @@ final class AppModel {
             if result.added > 0 { pushSoon() }
         } catch {
             pasteImportStatus = "Couldn't read it: \(error)"
+            importRun = nil
         }
     }
 
@@ -724,8 +750,8 @@ final class AppModel {
         if let db = urls.first(where: Self.isPasteDatabase) {
             let wal = urls.first { $0.lastPathComponent == db.lastPathComponent + "-wal" }
                 ?? URL(fileURLWithPath: db.path + "-wal").checkedFile
+            selection = .importer // the progress ring shows there
             await importFromPaste(db: db, wal: wal)
-            selection = .clipboard
             let rest = urls.filter { $0 != db && !$0.lastPathComponent.hasPrefix(db.lastPathComponent + "-") }
             if rest.isEmpty { return }
             await importFiles(rest, source: source)

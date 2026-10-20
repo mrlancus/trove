@@ -267,11 +267,17 @@ extension Library {
     /// Clips from another clipboard app (`PasteImport` entries), like the website's `importClips`:
     /// original times, app and pinboards (as tags) are kept; ones already here just gain the tags.
     @discardableResult
-    public func importClips(_ entries: [PasteImport.Entry], source: String = "Paste") async -> (added: Int, merged: Int) {
+    public func importClips(_ entries: [PasteImport.Entry], source: String = "Paste",
+                            progress: (@Sendable (_ done: Int, _ added: Int, _ latest: String?) async -> Void)? = nil) async -> (added: Int, merged: Int) {
         var added = 0, merged = 0
         var byHash = Dictionary(await clips().map { ($0.hash, $0) }, uniquingKeysWith: { a, _ in a })
         await engine.hold()
+        var done = 0
         for e in entries {
+            done += 1
+            if let progress, done % 25 == 0 || done == entries.count {
+                await progress(done, added, e.title ?? e.text.map { String($0.prefix(60)) } ?? (e.image != nil ? "Image" : nil))
+            }
             let tags = Self.cleanTags(e.pinboards.compactMap { Self.cleanTagName($0) })
             var hash: String
             var fields: [String: JSONValue] = [:]

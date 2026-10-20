@@ -140,7 +140,7 @@ private struct DropZone: View {
             .frame(width: 130, height: 130)
             Text(run.current.map { "Reading \($0)…" } ?? "Finishing up…")
                 .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-            Text("\(run.done) of \(run.total) files").font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+            Text("\(run.done) of \(run.total) \(run.unit)").font(.caption).foregroundStyle(.tertiary).monospacedDigit()
             arrivals(run)
         }
     }
@@ -164,8 +164,9 @@ private struct DropZone: View {
             HStack {
                 if run.added > 0 {
                     Button("Show them") {
+                        let destination = run.destination
                         model.dismissImport()
-                        model.selection = .source(.import)
+                        model.selection = destination
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -234,7 +235,7 @@ private struct PasteImportCard: View {
             HStack {
                 #if os(macOS)
                 if let found {
-                    Button { Task { await model.importFromPaste(db: found.db, wal: found.wal); model.selection = .clipboard } } label: {
+                    Button { Task { await model.importFromPaste(db: found.db, wal: found.wal) } } label: {
                         Label("Import from Paste", systemImage: "square.and.arrow.down")
                     }
                     .buttonStyle(.borderedProminent)

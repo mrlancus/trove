@@ -132,6 +132,10 @@ struct ClipsView: View {
     var activate: (ClipEntry, ClipTransform?) -> Void
     var saveToLibrary: (Clip) -> Void = { _ in }
     var close: () -> Void = {}
+    /// Its own search field. Off in the Mac's main window, where the window's search box searches the
+    /// clipboard instead: two search fields in one toolbar made macOS crash ("NSToolbar already
+    /// contains an item…").
+    var ownSearch = true
     @FocusState private var searchFocused: Bool
 
     private var entries: [ClipEntry] { state.entries(store, thisDevice: thisDevice) }
@@ -346,8 +350,7 @@ struct ClipsView: View {
                 }
             }
         }
-        .searchable(text: $state.query, prompt: "Search your clipboard, or #tag, app:")
-        .searchFocused($searchFocused)
+        .modifier(OwnSearch(on: ownSearch, query: $state.query, focused: $searchFocused))
         .onAppear { if Self.typingGoesToSearch { searchFocused = true } }
         .overlay {
             if entries.isEmpty { emptyState }
@@ -718,6 +721,23 @@ struct NewTagRow: View {
             if let id = draft.forClip, let clip = store.clips.first(where: { $0.id == id }), !clip.tags.contains(name) {
                 await store.toggleTag(name, on: clip)
             }
+        }
+    }
+}
+
+/// The clipboard's own search field, when it has one.
+private struct OwnSearch: ViewModifier {
+    let on: Bool
+    @Binding var query: String
+    var focused: FocusState<Bool>.Binding
+
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .searchable(text: $query, prompt: "Search your clipboard, or #tag, app:")
+                .searchFocused(focused)
+        } else {
+            content
         }
     }
 }
