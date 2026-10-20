@@ -62,6 +62,7 @@ final class ClipboardStore {
         clips = await library.clips()
         customTags = await library.customTags()
         autoSave = await library.clipAutoSaveKinds()
+        keep = await library.clipKeep()
         revision += 1
         #if os(iOS)
         publishForKeyboard()
@@ -214,6 +215,14 @@ final class ClipboardStore {
         var kinds = autoSave
         if on { kinds.insert(kind) } else { kinds.remove(kind) }
         await library?.setClipAutoSave(kinds)
+        await reload()
+    }
+
+    /// How much history is kept (synced to every device).
+    private(set) var keep: ClipKeep = .standard
+
+    func setKeep(_ keep: ClipKeep) async {
+        await library?.setClipKeep(keep)
         await reload()
     }
 

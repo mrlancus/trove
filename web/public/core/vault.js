@@ -4,7 +4,7 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
-import { ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
+import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
@@ -751,6 +751,30 @@ export class Vault {
   }
 
   setClipAutoSave(kinds) { this.set({ autoSave: [...new Set(kinds)].sort() }, CLIP_SETTINGS_ID, "setting"); }
+
+  /** How much history to keep, synced: {days, count}, 0 = no limit (Library.clipKeep). */
+  clipKeep() {
+    const f = this.store.records.get(CLIP_SETTINGS_ID)?.fields ?? {};
+    const n = (v, fallback) => (typeof v === "number" && v >= 0 ? Math.floor(v) : fallback);
+    return f._deleted === true ? { ...CLIP_KEEP_STANDARD } : { days: n(f.keepDays, CLIP_KEEP_STANDARD.days), count: n(f.keepCount, CLIP_KEEP_STANDARD.count) };
+  }
+
+  /** Changes how much history is kept, then prunes to it. */
+  setClipKeep({ days, count }) {
+    this.set({ keepDays: Math.max(0, days), keepCount: Math.max(0, count) }, CLIP_SETTINGS_ID, "setting");
+    return this.pruneClips();
+  }
+
+  /** Deletes unpinned clips older than the setting allows, and the oldest past its count (Library.pruneClips). */
+  pruneClips() {
+    const { days, count } = this.clipKeep();
+    const cutoff = days > 0 ? this.now() - days * 86_400_000 : -Infinity;
+    let removed = 0;
+    this.clips().forEach((clip, index) => {
+      if (!clip.isPinned && (clip.sortDate < cutoff || (count > 0 && index >= count))) { this.deleteClip(clip.id); removed++; }
+    });
+    return removed;
+  }
 
   /** Saves a new clip into the library if its kind is set to save automatically. */
   async autoSaveClip(id) {

@@ -67,7 +67,12 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   iOS 26's tinted/clear Liquid Glass modes show the box as a glyph like other apps instead of a
   grey square. Not done: an Icon Composer `.icon` file (true layered Liquid Glass, also for macOS
   26). It can't be made or checked without Icon Composer; try it if the variants aren't enough.
-- Tests: TroveCore 85 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
+- **How much clipboard history to keep** (the user asked for it in Settings): "Keep clips for" (1
+  week to 2 years, or forever) and "Keep at most" (500 to 50,000, or no limit), synced in
+  `settings.clipboard` (`keepDays`, `keepCount`). Apps: Settings → Clipboard. Website: Clipboard →
+  "How much history to keep". Changing it prunes at once. **Older app builds still prune at 30
+  days / 1,000**, so update every device before choosing more.
+- Tests: TroveCore 86 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
   web 31 unit + 9 Chromium e2e (new: tag sections, type-to-search, Sketches section).
 - **Website not deployed this round**: the deploy was blocked by the session's permission
   settings. Deploy with `cd server && npx wrangler deploy` (the token is in the cloud environment).

@@ -348,3 +348,9 @@ export function colorFormats({ r, g, b, a }) {
   const hex = "#" + [R, G, B].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
   return [hex, `rgb${a < 1 ? "a" : ""}(${R}, ${G}, ${B}${alpha})`, `hsl${a < 1 ? "a" : ""}(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%${alpha})`];
 }
+
+// ---------- how much history to keep (PROTOCOL.md §8, ClipKeep in Library+Clips.swift) ----------
+
+export const CLIP_KEEP_STANDARD = { days: 30, count: 1000 };
+export const KEEP_DAY_CHOICES = [[7, "1 week"], [30, "1 month"], [90, "3 months"], [180, "6 months"], [365, "1 year"], [730, "2 years"], [0, "Forever"]];
+export const KEEP_COUNT_CHOICES = [500, 1000, 5000, 10000, 50000, 0].map((n) => [n, n ? `${n.toLocaleString("en")} clips` : "No limit"]);

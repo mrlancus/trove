@@ -565,3 +565,17 @@ test("drawing: packed points, widths and strokes in the vault match Ink.swift", 
   assert.equal(vault.item(sketch).sketchPages, 3);
   assert.deepEqual([...vault.inkedLayers().get("pdf-item")], ["blob1"]);
 });
+
+test("how much clipboard history to keep is a synced setting (ClipTests.howMuchToKeepIsASyncedSetting)", async () => {
+  let now = 1_760_000_000_000;
+  const { v: vault } = await testVault();
+  vault.now = () => now;
+  assert.deepEqual(vault.clipKeep(), { days: 30, count: 1000 });
+  vault.addClip("last spring");
+  now += 200 * 86_400_000;
+  for (let i = 0; i < 4; i++) { now += 1000; vault.addClip(`clip ${i}`); }
+  assert.equal(vault.setClipKeep({ days: 365, count: 0 }), 0);
+  assert.equal(vault.setClipKeep({ days: 0, count: 3 }), 2);
+  assert.deepEqual(vault.clipKeep(), { days: 0, count: 3 });
+  assert.deepEqual(vault.clips().map((c) => c.text), ["clip 3", "clip 2", "clip 1"]);
+});

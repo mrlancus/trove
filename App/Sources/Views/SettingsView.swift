@@ -402,6 +402,9 @@ private struct ClipboardSection: View {
     @Environment(AppModel.self) private var model
     @State private var confirmClear = false
     static let autoSaveKinds: [(kind: ClipKind, title: String)] = [(.link, "Links"), (.image, "Images"), (.code, "Code"), (.text, "Text"), (.color, "Colours")]
+
+    /// The usual choices, plus whatever another device set if it isn't one of them.
+    static func choices(_ list: [Int], current: Int) -> [Int] { list.contains(current) ? list : list + [current] }
     #if os(macOS)
     @State private var trusted = AXIsProcessTrusted()
     @State private var recordPages = ClipSourceProbe.recordPages
@@ -459,6 +462,16 @@ private struct ClipboardSection: View {
             }
             Text("Copies of these kinds go straight into your library, with where they came from. Applies on all your devices.")
                 .font(.caption).foregroundStyle(.secondary)
+            Picker("Keep clips for", selection: Binding(get: { clipboard.keep.days },
+                                                         set: { days in Task { await clipboard.setKeep(ClipKeep(days: days, count: clipboard.keep.count)) } })) {
+                ForEach(Self.choices(ClipKeep.dayChoices, current: clipboard.keep.days), id: \.self) { Text(ClipKeep.daysTitle($0)).tag($0) }
+            }
+            Picker("Keep at most", selection: Binding(get: { clipboard.keep.count },
+                                                       set: { count in Task { await clipboard.setKeep(ClipKeep(days: clipboard.keep.days, count: count)) } })) {
+                ForEach(Self.choices(ClipKeep.countChoices, current: clipboard.keep.count), id: \.self) { Text(ClipKeep.countTitle($0)).tag($0) }
+            }
+            Text("Older clips are deleted on all your devices (pinned ones always stay). \(model.clipboard.clips.count.formatted()) kept now.")
+                .font(.caption).foregroundStyle(.secondary)
             Button("Clear history…", role: .destructive) { confirmClear = true }
                 .confirmationDialog("Delete every unpinned clip on all your devices?", isPresented: $confirmClear) {
                     Button("Clear history", role: .destructive) { Task { await model.clipboard.clearHistory() } }
@@ -466,7 +479,7 @@ private struct ClipboardSection: View {
         } header: {
             Text("Clipboard")
         } footer: {
-            FormFooter("Copies sync end-to-end encrypted to your other devices and are kept for 30 days (pinned ones forever). Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
+            FormFooter("Copies sync end-to-end encrypted to your other devices. Passwords, API keys and one-time codes are never synced, and copies from password managers are skipped.")
         }
     }
 }

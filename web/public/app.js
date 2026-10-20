@@ -1,7 +1,7 @@
 // Trove for any browser. Vanilla modules, no build step; the relay serves these files.
 import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
-import { availableTransforms, clipQueryMatches, clipSearchText, color, colorFormats, isSensitive, parseClipQuery, TAG_COLORS } from "./core/clips.js";
+import { availableTransforms, clipQueryMatches, KEEP_COUNT_CHOICES, KEEP_DAY_CHOICES, clipSearchText, color, colorFormats, isSensitive, parseClipQuery, TAG_COLORS } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
 import { importActions } from "./core/importer.js";
 import { renderMarkdown } from "./markdown.js";
@@ -818,7 +818,12 @@ function renderClips() {
         h("span", { class: "hint", text: "…or press ⌘V / Ctrl+V anywhere on this page. Copies on your Mac show up here by themselves. Just type to search; #tag, app: and is:pinned narrow it down." })),
       h("details", { class: "clip-settings" }, h("summary", {}, "Save to Trove automatically"),
         h("p", { class: "hint", text: "Copies of these kinds go straight into your library, with where they came from. Applies on every device." }),
-        h("div", { class: "chips", role: "group", "aria-label": "Save automatically" })));
+        h("div", { class: "chips", role: "group", "aria-label": "Save automatically" })),
+      h("details", { class: "clip-keep" }, h("summary", {}, "How much history to keep"),
+        h("div", { class: "row" },
+          h("label", {}, "Keep clips for ", h("select", { "aria-label": "Keep clips for", "data-keep": "days" })),
+          h("label", {}, "Keep at most ", h("select", { "aria-label": "Keep at most", "data-keep": "count" }))),
+        h("p", { class: "hint keep-note" })));
     $("#heading").after(tools);
   }
   $(".chips", tools).replaceChildren(...clipFilters.map(([id, title]) =>
@@ -832,6 +837,19 @@ function renderClips() {
       syncSoon();
     } }, title);
   }));
+  const keep = vault.clipKeep();
+  for (const [field, choices] of [["days", KEEP_DAY_CHOICES], ["count", KEEP_COUNT_CHOICES]]) {
+    const select = $(`select[data-keep="${field}"]`, tools);
+    if (document.activeElement === select) continue;
+    const list = choices.some(([v]) => v === keep[field]) ? choices : [...choices, [keep[field], String(keep[field])]];
+    select.replaceChildren(...list.map(([v, label]) => h("option", { value: String(v), selected: v === keep[field] }, label)));
+    select.onchange = () => {
+      const removed = vault.setClipKeep({ ...vault.clipKeep(), [field]: Number(select.value) });
+      if (removed) toast(`Removed ${removed} older clip${removed === 1 ? "" : "s"}`);
+      syncSoon();
+    };
+  }
+  $(".keep-note", tools).textContent = `Older clips are deleted on all your devices (pinned ones always stay). ${all.length.toLocaleString()} kept now.`;
   // Don't throw away what's being typed in an open clip when something syncs.
   const open = $("#grid .clip.open");
   if (open && open.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;

@@ -262,7 +262,8 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   seen it (`enrichment.tier == 0`) and it's less than 14 days old.
 - **Settings:** one synced record, id `settings.clipboard`, kind `setting`: `autoSave` is a sorted
   list of clip kinds (`link`, `image`, `code`, `text`, …). The device that records a new clip of one of
-  those kinds saves it to the library at once (below).
+  those kinds saves it to the library at once (below). `keepDays` and `keepCount` say how much
+  history to keep (numbers; 0 = no limit; missing = 30 days and 1,000 clips).
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
   (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
   `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,
@@ -281,7 +282,9 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   `origin: {clip, app?, url?, title?}`.
 - **De-duplication:** copying something whose `hash` matches an existing clip just sets that clip's
   `lastUsedAt`, `uses + 1` (and `sourceApp` and the source fields).
-- **Pruning:** any device may delete unpinned clips older than 30 days or beyond the newest 1,000.
+- **Pruning:** any device may delete unpinned clips last used more than `keepDays` days ago or
+  beyond the newest `keepCount` (settings above; 30 days and 1,000 when unset). Builds from before
+  this setting always use 30 days and 1,000, so every device needs a current build.
 - **Never stored:** copies marked concealed or transient (nspasteboard.org types), copies from
   password managers, and text that looks sensitive (passwords, API keys, private keys, one-time
   codes) are never written as clips. The Mac holds sensitive copies in memory for two minutes only.

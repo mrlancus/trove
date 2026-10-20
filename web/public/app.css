@@ -501,3 +501,5 @@ body.ink-open { overflow: hidden; }
 .swatch-button { width: 20px; height: 20px; min-width: 0; padding: 0; border-radius: 50%; border: 0; background: var(--tag); cursor: pointer; }
 .swatch-button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--panel, #fff), 0 0 0 4px var(--tag); }
 .clip-tag.coloured, .tag-chip.coloured { color: var(--tag); background: color-mix(in srgb, var(--tag) 15%, transparent); border-radius: 999px; padding: 0 6px; }
+.clip-keep .row { flex-wrap: wrap; gap: 12px; }
+.clip-keep select { margin-left: 4px; }

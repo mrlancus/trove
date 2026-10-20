@@ -238,6 +238,13 @@ test("create a vault in the browser, save the recovery code, add a second browse
   await until(async () => (await page.locator("#grid .clip").count()) === 1, "#tag search");
   await page.locator("#search").fill("");
 
+  // How much history to keep is a setting.
+  await page.locator(".clip-keep summary").click();
+  await page.getByLabel("Keep clips for").selectOption({ label: "1 year" });
+  await page.getByLabel("Keep at most").selectOption({ label: "No limit" });
+  await until(async () => (await page.getByLabel("Keep clips for").inputValue()) === "365", "keep a year");
+  assert.equal(await page.getByLabel("Keep at most").inputValue(), "0");
+
   // Sketches have their own section with a way in.
   await page.locator("nav a", { hasText: "Sketches" }).click();
   await page.getByRole("button", { name: "New sketch" }).waitFor();

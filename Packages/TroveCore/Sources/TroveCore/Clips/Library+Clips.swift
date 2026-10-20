@@ -2,9 +2,6 @@ import Foundation
 
 /// Clipboard history on top of the synced records (PROTOCOL.md §8).
 extension Library {
-    public static let clipLimit = 1_000
-    public static let clipMaxAge: TimeInterval = 30 * 86_400
-
     /// Newest first (by last copy or use).
     public func clips() async -> [Clip] {
         await engine.records.filter { $0.kind == "clip" }.map(Clip.init).sorted { $0.sortDate > $1.sortDate }
@@ -92,6 +89,20 @@ extension Library {
 
     public func setClipAutoSave(_ kinds: Set<ClipKind>) async {
         await engine.set(["autoSave": JSONValue(kinds.map(\.rawValue).sorted())], record: Self.clipSettingsId, kind: "setting")
+    }
+
+    /// How much history to keep (synced, so every device prunes the same way).
+    public func clipKeep() async -> ClipKeep {
+        guard let r = await engine.record(Self.clipSettingsId), !r.isDeleted else { return .standard }
+        return ClipKeep(days: r["keepDays"]?.number.map { max(0, Int($0)) } ?? ClipKeep.standard.days,
+                        count: r["keepCount"]?.number.map { max(0, Int($0)) } ?? ClipKeep.standard.count)
+    }
+
+    /// Changes how much history is kept, then prunes to it.
+    public func setClipKeep(_ keep: ClipKeep) async {
+        await engine.set(["keepDays": .number(Double(max(0, keep.days))), "keepCount": .number(Double(max(0, keep.count)))],
+                         record: Self.clipSettingsId, kind: "setting")
+        await pruneClips()
     }
 
     // MARK: Tags with colours (PROTOCOL.md §8)
@@ -199,12 +210,16 @@ extension Library {
     public func setClipPinned(_ id: String, _ pinned: Bool) async { await engine.set([Clip.Field.pinned: .bool(pinned)], record: id, kind: "clip") }
     public func deleteClip(_ id: String) async { await engine.delete(id) }
 
-    /// Unpinned clips everyone can see. Deletes the oldest past `limit` and those older than `maxAge`.
+    /// Deletes unpinned clips older than `maxAge` and the oldest past `limit`. Left out, both come from
+    /// the synced setting (`clipKeep`); 0 means no limit.
     @discardableResult
-    public func pruneClips(maxAge: TimeInterval = Library.clipMaxAge, limit: Int = Library.clipLimit) async -> Int {
-        let cutoff = now().addingTimeInterval(-maxAge)
+    public func pruneClips(maxAge: TimeInterval? = nil, limit: Int? = nil) async -> Int {
+        let keep = await clipKeep()
+        let maxAge = maxAge ?? (keep.days > 0 ? TimeInterval(keep.days) * 86_400 : 0)
+        let limit = limit ?? keep.count
+        let cutoff = maxAge > 0 ? now().addingTimeInterval(-maxAge) : .distantPast
         var removed = 0
-        for (index, clip) in await clips().enumerated() where !clip.isPinned && (clip.sortDate < cutoff || index >= limit) {
+        for (index, clip) in await clips().enumerated() where !clip.isPinned && (clip.sortDate < cutoff || (limit > 0 && index >= limit)) {
             await engine.delete(clip.id)
             removed += 1
         }
@@ -277,5 +292,35 @@ public struct CustomTag: Identifiable, Hashable, Sendable {
             guard !key.hasPrefix("_"), let name = value.string else { return nil }
             return CustomTag(name: key, color: TagColor(rawValue: name) ?? .gray)
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
+/// How much clipboard history to keep: clips used in the last `days` days, at most `count` of them
+/// (pinned clips always stay). 0 means no limit.
+public struct ClipKeep: Equatable, Hashable, Sendable {
+    public var days: Int
+    public var count: Int
+    public init(days: Int, count: Int) { self.days = days; self.count = count }
+
+    public static let standard = ClipKeep(days: 30, count: 1_000)
+    /// The choices Settings offers (0 = forever / no limit).
+    public static let dayChoices = [7, 30, 90, 180, 365, 730, 0]
+    public static let countChoices = [500, 1_000, 5_000, 10_000, 50_000, 0]
+
+    public static func daysTitle(_ days: Int) -> String {
+        switch days {
+        case 0: "Forever"
+        case 7: "1 week"
+        case 30: "1 month"
+        case 90: "3 months"
+        case 180: "6 months"
+        case 365: "1 year"
+        case 730: "2 years"
+        default: "\(days) days"
+        }
+    }
+
+    public static func countTitle(_ count: Int) -> String {
+        count == 0 ? "No limit" : "\(count.formatted()) clips"
     }
 }

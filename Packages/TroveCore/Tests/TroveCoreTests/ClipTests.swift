@@ -183,6 +183,23 @@ import Testing
         #expect(await lib.clips().map(\.text) == (7..<12).reversed().map { "clip \($0)" })
     }
 
+    @Test func howMuchToKeepIsASyncedSetting() async {
+        let box = ClockBox(Date(timeIntervalSince1970: 1_760_000_000))
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()), now: { box.now })
+        #expect(await lib.clipKeep() == .standard)
+        _ = await lib.addClip(text: "last spring")
+        box.advance(200 * 86_400)
+        for i in 0..<4 { box.advance(1); _ = await lib.addClip(text: "clip \(i)") }
+        await lib.setClipKeep(ClipKeep(days: 365, count: 0))       // a year, no count limit: nothing goes
+        #expect(await lib.clips().count == 5)
+        await lib.setClipKeep(ClipKeep(days: 0, count: 3))         // forever, but only 3: the oldest two go
+        #expect(await lib.clipKeep() == ClipKeep(days: 0, count: 3))
+        #expect(await lib.clips().map(\.text) == ["clip 3", "clip 2", "clip 1"])
+        await lib.setClipKeep(ClipKeep(days: 0, count: 0))
+        box.advance(5_000 * 86_400)
+        #expect(await lib.pruneClips() == 0)                         // forever means forever
+    }
+
     @Test func clipsSyncBetweenDevices() async throws {
         let keys = VaultKeys.generate()
         let folder = FolderTransport(root: FileManager.default.temporaryDirectory.appendingPathComponent("clips-\(UUID().uuidString)"))
