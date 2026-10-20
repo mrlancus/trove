@@ -4,6 +4,7 @@
 import { h } from "./dom.js";
 import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
 import { GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
+import { drawStrokes } from "./core/ink.js";
 import { renderMarkdown } from "./markdown.js";
 
 let pdfjs = null;
@@ -41,7 +42,7 @@ export function lightbox(src, alt = "") {
 }
 
 /** A scrolling PDF: pages render as they come into view; zoom buttons. */
-export async function pdfViewer(bytes, { onExpand } = {}) {
+export async function pdfViewer(bytes, { onExpand, ink } = {}) {
   const doc = await openPdf(bytes);
   let zoom = 1;
   const pages = h("div", { class: "pdf-pages" });
@@ -68,6 +69,12 @@ export async function pdfViewer(bytes, { onExpand } = {}) {
     const vp = page.getViewport({ scale });
     const canvas = h("canvas", { width: Math.floor(vp.width), height: Math.floor(vp.height), "aria-label": `Page ${n}` });
     await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    const strokes = ink?.(n - 1) ?? [];
+    if (strokes.length) {
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      drawStrokes(ctx, strokes);
+    }
     el.replaceChildren(canvas);
   };
   const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
@@ -75,6 +82,30 @@ export async function pdfViewer(bytes, { onExpand } = {}) {
   observeAll();
   return h("div", { class: "pdf-viewer" }, bar, pages);
 }
+
+/** Pages to draw on for a PDF or an image: [{width, height, background(ctx, pxPerPoint)}], in PDF points or image pixels. */
+export async function inkPages(att, bytes) {
+  if (previewKind(att.name, att.mime) === "pdf") {
+    const doc = await openPdf(bytes);
+    const pages = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const vp = page.getViewport({ scale: 1 });
+      pages.push({ width: vp.width, height: vp.height, background: async (ctx, k) => {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: k }) }).promise;
+        ctx.restore();
+      } });
+    }
+    return pages;
+  }
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: att.mime }));
+  return [{ width: bitmap.width, height: bitmap.height, background: (ctx) => ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height) }];
+}
+
+/** Whether a file can be drawn on (PDFs and images the browser can show). */
+export const canInk = (att) => ["pdf", "image"].includes(previewKind(att.name, att.mime)) && !/heic|heif|svg/.test(att.mime);
 
 /**
  * A GoodNotes notebook drawn from its own data (core/goodnotes.js): each page's PDF or image
@@ -184,14 +215,14 @@ function table(rows) {
  * The preview for one attachment. `load()` returns its decrypted bytes. `edit(bytes)` saves an
  * edited version (text files only). Returns an element that fills in as it loads.
  */
-export function attachmentPreview(att, { load, edit, onExpand, eager = true }) {
+export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink = null }) {
   const kind = previewKind(att.name, att.mime);
   const box = h("div", { class: `viewer viewer-${kind}` });
   const start = async () => {
     box.replaceChildren(h("p", { class: "saved", text: `Decrypting ${att.name}…` }));
     try {
       const bytes = await load();
-      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand }));
+      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand, ink }));
     } catch (e) {
       box.replaceChildren(h("p", { class: "danger", text: `Couldn't open ${att.name}: ${e.message}` }));
     }
@@ -201,15 +232,27 @@ export function attachmentPreview(att, { load, edit, onExpand, eager = true }) {
   return box;
 }
 
-async function build(kind, att, bytes, { edit, onExpand }) {
+async function build(kind, att, bytes, { edit, onExpand, ink }) {
   switch (kind) {
     case "image": {
       const url = urlFor(bytes, att.mime);
       const img = h("img", { src: url, alt: att.name, class: "zoomable", onclick: () => lightbox(url, att.name) });
       img.addEventListener("error", () => img.replaceWith(h("p", { class: "saved", text: "This browser can't show this image type (HEIC shows in Safari). Download it to open it." })));
-      return img;
+      const strokes = ink?.(0) ?? [];
+      if (!strokes.length) return img;
+      // Ink on top, in image pixels.
+      const overlay = h("canvas", { class: "ink-overlay", "aria-hidden": "true" });
+      img.addEventListener("load", () => {
+        const k = Math.min(1, 2400 / Math.max(img.naturalWidth, 1));
+        overlay.width = Math.round(img.naturalWidth * k);
+        overlay.height = Math.round(img.naturalHeight * k);
+        const ctx = overlay.getContext("2d");
+        ctx.setTransform(k, 0, 0, k, 0, 0);
+        drawStrokes(ctx, strokes);
+      });
+      return h("div", { class: "inked-image" }, img, overlay);
     }
-    case "pdf": return pdfViewer(bytes, { onExpand });
+    case "pdf": return pdfViewer(bytes, { onExpand, ink });
     case "audio": case "video": return h(kind, { src: urlFor(bytes, att.mime), controls: true, preload: "metadata" });
     case "goodnotes": {
       let notebook = null;

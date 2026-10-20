@@ -9,7 +9,8 @@ import { $, ago, fileSize, h } from "./dom.js";
 import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.js";
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
-import { attachmentPreview, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
+import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
+import { openInkEditor, renderSketchPage, sketchThumbnail } from "./draw.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
@@ -185,6 +186,11 @@ function showMain(vault) {
   vault.onChange(queueRender);
 
   $("#search").addEventListener("input", (e) => { state.query = e.target.value; queueRender(); });
+  $("#new-sketch").addEventListener("click", () => {
+    const id = vault.addSketch();
+    syncSoon();
+    openSketch(id, 0, () => openItem(id));
+  });
   $("#new-note").addEventListener("click", () => {
     const id = vault.addNote();
     state.mode = "edit";
@@ -868,7 +874,7 @@ const sourceLabels = { app: "Trove", share: "Share sheet", web: "Browser", email
   readwise: "Readwise", obsidian: "Obsidian", appleNotes: "Apple Notes", notion: "Notion", screenshot: "Screenshots", voice: "Voice",
   scan: "Scan", import: "Import" };
 const sourceLabel = (s) => sourceLabels[s] ?? s;
-const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email" };
+const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email", sketch: "Sketch" };
 
 function card(item, folderName) {
   const snippet = item.kind === "highlight" ? item.body.replace(/^> /gm, "") : item.summary || item.body.trim() || item.ocrText || "";
@@ -883,6 +889,8 @@ function card(item, folderName) {
     thumb = h("img", { class: "thumb", src: item.imageURL, alt: "", loading: "lazy", referrerpolicy: "no-referrer", onerror: (e) => e.target.remove() });
   } else if (att) {
     thumb = h("div", { class: `thumb-wrap small kind-${item.kind}` }, h("span", { class: "type-tile", text: typeLabel(att.name, att.mime) }));
+  } else if (item.kind === "sketch") {
+    thumb = h("div", { class: "thumb-wrap small kind-sketch" }, h("span", { class: "type-tile", text: "✎ Sketch" }));
   }
   const picked = state.picked.has(item.id);
   const el = h("button", { type: "button", class: `card ${item.kind}${picked ? " picked" : ""}${state.selecting ? " selecting" : ""}`, draggable: "true",
@@ -986,8 +994,9 @@ function renderDetail(force = false) {
   if (!item) { closeItem(); return; }
   const items = vault.items();
   const graph = linkGraph(items);
+  const inkSig = inkSignature(item);
   const sig = [item.id, item.record.updatedHLC, state.mode, state.history, state.wide, (graph.incoming[item.id] ?? []).join(), (graph.outgoing[item.id] ?? []).join(),
-    vault.folders().length, items.length].join("|");
+    vault.folders().length, items.length, inkSig].join("|");
   if (!force && sig === panelCache.sig) return;
   panelCache.sig = sig;
   panel.hidden = false;
@@ -1025,6 +1034,7 @@ function renderDetail(force = false) {
       h("button", { type: "button", class: "secondary", onclick: () => { vault.resolveConflicts(item.id, item.body); syncSoon(); } }, "Keep the current text")));
   }
 
+  if (item.kind === "sketch") parts.push(sketchSection(item));
   if (item.attachments.length) parts.push(filesSection(item));
 
   // Body: preview, edit or history.
@@ -1081,6 +1091,78 @@ function toggleWide() {
   renderDetail(true);
 }
 
+// ---------- drawing ----------
+
+/** Changes when the ink on an item changes, so its panel redraws. */
+function inkSignature(item) {
+  const vault = state.vault;
+  const layers = vault.inkedLayers().get(item.id);
+  if (!layers) return "";
+  return [...layers].map((l) => `${l}:${vault.strokes(item.id, l).length}`).join(",");
+}
+
+/** A sketch's pages in the panel; click one to draw on it. */
+function sketchSection(item) {
+  const vault = state.vault;
+  const grid = h("div", { class: "sketch-pages" });
+  for (let page = 0; page < item.sketchPages; page++) {
+    const canvas = h("canvas", { class: "sketch-page", "aria-label": `Page ${page + 1}` });
+    const button = h("button", { type: "button", class: "sketch-page-button", title: "Draw on this page", onclick: () => openSketch(item.id, page) }, canvas,
+      item.sketchPages > 1 ? h("span", { class: "saved", text: `${page + 1}` }) : null);
+    grid.append(button);
+    requestAnimationFrame(() => renderSketchPage(canvas, vault, item, page, Math.max(120, canvas.clientWidth || 300)));
+  }
+  return h("section", { class: "sketch" },
+    h("div", { class: "file-head" },
+      h("span", { class: "type-tile mini", text: "✎" }),
+      h("span", { class: "file-name", text: `${item.sketchPages} page${item.sketchPages === 1 ? "" : "s"}` }),
+      h("span", { class: "spacer" }),
+      h("button", { type: "button", class: "primary small", onclick: () => openSketch(item.id, 0) }, "✎ Draw")),
+    grid);
+}
+
+/** Opens a sketch in the drawing editor. */
+function openSketch(id, page = 0, after = null) {
+  const vault = state.vault;
+  const item = vault.item(id);
+  if (!item) return;
+  const [w, hgt] = item.pageSize;
+  const sketch = {
+    paper: item.paper, pageCount: item.sketchPages,
+    setPaper: (paper) => vault.setSketch(id, { paper }),
+    addPage: () => vault.setSketch(id, { pages: sketch.pageCount }),
+  };
+  openInkEditor({
+    vault, itemId: id, title: item.displayTitle, sketch, startPage: page,
+    pages: Array.from({ length: item.sketchPages }, () => ({ width: w, height: hgt })),
+    changed: () => syncSoon(4000),
+    onClose: async (edited) => {
+      if (edited) {
+        const current = vault.item(id);
+        const jpeg = current && await sketchThumbnail(vault, current).catch(() => null);
+        if (jpeg) { await vault.setThumbnail(id, jpeg).catch(() => {}); }
+        syncSoon(500);
+      }
+      panelCache.sig = null;
+      render();
+      after?.();
+    },
+  });
+}
+
+/** Opens a PDF or image in the drawing editor; the ink goes on top, the file stays as it is. */
+async function markUp(item, att) {
+  const vault = state.vault;
+  toast(`Opening ${att.name}…`);
+  let pages;
+  try { pages = await inkPages(att, await vault.attachment(att.id)); } catch (e) { toast(`Couldn't open ${att.name}: ${e.message}`); return; }
+  openInkEditor({
+    vault, itemId: item.id, layer: att.id, title: att.name, pages,
+    changed: () => syncSoon(4000),
+    onClose: () => { panelCache.sig = null; syncSoon(500); renderDetail(true); },
+  });
+}
+
 function folderPicker(item) {
   const vault = state.vault, folders = vault.folders();
   const select = h("select", { class: "folder-select", "aria-label": "Folder" },
@@ -1129,9 +1211,11 @@ function filesSection(item) {
       h("span", { class: "type-tile mini", text: typeLabel(att.name, att.mime) }),
       h("span", { class: "file-name", text: att.name }), h("span", { class: "saved", text: fileSize(att.size) }),
       h("span", { class: "spacer" }),
+      canInk(att) ? h("button", { type: "button", class: "secondary small", title: "Write or draw on this file. The file itself doesn't change.", onclick: () => markUp(item, att) }, "✎ Draw on it") : null,
       h("button", { type: "button", class: "secondary small", onclick: () => download(att) }, "Download"),
       index === 0 ? h("label", { class: "secondary small", title: "Upload an edited copy; the current file is kept as a version" }, "New version", upload) : null);
-    let preview = panelCache.previews.get(att.id);
+    const cacheKey = `${att.id}:${vault.strokes(item.id, att.id).length}`;
+    let preview = panelCache.previews.get(cacheKey);
     if (!preview) {
       const editable = index === 0 && isEditableText(att.name, att.mime);
       preview = attachmentPreview(att, {
@@ -1139,8 +1223,9 @@ function filesSection(item) {
         edit: editable ? async (bytes) => { await vault.replaceFile(item.id, bytes); syncSoon(); toast("Saved. The previous text is under Versions."); } : null,
         onExpand: state.wide ? null : toggleWide,
         eager: !att.size || att.size < 60e6 || index === 0 && att.size < 150e6,
+        ink: canInk(att) ? (page) => vault.strokes(item.id, att.id, page) : null,
       });
-      panelCache.previews.set(att.id, preview);
+      panelCache.previews.set(cacheKey, preview);
     }
     section.append(head, preview);
   });

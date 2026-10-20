@@ -84,10 +84,10 @@ test("imports are filed into folders; files preview, edit into versions, and con
   await page.locator(".card", { hasText: "sample" }).filter({ hasNot: page.locator(".thumb-wrap.loaded") }).first().click();
   await until(async () => (await page.locator(".doc-page h1").count()) > 0 || (await page.locator("canvas").count()) > 0, "a preview");
 
-  // GoodNotes: the document inside renders.
+  // GoodNotes: the notebook opens page by page (here its one page has the PDF inside as background).
   await page.locator("#folder-list .folder-row", { hasText: "Handwritten" }).click();
   await page.locator(".card", { hasText: "Lecture" }).click();
-  await page.locator(".goodnotes .pdf-page canvas").first().waitFor({ timeout: 15000 });
+  await page.locator(".notebook .pdf-page canvas").first().waitFor({ timeout: 15000 });
   if (shots) await page.screenshot({ path: join(shots, "web-goodnotes.png") });
 
   // Spreadsheet table.
