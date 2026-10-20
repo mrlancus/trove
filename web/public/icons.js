@@ -20,6 +20,12 @@ const paths = {
   arrowDown: ["M12 5v14", "M19 12l-7 7-7-7"],
   tag: ["M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z", "M7.5 7.5h.01"],
   plus: ["M12 5v14", "M5 12h14"],
+  back: ["M15 18l-6-6 6-6"],
+  forward: ["M9 18l6-6-6-6"],
+  folder: ["M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"],
+  clipboard: ["M9 4h6v3H9z", "M9 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-3"],
+  map: ["M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z", "M9 4v14", "M15 6v14"],
+  location: ["M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z", "M12 10h.01"],
 };
 
 /** An inline SVG icon. Decorative unless given a label (then it's announced as an image). */

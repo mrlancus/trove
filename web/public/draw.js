@@ -12,7 +12,8 @@ import { h } from "./dom.js";
 import { icon as lineIcon } from "./icons.js";
 import {
   bounds, drawPaper, drawStroke, drawTextElement, hits, lassoSelects, lassoSelectsBox, moveBy,
-  PAGE_COLORS, PAPER_TITLES, PAPERS, recognizeShape, textFont, transformPoint, transformRect, unionRect, widthScale, wrapText,
+  PAGE_COLOR_TITLES, PAGE_COLORS, PAGE_SIZES, PAPER_GROUPS, PAPER_TITLES, pageSizeName, recognizeShape, scribbleTargets, textFont, transformPoint,
+  transformRect, unionRect, widthScale, wrapText,
 } from "./core/ink.js";
 import { PdfDocument } from "./pdfwrite.js";
 
@@ -28,7 +29,12 @@ const TOOL_INFO = {
   eraser: { label: "Eraser", key: "e", width: 10, color: "", icon: "M7 20h11M5 15l8-8 6 6-5 5H9l-4-4zM9 11l5 5" },
   lasso: { label: "Lasso", key: "l", width: 0, color: "", icon: "M12 4c5 0 8 2.5 8 5.5S16.5 15 12 15s-8-2.5-8-5.5S7 4 12 4zM6 13c-1 2 0 4 2 5l-1 3" },
   text: { label: "Text", key: "t", width: 20, color: "#1c1c1e", icon: "M5 5h14M12 5v14M9 19h6" },
+  laser: { label: "Laser pointer: shows a line that fades, never saved", key: "k", width: 6, color: "#ff3b30", icon: "M5 19l7-7M14 4v3M20 10h-3M18.5 5.5l-2 2M12 12a1.5 1.5 0 1 0 .01 0" },
 };
+const ERASER_MODES = { stroke: "Whole strokes", partial: "Partial", precise: "Precise (exactly under the tip)" };
+const LAYOUTS = { vertical: "Scroll down", horizontal: "Scroll sideways", flip: "Flip pages" };
+const MIN_ZOOM = 0.1, MAX_ZOOM = 10;
+const LASER_FADE_MS = 1100;
 const SHAPE_ICON = "M4 18L12 5l8 13H4z";
 const PICTURE_ICON = "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01";
 const HOLD_TO_SNAP_MS = 550;
@@ -121,10 +127,18 @@ try { inkClipboard = JSON.parse(localStorage.getItem("trove.inkClipboard") ?? "n
  * - `changed()` runs after every edit (to sync); `onClose(edited)` when it closes.
  */
 export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pages: filePages = null, sketch = false, startPage = 0,
-  changed = () => {}, onClose = () => {} }) {
-  const prefs = { tool: "pen", colors: {}, widths: {}, eraser: "stroke", highlighterOnly: false, shapes: false, panel: innerWidth > 900, ...loadPrefs() };
+  changed = () => {}, onClose = () => {}, connect = null }) {
+  const extra = { connect };
+  const prefs = { tool: "pen", colors: {}, widths: {}, eraser: "stroke", highlighterOnly: false, shapes: false, panel: innerWidth > 900,
+    scribble: false, layout: "vertical", fit: "page", ...loadPrefs() };
+  if (!ERASER_MODES[prefs.eraser]) prefs.eraser = "stroke";
+  if (!LAYOUTS[prefs.layout]) prefs.layout = "vertical";
   let tool = TOOL_INFO[prefs.tool] ? prefs.tool : "pen";
+  // CSS pixels per page point (100 % = a page at its size in points). Fitted when the editor opens
+  // and on rotation, until zoomed by hand.
   let zoom = 1;
+  let zoomedByHand = false;
+  let lasers = []; // fading laser lines: {view, points, end}
   let penSeen = false;
   let edited = false;
   let current = null; // the stroke being drawn
@@ -140,13 +154,17 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const undo = [], redo = [];
 
   const colorOf = (t) => prefs.colors[t] ?? TOOL_INFO[t].color;
-  const widthOf = (t) => prefs.widths[t] ?? TOOL_INFO[t].width;
+  const widthOf = (t) => prefs.widths[t] ?? (t === "eraserPrecise" ? 3 : TOOL_INFO[t].width);
+  /** The precise eraser keeps its own (small) size. */
+  const sizeKey = () => (tool === "eraser" && prefs.eraser === "precise" ? "eraserPrecise" : tool);
   const item = () => vault.item(itemId);
   const pagesNow = () => (sketch ? sketchPages(item()) : filePages.map((p, i) => ({ ...p, key: i })));
 
   // ---------- toolbar ----------
+  // One row: the tools and the current tool's options scroll sideways on a narrow screen; Done
+  // stays put. Page and editor settings live in popovers, so the row stays short.
   const toolButtons = Object.entries(TOOL_INFO).map(([id, info]) => h("button", {
-    type: "button", class: `ink-tool tool-${id}`, title: `${info.label} (${info.key.toUpperCase()})`, "aria-label": info.label,
+    type: "button", class: `ink-tool tool-${id}`, title: `${info.label} (${info.key.toUpperCase()})`, "aria-label": info.label.split(":")[0],
     onclick: () => setTool(id),
   }, icon(info.icon)));
   const shapeButton = h("button", { type: "button", class: "ink-tool", title: "Shapes: lines and shapes come out clean (S)", "aria-label": "Shapes",
@@ -158,50 +176,40 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const swatches = COLORS.map((c) => h("button", { type: "button", class: "ink-swatch", title: c, "aria-label": `Colour ${c}`, style: `--swatch:${c}`, onclick: () => setColor(c) }));
   const custom = h("input", { type: "color", class: "ink-custom", "aria-label": "Any colour", title: "Any colour" });
   custom.addEventListener("input", () => setColor(custom.value));
-  const size = h("input", { type: "range", min: "1", max: "60", step: "0.5", class: "ink-size", "aria-label": "Size" });
+  const size = h("input", { type: "range", min: "0.5", max: "60", step: "0.5", class: "ink-size", "aria-label": "Size" });
   const sizeDot = h("span", { class: "ink-size-dot", "aria-hidden": "true" });
-  size.addEventListener("input", () => { prefs.widths[tool] = Number(size.value); savePrefs(prefs); refreshToolbar(); });
+  size.addEventListener("input", () => { prefs.widths[sizeKey()] = Number(size.value); savePrefs(prefs); refreshToolbar(); });
   const eraserMode = h("select", { class: "folder-select ink-eraser-mode", "aria-label": "Eraser mode" },
-    h("option", { value: "stroke", text: "Whole strokes" }), h("option", { value: "partial", text: "Partial" }));
-  eraserMode.addEventListener("change", () => { prefs.eraser = eraserMode.value; savePrefs(prefs); });
+    Object.entries(ERASER_MODES).map(([value, text]) => h("option", { value, text })));
+  eraserMode.addEventListener("change", () => { prefs.eraser = eraserMode.value; savePrefs(prefs); refreshToolbar(); });
   const highlighterOnly = h("label", { class: "ink-check" }, h("input", { type: "checkbox" }), "Highlighter only");
   highlighterOnly.firstChild.addEventListener("change", (e) => { prefs.highlighterOnly = e.target.checked; savePrefs(prefs); });
-  const undoButton = h("button", { type: "button", class: "secondary small", title: "Undo (⌘Z, or tap with two fingers)", onclick: doUndo }, lineIcon("undo"), " Undo");
-  const redoButton = h("button", { type: "button", class: "secondary small", title: "Redo (⇧⌘Z, or tap with three fingers)", onclick: doRedo }, lineIcon("redo"), " Redo");
+  const undoButton = h("button", { type: "button", class: "ink-tool", title: "Undo (⌘Z, or tap with two fingers)", "aria-label": "Undo", onclick: doUndo }, lineIcon("undo"));
+  const redoButton = h("button", { type: "button", class: "ink-tool", title: "Redo (⇧⌘Z, or tap with three fingers)", "aria-label": "Redo", onclick: doRedo }, lineIcon("redo"));
   const pasteButton = h("button", { type: "button", class: "secondary small", title: "Paste (⌘V)", onclick: () => paste() }, "Paste");
-  const zoomLabel = h("span", { class: "saved ink-zoom" });
-  const exportButton = h("button", { type: "button", class: "secondary small", onclick: () => exportPDF() }, "Export PDF");
-  let paperSelect = null, layoutSelect = null, panelButton = null;
+  const exportButton = h("button", { type: "button", class: "secondary small", onclick: () => { closePops(); exportPDF(); } }, "Export PDF");
+  const pageButton = h("button", { type: "button", class: "secondary small", "aria-haspopup": "dialog", title: "Paper, page colour, size and layout",
+    onclick: (e) => togglePop(pagePop, e.currentTarget, refreshPagePop) }, lineIcon("pages"), sketch ? " Page" : " View");
+  const settingsButton = h("button", { type: "button", class: "ink-tool", "aria-haspopup": "dialog", "aria-label": "Settings", title: "Settings",
+    onclick: (e) => togglePop(settingsPop, e.currentTarget, refreshSettingsPop) }, icon("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"));
+  const connectButton = extra.connect ? h("button", { type: "button", class: "secondary small", title: "Connect this sketch to notes, files and other sketches",
+    onclick: () => { closePops(); extra.connect(); } }, lineIcon("link"), " Connect") : null;
+  let panelButton = null;
   if (sketch) {
-    paperSelect = h("select", { class: "folder-select", "aria-label": "Paper", title: "Paper for every page" },
-      PAPERS.map((p) => h("option", { value: p, text: PAPER_TITLES[p] })));
-    paperSelect.addEventListener("change", () => {
-      const it = item();
-      vault.setSketch(itemId, { paper: paperSelect.value });
-      // One paper for every page: drop the pages' own.
-      for (const p of it.pageList) if (p.paper) vault.setPage(itemId, p.id, { paper: paperSelect.value });
-      afterPagesChanged();
-    });
-    layoutSelect = h("select", { class: "folder-select", "aria-label": "Layout" },
-      h("option", { value: "pages", text: "Pages" }), h("option", { value: "infinite", text: "Endless canvas" }));
-    layoutSelect.addEventListener("change", () => { clearSelection(); vault.setSketchCanvas(itemId, layoutSelect.value === "infinite"); afterPagesChanged(); });
-    panelButton = h("button", { type: "button", class: "secondary small", "aria-label": "Pages panel", onclick: () => { prefs.panel = !prefs.panel; savePrefs(prefs); refreshPanel(); } }, lineIcon("pages"), " Pages");
+    panelButton = h("button", { type: "button", class: "ink-tool", "aria-label": "Pages panel", title: "Pages panel",
+      onclick: () => { prefs.panel = !prefs.panel; savePrefs(prefs); refreshPanel(); requestAnimationFrame(layout); } }, icon("M4 4h6v7H4zM4 14h6v6H4zM13 4h7v16h-7z"));
   }
   const bar = h("div", { class: "ink-bar", role: "toolbar", "aria-label": "Drawing tools" },
-    h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
-    h("div", { class: "ink-group ink-colors" }, swatches, custom),
-    h("div", { class: "ink-group ink-size-group" }, sizeDot, size),
-    h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly),
-    h("div", { class: "ink-group" }, undoButton, redoButton, pasteButton),
-    h("div", { class: "ink-group" },
-      h("button", { type: "button", class: "secondary small", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.25) }, "−"), zoomLabel,
-      h("button", { type: "button", class: "secondary small", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.25) }, "+")),
-    sketch ? h("div", { class: "ink-group" }, panelButton, paperSelect, layoutSelect,
-      h("button", { type: "button", class: "secondary small ink-add-page", onclick: () => addPage(null) }, "+ Page")) : null,
-    exportButton,
-    h("span", { class: "spacer" }),
-    h("strong", { class: "ink-title", text: title }),
-    h("button", { type: "button", class: "primary", onclick: close }, "Done"));
+    h("div", { class: "ink-bar-scroll" },
+      sketch ? h("div", { class: "ink-group" }, panelButton) : null,
+      h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
+      h("div", { class: "ink-group ink-colors" }, swatches, custom),
+      h("div", { class: "ink-group ink-size-group" }, sizeDot, size),
+      h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly),
+      h("div", { class: "ink-group" }, undoButton, redoButton, pasteButton),
+      h("div", { class: "ink-group" }, pageButton, connectButton, exportButton, settingsButton),
+      h("strong", { class: "ink-title", text: title })),
+    h("button", { type: "button", class: "primary ink-done", onclick: close }, "Done"));
 
   // The lasso's actions, along the bottom while something is selected.
   const selectionBar = h("div", { class: "ink-selbar", hidden: true, role: "toolbar", "aria-label": "Selection" },
@@ -214,12 +222,139 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     h("button", { type: "button", class: "secondary small danger", onclick: () => deleteSelection() }, "Delete"),
     h("button", { type: "button", class: "secondary small", "aria-label": "Deselect", onclick: () => clearSelection() }, lineIcon("close")));
 
+  // ---------- popovers ----------
+  const pagePop = h("div", { class: "ink-pop", role: "dialog", "aria-label": "Page", hidden: true });
+  const settingsPop = h("div", { class: "ink-pop", role: "dialog", "aria-label": "Settings", hidden: true });
+  const zoomPop = h("div", { class: "ink-pop ink-zoom-pop", role: "dialog", "aria-label": "Zoom", hidden: true });
+  let openPop = null;
+  function togglePop(pop, anchor, fill) {
+    if (openPop === pop) { closePops(); return; }
+    closePops();
+    fill();
+    pop.hidden = false;
+    openPop = pop;
+    const r = anchor.getBoundingClientRect(), rr = root.getBoundingClientRect();
+    const width = Math.min(340, rr.width - 16);
+    pop.style.width = `${width}px`;
+    pop.style.left = `${Math.max(8, Math.min(rr.width - width - 8, r.left - rr.left))}px`;
+    if (pop === zoomPop) { pop.style.top = ""; pop.style.bottom = `${rr.bottom - r.top + 8}px`; } else { pop.style.bottom = ""; pop.style.top = `${r.bottom - rr.top + 6}px`; }
+  }
+  function closePops() { for (const p of [pagePop, settingsPop, zoomPop]) p.hidden = true; openPop = null; }
+  const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-bar, .ink-zoom-pill")) closePops(); };
+  document.addEventListener("pointerdown", onOutside, true);
+
+  const segmented = (label, options, value, onPick) => h("div", { class: "ink-seg", role: "radiogroup", "aria-label": label },
+    Object.entries(options).map(([v, text]) => h("button", { type: "button", role: "radio", "aria-checked": String(v === value), onclick: () => onPick(v) }, text)));
+
+  /** Paper, colour and size for this page or every page; the sketch's layout and how pages show. */
+  function refreshPagePop() {
+    const parts = [];
+    if (sketch) {
+      const it = item();
+      const spec = pagesNow().find((p) => p.key === currentKey) ?? pagesNow()[0];
+      const page = it.pageList.find((p) => p.id === spec?.key);
+      const scope = pagePop.dataset.scope ?? "all";
+      const apply = (change) => {
+        if (scope === "all" || it.infinite) vault.setAllPages(itemId, change); else vault.setPage(itemId, spec.key, change);
+        afterPagesChanged();
+        refreshPagePop();
+      };
+      if (!it.infinite) {
+        parts.push(segmented("Change", { all: "Every page", one: "This page" }, scope, (v) => { pagePop.dataset.scope = v; refreshPagePop(); }));
+      }
+      parts.push(h("div", { class: "ink-pop-title", text: "Paper" }));
+      parts.push(h("div", { class: "ink-papers" }, PAPER_GROUPS.map(([group, papers]) => h("div", { class: "ink-paper-group" },
+        h("span", { class: "hint", text: group }),
+        h("div", { class: "ink-paper-row" }, papers.map((paper) => {
+          const c = h("canvas", { width: 72, height: 96, class: "ink-paper-thumb" });
+          const ctx = c.getContext("2d");
+          ctx.scale(72 / 300, 96 / 400);
+          drawPaper(ctx, paper, 300, 400, spec?.color);
+          return h("button", { type: "button", class: "ink-paper", "aria-pressed": String(spec?.paper === paper), title: PAPER_TITLES[paper],
+            onclick: () => apply({ paper }) }, c, h("span", { text: PAPER_TITLES[paper] }));
+        }))))));
+      parts.push(h("div", { class: "ink-pop-title", text: "Page colour" }));
+      parts.push(h("div", { class: "ink-page-colors" }, PAGE_COLORS.map((c) => h("button", { type: "button", class: "ink-swatch page-swatch",
+        "aria-label": PAGE_COLOR_TITLES[c] ?? c, title: PAGE_COLOR_TITLES[c] ?? c, style: `--swatch:${c}`,
+        "aria-pressed": String((page?.color ?? spec?.color ?? "#ffffff") === c), onclick: () => apply({ color: c === "#ffffff" ? "" : c }) }))));
+      if (!it.infinite && spec) {
+        const named = pageSizeName([spec.width, spec.height]);
+        const sizeSelect = h("select", { class: "folder-select", "aria-label": "Page size" },
+          Object.entries(PAGE_SIZES).map(([v, { title: t }]) => h("option", { value: v, text: t })), named ? null : h("option", { value: "", text: "Custom" }));
+        sizeSelect.value = named?.name ?? "";
+        const landscape = named?.landscape ?? spec.width > spec.height;
+        const sized = (name, land) => { const [a, b] = PAGE_SIZES[name].size; return land ? [b, a] : [a, b]; };
+        sizeSelect.addEventListener("change", () => { if (sizeSelect.value) apply({ size: sized(sizeSelect.value, sizeSelect.value === "wide" ? true : landscape) }); });
+        parts.push(h("div", { class: "ink-pop-title", text: "Size" }),
+          h("div", { class: "ink-pop-row" }, sizeSelect,
+            segmented("Orientation", { portrait: "Portrait", landscape: "Landscape" }, landscape ? "landscape" : "portrait",
+              (v) => apply({ size: [Math.min(spec.width, spec.height), Math.max(spec.width, spec.height)][v === "landscape" ? "reverse" : "slice"]() }))));
+      }
+      parts.push(h("div", { class: "ink-pop-title", text: "Canvas" }),
+        segmented("Canvas", { pages: "Pages", infinite: "Endless canvas" }, it.infinite ? "infinite" : "pages", (v) => {
+          clearSelection(); vault.setSketchCanvas(itemId, v === "infinite"); afterPagesChanged(); refreshPagePop();
+        }));
+    }
+    if (!infinite) {
+      parts.push(h("div", { class: "ink-pop-title", text: "Pages show" }),
+        segmented("Pages show", LAYOUTS, prefs.layout, (v) => { setLayout(v); refreshPagePop(); }));
+    }
+    if (sketch && !item().infinite) {
+      parts.push(h("div", { class: "ink-pop-row" },
+        h("button", { type: "button", class: "secondary small", onclick: () => addPage(currentKey) }, "+ Page after this"),
+        h("button", { type: "button", class: "secondary small", onclick: () => { closePops(); prefs.panel = true; savePrefs(prefs); refreshPanel(); requestAnimationFrame(layout); } }, "All pages…")));
+    }
+    pagePop.replaceChildren(...parts);
+  }
+
+  function refreshSettingsPop() {
+    const check = (label, hint, key, after = () => {}) => {
+      const box = h("input", { type: "checkbox" });
+      box.checked = Boolean(prefs[key]);
+      box.addEventListener("change", () => { prefs[key] = box.checked; savePrefs(prefs); refreshToolbar(); after(); });
+      return h("label", { class: "ink-setting" }, box, h("span", {}, h("strong", { text: label }), h("span", { class: "hint", text: hint })));
+    };
+    settingsPop.replaceChildren(
+      check("Scribble to erase", "Scratch back and forth right over something to delete it. Off: every line stays.", "scribble"),
+      check("Shapes", "Lines and shapes come out clean. Holding the pen still at the end of a line does it either way.", "shapes"),
+      h("div", { class: "ink-pop-title", text: "When a drawing opens" }),
+      segmented("Zoom when opening", { page: "Whole page", width: "Page width" }, prefs.fit, (v) => { prefs.fit = v; savePrefs(prefs); zoomedByHand = false; fitZoom(); refreshSettingsPop(); }),
+      h("p", { class: "hint", text: "Apple Pencil: draw with the pen, scroll and pinch with fingers. Two-finger tap undoes, three-finger tap redoes." }));
+  }
+
+  // ---------- zoom (bottom left) ----------
+  const zoomPill = h("button", { type: "button", class: "ink-zoom-pill", title: "Zoom: tap for options", "aria-haspopup": "dialog",
+    onclick: (e) => togglePop(zoomPop, e.currentTarget, refreshZoomPop) });
+  const zoomLabel = zoomPill;
+  const toLog = (z) => Math.log(z / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM), fromLog = (f) => MIN_ZOOM * (MAX_ZOOM / MIN_ZOOM) ** f;
+  function refreshZoomPop() {
+    const slider = h("input", { type: "range", min: "0", max: "1", step: "0.001", class: "ink-zoom-slider", "aria-label": "Zoom" });
+    slider.value = String(toLog(zoom));
+    const label = h("strong", { class: "ink-zoom-value", text: `${Math.round(zoom * 100)}%` });
+    slider.addEventListener("input", () => { setZoom(fromLog(Number(slider.value)), null, true); label.textContent = `${Math.round(zoom * 100)}%`; });
+    const preset = (text, fn) => h("button", { type: "button", class: "secondary small", onclick: () => { fn(); refreshZoomPop(); } }, text);
+    zoomPop.replaceChildren(
+      h("div", { class: "ink-pop-row" }, preset("−", () => setZoom(zoom / 1.25, null, true)), label, preset("+", () => setZoom(zoom * 1.25, null, true))),
+      slider,
+      h("div", { class: "ink-pop-row ink-zoom-presets" },
+        preset("Reset to 100%", () => setZoom(1, null, true)),
+        infinite ? null : preset("Whole page", () => { zoomedByHand = false; fitZoom("page"); }),
+        infinite ? null : preset("Page width", () => { zoomedByHand = false; fitZoom("width"); }),
+        ...[50, 200, 400].map((n) => preset(`${n}%`, () => setZoom(n / 100, null, true)))),
+      h("p", { class: "hint", text: "10% to 1000%. Pinch, ⌘/Ctrl + scroll or + and − zoom too." }));
+  }
+
   // ---------- pages ----------
   const stack = h("div", { class: "ink-pages" });
   const scroller = h("div", { class: "ink-scroller" }, stack);
   const panel = h("aside", { class: "ink-panel", "aria-label": "Pages" });
-  const body = h("div", { class: "ink-body" }, panel, scroller);
-  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, bar, body, selectionBar);
+  const stage = h("div", { class: "ink-stage" }, scroller);
+  const body = h("div", { class: "ink-body" }, panel, stage);
+  const flipPrev = h("button", { type: "button", class: "ink-flip ink-flip-prev", "aria-label": "Previous page", onclick: () => flipBy(-1) }, lineIcon("back"));
+  const flipNext = h("button", { type: "button", class: "ink-flip ink-flip-next", "aria-label": "Next page", onclick: () => flipBy(1) }, lineIcon("forward"));
+  const pageCount = h("span", { class: "ink-page-count", "aria-live": "polite" });
+  stage.append(h("div", { class: "ink-corner" }, zoomPill, pageCount), flipPrev, flipNext);
+  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, bar, body, selectionBar, pagePop, settingsPop, zoomPop);
   document.body.append(root);
   document.body.classList.add("ink-open");
 
@@ -275,24 +410,98 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     return view;
   }
 
+  /** Sizes the pages for the zoom, and shows them down, across or one at a time. */
   function layout() {
+    root.dataset.layout = infinite ? "endless" : prefs.layout;
+    zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
     if (infinite) {
       infinite.scale = zoom;
-      zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
       renderView(infinite, true);
+      refreshPageCount();
       return;
     }
-    const avail = Math.max(240, scroller.clientWidth - 32);
     for (const v of views) {
-      const fit = Math.min(avail, Math.max(avail * 0.6, 900)) / v.spec.width;
-      v.el.style.width = `${Math.round(v.spec.width * fit * zoom)}px`;
+      v.el.style.width = `${Math.round(v.spec.width * zoom)}px`;
+      v.el.hidden = prefs.layout === "flip" && v.key !== currentKey;
     }
-    zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    refreshPageCount();
     renderVisible();
+  }
+
+  /** The zoom that fits the page in view: all of it, or its width. */
+  function fitZoom(kind = prefs.fit) {
+    const spec = infinite ? null : (viewByKey(currentKey) ?? views[0])?.spec;
+    if (!spec || !scroller.clientWidth) return;
+    const w = Math.max(120, scroller.clientWidth - 32), hgt = Math.max(120, scroller.clientHeight - 44);
+    const z = kind === "width" || prefs.layout === "vertical" && kind === "width" ? w / spec.width : Math.min(w / spec.width, hgt / spec.height);
+    setZoom(z);
+    if (prefs.layout !== "flip") reveal(viewByKey(currentKey));
+  }
+
+  function setLayout(next) {
+    prefs.layout = next;
+    savePrefs(prefs);
+    if (!zoomedByHand) fitZoom(); else layout();
+    requestAnimationFrame(() => reveal(viewByKey(currentKey)));
+  }
+
+  function refreshPageCount() {
+    const n = infinite ? 0 : views.length;
+    const i = views.findIndex((v) => v.key === currentKey);
+    pageCount.textContent = n > 1 ? `${i + 1} / ${n}` : "";
+    pageCount.hidden = n < 2;
+    const flip = !infinite && prefs.layout === "flip";
+    flipPrev.hidden = !flip || i <= 0;
+    flipNext.hidden = !flip || i >= n - 1;
+  }
+
+  /** Flip mode: turn to the next (1) or previous (−1) page, like turning paper. */
+  function flipBy(step) {
+    const i = views.findIndex((v) => v.key === currentKey);
+    const to = views[Math.max(0, Math.min(views.length - 1, i + step))];
+    if (!to || to === views[i] || infinite) return;
+    if (editing) commitText();
+    clearSelection();
+    const from = views[i];
+    if (prefs.layout === "flip") {
+      from.el.classList.remove("turn-in-next", "turn-in-prev");
+      to.el.hidden = false;
+      to.el.classList.add(step > 0 ? "turn-in-next" : "turn-in-prev");
+      from.el.hidden = true;
+      setTimeout(() => to.el.classList.remove("turn-in-next", "turn-in-prev"), 450);
+    }
+    setCurrentPage(to.key);
+    layout();
+    if (prefs.layout !== "flip") reveal(to, true);
+    else scroller.scrollTo({ top: 0, left: Math.max(0, (scroller.scrollWidth - scroller.clientWidth) / 2) });
+  }
+
+  /** Scrolls a page into view with the gap above (or beside) it showing. */
+  function reveal(v, smooth = false) {
+    if (!v || infinite) return;
+    const across = prefs.layout === "horizontal";
+    const left = across ? v.el.offsetLeft - 16 : Math.max(0, v.el.offsetLeft + v.el.offsetWidth / 2 - scroller.clientWidth / 2);
+    scroller.scrollTo({ top: across ? 0 : Math.max(0, v.el.offsetTop - 18), left, behavior: smooth ? "smooth" : "auto" });
   }
 
   /** CSS pixels per page point. */
   const cssScale = (v) => (v.infinite ? v.scale : v.el.clientWidth / v.spec.width);
+
+  /**
+   * The part of a page its canvases cover, in CSS pixels from the page's corner: all of it, or when
+   * that would be too many pixels (zoomed far in), what's on screen and a margin around it.
+   */
+  const MAX_PIXELS = 12e6;
+  function regionOf(v) {
+    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const css = v.el.clientWidth, cssH = css * v.spec.height / v.spec.width;
+    if (css * cssH * dpr * dpr <= MAX_PIXELS) return { x: 0, y: 0, w: css, h: cssH, clipped: false };
+    const er = v.el.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+    const mx = sr.width * 0.35, my = sr.height * 0.35;
+    const x0 = Math.max(0, sr.left - er.left - mx), y0 = Math.max(0, sr.top - er.top - my);
+    const x1 = Math.min(css, sr.right - er.left + mx), y1 = Math.min(cssH, sr.bottom - er.top + my);
+    return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0), clipped: true };
+  }
 
   /** Sizes a canvas to its view and returns its context, transformed to page points. */
   function prepare(v, canvas) {
@@ -308,31 +517,41 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       ctx.setTransform(k, 0, 0, k, -v.ox * k, -v.oy * k);
       return ctx;
     }
-    const css = v.el.clientWidth;
-    w = Math.round(css * dpr); hgt = Math.round(css * dpr * v.spec.height / v.spec.width);
-    const cap = 16e6 / Math.max(1, w * hgt);
-    if (cap < 1) { w = Math.floor(w * Math.sqrt(cap)); hgt = Math.floor(hgt * Math.sqrt(cap)); }
+    const r = v.region ?? (v.region = regionOf(v));
+    w = Math.max(1, Math.round(r.w * dpr)); hgt = Math.max(1, Math.round(r.h * dpr));
     if (canvas.width !== w || canvas.height !== hgt) { canvas.width = w; canvas.height = hgt; }
-    k = w / v.spec.width;
+    canvas.style.cssText = r.clipped ? `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px` : "";
+    k = dpr * v.el.clientWidth / v.spec.width;
     const ctx = canvas.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, hgt);
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.setTransform(k, 0, 0, k, -r.x * dpr, -r.y * dpr);
     return ctx;
+  }
+
+  /** Zoomed far in, a page's canvases follow the scrolling. */
+  function refollow() {
+    for (const v of views) {
+      if (!v.visible || v.infinite || !v.region?.clipped) continue;
+      const er = v.el.getBoundingClientRect(), sr = scroller.getBoundingClientRect(), r = v.region;
+      const vx0 = sr.left - er.left, vy0 = sr.top - er.top;
+      if (vx0 < r.x || vy0 < r.y || vx0 + sr.width > r.x + r.w || vy0 + sr.height > r.y + r.h) renderView(v, true);
+    }
   }
 
   /** The part of an endless canvas on screen, in page points. */
   const area = (v) => ({ x: v.ox, y: v.oy, w: v.el.clientWidth / v.scale, h: v.el.clientHeight / v.scale });
 
   async function renderView(v, force = false) {
-    if (!v.visible || !v.el.clientWidth) return;
+    if (!v.visible || !v.el.clientWidth || v.el.hidden) return;
     const css = v.el.clientWidth;
+    if (!v.infinite && (v.bgWidth !== css || force)) v.region = regionOf(v);
     if (v.infinite || v.bgWidth !== css || force) {
       v.bgWidth = css;
       const ctx = prepare(v, v.bg);
       if (sketch) drawPaper(ctx, v.spec.paper, v.spec.width, v.spec.height, v.spec.color, v.infinite ? area(v) : null);
       else { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, v.spec.width, v.spec.height); }
-      try { await v.spec.background?.(ctx, v.bg.width / v.spec.width); } catch { /* no background */ }
+      try { await v.spec.background?.(ctx, (v.bg.width / (v.region?.w ?? v.el.clientWidth)) * v.el.clientWidth / v.spec.width); } catch { /* no background */ }
     }
     if (v.infinite || v.inkWidth !== css || v.dirty || force) { v.inkWidth = css; v.dirty = false; renderInk(v); }
     renderLive(v);
@@ -358,7 +577,13 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   function renderLive(v) {
     const ctx = prepare(v, v.live);
     const px = 1 / cssScale(v); // one CSS pixel in page points
-    if (current?.view === v) drawStroke(ctx, current);
+    if (current?.view === v && current.tool !== "laser") drawStroke(ctx, current);
+    if (current?.view === v && current.tool === "laser") {
+      ctx.save(); ctx.shadowColor = current.color; ctx.shadowBlur = 12;
+      drawStroke(ctx, { tool: "marker", color: current.color, width: current.width * px * 1.5, points: current.points });
+      ctx.restore();
+    }
+    lasersOn(v, ctx);
     if (lasso?.view === v && lasso.points.length > 1) {
       ctx.save();
       ctx.setLineDash([6 * px, 5 * px]);
@@ -416,7 +641,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
 
   // ---------- input ----------
   function toPage(v, e) {
-    const r = v.live.getBoundingClientRect();
+    const r = v.el.getBoundingClientRect();
     if (v.infinite) return { x: (e.clientX - r.left) / v.scale + v.ox, y: (e.clientY - r.top) / v.scale + v.oy };
     return { x: ((e.clientX - r.left) / r.width) * v.spec.width, y: ((e.clientY - r.top) / r.height) * v.spec.height };
   }
@@ -487,7 +712,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     });
     const end = (e) => {
       if (e.pointerType === "touch") noteTap(e, "up");
-      if (touches.delete(e.pointerId)) { startPinch(); return; }
+      if (touches.delete(e.pointerId)) { startPinch(); if (!touches.size && swipe.dx) finishSwipe(); return; }
       if (erasing?.pointerId === e.pointerId) { finishErase(); return; }
       if (lasso?.pointerId === e.pointerId) { finishLasso(); return; }
       if (drag?.pointerId === e.pointerId) { finishDrag(e.type === "pointercancel"); return; }
@@ -527,7 +752,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     clearTimeout(armSnap.timer);
     const s = current;
     armSnap.timer = setTimeout(() => {
-      if (current !== s || !s || s.shape || s.points.length < 3) return;
+      if (current !== s || !s || s.shape || s.points.length < 3 || s.tool === "laser") return;
       const shape = recognizeShape(s.points);
       if (!shape) return;
       s.points = shape.points;
@@ -549,6 +774,22 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const s = current;
     current = null;
     if (!s.points.length) return;
+    if (s.tool === "laser") {
+      // Never saved: it fades away.
+      lasers.push({ view: s.view, points: s.points, color: s.color, width: s.width, end: performance.now() });
+      animateLasers();
+      return;
+    }
+    if (!s.shape && prefs.scribble && s.tool !== "highlighter") {
+      const targets = scribbleTargets(s.points, vault.strokes(itemId, layer, s.view.key));
+      if (targets) {
+        vault.deleteStrokes(targets);
+        record({ remove: targets.map((id) => [id, "stroke"]) }, [s.view]);
+        s.view.dirty = true;
+        renderView(s.view);
+        return;
+      }
+    }
     if (!s.shape && prefs.shapes) {
       const shape = recognizeShape(s.points);
       if (shape) { s.points = shape.points; s.shape = shape.shape; }
@@ -560,7 +801,36 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
 
   // ---------- eraser ----------
-  const eraserRadius = (v) => (widthOf("eraser") / 2 + 4) / cssScale(v);
+  /** In page points; the precise eraser is exactly its size, the others a little bigger to be easy to hit. */
+  const eraserRadius = (v) => (prefs.eraser === "precise" ? Math.max(0.25, widthOf("eraserPrecise") / 2) : widthOf("eraser") / 2 + 4) / cssScale(v);
+
+  // ---------- laser pointer ----------
+  function animateLasers() {
+    if (animateLasers.frame) return;
+    const tick = () => {
+      animateLasers.frame = 0;
+      const now = performance.now();
+      const touched = new Set(lasers.map((l) => l.view));
+      lasers = lasers.filter((l) => now - l.end < LASER_FADE_MS);
+      for (const v of touched) renderLive(v);
+      if (lasers.length) animateLasers.frame = requestAnimationFrame(tick);
+    };
+    animateLasers.frame = requestAnimationFrame(tick);
+  }
+  /** Laser lines on a page, fading out after the pen lifts. */
+  function lasersOn(v, ctx = null) {
+    const now = performance.now();
+    for (const l of lasers) {
+      if (l.view !== v) continue;
+      const c = ctx ?? v.live.getContext("2d");
+      c.save();
+      c.globalAlpha = Math.max(0, 1 - (now - l.end) / LASER_FADE_MS);
+      c.shadowColor = l.color;
+      c.shadowBlur = 12;
+      drawStroke(c, { tool: "marker", color: l.color, width: l.width / cssScale(v) * 1.5, points: l.points });
+      c.restore();
+    }
+  }
 
   function startErase(v, e, p) {
     erasing = { view: v, pointerId: e.pointerId, last: p, added: new Set(), removed: new Set(), before: new Set(vault.strokes(itemId, layer, v.key).map((s) => s.id)) };
@@ -574,7 +844,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const only = prefs.highlighterOnly ? ["highlighter"] : null;
     const path = [g.last, p];
     g.last = p;
-    if (prefs.eraser === "partial") {
+    if (prefs.eraser === "partial" || prefs.eraser === "precise") {
       for (const id of vault.eraseStrokes({ on: itemId, layer, page: v.key, path, radius: eraserRadius(v), only })) g.added.add(id);
       // What disappeared: originals and pieces made earlier in this gesture.
       const alive = new Set(vault.strokes(itemId, layer, v.key).map((s) => s.id));
@@ -881,7 +1151,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       panBy(pinch.cx - cx, pinch.cy - cy);
       pinch.cx = cx; pinch.cy = cy;
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      setZoom(pinch.zoom * dist / pinch.dist, { x: cx, y: cy });
+      if (Math.abs(dist / pinch.dist - 1) > 0.04 || pinch.zooming) { pinch.zooming = true; setZoom(pinch.zoom * dist / pinch.dist, { x: cx, y: cy }, true); }
     } else if (pts.length === 1 && pinch.x !== undefined) {
       panBy(pinch.x - pts[0].x, pinch.y - pts[0].y);
       pinch.x = pts[0].x; pinch.y = pts[0].y;
@@ -890,6 +1160,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
 
   /** Scrolls the pages, or moves around the endless canvas, by CSS pixels. */
   function panBy(dx, dy) {
+    if (canSwipe() && !pinch?.zooming && (swipe.dx || Math.abs(dx) > Math.abs(dy))) { swipeBy(dx); return; }
     if (infinite) {
       infinite.ox += dx / infinite.scale;
       infinite.oy += dy / infinite.scale;
@@ -898,9 +1169,10 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     } else scroller.scrollBy(dx, dy);
   }
 
-  function setZoom(z, anchor = null) {
-    const next = Math.min(4, Math.max(infinite ? 0.1 : 0.5, z));
-    if (Math.abs(next - zoom) < 0.001) return;
+  function setZoom(z, anchor = null, byHand = false) {
+    if (byHand) zoomedByHand = true;
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+    if (Math.abs(next - zoom) < 0.0005) { layout(); return; }
     if (infinite) {
       const r = infinite.el.getBoundingClientRect();
       const ax = anchor ? anchor.x - r.left : r.width / 2, ay = anchor ? anchor.y - r.top : r.height / 2;
@@ -924,18 +1196,47 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   scroller.addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      setZoom(zoom * Math.exp(-e.deltaY / 300), { x: e.clientX, y: e.clientY });
+      setZoom(zoom * Math.exp(-e.deltaY / 300), { x: e.clientX, y: e.clientY }, true);
     } else if (infinite) {
       e.preventDefault();
       panBy(e.deltaX, e.deltaY);
+    } else if (canSwipe() && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // A trackpad's sideways swipe turns the page.
+      e.preventDefault();
+      swipeBy(e.deltaX);
+      clearTimeout(swipe.timer);
+      swipe.timer = setTimeout(finishSwipe, 120);
     }
   }, { passive: false });
 
+  // ---------- flip mode: swiping turns the page ----------
+  const swipe = { dx: 0, timer: 0, until: 0 };
+  /** In flip mode with the page's whole width in view, a sideways drag turns the page instead of scrolling. */
+  const canSwipe = () => !infinite && prefs.layout === "flip" && scroller.scrollWidth <= scroller.clientWidth + 2;
+  function swipeBy(dx) {
+    if (performance.now() < swipe.until) return;
+    swipe.dx += dx;
+    const v = viewByKey(currentKey);
+    if (v) v.el.style.transform = `translateX(${-swipe.dx * 0.6}px) rotateY(${Math.max(-25, Math.min(25, swipe.dx / 12))}deg)`;
+  }
+  function finishSwipe() {
+    const v = viewByKey(currentKey);
+    if (v) v.el.style.transform = "";
+    const dx = swipe.dx;
+    swipe.dx = 0;
+    if (Math.abs(dx) > 70) { swipe.until = performance.now() + 450; flipBy(dx > 0 ? 1 : -1); }
+  }
+
+  let followFrame = 0;
   scroller.addEventListener("scroll", () => {
     if (infinite) return;
+    if (!followFrame) followFrame = requestAnimationFrame(() => { followFrame = 0; refollow(); });
+    if (prefs.layout === "flip") return;
     // The page most in view is the one new pages, pastes and pictures go on.
-    const top = scroller.getBoundingClientRect().top + scroller.clientHeight / 3;
-    const v = views.find((x) => { const r = x.el.getBoundingClientRect(); return r.top <= top && r.bottom >= top; });
+    const sr = scroller.getBoundingClientRect();
+    const across = prefs.layout === "horizontal";
+    const at = across ? sr.left + scroller.clientWidth / 3 : sr.top + scroller.clientHeight / 3;
+    const v = views.find((x) => { const r = x.el.getBoundingClientRect(); return across ? r.left <= at && r.right >= at : r.top <= at && r.bottom >= at; });
     if (v && v.key !== currentKey) setCurrentPage(v.key);
   }, { passive: true });
 
@@ -1007,14 +1308,16 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   function refreshToolbar() {
     toolButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(Object.keys(TOOL_INFO)[i] === tool)));
     shapeButton.setAttribute("aria-pressed", String(prefs.shapes));
-    const hasColor = PEN_TOOLS.includes(tool) || tool === "text";
+    const hasColor = PEN_TOOLS.includes(tool) || tool === "text" || tool === "laser";
     const c = hasColor ? colorOf(tool) : null;
     swatches.forEach((s, i) => s.setAttribute("aria-pressed", String(COLORS[i] === c)));
     if (c) custom.value = c;
     const sized = hasColor || tool === "eraser";
-    size.disabled = !sized;
-    size.value = String(sized ? widthOf(tool) : 10);
-    const d = Math.max(3, Math.min(22, sized ? widthOf(tool) : 10));
+    root.querySelector(".ink-colors").hidden = !hasColor && !(tool === "lasso" && selection);
+    root.querySelector(".ink-size-group").hidden = !sized;
+    size.max = sizeKey() === "eraserPrecise" ? "12" : tool === "text" ? "72" : "60";
+    size.value = String(sized ? widthOf(sizeKey()) : 10);
+    const d = Math.max(3, Math.min(22, sized ? widthOf(sizeKey()) : 10));
     sizeDot.style.cssText = `width:${d}px;height:${d}px;background:${c ?? "transparent"};opacity:${tool === "highlighter" ? 0.5 : 1}`;
     eraserMode.value = prefs.eraser;
     highlighterOnly.firstChild.checked = prefs.highlighterOnly;
@@ -1023,19 +1326,15 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     redoButton.disabled = !redo.length;
     pasteButton.hidden = !inkClipboard;
     root.dataset.tool = tool;
-    if (sketch) {
-      const it = item();
-      paperSelect.value = it.paper;
-      layoutSelect.value = it.infinite ? "infinite" : "pages";
-      root.querySelector(".ink-add-page").hidden = it.infinite;
-      panelButton.hidden = it.infinite;
-    }
+    if (sketch) panelButton.hidden = item().infinite;
+    panelButton?.setAttribute("aria-pressed", String(Boolean(prefs.panel)));
   }
 
   // ---------- the page panel ----------
   function setCurrentPage(key) {
     if (currentKey === key) return;
     currentKey = key;
+    refreshPageCount();
     for (const b of panel.querySelectorAll(".ink-thumb")) b.setAttribute("aria-current", String(b.dataset.key === String(key)));
     refreshPageTools();
   }
@@ -1050,7 +1349,12 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       const canvas = h("canvas", { class: "ink-thumb-canvas" });
       const button = h("button", { type: "button", class: "ink-thumb", "data-key": spec.key, "aria-current": String(spec.key === currentKey),
         "aria-label": `Page ${i + 1}`, draggable: "true",
-        onclick: () => { setCurrentPage(spec.key); viewByKey(spec.key)?.el.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+        onclick: () => {
+          const i = views.findIndex((v) => v.key === currentKey), j = views.findIndex((v) => v.key === spec.key);
+          if (prefs.layout === "flip") { if (j !== i) flipBy(j - i); return; }
+          setCurrentPage(spec.key);
+          reveal(viewByKey(spec.key), true);
+        } },
       canvas, h("span", { text: String(i + 1) }));
       button.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-trove-page", String(spec.key)); });
       button.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-trove-page")) e.preventDefault(); });
@@ -1087,7 +1391,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const spec = specs[i];
     if (!spec) { tools.replaceChildren(); return; }
     const page = item().pageList.find((p) => p.id === spec.key);
-    const paper = h("select", { class: "folder-select", "aria-label": "This page's paper" }, PAPERS.map((p) => h("option", { value: p, text: PAPER_TITLES[p] })));
+    const paper = h("select", { class: "folder-select", "aria-label": "This page's paper" },
+      PAPER_GROUPS.map(([group, list]) => h("optgroup", { label: group }, list.map((p) => h("option", { value: p, text: PAPER_TITLES[p] })))));
     paper.value = spec.paper;
     paper.addEventListener("change", () => { vault.setPage(itemId, spec.key, { paper: paper.value }); afterPagesChanged(); });
     tools.replaceChildren(
@@ -1113,6 +1418,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
 
   function addPage(after) {
+    closePops();
     const id = vault.addPage(itemId, after ?? (sketch ? item().pageList.at(-1).id : null));
     afterPagesChanged(id);
   }
@@ -1125,8 +1431,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     buildViews();
     refreshToolbar();
     requestAnimationFrame(() => {
-      layout();
-      if (focusKey) viewByKey(focusKey)?.el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!zoomedByHand && !infinite) fitZoom(); else layout();
+      if (focusKey && prefs.layout !== "flip") reveal(viewByKey(focusKey), true);
     });
     changed();
   }
@@ -1226,13 +1532,16 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     else if (mod && k === "v" && inkClipboard) paste();
     else if (mod && k === "a") selectAll();
     else if ((e.key === "Delete" || e.key === "Backspace") && selection) deleteSelection();
-    else if (e.key === "Escape") { if (selection) clearSelection(); else close(); }
+    else if (e.key === "Escape") { if (openPop) closePops(); else if (selection) clearSelection(); else close(); }
     else if (!mod && !e.altKey) {
       const id = Object.keys(TOOL_INFO).find((t) => TOOL_INFO[t].key === k);
       if (id) setTool(id);
       else if (k === "s") { prefs.shapes = !prefs.shapes; savePrefs(prefs); refreshToolbar(); }
-      else if (e.key === "+" || e.key === "=") setZoom(zoom * 1.25);
-      else if (e.key === "-") setZoom(zoom / 1.25);
+      else if (e.key === "+" || e.key === "=") setZoom(zoom * 1.25, null, true);
+      else if (e.key === "-") setZoom(zoom / 1.25, null, true);
+      else if (e.key === "0") setZoom(1, null, true);
+      else if (e.key === "ArrowRight" || e.key === "PageDown") { if (prefs.layout === "flip" || e.key === "PageDown") flipBy(1); else handled = false; }
+      else if (e.key === "ArrowLeft" || e.key === "PageUp") { if (prefs.layout === "flip" || e.key === "PageUp") flipBy(-1); else handled = false; }
       else handled = false;
     } else handled = false;
     if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
@@ -1245,7 +1554,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     if (file) { e.preventDefault(); e.stopImmediatePropagation(); insertPicture(file); }
   };
   document.addEventListener("paste", onPaste, true);
-  const onResize = () => layout();
+  // Turning the iPad or resizing the window keeps the page fitted (unless zoomed by hand).
+  const onResize = () => { if (!zoomedByHand) fitZoom(); else layout(); };
   addEventListener("resize", onResize);
 
   function close() {
@@ -1256,6 +1566,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     unsubscribe();
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("paste", onPaste, true);
+    document.removeEventListener("pointerdown", onOutside, true);
     removeEventListener("resize", onResize);
     root.remove();
     document.body.classList.remove("ink-open");
@@ -1268,8 +1579,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   refreshToolbar();
   refreshPanel();
   requestAnimationFrame(() => {
-    layout();
-    if (!infinite) viewByKey(currentKey)?.el.scrollIntoView({ block: "start" });
+    if (infinite) layout(); else fitZoom();
+    if (!infinite) reveal(viewByKey(currentKey));
   });
   return { close };
 }

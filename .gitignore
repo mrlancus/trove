@@ -14,3 +14,4 @@ xcuserdata/
 
 # macOS
 .DS_Store
+web/test/*.local.mjs

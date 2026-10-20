@@ -97,11 +97,13 @@ test("sketches and ink on files: draw, undo, erase, pages, and it all reaches an
   await mouseStroke(page, live, [0.45, 0.25], [0.45, 0.42], 8);
 
   // Squared paper and a second page.
-  await page.getByLabel("Paper", { exact: true }).selectOption("grid");
-  await page.getByRole("button", { name: "+ Page" }).click();
+  await page.getByRole("button", { name: "Page", exact: true }).click();
+  await page.getByRole("button", { name: "Squared", exact: true }).click();
+  await page.getByRole("button", { name: "+ Page after this" }).click();
   await until(async () => (await page.locator(".ink-page").count()) === 2, "a second page");
   await page.getByRole("button", { name: "Pen", exact: true }).click();
   const second = page.locator(".ink-page .ink-live").nth(1);
+  await page.waitForTimeout(700); // the new page scrolls into view
   await second.scrollIntoViewIfNeeded();
   await mouseStroke(page, second, [0.2, 0.2], [0.6, 0.5]);
   if (shots) await page.screenshot({ path: join(shots, "web-sketch-editor.png") });
@@ -262,9 +264,9 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
   await page.getByRole("button", { name: "Pen", exact: true }).click();
   await pointerPath(page, live, [[0.7, 0.1], [0.9, 0.12]]);
   await fingerTap(page, live, 2);
-  await until(() => page.locator("button", { hasText: /^\s*Redo$/ }).isEnabled(), "undo by two fingers");
+  await until(() => page.getByRole("button", { name: "Redo", exact: true }).isEnabled(), "undo by two fingers");
   await fingerTap(page, live, 3);
-  await until(async () => !(await page.locator("button", { hasText: /^\s*Redo$/ }).isEnabled()), "redo by three fingers");
+  await until(async () => !(await page.getByRole("button", { name: "Redo", exact: true }).isEnabled()), "redo by three fingers");
 
   // Pages: duplicate this one, move the copy up, colour it cream, and give it music paper.
   await page.getByRole("button", { name: "Duplicate page" }).click();
@@ -310,7 +312,9 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
   // An endless canvas: draw far out, scroll with the wheel.
   await page.locator("#grid .card.sketch").first().click();
   await page.getByRole("button", { name: "Draw", exact: true }).click();
-  await page.getByLabel("Layout").selectOption("infinite");
+  await page.getByRole("button", { name: "Page", exact: true }).click();
+  await page.getByRole("radio", { name: "Endless canvas" }).click();
+  await page.keyboard.press("Escape");
   await page.locator(".ink-infinite").waitFor();
   await page.getByRole("button", { name: "Pen", exact: true }).click();
   await pointerPath(page, ".ink-infinite .ink-live", [[0.5, 0.5], [0.6, 0.55]]);
@@ -327,6 +331,81 @@ test("sketching tools: pens, shapes, lasso, partial eraser, text, pictures, page
     return s.infinite && ys.length === 2 && ys[1] - ys[0] > 1500;
   }, "the endless canvas on the phone", 20000);
 
+  assert.deepEqual(problems, []);
+  await context.close();
+});
+
+test("zoom 10–1000 %, flipping pages, the precise eraser and scribble to erase", async () => {
+  const v = await createVault();
+  const phone = await Vault.join(memoryStorage(), await v.setupCode(), { origin: BASE, deviceName: "iPhone" });
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
+  const problems = [];
+  page.on("pageerror", (e) => problems.push(e.message));
+  page.on("dialog", (d) => d.accept());
+  await page.goto(BASE + "/");
+  await page.getByRole("tab", { name: "Setup code" }).click();
+  await page.getByLabel("Setup code").fill(await v.setupCode());
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.locator("#search").waitFor();
+  await page.evaluate(() => localStorage.removeItem("trove.ink"));
+  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  const live = ".ink-page .ink-live";
+  await page.locator(live).first().waitFor();
+  const pill = page.locator(".ink-zoom-pill");
+  await until(async () => /^\d+%$/.test(await pill.textContent()), "the zoom shown");
+
+  // The whole page fits when it opens; the pill resets to 100 % and fits again.
+  const fitted = await pill.textContent();
+  const box = await page.locator(".ink-page").first().boundingBox();
+  assert.ok(box.height <= 768 - 50, "the whole page is in view");
+  await pill.click();
+  await page.getByRole("button", { name: "Reset to 100%" }).click();
+  assert.equal(await pill.textContent(), "100%");
+  assert.equal(Math.round((await page.locator(".ink-page").first().boundingBox()).width), 768);
+  await page.getByRole("button", { name: "Whole page" }).click();
+  assert.equal(await pill.textContent(), fitted);
+  await page.keyboard.press("Escape");
+
+  // Three slanted strokes, then a scratch-out over them with scribble to erase on.
+  for (const x of [0.2, 0.25, 0.3]) await pointerPath(page, live, [[x, 0.25], [x + 0.02, 0.22], [x + 0.04, 0.19]]);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByText("Scribble to erase").click();
+  await page.keyboard.press("Escape");
+  const zig = Array.from({ length: 21 }, (_, i) => [0.18 + 0.2 * i / 20, i % 2 ? 0.17 : 0.27]);
+  await pointerPath(page, live, zig);
+  // A line elsewhere stays: one line is never a scratch-out.
+  await pointerPath(page, live, [[0.1, 0.6], [0.5, 0.6], [0.9, 0.6]]);
+
+  // The precise eraser cuts that line exactly where it passes.
+  await page.getByRole("button", { name: "Eraser", exact: true }).click();
+  await page.getByLabel("Eraser mode").selectOption("precise");
+  await pointerPath(page, live, [[0.5, 0.55], [0.5, 0.6], [0.5, 0.65]]);
+
+  // Flip pages: one page at a time, arrows and keys turn them.
+  await page.getByRole("button", { name: "Page", exact: true }).click();
+  await page.getByRole("radio", { name: "Flip pages" }).click();
+  await page.getByRole("button", { name: "+ Page after this" }).click();
+  await until(async () => (await page.locator(".ink-page").count()) === 2, "a second page");
+  await until(async () => (await page.locator(".ink-page:not([hidden])").count()) === 1, "one page at a time");
+  assert.equal(await page.locator(".ink-page-count").textContent(), "2 / 2");
+  await page.getByRole("button", { name: "Previous page" }).click();
+  assert.equal(await page.locator(".ink-page-count").textContent(), "1 / 2");
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await page.locator(".ink-page-count").textContent(), "2 / 2");
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("button", { name: "Sync now" }).click();
+  await until(async () => {
+    await phone.sync();
+    const s = phone.items().find((i) => i.kind === "sketch");
+    return s && s.pageList.length === 2 ? s : null;
+  }, "the sketch on the phone", 20000);
+  const s = phone.items().find((i) => i.kind === "sketch");
+  const strokes = phone.strokes(s.id);
+  // The three strokes are gone (no scratch-out kept); the long line is in two pieces.
+  assert.equal(strokes.length, 2, JSON.stringify(strokes.map((x) => x.points.length)));
+  assert.ok(strokes.every((x) => x.points.every((p) => p.y > 1024 * 0.5)), "only the cut line is left");
   assert.deepEqual(problems, []);
   await context.close();
 });
