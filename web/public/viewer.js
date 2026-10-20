@@ -148,7 +148,8 @@ export function notebookViewer(notebook, { onExpand } = {}) {
         el.style.aspectRatio = `${size.width} / ${size.height}`;
       } catch { pdfPage = null; }
     }
-    const px = (width / size.width) * Math.min(devicePixelRatio || 1, 2);
+    // A big whiteboard would need a canvas bigger than browsers allow: draw it softer instead.
+    const px = Math.min((width / size.width) * Math.min(devicePixelRatio || 1, 2), 16000 / size.height, Math.sqrt(30e6 / (size.width * size.height)));
     const canvas = h("canvas", { width: Math.floor(size.width * px), height: Math.floor(size.height * px), "aria-label": `Page ${Number(el.dataset.page) + 1}` });
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#fff";

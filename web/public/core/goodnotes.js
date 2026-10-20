@@ -563,9 +563,44 @@ export async function readNotebook(bytes) {
     const bg = background && attachments.get(background.attachment);
     if (bg?.mime === "application/pdf" && !sizes.has(background.attachment)) sizes.set(background.attachment, pdfSize(bg.bytes));
     const size = (bg?.mime === "application/pdf" && sizes.get(background.attachment)) || { width: 612, height: 792 };
-    pages.push({ id: p.id, ...size, background, ...pageContent(recs, attachments) });
+    const page = { id: p.id, ...size, background, ...pageContent(recs, attachments) };
+    pages.push(!background || Math.max(page.width, page.height) > OVERSIZED ? fitToContent(page) : page);
   }
   return { pages, attachments };
+}
+
+/** Pages bigger than this (points) are a whiteboard's endless canvas, not paper. */
+export const OVERSIZED = 2000;
+
+/**
+ * A GoodNotes whiteboard is an endless canvas, often drawn far from 0, 0, sometimes with a huge blank
+ * PDF behind it. A page with no background whose drawing runs off it, or any oversized page, becomes
+ * the size of what's on it plus a margin, moved so it all shows; an oversized page loses its (blank)
+ * background. Ordinary pages that fit are left alone (GoodNotesInk.fitToContent in Swift).
+ */
+export function fitToContent(page, margin = 36) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const add = (x, y) => { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); };
+  for (const l of page.layers) {
+    if (l.kind === "ink") { for (const [x, y, r = 0] of l.runs.flat()) if (Number.isFinite(x) && Number.isFinite(y)) { add(x - r, y - r); add(x + r, y + r); } }
+    else { add(l.x, l.y); add(l.x + l.w, l.y + l.h); }
+  }
+  const huge = Math.max(page.width, page.height) > OVERSIZED;
+  if (!Number.isFinite(minX)) return huge ? { ...page, width: 612, height: 792, background: null } : page;
+  const x0 = minX * GN_SCALE, y0 = minY * GN_SCALE, x1 = maxX * GN_SCALE, y1 = maxY * GN_SCALE;
+  if (!huge && x0 >= 0 && y0 >= 0 && x1 <= page.width && y1 <= page.height) return page;
+  const dx = (margin - x0) / GN_SCALE, dy = (margin - y0) / GN_SCALE;
+  const move = (l) => l.kind === "ink"
+    ? { ...l, runs: l.runs.map((run) => run.map(([x, y, ...rest]) => [x + dx, y + dy, ...rest])) }
+    : { ...l, x: l.x + dx, y: l.y + dy };
+  const layers = page.layers.map(move);
+  return {
+    ...page, background: huge ? null : page.background,
+    width: Math.max(200, x1 - x0 + 2 * margin), height: Math.max(200, y1 - y0 + 2 * margin),
+    layers,
+    ...Object.fromEntries([["strokes", "ink"], ["texts", "text"], ["images", "image"]].map(([key, kind]) =>
+      [key, layers.filter((l) => l.kind === kind).map(({ kind: _, ...rest }) => rest)])),
+  };
 }
 
 function sniffMime(b) {

@@ -82,6 +82,26 @@ import Testing
         #expect(first.strokes.contains { $0.isHighlighter && $0.runs.count == 2 })
     }
 
+    /// Whiteboards: drawing far from 0, 0 or on a huge page is cropped to what's there (same numbers
+    /// as the fitToContent test in web/test/core.test.mjs).
+    @Test func whiteboardFitsContent() {
+        typealias G = GoodNotesInk
+        let stroke = G.Stroke(id: nil, rgb: [0, 0, 0], alpha: 1, width: 2, runs: [[G.Point(x: -1320, y: 5280, r: 2), G.Point(x: 1100, y: 7700, r: 2)]])
+        let page = G.Page(id: "p", width: 612, height: 792, background: nil, layers: [.ink(stroke)])
+        let fit = G.fitToContent(page)
+        #expect(abs(fit.width - (2424 * G.scale + 72)) < 0.001 && abs(fit.height - (2424 * G.scale + 72)) < 0.001)
+        guard case .ink(let s) = fit.layers[0] else { Issue.record("no ink"); return }
+        #expect(abs((s.runs[0][0].x - 2) * G.scale - 36) < 0.001)
+        #expect(abs((s.runs[0][0].y - 2) * G.scale - 36) < 0.001)
+
+        let inside = G.Page(id: "q", width: 612, height: 792, background: nil, layers: [.ink(G.Stroke(id: nil, rgb: [0, 0, 0], alpha: 1, width: 2, runs: [[G.Point(x: 100, y: 100, r: 2)]]))])
+        #expect(G.fitToContent(inside).width == 612)
+
+        let huge = G.Page(id: "h", width: 20000, height: 20000, background: G.Background(attachment: "a", page: 1), layers: [])
+        let blank = G.fitToContent(huge)
+        #expect(blank.width == 612 && blank.background == nil)
+    }
+
     @Test func notANotebook() {
         #expect(throws: GoodNotesInk.Failure.self) { try GoodNotesInk.read(Data("hello".utf8)) }
     }

@@ -693,3 +693,17 @@ test("import from Paste: its SQLite database (new and old layouts), keyed archiv
   assert.equal(vault.clipEvents(clip.id)[0].at, 1760000100000);
   assert.deepEqual(await vault.importClips(read.entries), { added: 0, merged: 4 });
 });
+
+test("GoodNotes whiteboards fit their content (same numbers as GoodNotesInkTests)", async () => {
+  const { fitToContent, GN_SCALE } = await import("../public/core/goodnotes.js");
+  const ink = (runs) => ({ kind: "ink", rgb: [0, 0, 0], alpha: 1, width: 2, runs });
+  const fit = fitToContent({ id: "p", width: 612, height: 792, background: null, layers: [ink([[[-1320, 5280, 2], [1100, 7700, 2]]])] });
+  assert.ok(Math.abs(fit.width - (2424 * GN_SCALE + 72)) < 0.001 && Math.abs(fit.height - (2424 * GN_SCALE + 72)) < 0.001);
+  assert.ok(Math.abs((fit.layers[0].runs[0][0][0] - 2) * GN_SCALE - 36) < 0.001);
+  assert.ok(Math.abs((fit.strokes[0].runs[0][0][1] - 2) * GN_SCALE - 36) < 0.001);
+  assert.equal(fit.strokes[0].kind, undefined);
+  assert.equal(fitToContent({ id: "q", width: 612, height: 792, background: null, layers: [ink([[[100, 100, 2]]])] }).width, 612);
+  const blank = fitToContent({ id: "h", width: 20000, height: 20000, background: { attachment: "a", page: 1 }, layers: [] });
+  assert.equal(blank.width, 612);
+  assert.equal(blank.background, null);
+});

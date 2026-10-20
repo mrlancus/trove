@@ -198,10 +198,56 @@ public enum GoodNotesInk {
                 if sizes[id] == nil { sizes[id] = .some(pdfSize(bg.data)) }
                 if let s = sizes[id] ?? nil { size = s }
             }
-            pages.append(Page(id: p.id, width: size.width, height: size.height, background: background,
-                              layers: content(recs, attachmentIds: Set(attachments.keys))))
+            var page = Page(id: p.id, width: size.width, height: size.height, background: background,
+                            layers: content(recs, attachmentIds: Set(attachments.keys)))
+            if background == nil || max(page.width, page.height) > oversized { page = fitToContent(page) }
+            pages.append(page)
         }
         return Notebook(pages: pages, attachments: attachments)
+    }
+
+    /// Pages bigger than this (points) are a whiteboard's endless canvas, not paper.
+    public static let oversized = 2000.0
+
+    /// A GoodNotes whiteboard is an endless canvas, often drawn far from 0, 0, sometimes with a huge
+    /// blank PDF behind it. A page with no background whose drawing runs off it, or any oversized page,
+    /// becomes the size of what's on it plus a margin, moved so it all shows; an oversized page loses
+    /// its (blank) background. Ordinary pages that fit are left alone (core/goodnotes.js `fitToContent`).
+    public static func fitToContent(_ page: Page, margin: Double = 36) -> Page {
+        var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
+        func add(_ x: Double, _ y: Double) { minX = min(minX, x); minY = min(minY, y); maxX = max(maxX, x); maxY = max(maxY, y) }
+        for layer in page.layers {
+            switch layer {
+            case .ink(let s): for p in s.runs.joined() where p.x.isFinite && p.y.isFinite { add(p.x - p.r, p.y - p.r); add(p.x + p.r, p.y + p.r) }
+            case .text(let t): add(t.x, t.y); add(t.x + t.w, t.y + t.h)
+            case .image(let i): add(i.x, i.y); add(i.x + i.w, i.y + i.h)
+            }
+        }
+        let huge = max(page.width, page.height) > oversized
+        guard minX.isFinite else {
+            if !huge { return page }
+            var out = page
+            (out.width, out.height, out.background) = (612, 792, nil)
+            return out
+        }
+        // In points from here (layers are in GoodNotes units).
+        let x0 = minX * scale, y0 = minY * scale, x1 = maxX * scale, y1 = maxY * scale
+        if !huge, x0 >= 0, y0 >= 0, x1 <= page.width, y1 <= page.height { return page }
+        let dx = (margin - x0) / scale, dy = (margin - y0) / scale
+        var out = page
+        if huge { out.background = nil }
+        out.width = max(200, x1 - x0 + 2 * margin)
+        out.height = max(200, y1 - y0 + 2 * margin)
+        out.layers = page.layers.map { layer in
+            switch layer {
+            case .ink(var s):
+                s.runs = s.runs.map { $0.map { Point(x: $0.x + dx, y: $0.y + dy, r: $0.r) } }
+                return .ink(s)
+            case .text(var t): t.x += dx; t.y += dy; return .text(t)
+            case .image(var i): i.x += dx; i.y += dy; return .image(i)
+            }
+        }
+        return out
     }
 
     /// Strokes, shapes, text boxes and images on one page, in drawing order. Erased things (field

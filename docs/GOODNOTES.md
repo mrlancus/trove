@@ -52,3 +52,12 @@ A zip:
   background PDF.
 
 Not drawn yet: sticky notes, lasso-rotated items, audio recordings, pencil texture.
+
+## Page size and whiteboards
+
+A page takes its size from its PDF background's MediaBox, or US Letter (612 × 792 pt) when it has
+none. GoodNotes whiteboards are endless canvases: no background, or a huge blank one, with the drawing
+often far from 0, 0. So a page with no background whose content runs off the page, or any page over
+2000 pt on a side, is cropped to its content's bounds plus a 36 pt margin and everything is moved to
+fit (`fitToContent` in both decoders); an oversized page drops its blank background. The viewers draw
+very large pages at a lower resolution instead of failing.

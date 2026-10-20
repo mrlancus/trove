@@ -144,8 +144,10 @@ struct RenderedPage: @unchecked Sendable {
 enum NotebookRenderer {
     static func render(_ page: GoodNotesInk.Page, of notebook: GoodNotesInk.Notebook, width: CGFloat, scale: CGFloat) -> RenderedPage? {
         let k = width / page.width
+        // A big whiteboard would need more pixels than is sensible: draw it softer rather than not at all.
+        let scale = min(scale, CGFloat((58_000_000 / max(1, Double(width * width) * page.height / page.width)).squareRoot()))
         let pxW = Int((width * scale).rounded()), pxH = Int((page.height * k * scale).rounded())
-        guard pxW > 0, pxH > 0, pxW * pxH < 60_000_000,
+        guard pxW > 0, pxH > 0, pxW * pxH <= 60_000_000,
               let ctx = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         let px = k * scale // device pixels per point
