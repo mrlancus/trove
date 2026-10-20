@@ -45,7 +45,10 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.addGestureRecognizer(tools)
         c.toolGesture = tools
 
-        let hold = HoldWatcher()
+        let hold = HoldWatcher(target: nil, action: nil)
+        hold.cancelsTouchesInView = false
+        hold.delaysTouchesBegan = false
+        hold.delaysTouchesEnded = false
         hold.delegate = c
         canvas.addGestureRecognizer(hold)
         c.holdWatcher = hold
@@ -92,12 +95,12 @@ struct PencilCanvas: UIViewRepresentable {
 
     // MARK: Converting strokes
 
-    static func uiColor(_ hex: String) -> UIColor {
+    nonisolated static func uiColor(_ hex: String) -> UIColor {
         let (r, g, b) = InkStroke.rgb(hex)
         return UIColor(red: r, green: g, blue: b, alpha: 1)
     }
 
-    static func hex(_ color: UIColor) -> String {
+    nonisolated static func hex(_ color: UIColor) -> String {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)).getRed(&r, green: &g, blue: &b, alpha: &a)
         func byte(_ v: CGFloat) -> Int { Int((min(1, max(0, v)) * 255).rounded()) }
@@ -459,15 +462,6 @@ final class HoldWatcher: UIGestureRecognizer {
     private var lastMove = Date()
     private var lastPoint = CGPoint.zero
     private var held = false
-
-    override init(target: Any?, action: Selector?) {
-        super.init(target: target, action: action)
-        cancelsTouchesInView = false
-        delaysTouchesBegan = false
-        delaysTouchesEnded = false
-    }
-
-    convenience init() { self.init(target: nil, action: nil) }
 
     /// Whether the last line ended with a hold (and forget it).
     func takeHeld() -> Bool {

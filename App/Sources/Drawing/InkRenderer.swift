@@ -425,7 +425,7 @@ struct InkOverlay {
 extension InkRenderer {
     /// `scale` is screen points per page point, so lines and handles keep their size on screen.
     static func drawOverlay(_ o: InkOverlay, scale: Double, in ctx: CGContext) {
-        let px = 1 / max(0.05, scale)
+        let px = CGFloat(1 / max(0.05, scale))
         let blue = CGColor(red: 10 / 255, green: 132 / 255, blue: 1, alpha: 0.95)
         ctx.saveGState()
         if o.lasso.count > 1 {
