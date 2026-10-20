@@ -27,7 +27,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
     1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
-  - **Installing:** the run's artifacts are `Trove-macOS` (universal, ad-hoc signed) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
+  - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
 ## Latest round (user: "sync isn't working right; previews, versions, folders, Obsidian-style links; plan for Pencil")
@@ -104,6 +104,10 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   the same certificate, so macOS keeps Trove's permissions across updates, and `update.json` is
   published. The app checks it about 15 s after launch and every 6 h, downloads, verifies the Ed25519
   signature, and asks to restart (Settings → General → Updates; Trove → Check for Updates…).
+  - **Status:** ✅ the secrets are set and working. Build 23 (c94035d) was the first signed with the
+    certificate ("Trove Self-Signed Code Signing"), and its `update.json` signature was checked
+    against `TroveUpdatePublicKey`. If signing breaks again, `macos.log` on `ci-logs` names the
+    failing step and fingerprints of the secrets (never their values).
   - **First time only:** download Trove-macOS.zip by hand, use Open Anyway, and grant Accessibility
     again. After that it updates itself.
 - **iPhone/iPad with SideStore (instead of Sideloadly):** install SideStore once (needs the Mac for the
