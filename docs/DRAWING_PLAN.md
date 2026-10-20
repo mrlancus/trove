@@ -1,6 +1,6 @@
 # Drawing and handwriting: plan
 
-_Drafted 2026-10-20. Research notes with sources: see "Sources" at the end. Nothing here is built yet._
+_Drafted 2026-10-20. **Phases 1–4 are built** (core, website, iPad/iPhone with PencilKit, Mac); the record format is PROTOCOL.md §10. Phase 5 (search, export) and 6 are next. GoodNotes ink is now decoded directly (docs/GOODNOTES.md)._
 
 ## What we want
 - **Draw anywhere you have Trove**:

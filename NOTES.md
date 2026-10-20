@@ -1,20 +1,21 @@
 # NOTES: status and next steps
 
-_Last updated by a cloud session (Linux, no Xcode). The user has only an Intel Mac, so there is no local Xcode._
+_Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## Status
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions) | ✅ Done | 71 tests, plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing) | ✅ Done | 76 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
-| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections | ✅ Done | 21 unit/interop tests; 7 e2e (relay + real Chromium), passing locally and against production |
+| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing | ✅ Done | 24 unit/interop tests; 8 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. **This round's website changes aren't deployed yet** (see Next steps 0) |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS; not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8) | 🟡 Core + website tested; apps building on CI, not yet run on a device | 6 Swift + 2 JS unit tests, interop fixture, Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
-| Drawing / Apple Pencil | 📝 Plan only: `docs/DRAWING_PLAN.md` (3 questions for the user at the end) | |
+| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10) | 🟡 Core + website tested; apps written (PencilKit on iPad/iPhone, mouse/trackpad on Mac), building on CI, not yet run on a device | 2 Swift + 1 JS unit tests on `ink-cases.json`, Chromium e2e |
+| **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
@@ -30,7 +31,29 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "sync isn't working right; previews, versions, folders, Obsidian-style links; plan for Pencil")
+## Latest round (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
+- **Add a device** (Settings → Devices): waits for the new device on the relay, shows "… is set up" and closes. Done button.
+- **iPhone**: tabs (Library, Clipboard, Search) on navigation stacks. Tapping an item now opens it
+  (the split view never pushed the detail on iPhone). List layout by default, swipe to pin/delete.
+- **Select several** (apps + website): Select button, ⌘/⇧-click (Mac, website), bar to move, pin,
+  add to a collection or delete; Delete key / Escape on the Mac and website.
+- **Clipboard on iPhone/iPad**: saves what was copied whenever Trove opens (Settings → Clipboard);
+  iOS asks "Allow Paste?" unless the user allows it in iOS Settings → Apps → Trove → Paste from Other Apps.
+- **Sources**: an item that arrives again from another source records it in `alsoFrom` (PROTOCOL §9)
+  and is listed under every source. The website gained a Sources section.
+- **GoodNotes**: `.goodnotes` files open page by page with the handwriting (pen, pencil, highlighter,
+  shapes, typed text, images, PDF/template backgrounds), website and apps (`docs/GOODNOTES.md`).
+- **Drawing** (`docs/DRAWING_PLAN.md` phases 1–4; the user said "build it, as good and easy as
+  possible"): sketches (✎ Sketch on the website, Add → New sketch / ⇧⌘D in the apps) with
+  blank/lined/squared/dotted paper and pages; "Draw on it" for PDFs and images (the file never
+  changes). Pen, pencil, marker, highlighter, eraser, colours, size, undo/redo. Website: Apple Pencil
+  draws and fingers scroll/pinch. iPad/iPhone: PencilKit (double-tap/squeeze → eraser). Mac: mouse,
+  trackpad (Force Touch pressure), pinch zoom. Chosen without asking: pages (not an infinite canvas),
+  and a stroke eraser (no partial erase yet).
+- CI: TroveCore test failures were hidden by `| tail`; now `pipefail`. Bundles carry the real
+  version/build number (SideStore rejected build 23); CI fails if they don't.
+
+## Earlier round (user: "sync isn't working right; previews, versions, folders, Obsidian-style links; plan for Pencil")
 - **Sync fixes** (the user didn't say exactly what went wrong, so these are the bugs found by reading the code):
   - **App**:
     - A live ping that arrived mid-sync was dropped. The app then waited up to 30–60 s for the next
@@ -69,11 +92,13 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Drawing**: researched and planned, not built (`docs/DRAWING_PLAN.md`).
 
 ## Next steps
-0. **This round's apps on a device**: CI builds them. The user tries folders, the Connections graph,
-   Quick Look and versions on the iPad, then reports what breaks. On the website: press **Tidy up**
-   under Folders → Unfiled to file existing things.
-1. **Drawing**: wait for the user's answers to the 3 questions at the end of `docs/DRAWING_PLAN.md`,
-   then build phase 1 (strokes in the core) and phase 2 (website).
+0. **Deploy the website**: `cd server && npx wrangler deploy` (all web tests pass). The cloud
+   session's permission check blocked a production deploy, so it needs the user's OK.
+1. **This round on devices**: the user tries drawing with Apple Pencil on the iPad (app and Safari),
+   GoodNotes notebooks, select mode, the iPhone tabs and clipboard; we fix what breaks.
+   - Drawing, later phases: handwriting recognition into `ocrText` for search (Vision on rendered
+     pages), "export with markup" as a new file version, partial (pixel) eraser, lasso, shapes.
+   - GoodNotes, not drawn yet: sticky notes, rotated lasso items, audio recordings.
 2. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
    - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
    - The Mac build is ad-hoc signed, so the data protection keychain is unavailable; `Keychain` falls back to the login keychain on macOS.
