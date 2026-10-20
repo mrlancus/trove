@@ -41,7 +41,7 @@ struct MouseInkCanvas: NSViewRepresentable {
             view.show(page, index: pageIndex, key: key)
             guard newPage else { return }
             DispatchQueue.main.async {
-                let fit = max(0.25, (scroll.contentSize.width - 40) / page.width)
+                let fit = max(0.25, (Double(scroll.contentSize.width) - 40) / page.width)
                 scroll.magnification = min(fit, 3)
                 view.scroll(.zero)
             }
