@@ -27,6 +27,7 @@ import Testing
         #expect(index.search(.parse("ramen type:note")).map(\.item.id) == ["2"])
         #expect(index.search(.parse("is:recipe")).map(\.item.id) == ["1"])
         #expect(index.search(.parse("tag:food")).map(\.item.id) == ["1"])
+        #expect(index.search(.parse("#Food ramen")).map(\.item.id) == ["1"])
         #expect(index.search(.parse("is:pinned")).map(\.item.id) == ["3"])
         #expect(index.search(.parse("lamp"), semantic: ["2": 0.9]).count == 2)      // semantic hits join
         index.remove("1")

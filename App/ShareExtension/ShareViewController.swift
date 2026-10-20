@@ -79,7 +79,7 @@ struct ShareForm: View {
                     }
                     routes.insert(try await CaptureDrop.send(envelope))
                 }
-                status = routes.contains("local") ? "Saved. It'll appear when you next open Trove." : "Saved ✓"
+                status = routes.contains("local") ? "Saved. It'll appear when you next open Trove." : "Saved"
                 try? await Task.sleep(for: .milliseconds(600))
                 done(true)
             } catch {

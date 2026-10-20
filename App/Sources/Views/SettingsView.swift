@@ -306,7 +306,7 @@ private struct AISection: View {
 
     var body: some View {
         Section {
-            LabeledContent("This device", value: OnDeviceAI.isAvailable ? "Apple Intelligence ✓" : "Basic")
+            LabeledContent("This device", value: OnDeviceAI.isAvailable ? "Apple Intelligence" : "Basic")
             if !OnDeviceAI.isAvailable {
                 Text(OnDeviceAI.unavailableReason).font(.caption).foregroundStyle(.secondary)
             }
@@ -318,7 +318,7 @@ private struct AISection: View {
         } header: {
             Text("Intelligence")
         } footer: {
-            FormFooter("Search by meaning, text in images, dates and places work on every device. Smart titles and summaries come from Apple Intelligence (your iPad does it for everything). Cloud AI sends that item's text to Claude via your relay; items processed this way get a ☁︎ badge.")
+            FormFooter("Search by meaning, text in images, dates and places work on every device. Smart titles and summaries come from Apple Intelligence (your iPad does it for everything). Cloud AI sends that item's text to Claude via your relay; items processed this way show a cloud icon.")
         }
     }
 }

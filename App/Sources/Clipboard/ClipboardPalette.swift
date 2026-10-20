@@ -75,6 +75,9 @@ final class ClipboardPaletteController {
         state.filter = .all
         state.stack = []
         state.editing = nil
+        state.tag = nil
+        state.newTag = nil
+        state.focusRequest += 1
         state.selection = state.entries(store, thisDevice: thisDevice()).first?.id
         // Centre on the screen with the mouse, a little above the middle (like Spotlight).
         let mouse = NSEvent.mouseLocation
@@ -117,7 +120,8 @@ final class ClipboardPaletteController {
             // Only Sendable values cross into the main actor; the event itself stays here.
             let flags = event.modifierFlags
             let key = KeyPress(code: Int(event.keyCode), command: flags.contains(.command), option: flags.contains(.option),
-                               characters: event.charactersIgnoringModifiers?.lowercased() ?? "", windowNumber: event.windowNumber)
+                               characters: event.charactersIgnoringModifiers?.lowercased() ?? "", typed: event.characters ?? "",
+                               windowNumber: event.windowNumber)
             let handled = MainActor.assumeIsolated { self?.handle(key) ?? false }
             return handled ? nil : event
         }
@@ -128,6 +132,8 @@ final class ClipboardPaletteController {
         var command: Bool
         var option: Bool
         var characters: String
+        /// What the key types, for sending stray typing to the search box.
+        var typed: String
         var windowNumber: Int
     }
 
@@ -141,6 +147,11 @@ final class ClipboardPaletteController {
         // Editing a clip: keys go to its fields; esc goes back to the preview.
         if state.editing != nil {
             if event.code == kVK_Escape { state.editing = nil; return true }
+            return false
+        }
+        // Naming a new tag: keys go to its field; esc closes it.
+        if state.newTag != nil {
+            if event.code == kVK_Escape { state.newTag = nil; state.focusRequest += 1; return true }
             return false
         }
         switch event.code {
@@ -168,7 +179,13 @@ final class ClipboardPaletteController {
         default:
             break
         }
-        guard command else { return false }
+        guard command else {
+            // Typing always searches, even if a click moved the focus off the search box.
+            if !event.option, !event.typed.isEmpty, event.typed.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.value < 0xF700 }) {
+                focusSearch(panel)
+            }
+            return false
+        }
         let key = event.characters
         if let n = Int(key), (1...9).contains(n), n <= entries.count {
             paste(entries[n - 1], transform: nil)
@@ -191,6 +208,22 @@ final class ClipboardPaletteController {
         default:
             return false
         }
+    }
+
+    /// Puts the cursor at the end of the search box, unless a text field already has it. The key
+    /// that called this then goes on to the box.
+    private func focusSearch(_ panel: NSPanel) {
+        if panel.firstResponder is NSTextView { return } // a field's editor: something is being typed in
+        guard let field = Self.firstTextField(in: panel.contentView) else { return }
+        panel.makeFirstResponder(field)
+        field.currentEditor()?.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0)
+    }
+
+    private static func firstTextField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let field = view as? NSTextField, field.isEditable { return field }
+        for sub in view.subviews { if let field = firstTextField(in: sub) { return field } }
+        return nil
     }
 
     private func shiftFilter(_ delta: Int) {

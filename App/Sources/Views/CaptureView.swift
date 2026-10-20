@@ -230,7 +230,7 @@ struct AskView: View {
             .navigationTitle("Ask Trove")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
         }
-        .frame(minWidth: 480, minHeight: 420)
+        .sheetSize(width: 560, height: 520)
     }
 
     private func ask() {

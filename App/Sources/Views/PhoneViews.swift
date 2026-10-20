@@ -117,6 +117,7 @@ struct PhoneAddButtons: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Menu { AddMenu() } label: { Label("Add", systemImage: "ellipsis.circle") }
+            Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "pencil.tip.crop.circle.badge.plus") }
             Button { model.showCapture = true } label: { Label("Capture", systemImage: "plus.circle.fill") }
         }
     }

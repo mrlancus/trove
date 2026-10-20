@@ -157,9 +157,7 @@ struct ClipDetailSheet: View {
                 EmptyState(symbol: "doc.on.clipboard", title: "Clip deleted", message: "It was removed on another device.")
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 460, minHeight: 540)
-        #endif
+        .sheetSize(width: 500, height: 600)
     }
 }
 

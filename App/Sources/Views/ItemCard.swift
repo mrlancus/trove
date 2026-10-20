@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import TroveCore
 
@@ -67,7 +68,7 @@ struct ItemCard: View {
     private var productPrice: String? {
         if let w = item.priceWatch, let price = w.price {
             let dropped = w.previous.map { price < $0 } ?? false
-            return (dropped ? "↓ " : "") + PriceAlerts.price(price, w.currency)
+            return (dropped ? "Down to " : "") + PriceAlerts.price(price, w.currency)
         }
         guard let p = item.extracted["product"]?.object, let price = p["price"]?.number else { return nil }
         let currency = p["currency"]?.string ?? "GBP"
@@ -84,9 +85,11 @@ struct Thumbnail: View {
     @State private var image: PlatformImage?
 
     var body: some View {
+        // From the cache straight away when this file has been shown before (searching, scrolling back).
+        let shown = image ?? cacheKey.flatMap(ThumbnailCache.cached)
         Group {
-            if let image {
-                Image(platformImage: image).resizable().scaledToFill()
+            if let shown {
+                Image(platformImage: shown).resizable().scaledToFill()
             } else if let s = item.record[Field.imageURL]?.string, let url = URL(string: s) {
                 AsyncImage(url: url) { phase in
                     if let img = phase.image { img.resizable().scaledToFill() } else { placeholder }
@@ -96,12 +99,21 @@ struct Thumbnail: View {
             }
         }
         .modifier(ThumbnailFrame(square: square, height: hasVisual ? 140 : 0))
-        .task(id: item.thumbnail?.id ?? item.attachments.first?.id) { await loadAttachment() }
+        .task(id: cacheKey) { await loadAttachment() }
     }
+
+    /// The file the picture comes from: the synced preview, else the first attachment if it can make one.
+    private var source: Attachment? {
+        if let thumb = item.thumbnail { return thumb }
+        guard let a = item.attachments.first, ThumbnailCache.canPreview(a) else { return nil }
+        return a
+    }
+
+    private var cacheKey: String? { source?.id }
 
     private var hasVisual: Bool {
         image != nil || item.thumbnail != nil || item.kind == .sketch || item.record[Field.imageURL]?.string != nil
-            || item.attachments.contains { $0.mime.hasPrefix("image/") || $0.mime == "application/pdf" || $0.name.lowercased().hasSuffix(".goodnotes") }
+            || item.attachments.contains(where: ThumbnailCache.canPreview)
     }
 
     private var placeholder: some View {
@@ -112,28 +124,73 @@ struct Thumbnail: View {
     }
 
     private func loadAttachment() async {
-        // A preview made by a device that's seen the item (a sketch's first page, a document's cover).
-        if let thumb = item.thumbnail, let library = model.library, let data = try? await library.attachmentData(thumb) {
-            image = Self.downscale(data)
-            return
-        }
-        guard image == nil, let a = item.attachments.first, let library = model.library else { return }
-        if a.mime.hasPrefix("image/"), let data = try? await library.attachmentData(a) {
-            image = Self.downscale(data)
-        } else if a.mime == "application/pdf", let data = try? await library.attachmentData(a) {
-            image = PDFThumbnail.make(data)
-        } else if a.name.lowercased().hasSuffix(".goodnotes"), let data = try? await library.attachmentData(a) {
-            let cover = await Task.detached(priority: .utility) { FilePreview.goodnotes(data)?.thumbnail }.value
-            image = cover.flatMap(Self.downscale)
-        }
+        guard let source, let library = model.library else { image = nil; return }
+        image = await ThumbnailCache.image(for: source, from: library)
+    }
+}
+
+/// Card pictures, made once per file and kept in memory, so a card that shows again (search
+/// results, scrolling back) appears at once instead of decrypting and decoding its file again.
+/// Pictures are made off the main thread at card size, never full size.
+@MainActor
+enum ThumbnailCache {
+    private static let cache: NSCache<NSString, PlatformImage> = {
+        let cache = NSCache<NSString, PlatformImage>()
+        cache.countLimit = 500
+        return cache
+    }()
+    private static var loading: [String: Task<Decoded?, Never>] = [:]
+
+    static func cached(_ key: String) -> PlatformImage? { cache.object(forKey: key as NSString) }
+
+    nonisolated static func canPreview(_ a: Attachment) -> Bool {
+        (a.mime.hasPrefix("image/") && a.mime != "image/svg+xml") || a.mime == "application/pdf" || a.name.lowercased().hasSuffix(".goodnotes")
     }
 
-    nonisolated static func downscale(_ data: Data) -> PlatformImage? {
-        guard let img = PlatformImage(data: data) else { return nil }
+    static func image(for attachment: Attachment, from library: Library) async -> PlatformImage? {
+        let key = attachment.id
+        if let hit = cached(key) { return hit }
+        let task = loading[key] ?? Task<Decoded?, Never> {
+            guard let data = try? await library.attachmentData(attachment) else { return nil }
+            return await Task.detached(priority: .utility) { decode(data, attachment) }.value
+        }
+        loading[key] = task
+        let decoded = await task.value
+        loading[key] = nil
+        if let hit = cached(key) { return hit } // another card asking for the same file got there first
+        guard let decoded else { return nil }
+        let image = PlatformImage.make(decoded.cgImage)
+        cache.setObject(image, forKey: key as NSString)
+        return image
+    }
+
+    struct Decoded: @unchecked Sendable { let cgImage: CGImage }
+
+    nonisolated static func decode(_ data: Data, _ a: Attachment) -> Decoded? {
+        if a.mime == "application/pdf" {
+            return PDFThumbnail.make(data)?.cgImageForVision.map(Decoded.init)
+        }
+        if a.name.lowercased().hasSuffix(".goodnotes") {
+            return FilePreview.goodnotes(data)?.thumbnail.flatMap { downscaled($0) }.map(Decoded.init)
+        }
+        return downscaled(data).map(Decoded.init)
+    }
+
+    /// A card-sized picture straight from the file's bytes (ImageIO never decodes it full size).
+    nonisolated static func downscaled(_ data: Data, maxPixels: Int = 700) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+                                        kCGImageSourceCreateThumbnailWithTransform: true]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+}
+
+extension PlatformImage {
+    static func make(_ cgImage: CGImage) -> PlatformImage {
         #if canImport(UIKit)
-        return img.preparingThumbnail(of: CGSize(width: 600, height: 600 * img.size.height / max(img.size.width, 1))) ?? img
+        UIImage(cgImage: cgImage)
         #else
-        return img
+        NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         #endif
     }
 }

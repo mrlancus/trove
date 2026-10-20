@@ -1,5 +1,8 @@
 import SwiftUI
 import TroveCore
+#if os(iOS)
+import GameController
+#endif
 
 /// One row in the history: a synced clip, or a sensitive copy kept briefly on this device.
 enum ClipEntry: Identifiable, Equatable {
@@ -65,20 +68,44 @@ final class ClipPaletteState {
     var stack: [String] = []
     /// The clip being edited in place of the preview (⌘E).
     var editing: String?
+    /// One of your tags: only clips with it are shown.
+    var tag: String?
+    /// Bumped to put the cursor in the search field (each time the palette opens).
+    var focusRequest = 0
+    /// The "new tag" row, while it's open.
+    var newTag: NewTagDraft?
+
+    struct NewTagDraft: Equatable {
+        var name = ""
+        var color: TagColor = .blue
+        /// The clip that gets the tag once it's made, when it was started from a clip's menu.
+        var forClip: String?
+    }
+
+    /// The last answer, kept until the clips, the search or the filters change: the view asks
+    /// several times per keystroke.
+    @ObservationIgnored private var cached: (key: String, entries: [ClipEntry])?
 
     func entries(_ store: ClipboardStore, thisDevice: String?) -> [ClipEntry] {
-        let sensitive = store.ephemeral.map(ClipEntry.sensitive)
+        let key = "\(store.revision)|\(store.ephemeral.map(\.id).joined(separator: ","))|\(filter.rawValue)|\(tag ?? "")|\(thisDevice ?? "")|\(query)"
+        if let cached, cached.key == key { return cached.entries }
+        let parsed = ClipQuery(query)
+        let sensitive = tag == nil ? store.ephemeral.map(ClipEntry.sensitive) : []
         let synced = store.clips.map(ClipEntry.clip)
-        let pinnedFirst = filter == .all && query.isEmpty
+        let pinnedFirst = filter == .all && parsed.isEmpty
             ? synced.filter { $0.clip?.isPinned == true } + synced.filter { $0.clip?.isPinned != true }
             : synced
-        return (sensitive + pinnedFirst).filter { entry in
+        let found = (sensitive + pinnedFirst).filter { entry in
             guard filter.includes(entry, thisDevice: thisDevice) else { return false }
             switch entry {
-            case .clip(let c): return c.matches(query)
+            case .clip(let c):
+                if let tag, !c.tags.contains(tag) { return false }
+                return parsed.isEmpty || parsed.matches(c, haystack: store.searchText(c))
             case .sensitive(let e): return query.isEmpty || e.text.localizedCaseInsensitiveContains(query)
             }
         }
+        cached = (key, found)
+        return found
     }
 
     func move(_ delta: Int, in entries: [ClipEntry]) {
@@ -154,24 +181,69 @@ struct ClipsView: View {
             footer
         }
         .onAppear { searchFocused = true }
+        .onChange(of: state.focusRequest) { searchFocused = true }
         .onChange(of: state.query) { state.selection = entries.first?.id }
+        .onChange(of: state.tag) { state.selection = entries.first?.id }
         .onChange(of: state.selection) { if state.editing != state.selection { state.editing = nil } }
         .onChange(of: state.filter) { state.selection = entries.first?.id }
     }
 
+    /// The kinds, then your tags in their colours (click one to see only its clips), then "+ Tag".
     private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ClipFilter.allCases) { f in
-                    Button { state.filter = f } label: {
-                        Text(f.title).font(.callout.weight(state.filter == f ? .semibold : .regular))
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(ClipFilter.allCases) { f in
+                        Button { state.filter = f } label: {
+                            Text(f.title).font(.callout.weight(state.filter == f ? .semibold : .regular))
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(state.filter == f ? AnyShapeStyle(.orange.opacity(0.18)) : AnyShapeStyle(.clear), in: Capsule())
+                                .foregroundStyle(state.filter == f ? .orange : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Divider().frame(height: 16)
+                    ForEach(store.customTags) { tag in tagChip(tag) }
+                    Button { state.newTag = .init() } label: {
+                        Label("Tag", systemImage: "plus").font(.callout)
                             .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(state.filter == f ? AnyShapeStyle(.orange.opacity(0.18)) : AnyShapeStyle(.clear), in: Capsule())
-                            .foregroundStyle(state.filter == f ? .orange : .secondary)
+                            .overlay(Capsule().strokeBorder(.quaternary))
                     }
                     .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Make a tag with a colour, to sort clips into")
+                }
+                .padding(.vertical, 1)
+            }
+            if state.newTag != nil { NewTagRow(state: state, store: store) }
+        }
+    }
+
+    private func tagChip(_ tag: CustomTag) -> some View {
+        let on = state.tag == tag.name
+        return Button { state.tag = on ? nil : tag.name } label: {
+            HStack(spacing: 5) {
+                Circle().fill(tag.color.color).frame(width: 8, height: 8)
+                Text(tag.name).font(.callout.weight(on ? .semibold : .regular))
+                Text("\(store.clips.lazy.filter { $0.tags.contains(tag.name) }.count)").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(tag.color.color.opacity(on ? 0.3 : 0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? tag.color.color : .clear, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Menu("Colour") {
+                ForEach(TagColor.allCases, id: \.self) { c in
+                    Button { Task { await store.setTagColor(tag.name, c) } } label: {
+                        Label(c.rawValue.capitalized, systemImage: c == tag.color ? "checkmark.circle.fill" : "circle.fill")
+                    }
                 }
             }
+            Button(role: .destructive) {
+                if state.tag == tag.name { state.tag = nil }
+                Task { await store.deleteTag(tag.name) }
+            } label: { Label("Delete tag", systemImage: "trash") }
         }
     }
 
@@ -186,6 +258,7 @@ struct ClipsView: View {
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { activate(entry, nil) }
                             .onTapGesture { state.selection = entry.id }
+                            .contextMenu { if let clip = entry.clip { ClipTagMenu(clip: clip, store: store, state: state) } }
                     }
                 }
                 .padding(6)
@@ -244,9 +317,8 @@ struct ClipsView: View {
                 Text("What you copy is saved each time you open Trove (iOS asks “Allow Paste?” unless you allow it in Settings → Apps → Trove → Paste from Other Apps). Copies on your other devices appear here by themselves.")
             }
             Section {
-                Picker("Show", selection: $state.filter) {
-                    ForEach(ClipFilter.allCases) { Text($0.title).tag($0) }
-                }
+                filterChips
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             }
             Section {
                 ForEach(entries) { entry in
@@ -274,7 +346,9 @@ struct ClipsView: View {
                 }
             }
         }
-        .searchable(text: $state.query, prompt: "Search your clipboard, or tag:, app:")
+        .searchable(text: $state.query, prompt: "Search your clipboard, or #tag, app:")
+        .searchFocused($searchFocused)
+        .onAppear { if Self.typingGoesToSearch { searchFocused = true } }
         .overlay {
             if entries.isEmpty { emptyState }
         }
@@ -292,10 +366,21 @@ struct ClipsView: View {
                 Button { activate(entry, t) } label: { Text("Copy as \(t.title)") }
             }
             Button { detail = clip.id } label: { Label("Details and edit…", systemImage: "pencil") }
+            ClipTagMenu(clip: clip, store: store, state: state)
             Button { Task { await store.togglePin(clip) } } label: { Label(clip.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
             Button { saveToLibrary(clip) } label: { Label("Save to Trove", systemImage: "tray.and.arrow.down") }
         }
         Button(role: .destructive) { delete(entry) } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// With a keyboard (the Mac, or an iPad with one attached), the search box has the cursor as
+    /// soon as the clipboard opens, so typing searches. On a touch screen the keyboard would cover it.
+    static var typingGoesToSearch: Bool {
+        #if os(macOS)
+        true
+        #else
+        GCKeyboard.coalesced != nil
+        #endif
     }
 
     private func delete(_ entry: ClipEntry) {
@@ -327,7 +412,17 @@ struct ClipRow: View {
                 HStack(spacing: 6) {
                     Text(subtitle).foregroundStyle(.secondary)
                     if let tags = entry.clip?.tags, !tags.isEmpty {
-                        Text(tags.prefix(3).map { "#" + $0 }.joined(separator: " ")).foregroundStyle(.orange)
+                        let mine = tags.compactMap { t in store.color(ofTag: t).map { (t, $0) } }
+                        ForEach(Array(mine.prefix(3)), id: \.0) { name, color in
+                            Text(name).font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(color.color.opacity(0.2), in: Capsule())
+                                .foregroundStyle(color.color)
+                        }
+                        let rest = tags.filter { store.color(ofTag: $0) == nil }
+                        if mine.count < 3, !rest.isEmpty {
+                            Text(rest.prefix(3 - mine.count).map { "#" + $0 }.joined(separator: " ")).foregroundStyle(.orange)
+                        }
                     }
                 }
                 .font(.caption).lineLimit(1)
@@ -441,6 +536,10 @@ struct ClipPreview: View {
                 HStack {
                     Text(meta(clip)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
+                    Menu { ClipTagMenu(clip: clip, store: store, state: nil) } label: { Image(systemName: "tag") }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Tags")
                     Button { edit(clip) } label: { Image(systemName: "pencil") }
                         .help("Details and edit (⌘E)")
                     Button { Task { await store.togglePin(clip) } } label: { Image(systemName: clip.isPinned ? "pin.slash" : "pin") }
@@ -550,5 +649,73 @@ struct ColorDetails: View {
         let alpha = a < 1 ? String(format: ", %.2f", a) : ""
         return [hex, "rgb\(a < 1 ? "a" : "")(\(R), \(G), \(B)\(alpha))",
                 "hsl\(a < 1 ? "a" : "")(\(Int((h * 360).rounded())), \(Int((s * 100).rounded()))%, \(Int((l * 100).rounded()))%\(alpha))"]
+    }
+}
+
+// MARK: - Tags
+
+/// "Tags" in a clip's menu: tick your tags on and off, or make a new one for it.
+struct ClipTagMenu: View {
+    let clip: Clip
+    let store: ClipboardStore
+    /// Where "New tag…" opens its row; nil where there's no row to open (it's made blue instead).
+    let state: ClipPaletteState?
+
+    var body: some View {
+        Menu {
+            ForEach(store.customTags) { tag in
+                Button { Task { await store.toggleTag(tag.name, on: clip) } } label: {
+                    Label(tag.name, systemImage: clip.tags.contains(tag.name) ? "checkmark.circle.fill" : "circle")
+                }
+            }
+            if !store.customTags.isEmpty { Divider() }
+            if let state {
+                Button { state.newTag = .init(forClip: clip.id) } label: { Label("New tag…", systemImage: "plus") }
+            } else if store.customTags.isEmpty {
+                Text("Make a tag with + Tag above")
+            }
+        } label: { Label("Tags", systemImage: "tag") }
+    }
+}
+
+/// Name and colour for a new tag, under the filter chips.
+struct NewTagRow: View {
+    @Bindable var state: ClipPaletteState
+    let store: ClipboardStore
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let draft = state.newTag ?? .init()
+        HStack(spacing: 8) {
+            TextField("New tag", text: Binding(get: { state.newTag?.name ?? "" }, set: { state.newTag?.name = $0 }))
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 180)
+                .focused($focused)
+                .onSubmit(create)
+            ForEach(TagColor.allCases, id: \.self) { c in
+                Button { state.newTag?.color = c } label: {
+                    Circle().fill(c.color).frame(width: 16, height: 16)
+                        .overlay(Circle().strokeBorder(.primary.opacity(draft.color == c ? 0.8 : 0), lineWidth: 2).padding(-3))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(c.rawValue.capitalized)
+            }
+            Spacer(minLength: 4)
+            Button("Cancel") { state.newTag = nil }.buttonStyle(.borderless)
+            Button("Add", action: create).buttonStyle(.borderedProminent).controlSize(.small)
+                .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .onAppear { focused = true }
+    }
+
+    private func create() {
+        guard let draft = state.newTag, !draft.name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        state.newTag = nil
+        Task {
+            guard let name = await store.setTagColor(draft.name, draft.color) else { return }
+            if let id = draft.forClip, let clip = store.clips.first(where: { $0.id == id }), !clip.tags.contains(name) {
+                await store.toggleTag(name, on: clip)
+            }
+        }
     }
 }

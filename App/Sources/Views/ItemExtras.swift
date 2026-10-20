@@ -175,7 +175,7 @@ struct HistorySheet: View {
                 }
             }
         }
-        .frame(minWidth: 480, minHeight: 420)
+        .sheetSize(width: 600, height: 560)
         .task { versions = await model.textVersions(item) }
     }
 }
@@ -279,7 +279,7 @@ struct ConnectSheet: View {
             .navigationTitle("Connect to…")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
-        .frame(minWidth: 420, minHeight: 420)
+        .sheetSize(width: 480, height: 520)
     }
 
     private var results: [Item] {

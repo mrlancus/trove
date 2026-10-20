@@ -5,7 +5,7 @@ import SwiftUI
 import TroveCore
 
 /// What the drawing editor is open on: a sketch's own pages, or a file (PDF or image) with its ink.
-struct InkTarget: Identifiable, Hashable {
+struct InkTarget: Identifiable, Hashable, Codable {
     var itemId: String
     /// "" for a sketch; the attachment id for a file.
     var layer: String
@@ -841,6 +841,7 @@ final class InkEditorModel {
     /// When the editor closes: a fresh card picture for a sketch, and its handwriting read for search.
     func finish() async {
         guard edited, isSketch, let first = pages.first, let library = app?.library else { return }
+        edited = false // once: Done and closing the window both land here
         let c = display(first.key)
         let bounds = first.infinite ? await library.inkBounds(on: target.itemId, pageKey: first.key) : nil
         if let jpeg = await Task.detached(priority: .utility, operation: { InkRenderer.thumbnailJPEG(first, content: c, bounds: bounds) }).value {

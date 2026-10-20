@@ -35,6 +35,9 @@ struct MainView: View {
     @State private var showSettings = false
     @State private var showClipboard = false
     @State private var dropTargeted = false
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -55,7 +58,12 @@ struct MainView: View {
         #if os(iOS)
         .fullScreenCover(item: $model.inkTarget) { target in InkEditorView(target: target, app: model).environment(model) }
         #else
-        .sheet(item: $model.inkTarget) { target in InkEditorView(target: target, app: model).environment(model) }
+        // On the Mac a sketch opens in its own window, beside the library, not over it.
+        .onChange(of: model.inkTarget) { _, target in
+            guard let target else { return }
+            openWindow(id: "ink", value: target)
+            model.inkTarget = nil
+        }
         #endif
         #if os(iOS)
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
@@ -104,6 +112,8 @@ struct MainView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button { model.showCapture = true } label: { Label("Capture", systemImage: "plus") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+            Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "pencil.tip.crop.circle.badge.plus") }
+                .help("New sketch (⇧⌘D): draw with the Pencil, a mouse or the trackpad")
             Menu { AddMenu() } label: { Label("Add", systemImage: "ellipsis.circle") }
             Button { showAsk = true } label: { Label("Ask Trove", systemImage: "sparkles") }
                 .keyboardShortcut("j", modifiers: .command)
@@ -217,7 +227,7 @@ struct SidebarView: View {
         }
     }
 
-    private let primary: [SmartCollection] = [.recent, .pinned, .toRead, .notes]
+    private let primary: [SmartCollection] = [.recent, .pinned, .toRead, .notes, .sketches]
     private let smart: [SmartCollection] = [.recipes, .places, .thingsToBuy, .events, .videos, .quotes, .receipts, .handwriting, .needsAttention]
 
     var body: some View {
@@ -359,6 +369,9 @@ struct SidebarView: View {
         Label(s.title, systemImage: s.symbol)
             .badge(model.count(s))
             .tag(AppModel.Selection.smart(s))
+            .contextMenu {
+                if s == .sketches { Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "pencil.tip.crop.circle.badge.plus") } }
+            }
     }
 }
 
@@ -431,6 +444,7 @@ struct LibraryView: View {
 
     @ViewBuilder private var header: some View {
         if case .folder(let id) = model.selection, model.searchResults == nil { FolderHeader(folderId: id) }
+        if case .smart(.sketches) = model.selection, model.searchResults == nil, !model.selecting { SketchesHeader() }
         if case .unfiled = model.selection, !model.visibleItems.isEmpty, !model.selecting {
             Button { Task { await model.tidyUp() } } label: { Label("Tidy up: file everything", systemImage: "wand.and.stars") }
                 .buttonStyle(.borderedProminent)
@@ -841,5 +855,28 @@ struct FolderHeader: View {
                 }
             }
         }
+    }
+}
+
+/// The top of Sketches: a big way in to drawing.
+struct SketchesHeader: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { Task { await model.newSketch() } } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "pencil.tip.crop.circle.badge.plus").font(.system(size: 34)).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("New sketch").font(.headline)
+                    Text("Pens, highlighter, shapes, text and pictures, on pages or an endless canvas.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card(cornerRadius: 16)
+        }
+        .buttonStyle(.plain)
     }
 }

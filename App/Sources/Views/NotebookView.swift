@@ -131,9 +131,7 @@ struct NotebookReader: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 700, minHeight: 800)
-        #endif
+        .sheetSize(width: 900, height: 1000)
     }
 }
 

@@ -15,9 +15,7 @@ struct ClipboardScreen: View {
                 .navigationTitle("Clipboard")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-        #if os(macOS)
-        .frame(minWidth: 520, minHeight: 600)
-        #endif
+        .sheetSize(width: 760, height: 720)
         .task { await model.clipboard.reload() }
     }
 

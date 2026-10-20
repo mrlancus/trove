@@ -57,6 +57,16 @@ struct TroveApp: App {
         }
 
         #if os(macOS)
+        // Sketches (and drawing on PDFs and images) in a window of their own.
+        WindowGroup("Sketch", id: "ink", for: InkTarget.self) { $target in
+            if let target {
+                InkEditorView(target: target, app: model)
+                    .environment(model)
+                    .navigationTitle(target.title)
+            }
+        }
+        .defaultSize(width: 1100, height: 820)
+
         Window("Capture", id: "capture") {
             CaptureView()
                 .environment(model)

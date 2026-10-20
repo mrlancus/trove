@@ -110,6 +110,7 @@ test("URL cleaning, tags, search", () => {
   assert.deepEqual(search(items, "ramen type:note").map((i) => i.id), ["2"]);
   assert.deepEqual(search(items, "is:pinned").map((i) => i.id), ["3"]);
   assert.deepEqual(search(items, "tag:food").map((i) => i.id), ["1"]);
+  assert.deepEqual(search(items, "#Food ramen").map((i) => i.id), ["1"]);
 });
 
 test("setup codes", () => {

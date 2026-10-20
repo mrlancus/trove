@@ -138,6 +138,7 @@ export function parseQuery(input) {
   for (const token of input.split(" ").filter(Boolean)) {
     const i = token.indexOf(":");
     const key = i > 0 ? token.slice(0, i).toLowerCase() : "", value = i > 0 ? token.slice(i + 1).toLowerCase() : "";
+    if (token.length > 1 && token.startsWith("#")) { q.tags.push(token.slice(1).toLowerCase()); continue; }
     if (!value) { free.push(token); continue; }
     if (key === "tag") q.tags.push(value.replace("#", ""));
     else if (key === "type" || key === "kind") (KINDS.includes(value) ? q.kinds : q.categories).push(value);

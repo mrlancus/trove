@@ -30,7 +30,14 @@ final class ClipboardStore {
     /// The last copy this device recorded, for the status line in Settings.
     private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
 
+    /// Your tags, each with a colour (synced, `settings.tags`): the clipboard's sections.
+    private(set) var customTags: [CustomTag] = []
+    /// Bumped whenever `clips` changes, so lists can keep their filtered results until then.
+    private(set) var revision = 0
+
     @ObservationIgnored private var library: Library?
+    /// Each clip's folded search text, kept per version so typing only does `contains` checks.
+    @ObservationIgnored private var searchTexts: [String: (hlc: String, text: String)] = [:]
     @ObservationIgnored private var images: [String: PlatformImage] = [:]
     @ObservationIgnored private var lastPrune = Date.distantPast
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
@@ -53,10 +60,43 @@ final class ClipboardStore {
             await library.pruneClips()
         }
         clips = await library.clips()
+        customTags = await library.customTags()
         autoSave = await library.clipAutoSaveKinds()
+        revision += 1
         #if os(iOS)
         publishForKeyboard()
         #endif
+    }
+
+    // MARK: Searching
+
+    /// The clip's folded search text (`Clip.searchText`), worked out once per version of the clip.
+    func searchText(_ clip: Clip) -> String {
+        if let cached = searchTexts[clip.id], cached.hlc == clip.record.updatedHLC { return cached.text }
+        let text = clip.searchText
+        searchTexts[clip.id] = (clip.record.updatedHLC, text)
+        return text
+    }
+
+    func color(ofTag tag: String) -> TagColor? { customTags.first { $0.name == tag }?.color }
+
+    // MARK: Tags
+
+    @discardableResult
+    func setTagColor(_ name: String, _ color: TagColor) async -> String? {
+        let tag = await library?.setTagColor(name, color)
+        await reload()
+        return tag ?? nil
+    }
+
+    func deleteTag(_ name: String) async {
+        await library?.deleteTag(name)
+        await reload()
+    }
+
+    func toggleTag(_ tag: String, on clip: Clip) async {
+        await library?.toggleClipTag(clip.id, tag)
+        await reload()
     }
 
     // MARK: Adding

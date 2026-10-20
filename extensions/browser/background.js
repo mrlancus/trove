@@ -112,6 +112,6 @@ async function flushQueue() {
 
 async function notify(result) {
   await chrome.action.setBadgeBackgroundColor({ color: result.ok ? "#34C759" : result.queued ? "#FF9F0A" : "#FF3B30" });
-  await chrome.action.setBadgeText({ text: result.ok ? "✓" : result.queued ? "…" : "!" });
+  await chrome.action.setBadgeText({ text: result.ok ? "OK" : result.queued ? "…" : "!" });
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2500);
 }

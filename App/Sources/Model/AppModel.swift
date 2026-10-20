@@ -74,14 +74,13 @@ final class AppModel {
     /// Select mode: tapping toggles items into `picked` for the bulk actions bar.
     var selecting = false { didSet { if !selecting { picked = [] } } }
     var picked: Set<String> = []
-    var searchText = "" { didSet { scheduleSearch() } }
+    var searchText = "" { didSet { if searchText != oldValue { searchNow() } } }
     var searchResults: [Item]?
     /// Clips matching the search, shown under the library's results.
-    var clipResults: [Clip] {
-        let q = searchText.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return [] }
-        return Array(clipboard.clips.lazy.filter { $0.matches(q) }.prefix(8))
-    }
+    private(set) var clipResults: [Clip] = []
+    /// This device's search index, copied from the library after each change. Searching it on the
+    /// main actor answers every keystroke at once, without waiting behind syncing or file loads.
+    @ObservationIgnored private var index = SearchIndex()
     var sync = SyncStatus()
     var enriching = false
     var toast: String?
@@ -222,8 +221,11 @@ final class AppModel {
         collections = await library.collections()
         folders = await library.folders()
         links = Links.graph(items)
-        await semantic.update(items)
-        if !searchText.isEmpty { await runSearch() }
+        index = await library.searchIndex()
+        if !searchText.isEmpty { searchNow() }
+        // Search by meaning catches up in the background; keyword search never waits for it.
+        let snapshot = self.items, semantic = self.semantic
+        Task.detached(priority: .utility) { await semantic.update(snapshot) }
         publishWidget()
         SpotlightIndexer.index(items)
         inkedLayers = await library.inkedLayers()
@@ -393,22 +395,24 @@ final class AppModel {
 
     // MARK: Search
 
-    private func scheduleSearch() {
+    /// Keyword results straight away, on every keystroke; "search by meaning" is blended in a
+    /// moment later when typing pauses.
+    private func searchNow() {
         searchTask?.cancel()
-        searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
-            await self?.runSearch()
-        }
-    }
-
-    private func runSearch() async {
-        guard let library else { return }
         let text = searchText.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { searchResults = nil; return }
-        let free = SearchQuery.parse(text).text
-        let semanticScores = await semantic.scores(for: free)
-        searchResults = await library.search(text, semantic: semanticScores)
+        guard !text.isEmpty else { searchResults = nil; clipResults = []; return }
+        let query = SearchQuery.parse(text)
+        searchResults = index.search(query).map(\.item)
+        let clipQuery = ClipQuery(text)
+        clipResults = Array(clipboard.clips.lazy.filter { clipQuery.matches($0, haystack: self.clipboard.searchText($0)) }.prefix(8))
+        guard query.text.count >= 3 else { return }
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, !Task.isCancelled else { return }
+            let scores = await self.semantic.scores(for: query.text)
+            guard !Task.isCancelled, !scores.isEmpty, self.searchText.trimmingCharacters(in: .whitespaces) == text else { return }
+            self.searchResults = self.index.search(query, semantic: scores).map(\.item)
+        }
     }
 
     // MARK: Sync
@@ -785,7 +789,7 @@ final class AppModel {
             return (answer.answer, fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
         }
         if vault.config?.cloudAI == true, let relay = vault.relayClient, let answer = try? await relay.ask(question, sources: sources) {
-            return (answer.answer + "\n\n☁︎ Answered in the cloud", fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
+            return (answer.answer + "\n\n(Answered in the cloud)", fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
         }
         return ("Here are the closest matches. (Turn on Apple Intelligence or cloud AI for written answers.)", fallbackHits)
     }

@@ -171,7 +171,7 @@ public enum Tokenizer {
     }
 }
 
-/// Parsed search box input. Supports `tag:x`, `type:pdf`, `is:pinned`, `is:unread`, `from:kindle`,
+/// Parsed search box input. Supports `tag:x` (or `#x`), `type:pdf`, `is:pinned`, `is:unread`, `from:kindle`,
 /// `in:<collection id>`, `before:2026-01-01`, `after:2025-12-01`; everything else is free text.
 public struct SearchQuery: Sendable, Equatable {
     public var text: String = ""
@@ -195,6 +195,7 @@ public struct SearchQuery: Sendable, Equatable {
         day.locale = Locale(identifier: "en_US_POSIX")
         day.dateFormat = "yyyy-MM-dd"
         for token in input.split(separator: " ") {
+            if token.hasPrefix("#"), token.count > 1 { q.tags.insert(token.dropFirst().lowercased()); continue }
             let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
             guard parts.count == 2, !parts[1].isEmpty else { free.append(String(token)); continue }
             let value = parts[1].lowercased()

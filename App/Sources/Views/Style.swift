@@ -1,5 +1,8 @@
 import SwiftUI
 import TroveCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// Visual language per item type (RESEARCH.md design direction: calm, premium, Apple-native).
 enum ItemStyle {
@@ -118,13 +121,22 @@ extension View {
 
 struct TagChip: View {
     var tag: String
+    @Environment(AppModel.self) private var model
+
     var body: some View {
+        // One of your tags shows in its colour; others in the item's tint.
+        if let color = model.clipboard.color(ofTag: tag.lowercased())?.color {
+            label.background(color.opacity(0.16), in: Capsule()).foregroundStyle(color)
+        } else {
+            label.background(.tint.opacity(0.12), in: Capsule()).foregroundStyle(.tint)
+        }
+    }
+
+    private var label: some View {
         Text("#\(tag)")
             .font(.caption2.weight(.medium))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(.tint.opacity(0.12), in: Capsule())
-            .foregroundStyle(.tint)
     }
 }
 
@@ -147,5 +159,66 @@ extension Date {
         let seconds = -timeIntervalSinceNow
         if seconds < 60 { return "Just now" }
         return formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
+    }
+}
+
+// MARK: - Sheet sizes (Mac)
+
+extension View {
+    /// The size a sheet would like on the Mac, shrunk to fit its window and screen. A Mac sheet hangs
+    /// from its window and can't be moved, so one bigger than the window runs off the screen and
+    /// hides its buttons. iPhone and iPad size sheets themselves, so this does nothing there.
+    func sheetSize(width: CGFloat, height: CGFloat) -> some View {
+        modifier(SheetSize(wanted: CGSize(width: width, height: height)))
+    }
+}
+
+private struct SheetSize: ViewModifier {
+    #if os(macOS)
+    @State private var size: CGSize
+
+    init(wanted: CGSize) {
+        // Worked out once, when the sheet opens (later the sheet itself may be the key window).
+        _size = State(initialValue: Self.fit(wanted))
+    }
+
+    func body(content: Content) -> some View {
+        content.frame(width: size.width, height: size.height)
+    }
+
+    @MainActor static func fit(_ wanted: CGSize) -> CGSize {
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+        let screen = (window?.screen ?? NSScreen.main)?.visibleFrame.size ?? CGSize(width: 1280, height: 800)
+        var limit = CGSize(width: screen.width - 60, height: screen.height - 90)
+        if let frame = window?.frame.size {
+            limit.width = min(limit.width, max(frame.width - 40, 520))
+            limit.height = min(limit.height, max(frame.height - 70, 420))
+        }
+        return CGSize(width: min(wanted.width, limit.width), height: min(wanted.height, limit.height))
+    }
+    #else
+    init(wanted: CGSize) {}
+    func body(content: Content) -> some View { content }
+    #endif
+}
+
+// MARK: - Tag colours
+
+extension TagColor {
+    var color: Color {
+        switch self {
+        case .red: .red
+        case .orange: .orange
+        case .yellow: .yellow
+        case .green: .green
+        case .mint: .mint
+        case .teal: .teal
+        case .blue: .blue
+        case .indigo: .indigo
+        case .purple: .purple
+        case .pink: .pink
+        case .brown: .brown
+        case .gray: .gray
+        }
     }
 }

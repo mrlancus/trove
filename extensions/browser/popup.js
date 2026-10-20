@@ -20,7 +20,7 @@ if (!setup) {
     $("save").disabled = true;
     $("status").textContent = "Encrypting…";
     const result = await chrome.runtime.sendMessage({ type: "save", capture: { ...capture, note: $("note").value.trim() } });
-    $("status").textContent = result.ok ? "Saved ✓" : result.error;
+    $("status").textContent = result.ok ? "Saved" : result.error;
     $("status").className = "status " + (result.ok ? "ok" : result.queued ? "warn" : "err");
     if (result.ok || result.queued) setTimeout(() => window.close(), 900);
     else $("save").disabled = false;

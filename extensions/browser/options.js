@@ -22,7 +22,7 @@ $("connect").onclick = async () => {
     if (!health?.ok) throw new Error("Couldn't reach your relay. Check it's deployed and the URL is right.");
     await chrome.storage.local.set({ setup });
     $("code").value = "";
-    $("status").textContent = "Connected ✓";
+    $("status").textContent = "Connected";
     $("status").className = "status ok";
   } catch (e) {
     $("status").textContent = e.message;

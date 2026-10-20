@@ -389,7 +389,7 @@ struct ExtractedCards: View {
         event.endDate = start.addingTimeInterval(2 * 3600)
         event.location = location
         event.calendar = store.defaultCalendarForNewEvents
-        do { try store.save(event, span: .thisEvent); return "Added ✓" } catch { return "Couldn't add" }
+        do { try store.save(event, span: .thisEvent); return "Added to Calendar" } catch { return "Couldn't add" }
     }
 
     static func parseDate(_ s: String) -> Date? {

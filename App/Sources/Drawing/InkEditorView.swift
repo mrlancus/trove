@@ -65,7 +65,8 @@ struct InkEditorView: View {
             Button("Delete page", role: .destructive) { if let key = confirmDeletePage { editor.deletePage(key) }; confirmDeletePage = nil }
         }
         #if os(macOS)
-        .frame(minWidth: 900, minHeight: 700)
+        .frame(minWidth: 640, minHeight: 480)
+        .onDisappear { Task { await editor.finish() } } // closing the window counts as Done
         #endif
     }
 
@@ -359,7 +360,7 @@ struct InkTextSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 420, minHeight: 360)
+        .sheetSize(width: 480, height: 400)
         #endif
     }
 }
