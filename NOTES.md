@@ -14,7 +14,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 9ae52f4, search/tags/settings round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
-| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, erasers, lasso, shapes, text, pictures, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
+| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version fdbed6d6, after the search/tags/settings round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
@@ -31,7 +31,61 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "sheet off the page, clipboard tags, GoodNotes source, type to search, where's sketching, no emoji, faster search, Liquid Glass icon")
+## Latest round (user: "sketches getting deleted, better crossing out, precise eraser, zoom 10–1000 %, Pencil squeeze, sketch folders and connections, GoodNotes-level sketching, crashes, clipboard connections with where/when/geolocation, empty 1970 notes, Clipboard under Sketches, laggy scrolling, import from Paste")
+- **A session ran out before committing**, so this round was redone from scratch and committed step by step.
+- **Drawings vanishing (iPad):** when the Pencil lifted, the canvas could be redrawn from a copy of
+  the page taken before the stroke reached the model, wiping it. Now it reads the model fresh and
+  keeps strokes still being handed over; the editor also keeps unsaved strokes/erasures across
+  reloads. (There was no auto cross-out before: the user's guess was wrong, but scribble-to-erase
+  is now a real, opt-in feature.)
+- **Empty "Untitled, 56 years ago" notes:** edits written to ids that weren't items (and deletes
+  without a kind) made bare item records with no kind or date. `Library.update`/`setBody` and the
+  website's `update`/`setBody` now skip unknown ids, deletes keep the record's kind, and such
+  "stray items" are hidden everywhere (PROTOCOL.md §3). Not proven which code path made the user's;
+  ask if new ones appear.
+- **Crashes:** not reproduced (no device). Likely causes removed: a 4096-pixel picture per page
+  (memory) and strokes with no/NaN points handed to PencilKit. **Ask the user for a crash report**
+  (Settings → Privacy & Security → Analytics Data → Trove-…) if it still crashes.
+- **Sketching** (website `draw.js`, apps `App/Sources/Drawing`):
+  - 17 papers (PROTOCOL.md §10, shared `paperShapes`/`InkPaperShapes`, `Fixtures/ink-papers.json`),
+    10 page colours, page sizes (iPad, A4, A5, Letter, Legal, square, 16:9, phone) with
+    portrait/landscape, per page or every page, in a **Page** popover with paper pictures.
+  - Pages **scroll down, scroll sideways or flip** (page turn; swipe, arrows, ←/→). Opens showing
+    the **whole page** (or its width, in Settings) and refits on rotation/resize.
+  - **Zoom 10 %–1000 %** with a bottom-left pill: slider/presets, **Reset to 100 %**, whole page,
+    width (100 % = one page point per screen point). Far-in zoom draws only what's on screen.
+  - **Precise eraser** (exactly the tip's size, cuts strokes), **scribble to erase** (opt-in in
+    Settings; needs a real scratch-out: 6+ turns, dense, crossing what it removes; shared
+    `scribbleTargets`/`InkScribble`, `Fixtures/ink-scribble.json`), **laser pointer** (fades, never saved).
+  - **Apple Pencil squeeze / double-tap** follow the system setting (Settings → Apple Pencil): eraser,
+    last tool, or Trove's palette at the Pencil tip (tools, colours, size, eraser mode, undo/redo).
+  - The iPad/iPhone canvas now holds all pages on one PencilKit canvas (`PencilCanvas.Slot`).
+    Mac still shows one page at a time with the page bar; zoom pill works there too.
+  - One-row toolbar that scrolls sideways on narrow screens (website); Done stays put.
+  - **Sketch folders:** Sketches shows its folders as tiles with New folder; inside one, New sketch
+    here; drag sketches onto folders. **Connect** button inside the website editor.
+- **Clipboard:**
+  - Under Sketches in the sidebar (website + apps; iPhone keeps its tab too).
+  - Every copy, paste and reuse is a `clipEvent` record (PROTOCOL.md §8): app/site, page, window,
+    device, time, **place from the device's location** (never IP; apps name it via Apple; synced
+    setting `recordPlaces`, on). Mac ⌥Space pastes record the app pasted into. Website records its
+    own copies/uses (it can't see other apps' pastes). `_headers` now allows geolocation for the site.
+  - Filters (copied from, pasted into, where, when), a **Map** view (graph of clips joined by source,
+    destination, places, days, tags, connections), a clip's **history timeline** and
+    **connections** (to clips and items) on the website; history list in the apps.
+- **Import from Paste** (website, Import → "Everything from Paste"): reads Paste's own database
+  (`~/Library/Containers/com.wiheads.paste/Data/Library/Application Support/Paste/db.sqlite` + `-wal`,
+  or old `Paste.db`) in the browser with a small SQLite reader (`core/sqlite.js`) and plist/keyed
+  archive decoder (`core/bplist.js`); pinboards become tags, times and apps kept. Paste's schema is
+  undocumented: tables/columns are found by name and content and tested on synthetic databases only.
+  **Ask the user how many clips it found**; if it reads nothing, get the table names it prints.
+- **Scrolling:** card snippets cut to 400 characters, no whole-grid animation diff on every sync
+  (apps); off-screen clips skip layout (website).
+- **img1** from the user's message never reached the session; ask them to send it again.
+- Tests: TroveCore 92, web 34 unit + 10 Chromium e2e (new: zoom/flip/precise/scribble e2e, papers,
+  scribble, clip events, Paste import). Website **not deployed** yet: deploy when the user says so.
+
+## Round before (user: "sheet off the page, clipboard tags, GoodNotes source, type to search, where's sketching, no emoji, faster search, Liquid Glass icon")
 - **Mac sheets ran off the screen** (the GoodNotes reader asked for 700×800 at least, and its
   two-way scroll view grew the sheet). Sheets now use `.sheetSize(width:height:)` (Style.swift):
   the wanted size, shrunk to the window and screen when the sheet opens.
@@ -81,7 +135,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - Website deployed (version fdbed6d6) once the user said "publish" (the session's permission
   settings block deploys until the user asks).
 
-## Round before (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
+## Two rounds before (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
 - **Clipboard** (PROTOCOL.md §8):
   - Each copy keeps the app, and on the Mac the window title (Accessibility) and page address
     (Chromium's pasteboard marker, else a quick AppleScript to Safari/Chrome/Arc/Brave/Edge; macOS asks
@@ -113,7 +167,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   timed out type-checking a long `?? ""` array in `Clip.matches` that Swift 6.3 on Linux accepts: keep
   such expressions split into typed pieces.
 
-## Two rounds before (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
+## Three rounds before (user: "QR sheet should close; select and delete; GoodNotes files; sources; phone; clipboard; build the Pencil drawing")
 - **Add a device** (Settings → Devices): waits for the new device on the relay, shows "… is set up" and closes. Done button.
 - **iPhone**: tabs (Library, Clipboard, Search) on navigation stacks. Tapping an item now opens it
   (the split view never pushed the detail on iPhone). List layout by default, swipe to pin/delete.
@@ -176,7 +230,8 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 ## Next steps
 1. **This round on devices**: the user tries drawing with Apple Pencil on the iPad (app and Safari),
    GoodNotes notebooks, select mode, the iPhone tabs and clipboard; we fix what breaks.
-   - Sketching next: inline text editing in the apps (now a sheet), a ruler, rotating selections,
+   - Sketching next: the Mac editor's scroll/flip layouts (it shows one page at a time), Connect
+     inside the app editor, inline text editing in the apps (now a sheet), a ruler, rotating selections,
      handwriting recognition on the website (no on-device OCR in browsers; could use the relay's AI),
      "export with markup" saved back as a new file version, page templates/sizes (A4, letter).
    - Clipboard next: check the Mac's page/window capture with real browsers; the website can't watch
