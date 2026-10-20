@@ -4,11 +4,21 @@ import Security
 /// Minimal generic-password Keychain wrapper. The vault keys and relay device token live here and
 /// nowhere else on disk.
 ///
-/// The data protection keychain needs a signed app with a team. The Mac app built on CI is only
-/// ad-hoc signed (no Apple Silicon Mac to sign with), so there it gets errSecMissingEntitlement and
-/// falls back to the login keychain, which still keeps the secrets encrypted and per-user.
+/// The data protection keychain needs a signed app with a team. The Mac app built on CI is signed
+/// with Trove's own certificate but has no team, so there it gets errSecMissingEntitlement and falls
+/// back to the login keychain, which still keeps the secrets encrypted and per-user. The login
+/// keychain asks "Trove wants to access key…" for each item whenever the app's code changes (each
+/// update) and for any read it hasn't been allowed yet, so on the Mac every secret lives in **one**
+/// item that's read **once** per launch and then served from memory: at most one question per
+/// update instead of one per secret per read.
+@MainActor
 enum Keychain {
     static let service = "com.mrlancus.trove"
+    /// The Mac's single item holding every secret (a JSON object of account → base64).
+    private static let bundleAccount = "secrets"
+    /// What's been read or written this launch, so the keychain is asked once.
+    private static var cache: [String: Data] = [:]
+    private static var bundleLoaded = false
 
     private static func base(_ account: String, dataProtection: Bool) -> [String: Any] {
         var query: [String: Any] = [
@@ -29,7 +39,7 @@ enum Keychain {
         #endif
     }
 
-    static func set(_ data: Data, for account: String) throws {
+    private static func rawSet(_ data: Data, for account: String) throws {
         var last: OSStatus = errSecSuccess
         for dataProtection in modes {
             let query = base(account, dataProtection: dataProtection)
@@ -45,7 +55,7 @@ enum Keychain {
         throw KeychainError(status: last)
     }
 
-    static func get(_ account: String) -> Data? {
+    private static func rawGet(_ account: String) -> Data? {
         for dataProtection in modes {
             var query = base(account, dataProtection: dataProtection)
             query[kSecReturnData as String] = true
@@ -56,8 +66,67 @@ enum Keychain {
         return nil
     }
 
-    static func delete(_ account: String) {
+    private static func rawDelete(_ account: String) {
         for dataProtection in modes { SecItemDelete(base(account, dataProtection: dataProtection) as CFDictionary) }
+    }
+
+    #if os(macOS)
+    /// Reads the single item once. Secrets saved by older builds (one item each) move into it.
+    private static func loadBundle() {
+        guard !bundleLoaded else { return }
+        bundleLoaded = true
+        if let data = rawGet(bundleAccount), let object = try? JSONDecoder().decode([String: Data].self, from: data) {
+            cache.merge(object) { mine, _ in mine }
+            return
+        }
+        var moved = false
+        for account in legacyAccounts {
+            if let data = rawGet(account) { cache[account] = data; moved = true }
+        }
+        if moved, (try? saveBundle()) != nil { for account in legacyAccounts { rawDelete(account) } }
+    }
+
+    private static func saveBundle() throws {
+        try rawSet(JSONEncoder().encode(cache), for: bundleAccount)
+    }
+
+    /// The accounts older builds kept as items of their own.
+    static let legacyAccounts = ["vault.keys", "relay.deviceToken"]
+    #endif
+
+    static func set(_ data: Data, for account: String) throws {
+        #if os(macOS)
+        loadBundle()
+        let before = cache[account]
+        cache[account] = data
+        do { try saveBundle() } catch { cache[account] = before; throw error }
+        #else
+        try rawSet(data, for: account)
+        cache[account] = data
+        #endif
+    }
+
+    static func get(_ account: String) -> Data? {
+        #if os(macOS)
+        loadBundle()
+        return cache[account]
+        #else
+        if let hit = cache[account] { return hit }
+        let data = rawGet(account)
+        if let data { cache[account] = data }
+        return data
+        #endif
+    }
+
+    static func delete(_ account: String) {
+        cache[account] = nil
+        #if os(macOS)
+        loadBundle()
+        if cache.isEmpty { rawDelete(bundleAccount) } else { try? saveBundle() }
+        rawDelete(account)
+        #else
+        rawDelete(account)
+        #endif
     }
 
     static func setCodable<T: Encodable>(_ value: T, for account: String) throws {

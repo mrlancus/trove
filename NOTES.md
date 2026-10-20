@@ -239,7 +239,13 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
    - GoodNotes, not drawn yet: sticky notes, rotated lasso items, audio recordings.
 2. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
    - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
-   - The Mac build is ad-hoc signed, so the data protection keychain is unavailable; `Keychain` falls back to the login keychain on macOS.
+   - The Mac build has no Apple team, so the data protection keychain is unavailable; `Keychain` falls back to the login keychain on macOS.
+     The login keychain asks "Trove wants to access key…" (login password) once per item each time the
+     app's code changes (every update) and on every read not yet allowed. The user saw it repeatedly
+     (two items, and `relayClient` read the token on every use). Now the Mac keeps all secrets in one
+     item (`secrets`), read once per launch and cached: at most one question per update. Older builds'
+     two items move into it the first time (that launch may still ask twice). Only a paid Apple
+     developer team (or a Mac that can build with a personal team) removes the question entirely.
 2. **The user tries the website**: create a vault, save the recovery code, add the Chrome extension (Devices & extension → extension code), and set up the iPhone (Safari → the site → Setup code; optionally the share Shortcut). Then close the relay to new vaults.
 3. **Sideload on iPhone/iPad** once the IPA builds. Pair the app with a setup code from the website (Devices & extension → paste the recovery code → Make a setup code). Note the web-created vault has no iCloud folder; the app should use the relay.
    - Check: does the app join a relay-only vault cleanly (`VaultStore.join` with no iCloud folder)? Fix if not.
