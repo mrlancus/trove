@@ -74,6 +74,70 @@ import Testing
         #expect(await lib.items().count == 1)                                        // clips aren't library items
     }
 
+    /// Fixtures/clip-cases.json comes from web/test/make-clip-fixture.mjs (clips.js `insights`).
+    @Test func insightsMatchTheWebsite() throws {
+        struct Case: Decodable {
+            var text, autoTitle: String
+            var chars, words, lines: Int
+            var links, emails, phones, colors, hashtags: [String]
+        }
+        struct Cases: Decodable { var insights: [Case] }
+        let url = try #require(Bundle.module.url(forResource: "clip-cases", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode(Cases.self, from: Data(contentsOf: url))
+        #expect(cases.insights.count >= 10)
+        for c in cases.insights {
+            let got = ClipInsights.of(c.text)
+            #expect(got == ClipInsights(autoTitle: c.autoTitle, chars: c.chars, words: c.words, lines: c.lines, links: c.links,
+                                        emails: c.emails, phones: c.phones, colors: c.colors, hashtags: c.hashtags), "\(c.text)")
+        }
+    }
+
+    @Test func editingRenamingTaggingAndSaving() async throws {
+        let box = ClockBox(Date(timeIntervalSince1970: 1_760_000_000))
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()), now: { box.now })
+        let source = ClipSource(bundle: "com.google.Chrome", url: "https://news.example.com/story", title: "A story")
+        let id = try #require(await lib.addClip(text: "Call +44 20 7946 0958 about #budget", sourceApp: "Chrome", source: source))
+        var clip = try #require(await lib.clip(id))
+        #expect(clip.displayTitle == "Call +44 20 7946 0958 about #budget")
+        #expect(clip.insights.phones == ["+44 20 7946 0958"] && clip.insights.hashtags == ["budget"])
+        #expect(clip.sourceURL?.absoluteString == "https://news.example.com/story" && clip.sourceTitle == "A story")
+        #expect(clip.sourceBundle == "com.google.Chrome" && clip.needsEnrichment && clip.uses == 0)
+
+        await lib.applyClipEnrichment(id, title: "Budget call", summary: "Ring about the budget.", tags: ["Finance"], tier: .onDevice, by: "IPAD")
+        clip = try #require(await lib.clip(id))
+        #expect(clip.displayTitle == "Budget call" && !clip.needsEnrichment && clip.enrichment?.tier == .onDevice)
+        #expect(await lib.clipsNeedingEnrichment().isEmpty)
+
+        await lib.renameClip(id, to: "  Ring Anna ")
+        await lib.setClipTags(id, ["#Work", "work", " finance "])
+        await lib.setClipNote(id, "before Friday")
+        clip = try #require(await lib.clip(id))
+        #expect(clip.displayTitle == "Ring Anna" && clip.tags == ["work", "finance"] && clip.note == "before Friday")
+        #expect(clip.matches("tag:work anna") && clip.matches("app:chrome") && clip.matches("friday") && clip.matches("story"))
+        #expect(!clip.matches("is:pinned") && !clip.matches("tag:home"))
+
+        box.advance(5)
+        await lib.editClip(id, text: "Email anna@example.org about #budget")
+        clip = try #require(await lib.clip(id))
+        #expect(clip.text == "Email anna@example.org about #budget" && clip.hash == Clip.hash(text: clip.text))
+        #expect(clip.insights.emails == ["anna@example.org"] && clip.insights.phones.isEmpty)
+        #expect(clip.aiTitle == nil && clip.summary == nil && clip.needsEnrichment && clip.editedAt != nil)
+        #expect(clip.displayTitle == "Ring Anna")                                      // your name survives an edit
+
+        _ = await lib.addClip(text: "Email anna@example.org about #budget")
+        #expect(await lib.clip(id)?.uses == 1)                                         // copied again
+
+        let item = try #require(try await lib.saveClipToLibrary(id))
+        let saved = try #require(await lib.item(item))
+        #expect(saved.title == "Ring Anna" && saved.source == .clipboard && Set(["finance", "work"]).isSubset(of: saved.tags))
+        #expect(saved.body.contains("before Friday"))
+        let origin = try #require(saved.record[Field.origin]?.object)
+        #expect(origin["clip"]?.string == id && origin["app"]?.string == "Chrome" && origin["url"]?.string == "https://news.example.com/story")
+
+        await lib.renameClip(id, to: "")
+        #expect(await lib.clip(id)?.displayTitle == "Email anna@example.org about #budget")
+    }
+
     @Test func limitKeepsTheNewest() async {
         let box = ClockBox(Date(timeIntervalSince1970: 1_760_000_000))
         let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()), now: { box.now })

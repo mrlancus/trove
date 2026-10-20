@@ -1,0 +1,142 @@
+{
+ "insights": [
+  {
+   "text": "https://www.example.com/blog/post-1/?utm_source=x",
+   "autoTitle": "example.com/blog/post-1",
+   "chars": 49,
+   "words": 1,
+   "lines": 1,
+   "links": [
+    "https://www.example.com/blog/post-1/?utm_source=x"
+   ],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "Meeting notes\nCall Anna on +44 20 7946 0958 or anna@example.org about #budget and #Q3 plans.\nSee https://docs.example.com/plan. Colour #FF8800.",
+   "autoTitle": "Meeting notes",
+   "chars": 143,
+   "words": 20,
+   "lines": 3,
+   "links": [
+    "https://docs.example.com/plan"
+   ],
+   "emails": [
+    "anna@example.org"
+   ],
+   "phones": [
+    "+44 20 7946 0958"
+   ],
+   "colors": [
+    "#ff8800"
+   ],
+   "hashtags": [
+    "budget",
+    "q3"
+   ]
+  },
+  {
+   "text": "#3366ff",
+   "autoTitle": "Colour #3366ff",
+   "chars": 7,
+   "words": 1,
+   "lines": 1,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [
+    "#3366ff"
+   ],
+   "hashtags": []
+  },
+  {
+   "text": "/Users/me/Documents/report.pdf",
+   "autoTitle": "report.pdf",
+   "chars": 30,
+   "words": 1,
+   "lines": 1,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "{\"a\":1}",
+   "autoTitle": "JSON",
+   "chars": 7,
+   "words": 1,
+   "lines": 1,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "A really long sentence that keeps going and going past the sixty character limit for titles here",
+   "autoTitle": "A really long sentence that keeps going and going past the…",
+   "chars": 96,
+   "words": 17,
+   "lines": 1,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "  \n  indented first line  \nsecond",
+   "autoTitle": "indented first line",
+   "chars": 33,
+   "words": 4,
+   "lines": 3,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "Ünïcödé 😀 text",
+   "autoTitle": "Ünïcödé 😀 text",
+   "chars": 14,
+   "words": 3,
+   "lines": 1,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "Links (https://a.example.com/x), and https://b.example.com/y.",
+   "autoTitle": "Links (https://a.example.com/x), and…",
+   "chars": 61,
+   "words": 4,
+   "lines": 1,
+   "links": [
+    "https://a.example.com/x",
+    "https://b.example.com/y"
+   ],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  },
+  {
+   "text": "",
+   "autoTitle": "",
+   "chars": 0,
+   "words": 0,
+   "lines": 0,
+   "links": [],
+   "emails": [],
+   "phones": [],
+   "colors": [],
+   "hashtags": []
+  }
+ ]
+}

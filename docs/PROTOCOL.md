@@ -236,11 +236,28 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
 | `hash` | `"t:" + sha256hex(utf8 text)`, `"i:" + sha256hex(image bytes)` or `"f:" + sha256hex(paths joined by "\n")` |
 | `createdAt`, `lastUsedAt` | Unix ms. History is sorted by the later of the two |
 | `device`, `sourceDevice`, `sourceApp` | device id, its display name, and the app it was copied from |
+| `sourceBundle`, `sourceURL`, `sourceTitle` | the app's bundle id, and the web page (or document) it was copied from, when known |
 | `pinned` | pinned clips are never pruned |
 | `savedItem` | the library item the clip was saved as |
+| `autoTitle`, `stats`, `entities` | worked out by the device that made the clip (below) |
+| `title`, `tags`, `note`, `editedAt` | the user's name for it ("" = none), tags (lowercase, no `#`), a note, when the text was last edited |
+| `aiTitle`, `summary`, `ocrText`, `enrichment`, `needsEnrichment` | enrichment, as for items (§5): an AI title, a one-line summary, text found in an image |
+| `uses` | how many times it was copied again or pasted from history |
 
+- **Insights:** `autoTitle` is the link's host (without `www.`) and path, `"Colour " + text`, a
+  path's last component, `"JSON"`, or the first non-empty line with its whitespace collapsed, cut to
+  60 characters at a word past the middle plus `…`. `stats` is `{chars, words, lines}` (chars are
+  Unicode scalars). `entities` is `{links, emails, phones, colors, hashtags}`, each unique and at most
+  20; colours are lowercased `#rgb`/`#rrggbb` and aren't hashtags. `ClipInsights.swift` and
+  `clips.js insights` both check `Fixtures/clip-cases.json` (made by `web/test/make-clip-fixture.mjs`).
+- **Title shown:** `title`, else `aiTitle`, else the image's name, the files' names, or `autoTitle`.
+- **Editing text** sets `text`, `hash`, `editedAt`, fresh insights and `needsEnrichment: true`, and
+  clears `aiTitle` and `summary`. The user's `title`, `tags` and `note` stay.
+- **Saving to the library** makes a link, note (text plus the note) or file item with
+  `source: "clipboard"`, the clip's title, tags, summary and OCR text, and
+  `origin: {clip, app?, url?, title?}`.
 - **De-duplication:** copying something whose `hash` matches an existing clip just sets that clip's
-  `lastUsedAt` (and `sourceApp`).
+  `lastUsedAt`, `uses + 1` (and `sourceApp` and the source fields).
 - **Pruning:** any device may delete unpinned clips older than 30 days or beyond the newest 1,000.
 - **Never stored:** copies marked concealed or transient (nspasteboard.org types), copies from
   password managers, and text that looks sensitive (passwords, API keys, private keys, one-time

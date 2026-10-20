@@ -14,7 +14,7 @@ public enum ItemCategory: String, Codable, CaseIterable, Sendable {
 
 /// Where an item came from.
 public enum ItemSource: String, Codable, Sendable {
-    case app, share, web, email, goodnotes, kindle, readwise, obsidian, appleNotes, notion, screenshot, voice, scan, `import`
+    case app, share, web, email, goodnotes, kindle, readwise, obsidian, appleNotes, notion, screenshot, voice, scan, `import`, clipboard
 }
 
 public struct Attachment: Codable, Hashable, Sendable {
@@ -207,4 +207,9 @@ extension Attachment {
 
 extension Enrichment {
     public var json: JSONValue { ["tier": .number(Double(tier.rawValue)), "by": .string(by), "at": JSONValue(at)] }
+
+    public init?(json: JSONValue) {
+        guard let o = json.object, let t = o["tier"]?.number, let by = o["by"]?.string else { return nil }
+        self.init(tier: .init(rawValue: Int(t)) ?? .basic, by: by, at: o["at"]?.date ?? Date(timeIntervalSince1970: 0))
+    }
 }

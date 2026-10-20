@@ -1,12 +1,76 @@
 // Clipboard history for the web app (docs/PROTOCOL.md §8). Kept in step with
 // Packages/TroveCore/Sources/TroveCore/Clips/Clip.swift: same fields, hashes and classification.
-import { cleanURL } from "./items.js";
+import { cleanURL, hashtags } from "./items.js";
 import { sha256Hex } from "./bytes.js";
 
 export const ClipField = {
   text: "text", image: "image", files: "files", hash: "hash", sourceApp: "sourceApp", sourceDevice: "sourceDevice", device: "device",
   createdAt: "createdAt", lastUsedAt: "lastUsedAt", pinned: "pinned", savedItem: "savedItem",
+  sourceURL: "sourceURL", sourceTitle: "sourceTitle", sourceBundle: "sourceBundle",
+  autoTitle: "autoTitle", stats: "stats", entities: "entities", aiTitle: "aiTitle", summary: "summary", ocrText: "ocrText",
+  enrichment: "enrichment", needsEnrichment: "needsEnrichment", title: "title", tags: "tags", note: "note", editedAt: "editedAt", uses: "uses",
 };
+
+// ---------- insights (ClipInsights.swift; both check Fixtures/clip-cases.json) ----------
+
+const MAX_ENTITIES = 20, TITLE_LENGTH = 60;
+const uniq = (list) => [...new Set(list)].slice(0, MAX_ENTITIES);
+const trimPunctuation = (s) => s.replace(/[.,;:!?)\]}]+$/u, "");
+
+/** A title, counts, and the links, emails, phones, colours and hashtags in copied text. */
+export function insights(text, kind = classify(text)) {
+  const trimmed = text.trim();
+  return {
+    autoTitle: autoTitle(trimmed, kind),
+    chars: [...text].length,
+    words: text.split(/\s+/u).filter(Boolean).length,
+    lines: text ? text.split("\n").length : 0,
+    links: uniq([...text.matchAll(/https?:\/\/[^\s<>"'`]+/g)].map((m) => trimPunctuation(m[0]))),
+    emails: uniq([...text.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)].map((m) => m[0])),
+    phones: uniq([...text.matchAll(/\+?[0-9][0-9 ()\-.]{6,}[0-9]/g)].map((m) => m[0]).filter((p) => { const n = p.replace(/\D/g, "").length; return n >= 7 && n <= 15; })),
+    colors: uniq([...text.matchAll(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])/g)].map((m) => m[0].toLowerCase())),
+    // A colour like #ff8800 isn't a hashtag.
+    hashtags: uniq(hashtags(text).filter((t) => !/^(?:[0-9a-f]{3}|[0-9a-f]{6})$/.test(t))),
+  };
+}
+
+function autoTitle(s, kind) {
+  if (kind === "link") {
+    try {
+      const u = new URL(s);
+      // Like Foundation's URL.path: decoded, without a trailing slash.
+      let path = u.pathname.replace(/\/+$/, "");
+      try { path = decodeURIComponent(path); } catch { /* keep it encoded */ }
+      return clipTitle(u.host.replace(/^www\./, "") + path);
+    } catch { return clipTitle(s); }
+  }
+  if (kind === "color") return "Colour " + s;
+  if (kind === "path") return s.split("/").filter(Boolean).pop() ?? s;
+  if (kind === "json") return "JSON";
+  const line = s.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  return clipTitle(line.split(/\s+/u).filter(Boolean).join(" "));
+}
+
+/** At most 60 characters, cut at a word when there's one past the middle (ClipInsights.clip). */
+function clipTitle(s) {
+  const chars = [...s];
+  if (chars.length <= TITLE_LENGTH) return s;
+  let cut = chars.slice(0, TITLE_LENGTH).join("");
+  const space = cut.lastIndexOf(" ");
+  if (space >= 0 && [...cut.slice(0, space)].length > TITLE_LENGTH / 2) cut = cut.slice(0, space);
+  return cut.trim() + "…";
+}
+
+/** Insights as record fields. */
+export function insightFields(ins) {
+  return {
+    [ClipField.autoTitle]: ins.autoTitle,
+    [ClipField.stats]: { chars: ins.chars, words: ins.words, lines: ins.lines },
+    [ClipField.entities]: { links: ins.links, emails: ins.emails, phones: ins.phones, colors: ins.colors, hashtags: ins.hashtags },
+  };
+}
+
+export const cleanTags = (tags) => [...new Set(tags.map((t) => t.toLowerCase().replace(/#/g, "").trim()).filter(Boolean))];
 
 export const hashText = (text) => "t:" + sha256Hex(text);
 export const hashImageHex = (hexDigest) => "i:" + hexDigest;
@@ -20,6 +84,12 @@ export function clipView(record) {
   const lastUsedAt = typeof f.lastUsedAt === "number" ? f.lastUsedAt : createdAt;
   const kind = image ? "image" : files.length ? "file" : classify(text);
   const firstLine = text.split(/\r?\n/)[0]?.trim() ?? "";
+  const str = (v) => (typeof v === "string" && v ? v : null);
+  const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  const preview = kind === "image" ? image.name ?? "Image" : kind === "file" ? files.map((p) => p.split("/").pop()).join(", ") : firstLine.slice(0, 200);
+  const auto = str(f.autoTitle) ?? (kind === "image" || kind === "file" ? "" : insights(text, kind).autoTitle);
+  const title = str(f.title), aiTitle = str(f.aiTitle);
+  const stats = f.stats && typeof f.stats === "object" ? f.stats : null, entities = f.entities && typeof f.entities === "object" ? f.entities : null;
   return {
     id: record.id, record, text, image, files, kind, createdAt, lastUsedAt, sortDate: Math.max(createdAt, lastUsedAt),
     hash: typeof f.hash === "string" ? f.hash : "",
@@ -28,8 +98,30 @@ export function clipView(record) {
     device: typeof f.device === "string" ? f.device : null,
     isPinned: f.pinned === true,
     savedItem: typeof f.savedItem === "string" ? f.savedItem : null,
-    preview: kind === "image" ? image.name ?? "Image" : kind === "file" ? files.map((p) => p.split("/").pop()).join(", ") : firstLine.slice(0, 200),
+    preview,
+    sourceURL: str(f.sourceURL), sourceTitle: str(f.sourceTitle), sourceBundle: str(f.sourceBundle),
+    title, aiTitle, autoTitle: auto,
+    displayTitle: title ?? aiTitle ?? (kind === "image" ? image.name ?? "Image" : kind === "file" ? preview : auto || "Clip"),
+    summary: str(f.summary), ocrText: str(f.ocrText), tags: list(f.tags), note: typeof f.note === "string" ? f.note : "",
+    editedAt: typeof f.editedAt === "number" ? f.editedAt : null, uses: typeof f.uses === "number" ? f.uses : 0,
+    needsEnrichment: f.needsEnrichment === true, enrichment: f.enrichment && typeof f.enrichment === "object" ? f.enrichment : null,
+    stats: stats ? { chars: stats.chars ?? 0, words: stats.words ?? 0, lines: stats.lines ?? 0 } : null,
+    entities: entities ? { links: list(entities.links), emails: list(entities.emails), phones: list(entities.phones), colors: list(entities.colors), hashtags: list(entities.hashtags) } : null,
   };
+}
+
+/** Clip.matches: everything known about it; `tag:x`, `app:x` and `is:pinned` narrow it down. */
+export function clipMatches(clip, query) {
+  const q = query.trim();
+  if (!q) return true;
+  const hay = [clip.text, clip.displayTitle, clip.autoTitle, clip.aiTitle ?? "", clip.summary ?? "", clip.note, clip.tags.join(" "), clip.ocrText ?? "",
+    clip.sourceApp ?? "", clip.sourceDevice ?? "", clip.sourceTitle ?? "", clip.sourceURL ?? "", clip.files.join(" "), clip.image?.name ?? ""].join("\n").toLowerCase();
+  return q.split(/\s+/).every((w) => {
+    if (w.startsWith("tag:")) return clip.tags.includes(w.slice(4).toLowerCase());
+    if (w.startsWith("app:")) return (clip.sourceApp ?? "").toLowerCase().includes(w.slice(4).toLowerCase());
+    if (w === "is:pinned") return clip.isPinned;
+    return hay.includes(w.toLowerCase());
+  });
 }
 
 export function classify(raw) {

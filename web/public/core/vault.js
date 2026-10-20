@@ -4,7 +4,7 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
-import { ClipField, clipView, hashImageHex, hashText } from "./clips.js";
+import { ClipField, cleanTags, clipView, hashImageHex, hashText, insightFields, insights } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
@@ -510,9 +510,9 @@ export class Vault {
   }
 
   /** Adds copied text, or moves the same text's clip back to the top. Callers skip sensitive text. */
-  addClip(text, { sourceApp = null } = {}) {
+  addClip(text, { sourceApp = null, sourceURL = null, sourceTitle = null } = {}) {
     if (!text.trim() || utf8.encode(text).length > 256 * 1024) return null;
-    return this.upsertClip(hashText(text), { [ClipField.text]: text }, sourceApp);
+    return this.upsertClip(hashText(text), { [ClipField.text]: text, ...insightFields(insights(text)) }, sourceApp, { sourceURL, sourceTitle });
   }
 
   async addImageClip(bytes, mime = "image/png") {
@@ -522,25 +522,43 @@ export class Vault {
     if (existing) { this.markClipUsed(existing.id); return existing.id; }
     const ext = mime === "image/jpeg" ? "jpg" : mime.split("/")[1] ?? "png";
     const attachment = await this.storeBlob(bytes, `Image.${ext}`, mime);
-    return this.upsertClip(hash, { [ClipField.image]: attachment }, null);
+    return this.upsertClip(hash, { [ClipField.image]: attachment, [ClipField.autoTitle]: "Image" }, null);
   }
 
-  upsertClip(hash, fields, sourceApp) {
+  upsertClip(hash, fields, sourceApp, { sourceURL = null, sourceTitle = null } = {}) {
     const at = this.now();
+    const source = {};
+    if (sourceURL) source[ClipField.sourceURL] = sourceURL;
+    if (sourceTitle) source[ClipField.sourceTitle] = sourceTitle;
     const existing = this.clips().find((c) => c.hash === hash);
     if (existing) {
-      this.set({ [ClipField.lastUsedAt]: at, ...(sourceApp ? { [ClipField.sourceApp]: sourceApp } : {}) }, existing.id, "clip");
+      this.set({ [ClipField.lastUsedAt]: at, [ClipField.uses]: existing.uses + 1, ...(sourceApp ? { [ClipField.sourceApp]: sourceApp } : {}), ...source },
+        existing.id, "clip");
       return existing.id;
     }
     const id = crypto.randomUUID().toLowerCase();
     const all = { ...fields, [ClipField.hash]: hash, [ClipField.createdAt]: at, [ClipField.lastUsedAt]: at, [ClipField.device]: this.journal.device,
-      [ClipField.sourceDevice]: this.config.deviceName ?? "Web browser" };
+      [ClipField.sourceDevice]: this.config.deviceName ?? "Web browser", [ClipField.needsEnrichment]: true, ...source };
     if (sourceApp) all[ClipField.sourceApp] = sourceApp;
     this.set(all, id, "clip");
     return id;
   }
 
-  markClipUsed(id) { this.set({ [ClipField.lastUsedAt]: this.now() }, id, "clip"); }
+  markClipUsed(id) { this.set({ [ClipField.lastUsedAt]: this.now(), [ClipField.uses]: (this.clip(id)?.uses ?? 0) + 1 }, id, "clip"); }
+
+  /** Your own name for a clip ("" goes back to the automatic one). */
+  renameClip(id, title) { this.set({ [ClipField.title]: title.trim() }, id, "clip"); }
+
+  /** Changes a text clip's text; insights are worked out again and AI looks at it again (Library.editClip). */
+  editClip(id, text) {
+    const clip = this.clip(id);
+    if (!clip || clip.image || clip.text === text || !text) return;
+    this.set({ [ClipField.text]: text, [ClipField.hash]: hashText(text), [ClipField.editedAt]: this.now(), [ClipField.needsEnrichment]: true,
+      [ClipField.aiTitle]: null, [ClipField.summary]: null, ...insightFields(insights(text)) }, id, "clip");
+  }
+
+  setClipTags(id, tags) { this.set({ [ClipField.tags]: cleanTags(tags) }, id, "clip"); }
+  setClipNote(id, note) { this.set({ [ClipField.note]: note }, id, "clip"); }
   setClipPinned(id, pinned) { this.set({ [ClipField.pinned]: pinned }, id, "clip"); }
   deleteClip(id) { this.set({ _deleted: true }, id, "clip"); }
 
@@ -550,9 +568,21 @@ export class Vault {
     if (!clip) return null;
     if (clip.savedItem && this.item(clip.savedItem)) return clip.savedItem;
     let itemId;
-    if (clip.image) itemId = await this.addFile(await this.attachment(clip.image.id), clip.image.name, clip.image.mime);
-    else if (clip.kind === "link") itemId = this.addLink(clip.text.trim()).id;
-    else itemId = this.addNote({ body: clip.text });
+    const named = clip.title ?? clip.aiTitle;
+    if (clip.image) itemId = await this.addFile(await this.attachment(clip.image.id), clip.image.name, clip.image.mime, { source: "clipboard", title: named ?? undefined });
+    else if (clip.kind === "link") itemId = this.addLink(clip.text.trim(), { title: named ?? "", note: clip.note, source: "clipboard" }).id;
+    else itemId = this.addNote({ title: named ?? "", body: clip.note ? `${clip.text}\n\n${clip.note}` : clip.text, source: "clipboard" });
+    // The item keeps where the copy came from (Library.saveClipToLibrary).
+    const origin = { clip: id };
+    if (clip.sourceApp) origin.app = clip.sourceApp;
+    if (clip.sourceURL) origin.url = clip.sourceURL;
+    if (clip.sourceTitle) origin.title = clip.sourceTitle;
+    const fields = { [Field.origin]: origin };
+    const item = this.item(itemId);
+    if (clip.tags.length && item) fields[Field.tags] = cleanTags([...item.tags, ...clip.tags]).sort();
+    if (clip.summary) fields[Field.summary] = clip.summary;
+    if (clip.ocrText) fields[Field.ocrText] = clip.ocrText;
+    this.update(itemId, fields);
     this.set({ [ClipField.savedItem]: itemId }, id, "clip");
     return itemId;
   }

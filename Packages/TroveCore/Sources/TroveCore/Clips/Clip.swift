@@ -10,6 +10,12 @@ public struct Clip: Identifiable, Hashable, Sendable {
         public static let text = "text", image = "image", files = "files", hash = "hash"
         public static let sourceApp = "sourceApp", sourceDevice = "sourceDevice", device = "device"
         public static let createdAt = "createdAt", lastUsedAt = "lastUsedAt", pinned = "pinned", savedItem = "savedItem"
+        // Where it came from, beyond the app (Mac): the page or document, and the app's bundle id.
+        public static let sourceURL = "sourceURL", sourceTitle = "sourceTitle", sourceBundle = "sourceBundle"
+        // Worked out on copy (ClipInsights), then by AI enrichment, then by you.
+        public static let autoTitle = "autoTitle", stats = "stats", entities = "entities"
+        public static let aiTitle = "aiTitle", summary = "summary", ocrText = "ocrText", enrichment = "enrichment", needsEnrichment = "needsEnrichment"
+        public static let title = "title", tags = "tags", note = "note", editedAt = "editedAt", uses = "uses"
     }
 
     public var id: String { record.id }
@@ -30,6 +36,40 @@ public struct Clip: Identifiable, Hashable, Sendable {
     public var isPinned: Bool { record[Field.pinned]?.bool ?? false }
     /// The library item this clip was saved as, if any.
     public var savedItem: String? { record[Field.savedItem]?.string }
+    public var sourceURL: URL? { record[Field.sourceURL]?.string.flatMap(URL.init(string:)) }
+    /// The window, page or document title it was copied from (Mac).
+    public var sourceTitle: String? { record[Field.sourceTitle]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+    public var sourceBundle: String? { record[Field.sourceBundle]?.string }
+    /// The name you gave it.
+    public var title: String? { record[Field.title]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+    public var aiTitle: String? { record[Field.aiTitle]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+    public var autoTitle: String { record[Field.autoTitle]?.string ?? ClipInsights.of(text, kind: kind).autoTitle }
+    /// Your name for it, else the AI's, else one worked out from the text.
+    public var displayTitle: String {
+        if let title { return title }
+        if let aiTitle { return aiTitle }
+        if kind == .image { return image?.name ?? "Image" }
+        if kind == .file { return preview }
+        let auto = autoTitle
+        return auto.isEmpty ? "Clip" : auto
+    }
+    public var summary: String? { record[Field.summary]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+    public var tags: [String] { record[Field.tags]?.stringArray ?? [] }
+    public var note: String { record[Field.note]?.string ?? "" }
+    /// Text found in a copied image.
+    public var ocrText: String? { record[Field.ocrText]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+    public var editedAt: Date? { record[Field.editedAt]?.date }
+    /// How many times it was copied again or pasted from history.
+    public var uses: Int { Int(record[Field.uses]?.number ?? 0) }
+    public var needsEnrichment: Bool { record[Field.needsEnrichment]?.bool ?? false }
+    public var enrichment: Enrichment? { record[Field.enrichment].flatMap(Enrichment.init(json:)) }
+    public var insights: ClipInsights {
+        let stats = record[Field.stats]?.object, e = record[Field.entities]?.object
+        guard let stats, let e else { return ClipInsights.of(text, kind: kind) }
+        return ClipInsights(autoTitle: autoTitle, chars: Int(stats["chars"]?.number ?? 0), words: Int(stats["words"]?.number ?? 0),
+                            lines: Int(stats["lines"]?.number ?? 0), links: e["links"]?.stringArray ?? [], emails: e["emails"]?.stringArray ?? [],
+                            phones: e["phones"]?.stringArray ?? [], colors: e["colors"]?.stringArray ?? [], hashtags: e["hashtags"]?.stringArray ?? [])
+    }
 
     /// Most recent activity: copied again or pasted from history moves a clip to the top.
     public var sortDate: Date { max(createdAt, lastUsedAt) }
@@ -46,11 +86,20 @@ public struct Clip: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// Searches everything known about the clip. `tag:x`, `app:x` and `is:pinned` narrow it down.
     public func matches(_ query: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty { return true }
-        let haystack = [text, sourceApp ?? "", sourceDevice ?? "", files.joined(separator: " "), image?.name ?? ""].joined(separator: "\n")
-        return q.split(separator: " ").allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        let haystack = [text, displayTitle, autoTitle, aiTitle ?? "", summary ?? "", note, tags.joined(separator: " "), ocrText ?? "",
+                        sourceApp ?? "", sourceDevice ?? "", sourceTitle ?? "", sourceURL?.absoluteString ?? "",
+                        files.joined(separator: " "), image?.name ?? ""].joined(separator: "\n")
+        return q.split(separator: " ").allSatisfy { word in
+            let w = String(word)
+            if w.hasPrefix("tag:") { return tags.contains(String(w.dropFirst(4)).lowercased()) }
+            if w.hasPrefix("app:") { return (sourceApp ?? "").range(of: w.dropFirst(4), options: [.caseInsensitive]) != nil }
+            if w == "is:pinned" { return isPinned }
+            return haystack.range(of: w, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
     }
 
     /// Stable content hash for de-duplication: the same text copied twice is one clip.

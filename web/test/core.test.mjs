@@ -170,6 +170,53 @@ test("clips in the vault: dedupe, pin, delete and save to the library", async ()
   assert.equal(v.items().length, 1);
 });
 
+test("clip insights match Fixtures/clip-cases.json (ClipInsights.swift)", async () => {
+  const { insights } = await import("../public/core/clips.js");
+  const cases = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/clip-cases.json", import.meta.url), "utf8"));
+  assert.ok(cases.insights.length >= 10);
+  for (const { text, ...expected } of cases.insights) assert.deepEqual(insights(text), expected, text);
+});
+
+test("clips: rename, edit, tag, note, search and save with where they came from", async () => {
+  const { Vault } = await import("../public/core/vault.js");
+  const { clipMatches, hashText } = await import("../public/core/clips.js");
+  const storage = { m: new Map(), get: async (k) => storage.m.get(k), set: async (k, v) => { storage.m.set(k, v); }, clear: async () => storage.m.clear() };
+  let t = 1_760_000_000_000;
+  const keys = await importVaultKeys({ vaultKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))) });
+  const v = new Vault(storage, { deviceName: "Chrome", encrypted: true }, keys, { device: "WEB" }, [], [], [], 0, { now: () => (t += 1000) });
+  const id = v.addClip("Call +44 20 7946 0958 about #budget", { sourceApp: "Chrome", sourceURL: "https://news.example.com/story", sourceTitle: "A story" });
+  let clip = v.clip(id);
+  assert.equal(clip.displayTitle, "Call +44 20 7946 0958 about #budget");
+  assert.deepEqual(clip.entities.phones, ["+44 20 7946 0958"]);
+  assert.equal(clip.sourceTitle, "A story");
+  assert.ok(clip.needsEnrichment);
+  v.renameClip(id, "  Ring Anna ");
+  v.setClipTags(id, ["#Work", "work", " finance "]);
+  v.setClipNote(id, "before Friday");
+  clip = v.clip(id);
+  assert.equal(clip.displayTitle, "Ring Anna");
+  assert.deepEqual(clip.tags, ["work", "finance"]);
+  assert.ok(clipMatches(clip, "tag:work anna") && clipMatches(clip, "app:chrome") && clipMatches(clip, "friday") && clipMatches(clip, "story"));
+  assert.ok(!clipMatches(clip, "is:pinned") && !clipMatches(clip, "tag:home"));
+  v.editClip(id, "Email anna@example.org about #budget");
+  clip = v.clip(id);
+  assert.equal(clip.hash, hashText(clip.text));
+  assert.deepEqual(clip.entities.emails, ["anna@example.org"]);
+  assert.deepEqual(clip.entities.phones, []);
+  assert.ok(clip.aiTitle === null && clip.needsEnrichment && clip.editedAt);
+  assert.equal(clip.displayTitle, "Ring Anna");
+  v.addClip("Email anna@example.org about #budget");
+  assert.equal(v.clip(id).uses, 1);
+  const item = v.item(await v.saveClipToLibrary(id));
+  assert.equal(item.title, "Ring Anna");
+  assert.equal(item.source, "clipboard");
+  assert.ok(["finance", "work"].every((x) => item.tags.includes(x)));
+  assert.ok(item.body.includes("before Friday"));
+  assert.deepEqual(item.record.fields.origin, { clip: id, app: "Chrome", url: "https://news.example.com/story", title: "A story" });
+  v.renameClip(id, "");
+  assert.equal(v.clip(id).displayTitle, "Email anna@example.org about #budget");
+});
+
 test("imports the same zip as FileImportTests.swift", async () => {
   const { importActions, countActions, isJunk, readZip, parseMarkdownNote } = await import("../public/core/importer.js");
   const bytes = new Uint8Array(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/import-sample.zip", import.meta.url)));

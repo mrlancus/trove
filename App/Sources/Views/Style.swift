@@ -65,6 +65,7 @@ enum ItemStyle {
         case .voice: "Voice"
         case .scan: "Scan"
         case .import: "Import"
+        case .clipboard: "Clipboard"
         }
     }
 
@@ -80,6 +81,7 @@ enum ItemStyle {
         case .screenshot: "camera.viewfinder"
         case .voice: "mic"
         case .scan: "doc.viewfinder"
+        case .clipboard: "doc.on.clipboard"
         default: "tray"
         }
     }
