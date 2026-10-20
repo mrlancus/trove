@@ -26,6 +26,8 @@ final class ClipboardStore {
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
     /// iPhone/iPad: save what was copied whenever Trove is opened.
     var captureOnOpen: Bool { didSet { UserDefaults.standard.set(captureOnOpen, forKey: "clipboard.captureOnOpen") } }
+    /// Keep where you were with each copy and paste (synced: `recordPlaces`).
+    var recordPlaces = true
 
     /// The last copy this device recorded, for the status line in Settings.
     private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
@@ -112,23 +114,36 @@ final class ClipboardStore {
             scheduleExpiry()
             return
         }
-        await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
+        let id = await library.addClip(text: text, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
         lastCaptured = (Date(), false)
         await reload()
+        await note(id, .copy, app: sourceApp, source: source)
+    }
+
+    func events(for clip: String) async -> [ClipEvent] { await library?.clipEvents(of: clip) ?? [] }
+
+    /// Where and when a clip was copied, pasted or used again (PROTOCOL.md §8), with the place.
+    func note(_ id: String?, _ type: ClipEvent.Kind, app: String?, source: ClipSource = ClipSource()) async {
+        guard let id, let library else { return }
+        let place = recordPlaces ? await PlaceFinder.shared.current() : nil
+        await library.recordClipEvent(id, type, app: app, bundle: source.bundle, url: source.url, title: source.title,
+                                      deviceName: DeviceInfo.name, place: place)
     }
 
     func capture(image data: Data, mime: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library else { return }
-        _ = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
+        let id = try? await library.addClip(image: data, mime: mime, sourceApp: sourceApp, sourceDevice: DeviceInfo.name, source: source)
         lastCaptured = (Date(), false)
         await reload()
+        await note(id, .copy, app: sourceApp, source: source)
     }
 
     func capture(files: [String], sourceApp: String?) async {
         guard enabled, let library else { return }
-        await library.addClip(files: files, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
+        let id = await library.addClip(files: files, sourceApp: sourceApp, sourceDevice: DeviceInfo.name)
         lastCaptured = (Date(), false)
         await reload()
+        await note(id, .copy, app: sourceApp)
     }
 
     private func scheduleExpiry() {
@@ -145,7 +160,8 @@ final class ClipboardStore {
     // MARK: Using
 
     /// Puts a clip (optionally rewritten) on the system pasteboard and moves it to the top.
-    func copy(_ clip: Clip, transform: ClipTransform? = nil) async {
+    /// `use: false` when the caller records where it was pasted instead.
+    func copy(_ clip: Clip, transform: ClipTransform? = nil, use: Bool = true) async {
         if clip.image != nil {
             guard let picture = await image(for: clip) else { return }
             ClipPasteboard.write(image: picture)
@@ -156,6 +172,7 @@ final class ClipboardStore {
         }
         await library?.markClipUsed(clip.id)
         await reload()
+        if use { await note(clip.id, .use, app: nil) }
     }
 
     func copy(_ clip: EphemeralClip) { ClipPasteboard.write(text: clip.text) }

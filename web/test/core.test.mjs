@@ -587,3 +587,41 @@ test("how much clipboard history to keep is a synced setting (ClipTests.howMuchT
   assert.deepEqual(vault.clipKeep(), { days: 0, count: 3 });
   assert.deepEqual(vault.clips().map((c) => c.text), ["clip 3", "clip 2", "clip 1"]);
 });
+
+test("clip copy and paste events, places and the clipboard map (core/clipmap.js)", async () => {
+  const { v: vault } = await testVault();
+  const { buildClipGraph, clipFacts, filterChoices, filterClips } = await import("../public/core/clipmap.js");
+  const a = vault.addClip("https://github.com/mrlancus/trove", { sourceApp: "Safari", sourceURL: "https://github.com/mrlancus/trove" });
+  const b = vault.addClip("Meeting at 10", { sourceApp: "Notes" });
+  const c = vault.addClip("SELECT * FROM clips", { sourceApp: "Xcode" });
+  vault.recordClipEvent(a, "copy", { app: "Safari", url: "https://github.com/mrlancus/trove", place: { lat: 51.50735, lon: -0.12776, accuracy: 30, name: "Home" } });
+  vault.recordClipEvent(a, "paste", { app: "Slack", place: { lat: 51.50735, lon: -0.12776 } });
+  vault.recordClipEvent(b, "copy", { app: "Notes", place: { lat: 51.50731, lon: -0.12771, name: "Home" } });
+  vault.recordClipEvent(b, "paste", { app: "Slack" });
+  vault.recordClipEvent(c, "paste", { app: "Terminal", place: { lat: 48.8566, lon: 2.3522 } });
+  assert.equal(vault.clipEvents(a).length, 2);
+  assert.deepEqual(vault.clipEvents(a)[0].place, { lat: 51.50735, lon: -0.12776, accuracy: 30, name: "Home", city: null });
+  const clips = vault.clips();
+  const facts = clipFacts(clips, vault.clipEvents());
+  assert.deepEqual([...facts.get(a).from.keys()], ["site:github.com"]);
+  assert.deepEqual([...facts.get(a).to.keys()], ["app:slack"]);
+  assert.deepEqual(filterClips(clips, facts, { to: "app:slack" }).map((x) => x.id).sort(), [a, b].sort());
+  assert.deepEqual(filterClips(clips, facts, { place: "place:home" }).map((x) => x.id).sort(), [a, b].sort());
+  assert.deepEqual(filterClips(clips, facts, { place: "place:48.857,2.352" }).map((x) => x.id), [c]);
+  assert.equal(filterChoices(clips, facts).to[0].label, "Slack");
+  const graph = buildClipGraph(clips, facts, { groups: ["to", "place"] });
+  assert.ok(graph.nodes.some((n) => n.id === "to|app:slack" && n.degree === 2));
+  assert.ok(graph.nodes.some((n) => n.id === "place|place:home"));
+  // Connections between clips and to items; deleting a clip deletes its events.
+  const note = vault.addNote({ title: "Standup" });
+  vault.connectClip(b, note);
+  vault.connectClip(b, a);
+  assert.deepEqual(vault.clip(b).links, [note, a]);
+  assert.ok(buildClipGraph(vault.clips(), facts, { groups: [], items: vault.items() }).edges.some((e) => e.a === b && e.b === note));
+  vault.deleteClip(a);
+  assert.equal(vault.clipEvents(a).length, 0);
+  // Places can be turned off for every device.
+  assert.equal(vault.appSetting("recordPlaces"), true);
+  vault.setAppSetting("recordPlaces", false);
+  assert.equal(vault.appSetting("recordPlaces"), false);
+});

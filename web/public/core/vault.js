@@ -7,6 +7,7 @@ import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js
 import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
+import { clipEventView } from "./clipmap.js";
 import { parseHLC } from "./records.js";
 import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
@@ -829,7 +830,50 @@ export class Vault {
   }
   setClipNote(id, note) { this.set({ [ClipField.note]: note }, id, "clip"); }
   setClipPinned(id, pinned) { this.set({ [ClipField.pinned]: pinned }, id, "clip"); }
-  deleteClip(id) { this.set({ _deleted: true }, id, "clip"); }
+  /** Deletes a clip and where and when it was copied and pasted. */
+  deleteClip(id) {
+    this.set({ _deleted: true }, id, "clip");
+    for (const e of this.clipEvents(id)) this.set({ _deleted: true }, e.id, "clipEvent");
+  }
+
+  /** A setting every device follows (`settings.app`, Library.sharedSettings); `standard` when unset. */
+  appSetting(name, standard = true) {
+    const r = this.store.records.get("settings.app");
+    const v = r && r.fields._deleted !== true ? r.fields[name] : undefined;
+    return typeof v === "boolean" ? v : standard;
+  }
+
+  setAppSetting(name, value) { this.set({ [name]: Boolean(value) }, "settings.app", "setting"); }
+
+  // ---------- where and when clips were copied and pasted (PROTOCOL.md §8, core/clipmap.js) ----------
+
+  /** Every copy and paste event, or one clip's, oldest first. */
+  clipEvents(clip = null) {
+    return this.store.visible.filter((r) => r.kind === "clipEvent").map(clipEventView)
+      .filter((e) => e.clip && (!clip || e.clip === clip)).sort((a, b) => a.at - b.at);
+  }
+
+  /**
+   * Records a copy (`type` "copy"), a paste into somewhere ("paste") or a copy back from the
+   * history ("use"): app, page, window and place (`{lat, lon, accuracy, name?, city?}`) when known.
+   */
+  recordClipEvent(clip, type, { app = null, bundle = null, url = null, title = null, window = null, place = null, at = this.now() } = {}) {
+    if (!clip) return null;
+    const id = crypto.randomUUID().toLowerCase();
+    const fields = { clip, type, at, device: this.journal.device, deviceName: this.config.deviceName ?? "Web browser" };
+    for (const [k, v] of Object.entries({ app, bundle, url, title, window })) if (typeof v === "string" && v) fields[k] = v;
+    if (place && Number.isFinite(place.lat) && Number.isFinite(place.lon)) {
+      fields.place = { lat: Math.round(place.lat * 1e5) / 1e5, lon: Math.round(place.lon * 1e5) / 1e5,
+        ...(Number.isFinite(place.accuracy) ? { accuracy: Math.round(place.accuracy) } : {}), ...(place.name ? { name: place.name } : {}), ...(place.city ? { city: place.city } : {}) };
+    }
+    this.set(fields, id, "clipEvent");
+    return id;
+  }
+
+  /** A clip's connections: other clips and library items. */
+  setClipLinks(id, links) { this.set({ links: [...new Set(links)].filter((l) => l !== id) }, id, "clip"); }
+  connectClip(id, other) { const c = this.clip(id); if (c && !c.links.includes(other)) this.setClipLinks(id, [...c.links, other]); }
+  disconnectClip(id, other) { const c = this.clip(id); if (c) this.setClipLinks(id, c.links.filter((l) => l !== other)); }
 
   /** Turns a clip into a library item (link, note or file) and links the two. */
   async saveClipToLibrary(id) {

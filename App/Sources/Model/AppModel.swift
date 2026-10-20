@@ -20,6 +20,7 @@ final class AppModel {
         case unfiled
         case graph
         case importer
+        case clipboard
     }
 
     /// A folder and its subfolders, for the sidebar's outline.
@@ -271,7 +272,7 @@ final class AppModel {
         case .source(let src): return items.filter { $0.sources.contains(src) }
         case .folder(let id): return items.filter { $0.folder == id }
         case .unfiled: return unfiledItems
-        case .graph, .importer, nil: return items
+        case .graph, .importer, .clipboard, nil: return items
         }
     }
 
@@ -473,6 +474,7 @@ final class AppModel {
         case .holdSensitive: return clipboard.keepSensitive
         case .saveCopiesOnOpen: return clipboard.captureOnOpen
         case .cloudAI: return config?.cloudAI ?? false
+        case .recordPlaces: return clipboard.recordPlaces
         #if os(macOS)
         case .recordPages: return sharedValues[key] ?? ClipSourceProbe.recordPages
         case .autoUpdate: return sharedValues[key] ?? Updater.shared.automatic
@@ -499,6 +501,7 @@ final class AppModel {
         case .holdSensitive: if clipboard.keepSensitive != on { clipboard.keepSensitive = on }
         case .saveCopiesOnOpen: if clipboard.captureOnOpen != on { clipboard.captureOnOpen = on }
         case .cloudAI: if config?.cloudAI != on { updateConfig { $0.cloudAI = on } }
+        case .recordPlaces: if clipboard.recordPlaces != on { clipboard.recordPlaces = on }
         case .recordPages:
             #if os(macOS)
             ClipSourceProbe.recordPages = on

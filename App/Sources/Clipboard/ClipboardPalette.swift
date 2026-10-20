@@ -237,10 +237,11 @@ final class ClipboardPaletteController {
     private func paste(_ entry: ClipEntry, transform: ClipTransform?, copyOnly: Bool = false) {
         Task {
             switch entry {
-            case .clip(let clip): await store.copy(clip, transform: transform)
+            case .clip(let clip): await store.copy(clip, transform: transform, use: copyOnly)
             case .sensitive(let e): store.copy(e)
             }
             finish(copyOnly: copyOnly)
+            if !copyOnly, let id = entry.clip?.id { notePaste([id]) }
         }
     }
 
@@ -249,6 +250,21 @@ final class ClipboardPaletteController {
         Task {
             await store.copy(joined: clips)
             finish(copyOnly: copyOnly)
+            if !copyOnly { notePaste(clips.map(\.id)) }
+        }
+    }
+
+    /// Where the clips went: the app (and its window or page) in front once the palette is gone.
+    private func notePaste(_ ids: [String]) {
+        let store = store
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            let app = NSWorkspace.shared.frontmostApplication
+            guard app?.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+            let (found, askBrowser) = ClipSourceProbe.immediate(app: app, pasteboard: NSPasteboard(name: .init("com.mrlancus.trove.none")))
+            var source = found
+            if askBrowser, let bundle = found.bundle, let page = await ClipSourceProbe.pageURL(bundle: bundle) { source.url = page }
+            for id in ids { await store.note(id, .paste, app: app?.localizedName, source: source) }
         }
     }
 

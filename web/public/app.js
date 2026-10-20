@@ -1,6 +1,7 @@
 // Trove for any browser. Vanilla modules, no build step; the relay serves these files.
 import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
+import { appKey, buildClipGraph, clipFacts, filterChoices, filterClips, placeKey } from "./core/clipmap.js";
 import { availableTransforms, clipQueryMatches, KEEP_COUNT_CHOICES, KEEP_DAY_CHOICES, clipSearchText, color, colorFormats, isSensitive, parseClipQuery, TAG_COLORS } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
 import { importActions } from "./core/importer.js";
@@ -16,7 +17,7 @@ import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
-  clipTag: null, newTag: null, tags: [], tagSig: "", dataVersion: 0, sidebarKey: null, memo: new Map(),
+  clipTag: null, clipShow: "list", clipWhere: {}, clipGroups: ["from", "to", "place"], newTag: null, tags: [], tagSig: "", dataVersion: 0, sidebarKey: null, memo: new Map(),
   importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false,
   selecting: false, picked: new Set(), anchor: null, shownIds: [], graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
 
@@ -464,11 +465,12 @@ function renderSidebar(items, collections, folders, unfiled, now) {
   const graph = memo("graph", () => linkGraph(items));
   const connected = items.filter((i) => graph.outgoing[i.id] || graph.incoming[i.id]).length;
 
-  $("#smart-list").replaceChildren(...smartCollections.map((s) => {
+  // The clipboard sits right under Sketches.
+  $("#smart-list").replaceChildren(...smartCollections.flatMap((s) => {
     const count = items.filter((i) => s.contains(i, now)).length;
-    if (!count && !["all", "notes", "sketches", "pinned"].includes(s.id)) return null;
-    return navLink(s.id, s.title, count);
-  }).filter(Boolean), navLink("graph", "Connections", connected || ""), navLink("clips", "Clipboard", vault.clips().length),
+    const link = !count && !["all", "notes", "sketches", "pinned"].includes(s.id) ? [] : [navLink(s.id, s.title, count)];
+    return s.id === "sketches" ? [...link, navLink("clips", "Clipboard", vault.clips().length)] : link;
+  }), navLink("graph", "Connections", connected || ""),
   navLink("import", "Import", state.importRun && !state.importRun.finished ? state.importRun.total - state.importRun.done : ""));
   renderFolderNav(folders, items, unfiled);
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
@@ -490,7 +492,7 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
   for (const id of ["#heading", "#grid"]) $(id).hidden = mode === "import" || mode === "graph";
   $("#folder-tiles").hidden = true;
   if (mode !== "graph" && graphView) { graphView.stop(); graphView = null; }
-  if (mode !== "clips") $("#clip-tools")?.remove();
+  if (mode !== "clips") { $("#clip-tools")?.remove(); clipMap?.stop(); clipMap = null; }
   if (mode !== "items") $("#clip-results")?.remove();
   $("#select-mode").hidden = mode !== "items";
   if (mode !== "items" && state.selecting) { state.selecting = false; state.picked = new Set(); renderBulkBar(); }
@@ -803,13 +805,20 @@ function renderClips() {
   const tags = vault.customTags();
   if (state.clipTag && !tags.some((t) => t.name === state.clipTag)) state.clipTag = null;
   const parsed = parseClipQuery(q);
-  const shown = all.filter((c) => filter[2](c) && (!state.clipTag || c.tags.includes(state.clipTag)) && clipQueryMatches(parsed, c, clipSearchText(c)));
+  const facts = memo("clipFacts", () => clipFacts(all, vault.clipEvents()));
+  const where = state.clipWhere;
+  const since = { day: Date.now() - 86_400_000, week: Date.now() - 7 * 86_400_000, month: Date.now() - 30 * 86_400_000 }[where.when] ?? null;
+  const shown = filterClips(all, facts, { from: where.from, to: where.to, place: where.place, since })
+    .filter((c) => filter[2](c) && (!state.clipTag || c.tags.includes(state.clipTag)) && clipQueryMatches(parsed, c, clipSearchText(c)));
   const pinned = !q && state.clipFilter === "all" ? [...shown.filter((c) => c.isPinned), ...shown.filter((c) => !c.isPinned)] : shown;
 
   $("#heading").textContent = q ? `${shown.length} clip${shown.length === 1 ? "" : "s"}` : "Clipboard";
   let tools = $("#clip-tools");
   if (!tools) {
     tools = h("div", { id: "clip-tools", class: "clip-tools" },
+      h("div", { class: "clip-top" },
+        h("div", { class: "seg clip-view", role: "radiogroup", "aria-label": "Show clips as" }),
+        h("div", { class: "clip-where", role: "group", "aria-label": "Where and when" })),
       h("div", { class: "chips", role: "group", "aria-label": "Filter" }),
       h("div", { class: "chips tag-chips", role: "group", "aria-label": "Your tags" }),
       h("div", { class: "tag-edit" }),
@@ -819,6 +828,9 @@ function renderClips() {
       h("details", { class: "clip-settings" }, h("summary", {}, "Save to Trove automatically"),
         h("p", { class: "hint", text: "Copies of these kinds go straight into your library, with where they came from. Applies on every device." }),
         h("div", { class: "chips", role: "group", "aria-label": "Save automatically" })),
+      h("details", { class: "clip-places" }, h("summary", {}, "Where you copy and paste"),
+        h("label", { class: "ink-check" }, h("input", { type: "checkbox", "data-setting": "recordPlaces" }), "Record the place (your location) with each copy and paste"),
+        h("p", { class: "hint", text: "Each copy and paste keeps the app or site, the device, the time and, with this on, where you were (from your device's location, never your IP address). It's encrypted like everything else and only your devices can read it. Applies on every device." })),
       h("details", { class: "clip-keep" }, h("summary", {}, "How much history to keep"),
         h("div", { class: "row" },
           h("label", {}, "Keep clips for ", h("select", { "aria-label": "Keep clips for", "data-keep": "days" })),
@@ -826,6 +838,26 @@ function renderClips() {
         h("p", { class: "hint keep-note" })));
     $("#heading").after(tools);
   }
+  // List or map, and where/when filters.
+  $(".clip-view", tools).replaceChildren(...[["list", "List"], ["map", "Map"]].map(([id, title]) =>
+    h("button", { type: "button", role: "radio", "aria-checked": String(state.clipShow === id), onclick: () => { state.clipShow = id; render(); } }, title)));
+  const choices = filterChoices(all, facts);
+  const pick = (key, label, options) => {
+    const select = h("select", { class: "folder-select", "aria-label": label },
+      h("option", { value: "", text: label }), options.map((o) => h("option", { value: o.key, text: `${o.label} (${o.count})` })));
+    select.value = where[key] ?? "";
+    select.onchange = () => { where[key] = select.value || null; render(); };
+    return options.length || where[key] ? select : null;
+  };
+  const when = h("select", { class: "folder-select", "aria-label": "When" },
+    [["", "Any time"], ["day", "Last 24 hours"], ["week", "Last 7 days"], ["month", "Last 30 days"]].map(([v, t]) => h("option", { value: v, text: t })));
+  when.value = where.when ?? "";
+  when.onchange = () => { where.when = when.value || null; render(); };
+  $(".clip-where", tools).replaceChildren(...[pick("from", "Copied from", choices.from), pick("to", "Pasted into", choices.to), pick("place", "Where", choices.places), when,
+    Object.values(where).some(Boolean) ? h("button", { type: "button", class: "secondary small", onclick: () => { state.clipWhere = {}; render(); } }, "Clear") : null].filter(Boolean));
+  const placesBox = $('[data-setting="recordPlaces"]', tools);
+  placesBox.checked = vault.appSetting("recordPlaces");
+  placesBox.onchange = () => { vault.setAppSetting("recordPlaces", placesBox.checked); syncSoon(); if (placesBox.checked) currentPlace(); };
   $(".chips", tools).replaceChildren(...clipFilters.map(([id, title]) =>
     h("button", { type: "button", "aria-pressed": String(state.clipFilter === id), onclick: () => { state.clipFilter = id; render(); } }, title)));
   renderTagChips(tools, tags, all);
@@ -853,9 +885,38 @@ function renderClips() {
   // Don't throw away what's being typed in an open clip when something syncs.
   const open = $("#grid .clip.open");
   if (open && open.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if (state.clipShow === "map") { renderClipMap(pinned, facts); $("#empty").hidden = true; return; }
+  clipMap?.stop(); clipMap = null;
   $("#grid").replaceChildren(...pinned.slice(0, 300).map(clipRow));
   $("#empty").hidden = pinned.length > 0;
   $("#empty").textContent = all.length ? "No clips match." : "Nothing copied yet. Copy something on your Mac, or paste here.";
+}
+
+// ---------- the clipboard map: where clips came from and went, as a graph ----------
+
+let clipMap = null;
+const MAP_GROUPS = [["from", "Copied from"], ["to", "Pasted into"], ["place", "Places"], ["day", "Days"], ["tag", "Tags"]];
+
+function renderClipMap(clips, facts) {
+  const groups = state.clipGroups;
+  const data = buildClipGraph(clips.slice(0, 600), facts, { groups, items: state.vault.items() });
+  const sig = JSON.stringify([data.nodes.length, data.edges.length, groups, clips.slice(0, 600).map((c) => c.id).join()]);
+  let wrap = $("#grid .clip-map");
+  if (wrap && wrap.dataset.sig === sig) return;
+  clipMap?.stop();
+  const canvasBox = h("div", { class: "clip-map-canvas" });
+  wrap = h("div", { class: "clip-map", "data-sig": sig },
+    h("div", { class: "chips clip-map-groups", role: "group", "aria-label": "Group by" }, h("span", { class: "hint", text: "Join clips by" }),
+      MAP_GROUPS.map(([id, title]) => h("button", { type: "button", "aria-pressed": String(groups.includes(id)),
+        onclick: () => { state.clipGroups = groups.includes(id) ? groups.filter((g) => g !== id) : [...groups, id]; render(); } }, title))),
+    canvasBox,
+    h("p", { class: "hint", text: `${clips.length} clip${clips.length === 1 ? "" : "s"}. Points are clips (coloured by kind); green: where they were copied, pink: where they were pasted, yellow: places. Tap a clip to open it; drag, scroll and pinch to move around.` }));
+  $("#grid").replaceChildren(wrap);
+  requestAnimationFrame(() => {
+    clipMap = graphCanvas(canvasBox, data, { onOpen: (id) => {
+      if (state.vault.clip(id)) { state.clipShow = "list"; state.openClip = id; render(); } else openItem(id);
+    } });
+  });
 }
 
 // ---------- your tags, with colours (PROTOCOL.md §8) ----------
@@ -1030,6 +1091,7 @@ function clipDetails(clip, c) {
   if (clip.stats && clip.kind !== "image") facts.push(["Size", [[clip.stats.chars, "character"], [clip.stats.words, "word"], [clip.stats.lines, "line"]].map(([n, w]) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`).join(" · ")]);
   if (clip.enrichment) facts.push(["Named by", ["Built-in rules", "Apple Intelligence", "Helper", "Cloud AI"][clip.enrichment.tier] ?? "AI"]);
   details.append(h("dl", { class: "clip-facts" }, facts.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", {}, v)])));
+  details.append(clipHistory(clip), clipConnections(clip));
 
   details.append(h("div", { class: "row" },
     h("button", { type: "button", class: "secondary", onclick: () => save(() => vault.setClipPinned(clip.id, !clip.isPinned)) }, clip.isPinned ? "Unpin" : "Pin"),
@@ -1043,6 +1105,51 @@ function clipDetails(clip, c) {
   return details;
 }
 
+/** Every copy and paste of a clip: when, on which device, from or into which app or page, and where. */
+function clipHistory(clip) {
+  const events = state.vault.clipEvents(clip.id);
+  const verb = { copy: "Copied", paste: "Pasted into", use: "Copied again from Trove" };
+  const rows = events.slice(-30).reverse().map((e) => {
+    const where = appKey(e)?.label;
+    const place = placeKey(e.place);
+    return h("li", { class: `clip-event ${e.type}` },
+      h("span", { class: "clip-event-dot", "aria-hidden": "true" }),
+      h("div", {},
+        h("strong", { text: `${verb[e.type]}${e.type === "use" ? "" : where ? ` ${e.type === "copy" ? "from " : ""}${where}` : ""}` }),
+        h("span", { class: "hint", text: [new Date(e.at).toLocaleString(), e.deviceName, e.title && e.title !== where ? e.title : null].filter(Boolean).join(" · ") }),
+        place ? h("a", { class: "clip-place", href: `https://www.openstreetmap.org/?mlat=${e.place.lat}&mlon=${e.place.lon}#map=16/${e.place.lat}/${e.place.lon}`,
+          target: "_blank", rel: "noopener noreferrer" }, icon("location"), ` ${place.label}`) : null));
+  });
+  return h("div", { class: "clip-field" }, h("span", { class: "hint", text: "Where and when" }),
+    rows.length ? h("ol", { class: "clip-events" }, rows) : h("p", { class: "hint", text: "No copies or pastes recorded yet." }));
+}
+
+/** A clip's connections to other clips and to things in the library, and a way to add one. */
+function clipConnections(clip) {
+  const vault = state.vault;
+  const chips = clip.links.map((id) => {
+    const other = vault.clip(id) ?? vault.item(id);
+    if (!other) return null;
+    return h("span", { class: "link-chip" },
+      h("a", { href: "#", text: other.displayTitle, onclick: (e) => { e.preventDefault(); if (vault.clip(id)) { state.openClip = id; render(); } else openItem(id); } }),
+      h("button", { type: "button", class: "chip-x", "aria-label": `Disconnect ${other.displayTitle}`, onclick: () => { vault.disconnectClip(clip.id, id); syncSoon(); } }, icon("close")));
+  }).filter(Boolean);
+  const input = h("input", { type: "search", placeholder: "Connect to a note, file or clip…", "aria-label": "Connect to" });
+  const results = h("div", { class: "connect-results", hidden: true });
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { results.hidden = true; return; }
+    const hits = [...vault.items().filter((i) => i.displayTitle.toLowerCase().includes(q)).slice(0, 6),
+      ...vault.clips().filter((c) => c.id !== clip.id && c.displayTitle.toLowerCase().includes(q)).slice(0, 4)];
+    results.hidden = !hits.length;
+    results.replaceChildren(...hits.map((x) => h("button", { type: "button", onclick: () => {
+      vault.connectClip(clip.id, x.id); input.value = ""; results.hidden = true; syncSoon();
+    } }, h("strong", { text: x.displayTitle }), h("span", { class: "saved", text: x.kind && vault.item(x.id) ? ` ${x.kind}` : " clip" }))));
+  });
+  return h("div", { class: "clip-field" }, h("span", { class: "hint", text: "Connections" }),
+    chips.length ? h("div", { class: "link-chips" }, chips) : null, h("div", { class: "connect-picker" }, input, results));
+}
+
 function shortLink(u) {
   try { const x = new URL(u); return (x.host.replace(/^www\./, "") + x.pathname.replace(/\/$/, "")).slice(0, 60); } catch { return u.slice(0, 60); }
 }
@@ -1050,7 +1157,7 @@ function shortLink(u) {
 async function copyText(text, clip) {
   try {
     await navigator.clipboard.writeText(text);
-    if (clip) { state.vault.markClipUsed(clip.id); syncSoon(); }
+    if (clip) { state.vault.markClipUsed(clip.id); syncSoon(); noteClipEvent(clip.id, "use"); }
     toast("Copied");
   } catch {
     toast("Your browser blocked copying. Select the text and copy it instead.");
@@ -1064,6 +1171,7 @@ async function copyClip(clip) {
       await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
       state.vault.markClipUsed(clip.id);
       syncSoon();
+      noteClipEvent(clip.id, "use");
       toast("Image copied");
     } catch {
       toast("Your browser can't copy images here. Open it with the arrow on its right instead.");
@@ -1074,19 +1182,47 @@ async function copyClip(clip) {
 }
 
 /** Adds text or an image to the history (the web can't watch the clipboard, so you paste). */
+// ---------- where clips are copied and pasted ----------
+
+let lastPlace = null;
+/**
+ * Where this browser is, if the person lets it and "Record places" is on (synced; off on any
+ * device turns it off everywhere). Asked once by the browser; null when it can't say in 4 s.
+ */
+async function currentPlace() {
+  if (!state.vault?.appSetting("recordPlaces") || !navigator.geolocation) return null;
+  if (lastPlace && Date.now() - lastPlace.at < 5 * 60_000) return lastPlace.place;
+  return new Promise((done) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { const place = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }; lastPlace = { at: Date.now(), place }; done(place); },
+      () => done(null), { enableHighAccuracy: false, timeout: 4000, maximumAge: 300_000 });
+  });
+}
+
+/** Writes a copy, paste or use of a clip, with the place once it's known. */
+async function noteClipEvent(clipId, type, extra = {}) {
+  if (!clipId) return;
+  const place = await currentPlace().catch(() => null);
+  state.vault.recordClipEvent(clipId, type, { app: "Web browser", ...extra, place });
+  syncSoon();
+}
+
 async function addToClipboardHistory({ text, file }) {
+  let id = null;
   if (file && file.type.startsWith("image/")) {
-    const id = await state.vault.addImageClip(new Uint8Array(await file.arrayBuffer()), file.type);
+    id = await state.vault.addImageClip(new Uint8Array(await file.arrayBuffer()), file.type);
     await state.vault.autoSaveClip(id).catch(() => {});
     toast("Image added to your clipboard history");
   } else if (text && text.trim()) {
     if (isSensitive(text)) { toast("That looks like a password or code, so it wasn't saved"); return; }
-    await state.vault.autoSaveClip(state.vault.addClip(text, { sourceApp: "Web" })).catch(() => {});
+    id = state.vault.addClip(text, { sourceApp: "Web" });
+    await state.vault.autoSaveClip(id).catch(() => {});
     toast("Added to your clipboard history");
   } else {
     return;
   }
   syncSoon();
+  noteClipEvent(id, "copy");
 }
 
 async function pasteFromClipboard() {

@@ -247,6 +247,7 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
 | `title`, `tags`, `note`, `editedAt` | the user's name for it ("" = none), tags (lowercase, no `#`), a note, when the text was last edited |
 | `aiTitle`, `summary`, `ocrText`, `enrichment`, `needsEnrichment` | enrichment, as for items (§5): an AI title, a one-line summary, text found in an image |
 | `uses` | how many times it was copied again or pasted from history |
+| `links` | ids of other clips and library items it's connected to |
 
 - **Insights:** `autoTitle` is the link's host (without `www.`) and path, `"Colour " + text`, a
   path's last component, `"JSON"`, or the first non-empty line with its whitespace collapsed, cut to
@@ -271,7 +272,7 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
 - **Shared app settings:** one synced record, id `settings.app`, kind `setting`, booleans that
   every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
   never leave the device), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
-  (Mac), `cloudAI`. A missing field means the default (all on, except `cloudAI`). A device whose
+  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`). A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
@@ -300,6 +301,19 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   codes) are never written as clips. The Mac holds sensitive copies in memory for two minutes only.
   The rules live in `Clip.swift` (`SensitiveDetector`) and `web/public/core/clips.js`, and their
   tests are kept in step.
+- **Copy and paste events:** each copy, paste or reuse is its own record, kind `clipEvent`, so two
+  devices recording at once never overwrite each other: `clip` (the clip's id), `type` (`copy`,
+  `paste` into another app, or `use`: copied back out of Trove's history), `at` (Unix ms), `device`,
+  `deviceName`, and when known `app`, `bundle`, `url` (the page), `title` (window or page title) and
+  `place` `{lat, lon, accuracy?, name?, city?}`: where the device was, from its own location
+  (CoreLocation, the browser's geolocation), never an IP address; 5 decimal places, accuracy in
+  metres, `name`/`city` looked up by Apple devices. Places are recorded while the shared setting
+  `recordPlaces` (in `settings.app`, on unless turned off) is on. Deleting or pruning a clip deletes
+  its events. A copy that only bumps an existing clip still gets its own `copy` event.
+- **The clipboard map** joins clips to where they were copied from (the site for a page, else the
+  app), where they were pasted, their places (by `name`, else position rounded to 3 decimals), days
+  and tags, and to connected clips and items (`core/clipmap.js`, `ClipEvents.swift`; both check
+  `Fixtures/clip-events.json`, made by `web/test/make-clip-events-fixture.mjs`).
 - **iOS keyboard:** the app writes the latest text clips to the App Group (`keyboard-clips.json`)
   for the Trove keyboard, which has no vault keys.
 

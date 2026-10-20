@@ -46,6 +46,7 @@ struct ClipDetailForm: View {
                 TextEditor(text: $note).frame(minHeight: 54)
             }
             Section("Where it came from") { facts }
+            Section("Where and when") { ClipHistoryList(clipId: clip.id, store: store) }
             Section {
                 HStack {
                     Button(clip.isPinned ? "Unpin" : "Pin") { Task { await store.togglePin(clip) } }
@@ -186,3 +187,42 @@ struct ClipSearchRows: View {
 }
 
 struct ClipSheetID: Identifiable { let id: String }
+
+/// Every copy and paste of a clip, newest first: what, where to or from, when, on which device and
+/// where you were (PROTOCOL.md §8 copy and paste events). Places open in Maps.
+struct ClipHistoryList: View {
+    let clipId: String
+    let store: ClipboardStore
+    @State private var events: [ClipEvent] = []
+
+    var body: some View {
+        Group {
+            if events.isEmpty {
+                Text("No copies or pastes recorded yet.").font(.callout).foregroundStyle(.secondary)
+            }
+            ForEach(events.reversed().prefix(30)) { e in
+                HStack(alignment: .top, spacing: 10) {
+                    Circle().fill(e.type == .copy ? Color.green : e.type == .paste ? Color.pink : Color.gray).frame(width: 10, height: 10).padding(.top, 5)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(headline(e)).font(.callout.weight(.semibold))
+                        Text([e.at.formatted(date: .abbreviated, time: .shortened), e.deviceName, e.title].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        if let place = e.place, let url = URL(string: "https://maps.apple.com/?ll=\(place.lat),\(place.lon)&q=\(place.key.label.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
+                            Link(destination: url) { Label(place.key.label, systemImage: "mappin.and.ellipse").font(.caption) }
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: clipId) { events = await store.events(for: clipId) }
+    }
+
+    private func headline(_ e: ClipEvent) -> String {
+        let place = e.whereKey?.label
+        switch e.type {
+        case .copy: return place.map { "Copied from \($0)" } ?? "Copied"
+        case .paste: return place.map { "Pasted into \($0)" } ?? "Pasted"
+        case .use: return "Copied again from Trove"
+        }
+    }
+}

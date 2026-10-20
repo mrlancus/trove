@@ -56,6 +56,8 @@ public struct Clip: Identifiable, Hashable, Sendable {
     public var summary: String? { record[Field.summary]?.string.flatMap { $0.isEmpty ? nil : $0 } }
     public var tags: [String] { record[Field.tags]?.stringArray ?? [] }
     public var note: String { record[Field.note]?.string ?? "" }
+    /// Other clips and library items this one is connected to.
+    public var links: [String] { record["links"]?.stringArray ?? [] }
     /// Text found in a copied image.
     public var ocrText: String? { record[Field.ocrText]?.string.flatMap { $0.isEmpty ? nil : $0 } }
     public var editedAt: Date? { record[Field.editedAt]?.date }

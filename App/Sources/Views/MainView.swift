@@ -93,6 +93,7 @@ struct MainView: View {
             Group {
                 if model.selection == .importer, model.searchText.isEmpty { ImportView() }
                 else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
+                else if model.selection == .clipboard { ClipboardScreen(embedded: true) }
                 else { LibraryView() }
             }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 520)
@@ -235,6 +236,9 @@ struct SidebarView: View {
         List(selection: onPick.map { pick in Binding(get: { nil }, set: { if let s = $0 { pick(s) } }) } ?? $model.selection) {
             Section {
                 ForEach(primary) { s in row(s) }
+                // Right under Sketches.
+                Label("Clipboard", systemImage: "doc.on.clipboard")
+                    .tag(AppModel.Selection.clipboard)
                 Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(AppModel.Selection.graph)
                 Label("Import", systemImage: "square.and.arrow.down.on.square")
@@ -564,6 +568,7 @@ struct LibraryView: View {
         case .unfiled: return "Unfiled"
         case .graph: return "Connections"
         case .importer: return "Import"
+        case .clipboard: return "Clipboard"
         case nil: return "Trove"
         }
     }

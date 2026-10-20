@@ -255,3 +255,36 @@ final class ClockBox: @unchecked Sendable {
         #expect(await ipad.clipKeep() == ClipKeep(days: 365, count: 0))
     }
 }
+
+@Suite struct ClipEventTests {
+    @Test func eventsReadLikeTheWebsite() throws {
+        let url = try #require(Bundle.module.url(forResource: "clip-events", withExtension: "json", subdirectory: "Fixtures"))
+        let file = try JSONDecoder().decode([String: [[String: JSONValue]]].self, from: Data(contentsOf: url))
+        for (i, c) in (file["cases"] ?? []).enumerated() {
+            var r = Record(id: "e\(i)", kind: ClipEvent.kind, createdHLC: "", updatedHLC: "")
+            r.fields = c["fields"]?.object ?? [:]
+            let e = ClipEvent(r)
+            let expect = c["expect"]?.object ?? [:]
+            #expect(e.type.rawValue == expect["type"]?.string)
+            #expect(e.whereKey?.key == expect["where"]?.object?["key"]?.string, "where \(i)")
+            #expect(e.whereKey?.label == expect["where"]?.object?["label"]?.string)
+            #expect(e.place?.key.key == expect["place"]?.object?["key"]?.string, "place \(i)")
+            #expect(e.place?.key.label == expect["place"]?.object?["label"]?.string)
+        }
+    }
+
+    @Test func recordConnectAndDelete() async {
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()))
+        let a = await lib.addClip(text: "hello there")!
+        let b = await lib.addClip(text: "second clip")!
+        await lib.recordClipEvent(a, .copy, app: "Notes", place: .init(lat: 51.507351234, lon: -0.1277, accuracy: 12.4, name: "Home"))
+        await lib.recordClipEvent(a, .paste, app: "Slack")
+        let events = await lib.clipEvents(of: a)
+        #expect(events.map(\.type) == [.copy, .paste])
+        #expect(events[0].place == .init(lat: 51.50735, lon: -0.1277, accuracy: 12, name: "Home"))
+        await lib.connectClip(a, to: b)
+        #expect(await lib.clip(a)?.links == [b])
+        await lib.deleteClip(a)
+        #expect(await lib.clipEvents(of: a).isEmpty)
+    }
+}

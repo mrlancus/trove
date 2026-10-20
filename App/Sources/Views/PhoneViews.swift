@@ -70,6 +70,7 @@ struct PhoneRootView: View {
         switch route {
         case .list(.graph): GraphScreen()
         case .list(.importer): ImportView()
+        case .list(.clipboard): ClipboardScreen(embedded: true)
         case .list(let selection):
             LibraryView()
                 .onAppear { if model.selection != selection { model.selection = selection } }

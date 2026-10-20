@@ -208,7 +208,11 @@ extension Library {
         await engine.set(fields, record: id, kind: "clip")
     }
     public func setClipPinned(_ id: String, _ pinned: Bool) async { await engine.set([Clip.Field.pinned: .bool(pinned)], record: id, kind: "clip") }
-    public func deleteClip(_ id: String) async { await engine.delete(id) }
+    /// Deletes a clip and where and when it was copied and pasted.
+    public func deleteClip(_ id: String) async {
+        await engine.delete(id)
+        for e in await clipEvents(of: id) { await engine.set(["_deleted": .bool(true)], record: e.id, kind: ClipEvent.kind) }
+    }
 
     /// Deletes unpinned clips older than `maxAge` and the oldest past `limit`. Left out, both come from
     /// the synced setting (`clipKeep`); 0 means no limit.
@@ -220,7 +224,7 @@ extension Library {
         let cutoff = maxAge > 0 ? now().addingTimeInterval(-maxAge) : .distantPast
         var removed = 0
         for (index, clip) in await clips().enumerated() where !clip.isPinned && (clip.sortDate < cutoff || (limit > 0 && index >= limit)) {
-            await engine.delete(clip.id)
+            await deleteClip(clip.id)
             removed += 1
         }
         return removed
@@ -331,6 +335,8 @@ public struct ClipKeep: Equatable, Hashable, Sendable {
 /// (Things that belong to one machine, like a folder path or a permission, stay on that machine.)
 public enum SharedSetting: String, CaseIterable, Sendable {
     case clipboardHistory, holdSensitive, saveCopiesOnOpen, recordPages, autoUpdate, cloudAI
+    /// Keep where you were (the device's location) with each copy and paste.
+    case recordPlaces
 
     /// The value before anyone has changed it.
     public var standard: Bool { self != .cloudAI }

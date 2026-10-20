@@ -72,6 +72,8 @@ targets:
         NSSpeechRecognitionUsageDescription: Trove turns your voice notes into searchable text on this device.
         NSPhotoLibraryUsageDescription: Trove can import your screenshots so their text becomes searchable.
         NSAppleEventsUsageDescription: Trove reads your Apple Notes so they appear in Trove search.
+        NSLocationWhenInUseUsageDescription: Trove keeps where you were with each copy and paste in your clipboard history (you can turn this off in Settings, Clipboard).
+        NSLocationUsageDescription: Trove keeps where you were with each copy and paste in your clipboard history (you can turn this off in Settings, Clipboard).
         NSCalendarsWriteOnlyAccessUsageDescription: Trove can add events it finds in your saved items to your calendar.
         NSRemindersFullAccessUsageDescription: Trove can turn tasks in your notes into reminders.
         NSUserActivityTypes: [com.mrlancus.trove.item]
@@ -84,6 +86,8 @@ targets:
       path: Config/Trove.entitlements
       properties:
         com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
+        # The hardened runtime needs this for the clipboard's places (Services/PlaceFinder.swift).
+        com.apple.security.personal-information.location: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove

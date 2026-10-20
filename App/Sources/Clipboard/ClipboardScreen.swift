@@ -6,17 +6,26 @@ struct ClipboardScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var state = ClipPaletteState()
+    /// In the sidebar's column (or pushed on iPhone) instead of a sheet.
+    var embedded = false
 
     var body: some View {
-        NavigationStack {
-            ClipsView(style: .list, state: state, store: model.clipboard, thisDevice: model.config?.deviceId,
-                      activate: { entry, transform in copy(entry, transform) },
-                      saveToLibrary: { model.saveClip($0) })
-                .navigationTitle("Clipboard")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        if embedded {
+            clips.task { await model.clipboard.reload() }
+        } else {
+            NavigationStack {
+                clips.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            }
+            .sheetSize(width: 760, height: 720)
+            .task { await model.clipboard.reload() }
         }
-        .sheetSize(width: 760, height: 720)
-        .task { await model.clipboard.reload() }
+    }
+
+    private var clips: some View {
+        ClipsView(style: .list, state: state, store: model.clipboard, thisDevice: model.config?.deviceId,
+                  activate: { entry, transform in copy(entry, transform) },
+                  saveToLibrary: { model.saveClip($0) })
+            .navigationTitle("Clipboard")
     }
 
     private func copy(_ entry: ClipEntry, _ transform: ClipTransform?) {

@@ -149,6 +149,7 @@ function makeClipView(record) {
     title, aiTitle, autoTitle: auto,
     displayTitle: title ?? aiTitle ?? (kind === "image" ? image.name ?? "Image" : kind === "file" ? preview : auto || "Clip"),
     summary: str(f.summary), ocrText: str(f.ocrText), tags: list(f.tags), note: typeof f.note === "string" ? f.note : "",
+    links: list(f.links),
     editedAt: typeof f.editedAt === "number" ? f.editedAt : null, uses: typeof f.uses === "number" ? f.uses : 0,
     needsEnrichment: f.needsEnrichment === true, enrichment: f.enrichment && typeof f.enrichment === "object" ? f.enrichment : null,
     stats: stats ? { chars: stats.chars ?? 0, words: stats.words ?? 0, lines: stats.lines ?? 0 } : null,

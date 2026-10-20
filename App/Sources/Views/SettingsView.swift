@@ -457,6 +457,9 @@ private struct ClipboardSection: View {
             Text("The window title needs Accessibility (above). For Safari and other browsers, macOS asks once whether Trove may read the front page's address.")
                 .font(.caption).foregroundStyle(.secondary)
             #endif
+            Toggle("Record where you copy and paste", isOn: shared(.recordPlaces))
+            Text("Each copy and paste keeps the app or site, the device, the time and where you were (from this device's location, never your IP address). Encrypted like everything else. Applies on every device.")
+                .font(.caption).foregroundStyle(.secondary)
             LabeledContent("Save to Trove automatically") {
                 VStack(alignment: .trailing, spacing: 4) {
                     ForEach(Self.autoSaveKinds, id: \.kind) { option in
