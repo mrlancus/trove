@@ -173,7 +173,11 @@ struct PencilCanvas: UIViewRepresentable {
         private var shownVersion = -1
         private var applying = false
         private var drawing = false
-        private var pending: (InkContent, Int)?
+        /// Ink changed while the pen was down: show it once the pen lifts, read fresh then (an older
+        /// copy kept from before would wipe the stroke just drawn).
+        private var pending = false
+        /// Strokes just drawn that haven't reached the model yet (it hears of them a moment later).
+        private var handingOver: Set<String> = []
         private var backgroundTask: Task<Void, Never>?
         private var backgroundKey = ""
 
@@ -290,11 +294,15 @@ struct PencilCanvas: UIViewRepresentable {
             refreshBackground(canvas)
             paperView.setNeedsDisplay()
             guard version != shownVersion else { return }
-            if drawing { pending = (content, version); return }
+            if drawing { pending = true; return }
             applying = true
+            // Keep what was just drawn and is still on its way to the model.
+            let modelIds = Set(content.strokes.map(\.id))
+            let keep = canvas.drawing.strokes.filter { s in ids[PencilCanvas.signature(s)].map { handingOver.contains($0) && !modelIds.contains($0) } ?? false }
+            let kept = keep.map { (PencilCanvas.signature($0), ids[PencilCanvas.signature($0)] ?? "") }
             let pk = content.strokes.map { PencilCanvas.pkStroke($0, origin: origin) }
-            canvas.drawing = PKDrawing(strokes: pk)
-            ids = Dictionary(zip(pk.map(PencilCanvas.signature), content.strokes.map(\.id)), uniquingKeysWith: { a, _ in a })
+            canvas.drawing = PKDrawing(strokes: pk + keep)
+            ids = Dictionary(zip(pk.map(PencilCanvas.signature), content.strokes.map(\.id)) + kept, uniquingKeysWith: { a, _ in a })
             shownVersion = version
             applying = false
         }
@@ -303,7 +311,16 @@ struct PencilCanvas: UIViewRepresentable {
 
         func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
             drawing = false
-            if let p = pending { pending = nil; apply(p.0, version: p.1, to: canvasView) }
+            guard pending, let page else { return }
+            pending = false
+            // After PencilKit has reported the new stroke (it does so before or after this call),
+            // so the stroke is in the model by the time the canvas is redrawn from it.
+            DispatchQueue.main.async { [weak self, weak canvasView] in
+                guard let self, let canvasView, !self.drawing, self.page?.key == page.key else { return }
+                self.canvasViewDrawingDidChange(canvasView)
+                self.shownVersion = -1
+                self.apply(self.editor.display(page.key), version: self.editor.revision, to: canvasView)
+            }
         }
 
         /// New strokes are added to Trove (snapped into shapes if asked); others' changes are applied
@@ -316,11 +333,12 @@ struct PencilCanvas: UIViewRepresentable {
             let key = page.key, origin = origin
             // Trove's copies, made now; saved a moment later, once the hold watcher has seen the pen lift.
             let strokes = added.map { s in (signature: PencilCanvas.signature(s), id: UUID().uuidString.lowercased(), ink: PencilCanvas.convert(s, origin: origin)) }
-            for s in strokes { ids[s.signature] = s.id }
+            for s in strokes { ids[s.signature] = s.id; handingOver.insert(s.id) }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let held = self.holdWatcher?.takeHeld() ?? false
                 for s in strokes {
+                    self.handingOver.remove(s.id)
                     let c = s.ink
                     if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: key, held: held) != nil {
                         // Snapped: show the clean shape instead of the rough line.

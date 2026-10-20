@@ -245,7 +245,8 @@ extension Library {
     }
 
     public func deleteStrokes(_ ids: [String]) async {
-        for id in ids { await engine.delete(id) }
+        // With the kind, a delete that lands before the stroke is stored still names a stroke.
+        for id in ids { await engine.set(["_deleted": .bool(true)], record: id, kind: "stroke") }
     }
 
     /// A new, empty sketch.

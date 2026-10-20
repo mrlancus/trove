@@ -12,6 +12,9 @@ public struct Record: Sendable, Hashable, Identifiable {
     public var updatedHLC: String
 
     public var isDeleted: Bool { fields["_deleted"]?.bool == true }
+    /// An "item" made only by edits to an id that never was one (no kind, no date): shown as an
+    /// empty "Untitled" from 1970 before, now left out everywhere (PROTOCOL.md §3).
+    public var isStrayItem: Bool { kind == "item" && fields["kind"] == nil && fields["createdAt"] == nil }
     public subscript(field: String) -> JSONValue? { fields[field] }
 }
 

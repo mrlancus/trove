@@ -115,7 +115,8 @@ public actor SyncEngine {
         return op
     }
 
-    public func delete(_ record: String) { set(["_deleted": true], record: record) }
+    /// Deletes a record, keeping its kind (a delete with none would name an unknown id an item).
+    public func delete(_ record: String) { set(["_deleted": true], record: record, kind: store.record(record)?.kind) }
 
     // MARK: Sync
 

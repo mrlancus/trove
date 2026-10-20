@@ -214,3 +214,23 @@ import Testing
         #expect(await lib.item(webId)?.source == .web)
     }
 }
+
+@Suite struct StrayItemTests {
+    @Test func editsToUnknownIdsNeverMakeEmptyItems() async {
+        let engine = SyncEngine(device: "MAC", keys: .generate())
+        let lib = Library(engine: engine)
+        // Writes aimed at ids that were never items do nothing.
+        await lib.update("nobody", [Field.title: .string("x")])
+        await lib.setBody("nobody", "text")
+        #expect(await engine.record("nobody") == nil)
+        // A stroke deleted before it's stored stays a stroke, not an item.
+        await lib.deleteStrokes(["s1"])
+        #expect(await engine.record("s1")?.kind == "stroke")
+        // A stray item that an older version wrote is left out of the library.
+        await engine.set(["thumbnail": .string("x")], record: "ghost", kind: "item")
+        let id = await lib.addNote(title: "Real", body: "")
+        let ids = await lib.items().map(\.id)
+        #expect(ids == [id])
+        #expect(await lib.item("ghost") == nil)
+    }
+}

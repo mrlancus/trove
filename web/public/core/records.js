@@ -37,6 +37,9 @@ export class HLCClock {
 
 // ---------- Record store ----------
 
+/** An "item" made only by edits to an id that never was one (no kind, no date): left out (RecordStore.swift isStrayItem). */
+export const isStrayItem = (r) => r.kind === "item" && r.fields.kind === undefined && r.fields.createdAt === undefined;
+
 const opId = (op) => `${op.d}:${op.s}`;
 const order = (a, b) => (a.h !== b.h ? (a.h < b.h ? -1 : 1) : a.d !== b.d ? (a.d < b.d ? -1 : 1) : a.s - b.s);
 const maxString = (a, b) => (a > b ? a : b);

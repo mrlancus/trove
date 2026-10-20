@@ -85,6 +85,10 @@ It sorts as a plain string, and ties break on device id. Each device keeps its H
   - A clean merge becomes the new text.
   - On conflict, the current text stays and `value` is kept in the record's `_conflicts` list for the UI to show. Data is never silently lost.
   - Every text value seen is added to the history, keyed by its hash.
+- **Stray items:** a record of kind `item` with neither a `kind` field nor `createdAt` was made only
+  by edits (or a delete without `k`) aimed at an id that never was an item. Clients leave it out of
+  the library. Writers send `k` on deletes (the record's own kind) and never `set` item fields on an
+  id that has no item record.
 
 ### Segment (the file and relay unit)
 A segment is an immutable batch of consecutive ops from one device:

@@ -1,7 +1,7 @@
 // The web app's vault: joins the relay as a "web" device, keeps a local copy of every op, pulls and
 // pushes encrypted journal segments (docs/PROTOCOL.md §3–4) and edits records the same way the apps do.
 import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
-import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
+import { decodeSegment, encodeSegment, isStrayItem, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
 import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, customTagList, hashImageHex, hashText, insightFields, insights, ruleTags, TAG_COLORS, TAG_SETTINGS_ID } from "./clips.js";
@@ -186,12 +186,12 @@ export class Vault {
   // ---------- reading ----------
 
   items() {
-    return this.store.visible.filter((r) => r.kind === "item").map(itemView).sort((a, b) => b.createdAt - a.createdAt);
+    return this.store.visible.filter((r) => r.kind === "item" && !isStrayItem(r)).map(itemView).sort((a, b) => b.createdAt - a.createdAt);
   }
 
   item(id) {
     const r = this.store.records.get(id);
-    return r && r.kind === "item" && r.fields._deleted !== true ? itemView(r) : null;
+    return r && r.kind === "item" && r.fields._deleted !== true && !isStrayItem(r) ? itemView(r) : null;
   }
 
   // ---------- folders (PROTOCOL.md §9, Library+Folders.swift) ----------
@@ -431,9 +431,11 @@ export class Vault {
     return id;
   }
 
-  update(id, fields) { this.set(fields, id, "item"); }
+  /** Changes an item's fields; an id with no item behind it is left alone (it would show as an empty 1970 "Untitled"). */
+  update(id, fields) { if (this.store.records.get(id)?.kind === "item") this.set(fields, id, "item"); }
 
   setBody(id, text) {
+    if (this.store.records.get(id)?.kind !== "item") return;
     this.editText(Field.body, text, id, "item");
     const tags = hashtags(text), item = this.item(id);
     if (item && tags.length && !tags.every((t) => item.tags.includes(t))) {
@@ -443,7 +445,7 @@ export class Vault {
 
   setPinned(id, pinned) { this.update(id, { [Field.pinned]: pinned }); }
   markRead(id, read = true) { this.update(id, { [Field.readAt]: read ? this.now() : null }); }
-  delete(id) { this.set({ _deleted: true }, id); }
+  delete(id) { this.set({ _deleted: true }, id, this.store.records.get(id)?.kind); }
 
   resolveConflicts(id, keeping) {
     this.editText(Field.body, keeping, id, "item");

@@ -164,6 +164,10 @@ final class InkEditorModel {
         case drag(key: String, start: InkPoint, corner: Int?, box: InkGeometry.Rect)
     }
     private var gesture: Gesture?
+    /// Strokes drawn here that the library hasn't stored yet, and ones erased here it hasn't
+    /// deleted yet. A reload that lands in between keeps them as drawn, so nothing flickers away.
+    @ObservationIgnored private var unsavedStrokes: [String: (key: String, line: InkLine)] = [:]
+    @ObservationIgnored private var unsavedDeletes: Set<String> = []
     @ObservationIgnored private weak var app: AppModel?
     private var pagesSig = ""
 
@@ -256,7 +260,12 @@ final class InkEditorModel {
         let strokes = await library.strokes(on: target.itemId, layer: target.layer)
         let elements = await library.elements(on: target.itemId, layer: target.layer)
         var next: [String: InkContent] = [:]
-        for s in strokes { next[s.pageKey, default: InkContent()].strokes.append(InkLine(s)) }
+        let stored = Set(strokes.map(\.id))
+        for id in unsavedStrokes.keys where stored.contains(id) { unsavedStrokes[id] = nil }
+        for s in strokes where !unsavedDeletes.contains(s.id) { next[s.pageKey, default: InkContent()].strokes.append(InkLine(s)) }
+        for (_, s) in unsavedStrokes.sorted(by: { $0.key < $1.key }) where !unsavedDeletes.contains(s.line.id) {
+            next[s.key, default: InkContent()].strokes.append(s.line)
+        }
         for e in elements { next[e.pageKey, default: InkContent()].elements.append(InkBox(e)) }
         content = next
         for e in elements where e.kind == .image {
@@ -310,12 +319,15 @@ final class InkEditorModel {
         let shape = snapped?.shape.rawValue
         let key = pageKey ?? currentKey
         let id = id ?? UUID().uuidString.lowercased()
-        content[key, default: InkContent()].strokes.append(InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape))
+        let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape)
+        content[key, default: InkContent()].strokes.append(line)
+        unsavedStrokes[id] = (key, line)
         revision += 1
         record(Action(add: [Ref(id: id, kind: "stroke")]))
         let itemId = target.itemId, layer = target.layer
         Task {
             await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: tool, color: color, width: width, points: pts, shape: shape)
+            unsavedStrokes[id] = nil
             await reloadInk()
             app?.inkChanged()
         }
@@ -327,10 +339,12 @@ final class InkEditorModel {
         guard !ids.isEmpty, let library = app?.library else { return }
         let key = pageKey ?? currentKey
         content[key]?.strokes.removeAll { ids.contains($0.id) }
+        unsavedDeletes.formUnion(ids)
         revision += 1
         record(Action(remove: ids.map { Ref(id: $0, kind: "stroke") }))
         Task {
             await library.deleteStrokes(ids)
+            unsavedDeletes.subtract(ids)
             await reloadInk()
             app?.inkChanged()
         }
@@ -444,7 +458,12 @@ final class InkEditorModel {
             if !gone.isEmpty, let library = app?.library {
                 content[key]?.strokes.removeAll { gone.contains($0.id) }
                 removed.formUnion(gone)
-                Task { await library.deleteStrokes(gone); app?.inkChanged() }
+                unsavedDeletes.formUnion(gone)
+                Task {
+                    await library.deleteStrokes(gone)
+                    unsavedDeletes.subtract(gone)
+                    app?.inkChanged()
+                }
             }
             gesture = .erase(key: key, last: p, removed: removed)
         case .partial(let key, let last):

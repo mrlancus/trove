@@ -17,11 +17,11 @@ public actor Library {
 
     public func items() async -> [Item] {
         await refreshIndex()
-        return await engine.records.filter { $0.kind == "item" }.map(Item.init).sorted { $0.createdAt > $1.createdAt }
+        return await engine.records.filter { $0.kind == "item" && !$0.isStrayItem }.map(Item.init).sorted { $0.createdAt > $1.createdAt }
     }
 
     public func item(_ id: String) async -> Item? {
-        guard let r = await engine.record(id), r.kind == "item", !r.isDeleted else { return nil }
+        guard let r = await engine.record(id), r.kind == "item", !r.isDeleted, !r.isStrayItem else { return nil }
         return Item(r)
     }
 
@@ -56,7 +56,7 @@ public actor Library {
 
     private func refreshIndex() async {
         let records = await engine.store.records
-        for (id, record) in records where record.kind == "item" {
+        for (id, record) in records where record.kind == "item" && !record.isStrayItem {
             if indexed[id] != record.updatedHLC {
                 index.update(Item(record))
                 indexed[id] = record.updatedHLC
@@ -149,11 +149,15 @@ public actor Library {
 
     // MARK: Editing
 
+    /// Changes an item's fields. An id with no item behind it is left alone: writing to it would
+    /// make an empty "Untitled" item dated 1970 on every device (PROTOCOL.md §3).
     public func update(_ id: String, _ fields: [String: JSONValue]) async {
+        guard let r = await engine.record(id), r.kind == "item" else { return }
         await engine.set(fields, record: id, kind: "item")
     }
 
     public func setBody(_ id: String, _ text: String) async {
+        guard let r = await engine.record(id), r.kind == "item" else { return }
         await engine.editText(Field.body, value: text, record: id, kind: "item")
         let tags = Markdown.hashtags(in: text)
         if let item = await item(id), !tags.isEmpty, !Set(tags).isSubset(of: Set(item.tags)) {
