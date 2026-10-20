@@ -38,9 +38,13 @@
 | TRV1, HKDF keys, SHA-256 | `web/public/core/{trv1,keys,bytes}.js` |
 | Ops, HLC, RecordStore, Journal, segments (port of the Swift sync core) | `web/public/core/records.js`, `merge.js` |
 | Item view, search, smart collections, URL cleaning | `web/public/core/items.js` |
+| Folders and auto-filing (port of `Organizer.swift`) | `web/public/core/organize.js` |
+| Wikilinks, backlinks, mentions, related (port of `Links.swift`) | `web/public/core/links.js` |
+| File previews: GoodNotes, Word, Excel, PowerPoint, iWork, CSV | `web/public/core/files.js` |
+| Viewer (pdf.js in `vendor/pdfjs`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
 | UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
-| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs` |
+| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs` |
 
 ## Data model
 - Everything is a **record** (`kind`: `item` or `collection`), materialised from **ops** (PROTOCOL.md §3).
@@ -48,6 +52,11 @@
   text field merged with diff3. When an edit can't be merged, it is kept as a conflict copy, which the
   app shows as "Needs Attention", so nothing is ever silently lost.
 - `Item` (TroveCore/Model/Item.swift) is a typed view over a record. Field names are listed in `Field`.
+- Items sit in at most one **folder** (`kind: "folder"` records with a `parent`, PROTOCOL.md §9);
+  new items are filed by `Organizer`. **Collections** are separate hand-made lists an item can be in
+  several of.
+- **Connections** are `[[wikilinks]]` in text plus hand-made `links`; `Links.graph` builds the graph.
+- **Versions**: note text history comes from the text ops; replaced files go into `fileVersions`.
 - `kind` is what the item physically is (note, link, pdf…). `category` is what it's *about* (recipe,
   place, product…) and drives Smart Collections and card styles.
 
@@ -93,6 +102,8 @@
 | Vault creation/joining, folder access, Keychain | `App/Sources/Services/VaultStore.swift` |
 | Enrichment | `App/Sources/Enrichment/*` |
 | Obsidian / Apple Notes / screenshots | `App/Sources/Integrations/*` |
+| Folders line, files + versions, history, connections | `App/Sources/Views/ItemExtras.swift` |
+| Connections graph | `App/Sources/Views/GraphView.swift` |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
 | Share sheet | `App/ShareExtension/ShareViewController.swift` (seals via `CaptureDrop`) |
 | Widgets + Control Center | `App/Widgets/TroveWidgets.swift` |

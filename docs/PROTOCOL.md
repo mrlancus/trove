@@ -249,3 +249,62 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   tests are kept in step.
 - **iOS keyboard:** the app writes the latest text clips to the App Group (`keyboard-clips.json`)
   for the Trove keyboard, which has no vault keys.
+
+## 9. Folders, connections, versions and thumbnails
+All of these are plain records and fields (`set` ops, last writer wins), so older clients simply
+ignore them.
+
+**Folders** are records with `kind: "folder"`:
+
+| Field | Meaning |
+|---|---|
+| `name` | display name (no `/`) |
+| `parent` | parent folder id, or `null` for the top level |
+| `auto` | `true` when the organiser made it, `false` once made or renamed by hand |
+| `createdAt` | Unix ms |
+
+- **Ids come from the path**: `folder:<lowercased name>` at the top and `<parent id>/<lowercased name>`
+  below (`folder:documents/spreadsheets`). Two devices filing into "Documents" at once therefore write
+  the same record.
+  - Before making a folder, a device first looks for an existing live folder with the same name
+    (ignoring case) under the same parent. That way renamed and hand-made folders are reused.
+  - If the path id is taken by a live folder that has since moved or been renamed, the device adds
+    `~` and 6 random characters.
+- **Deleting a folder** (`_deleted: true`) first moves its items and subfolders to its parent.
+- **A folder can't be moved inside itself.** Clients break cycles on display by showing such folders
+  at the top level.
+
+**Item fields**:
+
+| Field | Meaning |
+|---|---|
+| `folder` | folder id, or `null` (unfiled) |
+| `folderAuto` | `true` while the organiser chose the folder; set to `false` when the user moves the item |
+| `links` | ids of items connected by hand. `[[Title]]` links in the body are found from the text and aren't stored |
+| `fileVersions` | earlier files, newest first, at most 50: `[{attachment, at, by}]` (`attachment` is the usual `{id,name,mime,size}`, `at` Unix ms, `by` device id) |
+| `thumbnail` | a small JPEG preview (attachment JSON). Written once by whichever device sees the file first; cleared when the file changes |
+
+**Filing new items**: `Organizer.swift` and `web/public/core/organize.js`, both checked against
+`Fixtures/organize-cases.json`.
+- The folders a file came from (a dropped folder, or the folders inside a zip, starting with the
+  zip's name) win. Notion export ids are dropped, repeats are collapsed, and the path is at most 5
+  deep.
+- Otherwise the item is filed by what it is: Notes, Documents (› Spreadsheets / Presentations / Scans),
+  Handwritten (GoodNotes), Images (› Screenshots), Audio (› Voice notes), Videos, Links, Reading,
+  Recipes, Shopping, Places, Events, Code, Bookmarks (› the bookmark folder), Highlights (› the book),
+  Email, Receipts, Files.
+- When enrichment sets a new category, an item still filed by the organiser (`folderAuto`) moves to
+  match (a link that turns out to be a recipe goes to Recipes).
+- "Tidy up" files every item that has no live folder.
+
+**Wikilinks** are resolved by title (`Links.swift`, `web/public/core/links.js`,
+`Fixtures/links-cases.json`):
+- Matching ignores case. When two items share a title, the newest wins, then the smallest id.
+- `[[Title|label]]` and `[[Title#heading]]` link to `Title`.
+- Links inside code are ignored.
+
+**Text history** needs no extra data: every `text` op on `body` is a saved state. Clients show them
+newest first, one per editing session (same device, edits less than 2 minutes apart).
+
+**Inbox imports** (§4) use the item id `inbox-<relay entry id, lowercased>`. When the website and an
+app import the same entry at the same time, they write the same item rather than two.

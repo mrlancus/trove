@@ -6,13 +6,15 @@ _Last updated by a cloud session (Linux, no Xcode). The user has only an Intel M
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing) | ✅ Done | 49 tests, plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions) | ✅ Done | 71 tests, plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
-| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import | ✅ Done | 11 unit/interop tests; 6 e2e (relay + real Chromium), passing locally and against production |
+| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections | ✅ Done | 21 unit/interop tests; 7 e2e (relay + real Chromium), passing locally and against production |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS; not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8) | 🟡 Core + website tested; apps building on CI, not yet run on a device | 6 Swift + 2 JS unit tests, interop fixture, Chromium e2e |
+| **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
+| Drawing / Apple Pencil | 📝 Plan only: `docs/DRAWING_PLAN.md` (3 questions for the user at the end) | |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
@@ -28,21 +30,51 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, ad-hoc signed) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user feedback from running the Mac app)
-- Dock icon was full-bleed; now on Apple's 824/1024 grid (iOS icon is opaque full-bleed).
-- Settings on the Mac is the Settings window with tabs (General, Devices & Web, Clipboard, Intelligence, Integrations).
-- **Trove on the web** (Settings → Devices & Web): turns on the relay (`TroveDefaultRelay` in project.yml)
-  and makes a setup code that's copied for you. Joining a website-made vault on a Mac now starts the
-  empty iCloud folder instead of failing.
-- Clipboard: watcher in common run-loop modes; "Last copy recorded" status; password guard needs a digit.
-- **Import** is its own screen in the app (sidebar, ⌘⇧I) and the website: animated drop zone, folders,
-  zips (TroveCore `ZipArchive` + `FileImport`; web `core/importer.js`), exports. Drop anywhere works.
-- Open: what "it isn't copying automatically" meant (clipboard history not recording, or picking a
-  clip not pasting). Ask, and have the user check Settings → Clipboard → "Last copy recorded".
-- Deployed (with the user's go-ahead); the Chromium UI e2e passes against production.
+## Latest round (user: "sync isn't working right; previews, versions, folders, Obsidian-style links; plan for Pencil")
+- **Sync fixes** (the user didn't say exactly what went wrong, so these are the bugs found by reading the code):
+  - **App**:
+    - A live ping that arrived mid-sync was dropped. The app then waited up to 30–60 s for the next
+      loop, and enrichment and the Mac mirror held the sync lock the whole time, so website changes
+      showed up late. Now a request during a sync runs right after it, and the slow steps run after
+      the lock is released.
+    - App edits were only uploaded by the 30/60 s loop. They now push about 2 s after an edit.
+    - The live socket reconnects when the app comes back to the foreground.
+  - **Website and app both reading the inbox**: they could both import the same entry (extension,
+    email, GoodNotes) and make two items. Now the item id comes from the inbox entry id, so they write
+    the same item.
+  - **Bridging device** (the Mac with both iCloud and the relay): it now also copies attachments
+    across, so files uploaded on the website open on iCloud-only devices.
+  - **Ask the user** what exactly looked wrong, if it still does after this round.
+- **Folders** (the "main part"):
+  - Every new item is filed automatically: by the folders it was dropped or zipped in, else by type
+    (Documents, Handwritten, Images, Links, Recipes…).
+  - The folder tree is in the sidebar on the website and in the apps. You can drag items and folders
+    onto folders, and new/rename/move/delete folders.
+  - Unfiled + "Tidy up" files everything already in the vault. **The user's existing items are
+    unfiled until they press Tidy up** (or file them by hand).
+- **Previews**:
+  - The website renders PDFs (vendored pdf.js), GoodNotes notebooks (cover and the documents inside),
+    Word, Excel, PowerPoint, Pages/Keynote/Numbers previews, CSV/text, and images, audio and video.
+  - The apps add Quick Look for every file, plus GoodNotes and iWork previews.
+  - Card thumbnails are made once and synced.
+- **Versions**:
+  - Uploading a new version or editing a text/CSV file in place keeps the old file. GoodNotes
+    re-backups do the same.
+  - Note text has a History view with restore.
+- **Connections** (Obsidian-like):
+  - `[[` autocomplete, links and backlinks, links to notes that don't exist yet (tap to make them),
+    unlinked mentions, "maybe related", and Connect to….
+  - A small graph per item, and a full Connections graph coloured by folder, with optional tag and
+    folder nodes.
+- **Drawing**: researched and planned, not built (`docs/DRAWING_PLAN.md`).
 
 ## Next steps
-1. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
+0. **This round's apps on a device**: CI builds them. The user tries folders, the Connections graph,
+   Quick Look and versions on the iPad, then reports what breaks. On the website: press **Tidy up**
+   under Folders → Unfiled to file existing things.
+1. **Drawing**: wait for the user's answers to the 3 questions at the end of `docs/DRAWING_PLAN.md`,
+   then build phase 1 (strokes in the core) and phase 2 (website).
+2. **The apps compile** (done in 3 CI rounds). Downloads: https://github.com/mrlancus/trove/releases/tag/latest (`Trove.ipa`, `Trove-macOS.zip`). Next: the user runs them, and we fix what breaks at runtime from their screenshots and descriptions.
    - CI builds without signing, so entitlements (App Groups) aren't checked there. When sideloaded with a free account, App Groups may not work; `SharedConfig.container` then falls back to a local folder, and the share extension should use the relay path.
    - The Mac build is ad-hoc signed, so the data protection keychain is unavailable; `Keychain` falls back to the login keychain on macOS.
 2. **The user tries the website**: create a vault, save the recovery code, add the Chrome extension (Devices & extension → extension code), and set up the iPhone (Safari → the site → Setup code; optionally the share Shortcut). Then close the relay to new vaults.
@@ -67,7 +99,8 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **iPhone/iPad:** install `Trove.ipa` with Sideloadly (sideloadly.io; works on Intel Macs) using your Apple ID. Then on the device: Settings → General → VPN & Device Management → trust it, and turn on Developer Mode if asked. Redo every 7 days.
   - **Mac:** unzip `Trove-macOS.zip` and move Trove to Applications. On first open, macOS blocks it; go to System Settings → Privacy & Security → **Open Anyway**.
 - **Relay:** deployed at https://trove-relay.lancus.workers.dev. Optional extras in `server/README.md`: an Anthropic key for cloud AI (costs money, so it's your call) and email routing (needs a domain).
-- **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings (in the app; the website doesn't show WebDAV settings yet).
+- **GoodNotes:** Settings → Cloud & Backup → Auto Backup → WebDAV, using the values from Trove Settings (in the app; the website doesn't show WebDAV settings yet). Set **File Format to PDF** (or both) to see your handwriting in Trove; a GoodNotes-format backup only shows the cover and the documents inside.
+- **Existing items:** on the website, Folders → Unfiled → **Tidy up** files everything that was saved before folders existed.
 
 ## How the newer features work (built without a Mac)
 - **Price-drop alerts:**
