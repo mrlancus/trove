@@ -65,6 +65,7 @@ final class ClipboardStore {
         if Date().timeIntervalSince(lastPrune) > 3_600 {
             lastPrune = Date()
             await library.pruneClips()
+            await library.repairWrappedClips()
         }
         // Nothing new since last time: leave everything as it is, so nothing redraws.
         let stamp = await library.stamp(of: ["clip", "setting"])

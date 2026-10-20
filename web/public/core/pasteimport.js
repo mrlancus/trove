@@ -75,6 +75,22 @@ function flavours(value) {
   return { pairs, strings };
 }
 
+/**
+ * Newer Paste keeps a clip's text wrapped in JSON, `{"type":"text","text":"…","textLength":230}`
+ * (links as `{"type":"link","url":"…"}`). The {text, url} inside, or null when it isn't that
+ * (PasteImport.unwrap in Swift).
+ */
+export function unwrap(raw) {
+  const t = raw.trim();
+  if (!t.startsWith("{") || !t.endsWith("}") || !t.includes('"type"')) return null;
+  let o;
+  try { o = JSON.parse(t); } catch { return null; }
+  if (!o || typeof o !== "object" || typeof o.type !== "string") return null;
+  const str = (keys) => keys.map((k) => o[k]).find((v) => typeof v === "string" && v.trim()) ?? null;
+  const text = str(["text", "string", "content", "plainText"]), url = str(["url", "link", "href"]);
+  return text || url ? { text: text ?? url, url } : null;
+}
+
 /** What one pasteboard payload holds: {text?, image?: {bytes, mime}, url?}. */
 export function readPayload(blob) {
   if (blob == null) return {};
@@ -187,6 +203,8 @@ export function readPasteDatabase(bytes, wal = null) {
       if (!payload.image && p.image) payload.image = p.image;
       if (!payload.url && p.url) payload.url = p.url;
     }
+    const w = payload.text ? unwrap(payload.text) : null;
+    if (w) { payload.text = w.text; payload.url ??= w.url; }
     if (!payload.text && !payload.image) { skipped++; continue; }
     out.push({
       text: payload.text ?? null, image: payload.text ? null : payload.image ?? null, url: payload.url ?? null,

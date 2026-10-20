@@ -287,4 +287,43 @@ final class ClockBox: @unchecked Sendable {
         await lib.deleteClip(a)
         #expect(await lib.clipEvents(of: a).isEmpty)
     }
+
+    @Test func clipGraphJoinsByWhere() async throws {
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()))
+        let a = try #require(await lib.addClip(text: "first clip", sourceApp: "Safari"))
+        let b = try #require(await lib.addClip(text: "second clip", sourceApp: "Safari"))
+        let c = try #require(await lib.addClip(text: "third clip", sourceApp: "Notes"))
+        await lib.recordClipEvent(a, .paste, app: "Slack")
+        await lib.recordClipEvent(c, .paste, app: "Slack")
+        await lib.connectClip(b, to: c)
+        let clips = await lib.clips()
+        let facts = ClipGraph.facts(clips, events: await lib.clipEvents())
+        let graph = ClipGraph.build(clips, facts: facts)
+        let ids = Set(graph.nodes.map(\.id))
+        #expect(ids.contains("from|app:safari") && ids.contains("to|app:slack"))
+        #expect(!ids.contains("from|app:notes")) // one clip only
+        #expect(graph.nodes.first { $0.id == "to|app:slack" }?.label == "→ Slack")
+        #expect(graph.edges.contains { $0.a == b && $0.b == c && $0.kind == .link })
+        #expect(graph.nodes.first { $0.id == "from|app:safari" }?.degree == 2)
+        #expect(ClipGraph.build(clips, facts: facts, groups: []).edges.count == 1)
+    }
+
+    @Test func unwrapsPasteJSON() async throws {
+        let wrapped = #"{"type":"text","text":"py tools\/sim.py compare\ngit push","textLength":230}"#
+        #expect(PasteImport.unwrap(wrapped)?.text == "py tools/sim.py compare\ngit push")
+        #expect(PasteImport.unwrap(#"{"type":"link","url":"https://example.com"}"#)?.text == "https://example.com")
+        #expect(PasteImport.unwrap(#"{"name":"not paste"}"#) == nil)
+        #expect(PasteImport.unwrap("plain") == nil)
+
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()))
+        let bad = try #require(await lib.addClip(text: wrapped))
+        let dupe = try #require(await lib.addClip(text: #"{"type":"text","text":"hello there"}"#))
+        let plain = try #require(await lib.addClip(text: "hello there"))
+        #expect(await lib.repairWrappedClips() == 2)
+        let fixed = try #require(await lib.clip(bad))
+        #expect(fixed.text == "py tools/sim.py compare\ngit push" && fixed.kind != .json && !fixed.tags.contains("json"))
+        let gone = await lib.clip(dupe), kept = await lib.clip(plain)
+        #expect(gone == nil && kept != nil)
+        #expect(await lib.repairWrappedClips() == 0)
+    }
 }

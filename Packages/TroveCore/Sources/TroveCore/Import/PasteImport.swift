@@ -130,6 +130,20 @@ public enum PasteImport {
         return (pairs, strings)
     }
 
+    /// Newer Paste keeps a clip's text wrapped in JSON, `{"type":"text","text":"…","textLength":230}`
+    /// (links as `{"type":"link","url":"…"}`). The text and link inside, or nil when it isn't that.
+    public static func unwrap(_ raw: String) -> (text: String?, url: String?)? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("{"), t.hasSuffix("}"), t.contains("\"type\""),
+              let o = (try? JSONSerialization.jsonObject(with: Data(t.utf8))) as? [String: Any], o["type"] is String else { return nil }
+        func str(_ keys: [String]) -> String? {
+            keys.lazy.compactMap { (o[$0] as? String).flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } }.first
+        }
+        let text = str(["text", "string", "content", "plainText"]), url = str(["url", "link", "href"])
+        guard text != nil || url != nil else { return nil }
+        return (text ?? url, url)
+    }
+
     /// What one pasteboard payload holds.
     static func read(_ value: SQLiteReader.Value) -> (text: String?, image: Data?, url: String?) {
         switch value {
@@ -251,6 +265,7 @@ public enum PasteImport {
                 let p = read(.blob(blob))
                 text = text ?? p.text; image = image ?? p.image; url = url ?? p.url
             }
+            if let t = text, let w = unwrap(t) { text = w.text; url = url ?? w.url }
             guard text != nil || image != nil else { skipped += 1; continue }
             out.append(Entry(text: text, image: text == nil ? image : nil, imageMime: text == nil ? image.flatMap(imageMime) : nil, url: url,
                              createdAt: date(dateColumn.flatMap { r[$0].number }),
@@ -264,6 +279,39 @@ public enum PasteImport {
 }
 
 extension Library {
+    /// Clips brought in by an older importer with Paste's JSON wrapper still on (`PasteImport.unwrap`)
+    /// get their plain text back; one that's now the same as another clip folds into it. Cheap when
+    /// there's nothing to fix. Returns how many were fixed (core/vault.js `repairWrappedClips`).
+    @discardableResult
+    public func repairWrappedClips() async -> Int {
+        let all = await clips()
+        let wrapped = all.compactMap { c -> (Clip, String)? in
+            guard c.image == nil, c.text.hasPrefix("{"), let w = PasteImport.unwrap(c.text), let t = w.text, t != c.text else { return nil }
+            return (c, t)
+        }
+        guard !wrapped.isEmpty else { return 0 }
+        var byHash = Dictionary(all.map { ($0.hash, $0) }, uniquingKeysWith: { a, _ in a })
+        await engine.hold()
+        for (c, text) in wrapped {
+            let hash = Clip.hash(text: text)
+            let kept = c.tags.filter { !ClipInsights.ruleTags(c.text).contains($0) }
+            if let other = byHash[hash], other.id != c.id {
+                let tags = Self.cleanTags(other.tags + kept)
+                if tags != other.tags { await engine.set([Clip.Field.tags: JSONValue(tags)], record: other.id, kind: "clip") }
+                await deleteClip(c.id)
+                continue
+            }
+            var fields: [String: JSONValue] = [Clip.Field.text: .string(text), Clip.Field.hash: .string(hash)]
+            fields.merge(ClipInsights.of(text).json) { _, b in b }
+            fields[Clip.Field.tags] = JSONValue(Self.cleanTags(kept + ClipInsights.ruleTags(text)))
+            if let url = PasteImport.unwrap(c.text)?.url, url != text, c.sourceURL == nil { fields[Clip.Field.sourceURL] = .string(url) }
+            await engine.set(fields, record: c.id, kind: "clip")
+            byHash[hash] = c
+        }
+        await engine.release()
+        return wrapped.count
+    }
+
     /// Clips from another clipboard app (`PasteImport` entries), like the website's `importClips`:
     /// original times, app and pinboards (as tags) are kept; ones already here just gain the tags.
     @discardableResult

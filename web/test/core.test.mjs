@@ -707,3 +707,11 @@ test("GoodNotes whiteboards fit their content (same numbers as GoodNotesInkTests
   assert.equal(blank.width, 612);
   assert.equal(blank.background, null);
 });
+
+test("Paste's JSON-wrapped text is unwrapped (same as ClipTests.unwrapsPasteJSON)", async () => {
+  const { unwrap } = await import("../public/core/pasteimport.js");
+  assert.equal(unwrap('{"type":"text","text":"py tools\\/sim.py compare\\ngit push","textLength":230}').text, "py tools/sim.py compare\ngit push");
+  assert.equal(unwrap('{"type":"link","url":"https://example.com"}').text, "https://example.com");
+  assert.equal(unwrap('{"name":"not paste"}'), null);
+  assert.equal(unwrap("plain"), null);
+});

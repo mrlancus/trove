@@ -131,11 +131,15 @@ test("imports are filed into folders; files preview, edit into versions, and con
 
   // Graph view.
   await page.locator("#search").fill("");
-  await page.getByRole("button", { name: "Close" }).click();
-  await page.getByRole("link", { name: /^Connections/ }).click();
+  await page.getByRole("link", { name: /^Connections/ }).click(); // closes the open item by itself
+  await page.locator("#detail").waitFor({ state: "hidden" });
   await page.locator("#graph-stage canvas").waitFor();
   await page.waitForTimeout(1500);
   if (shots) await page.screenshot({ path: join(shots, "web-graph.png") });
+  await page.getByRole("radio", { name: "Clipboard" }).click();
+  await page.locator("#graph-stage .graph-empty, #graph-stage canvas").first().waitFor();
+  await page.getByRole("radio", { name: "Notes" }).click();
+  await page.locator("#graph-stage canvas").waitFor();
 
   // Drag a card onto a folder to move it; make and rename folders.
   await page.getByRole("link", { name: /^Everything/ }).click();

@@ -8,6 +8,7 @@ import { CLIP_KEEP_STANDARD, ClipField, cleanTagName, cleanTags, clipView, custo
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
+import { unwrap as unwrapPaste } from "./pasteimport.js";
 import { parseHLC } from "./records.js";
 import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
@@ -875,6 +876,34 @@ export class Vault {
    * pinboards (as tags) are kept. Ones already here (same text or image) just gain the tags.
    * Returns {added, merged}.
    */
+  /**
+   * Clips brought in by an older importer with Paste's JSON wrapper still on get their plain text
+   * back; one that's now the same as another clip folds into it (Library.repairWrappedClips).
+   */
+  repairWrappedClips() {
+    const all = this.clips();
+    const wrapped = all.filter((c) => !c.image && c.text.startsWith("{")).map((c) => [c, unwrapPaste(c.text)]).filter(([c, w]) => w?.text && w.text !== c.text);
+    if (!wrapped.length) return 0;
+    const byHash = new Map(all.map((c) => [c.hash, c]));
+    for (const [c, w] of wrapped) {
+      const hash = hashText(w.text);
+      const old = new Set(ruleTags(c.text));
+      const kept = c.tags.filter((t) => !old.has(t));
+      const other = byHash.get(hash);
+      if (other && other.id !== c.id) {
+        const tags = cleanTags([...other.tags, ...kept]);
+        if (tags.join() !== other.tags.join()) this.set({ [ClipField.tags]: tags }, other.id, "clip");
+        this.deleteClip(c.id);
+        continue;
+      }
+      const fields = { [ClipField.text]: w.text, [ClipField.hash]: hash, ...insightFields(insights(w.text)), [ClipField.tags]: cleanTags([...kept, ...ruleTags(w.text)]) };
+      if (w.url && w.url !== w.text && !c.sourceURL) fields[ClipField.sourceURL] = w.url;
+      this.set(fields, c.id, "clip");
+      byHash.set(hash, c);
+    }
+    return wrapped.length;
+  }
+
   async importClips(entries, { source = "Paste", progress = null } = {}) {
     let added = 0, merged = 0;
     const byHash = new Map(this.clips().map((c) => [c.hash, c]));

@@ -19,7 +19,7 @@ const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
   clipTag: null, clipShow: "list", clipWhere: {}, clipGroups: ["from", "to", "place"], newTag: null, tags: [], tagSig: "", dataVersion: 0, sidebarKey: null, memo: new Map(),
   importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false,
-  selecting: false, picked: new Set(), anchor: null, shownIds: [], graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
+  selecting: false, picked: new Set(), anchor: null, shownIds: [], graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }), graphSource: loadPref("graphSource", "notes") };
 
 function loadPref(key, fallback) {
   try { const v = JSON.parse(localStorage.getItem(`trove.${key}`)); return v ?? fallback; } catch { return fallback; }
@@ -661,6 +661,8 @@ function navLink(id, title, count) {
 
 function select(id) {
   state.selection = id;
+  // The graph wants the whole width: whatever was open on the right closes.
+  if (id === "graph") { if (state.openId) closeItem(); state.openClip = null; }
   $(".sidebar").classList.remove("open");
   if (id.startsWith("f:")) for (const f of folderPathOf(id.slice(2), state.vault.folders()).slice(0, -1)) state.expanded.add(f.id);
   render();
@@ -851,12 +853,48 @@ function tidyUp() {
 
 let graphView = null;
 
+/** Notes or Clipboard: which graph Connections shows. */
+function graphSourceSwitch() {
+  return h("div", { class: "seg", role: "radiogroup", "aria-label": "Connections between" }, [["notes", "Notes"], ["clipboard", "Clipboard"]].map(([id, title]) =>
+    h("button", { type: "button", role: "radio", "aria-checked": String(state.graphSource === id),
+      onclick: () => { state.graphSource = id; savePref("graphSource", id); render(); } }, title)));
+}
+
+/** The clipboard's graph (the same as its Map view) in Connections. */
+function renderClipGraphView(items) {
+  const vault = state.vault, groups = state.clipGroups;
+  const all = vault.clips();
+  const facts = memo("clipFacts", () => clipFacts(all, vault.clipEvents()));
+  const clips = all.slice(0, 600);
+  const data = buildClipGraph(clips, facts, { groups, items });
+  const sig = `clips/${data.nodes.length}/${data.edges.length}/${groups.join()}/${clips.map((c) => c.id).join()}`;
+  $("#graph-tools").replaceChildren(graphSourceSwitch(),
+    h("div", { class: "chips", role: "group", "aria-label": "Join clips by" }, MAP_GROUPS.map(([id, title]) =>
+      h("button", { type: "button", "aria-pressed": String(groups.includes(id)),
+        onclick: () => { state.clipGroups = groups.includes(id) ? groups.filter((g) => g !== id) : [...groups, id]; render(); } }, title))));
+  $("#graph-count").textContent = all.length ? `${clips.length.toLocaleString()} of ${all.length.toLocaleString()} clips` : "";
+  const stage = $("#graph-stage");
+  if (!clips.length) {
+    graphView?.stop(); graphView = null;
+    stage.replaceChildren(h("div", { class: "graph-empty" }, h("p", { class: "dz-title", text: "No clips yet" }),
+      h("p", { class: "hint", text: "Copy something, and it shows here joined to where you copied it, where you pasted it and where you were." })));
+    return;
+  }
+  if (graphView?.sig === sig) return;
+  graphView?.stop();
+  graphView = graphCanvas(stage, data, { onOpen: (id) => {
+    if (vault.clip(id)) { state.clipShow = "list"; state.openClip = id; select("clips"); } else { state.mode = null; openItem(id); }
+  } });
+  graphView.sig = sig;
+}
+
 function renderGraphView(items, folders) {
+  if (state.graphSource === "clipboard") return renderClipGraphView(items);
   const opts = state.graphOpts;
   const data = buildGraph(items, folders, opts);
   const sig = `${data.nodes.length}/${data.edges.length}/${JSON.stringify(opts)}`;
   const toggles = [["tags", "Tags"], ["folderNodes", "Folders"], ["unlinked", "Unconnected items"]];
-  $("#graph-tools").replaceChildren(
+  $("#graph-tools").replaceChildren(graphSourceSwitch(),
     h("div", { class: "chips", role: "group", "aria-label": "Show" }, toggles.map(([k, label]) =>
       h("button", { type: "button", "aria-pressed": String(Boolean(opts[k])), onclick: () => { opts[k] = !opts[k]; savePref("graph", opts); render(); } }, label))),
     h("div", { class: "legend" }, folders.filter((f) => !f.parent).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12).map((f) =>
@@ -893,6 +931,8 @@ const autoSaveKinds = [["link", "Links"], ["image", "Images"], ["code", "Code"],
 
 function renderClips() {
   const vault = state.vault;
+  // Clips an older Paste import left wrapped in JSON get their text back (once a session is enough).
+  if (!state.clipsRepaired) { state.clipsRepaired = true; if (vault.repairWrappedClips()) { syncSoon(); return render(); } }
   const filter = clipFilters.find(([id]) => id === state.clipFilter) ?? clipFilters[0];
   const q = state.query.trim();
   const all = vault.clips();
