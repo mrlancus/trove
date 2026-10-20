@@ -81,7 +81,8 @@ import Testing
             var chars, words, lines: Int
             var links, emails, phones, colors, hashtags: [String]
         }
-        struct Cases: Decodable { var insights: [Case] }
+        struct Rule: Decodable { var text: String; var tags: [String] }
+        struct Cases: Decodable { var insights: [Case]; var rules: [Rule] }
         let url = try #require(Bundle.module.url(forResource: "clip-cases", withExtension: "json", subdirectory: "Fixtures"))
         let cases = try JSONDecoder().decode(Cases.self, from: Data(contentsOf: url))
         #expect(cases.insights.count >= 10)
@@ -90,6 +91,41 @@ import Testing
             #expect(got == ClipInsights(autoTitle: c.autoTitle, chars: c.chars, words: c.words, lines: c.lines, links: c.links,
                                         emails: c.emails, phones: c.phones, colors: c.colors, hashtags: c.hashtags), "\(c.text)")
         }
+        #expect(cases.rules.count >= 15)
+        for r in cases.rules { #expect(ClipInsights.ruleTags(r.text) == r.tags, "\(r.text)") }
+    }
+
+    @Test func ruleTagsAutoSaveAndTheAIQueue() async throws {
+        let box = ClockBox(Date(timeIntervalSince1970: 1_760_000_000))
+        let lib = Library(engine: SyncEngine(device: "MAC", keys: .generate()), now: { box.now })
+        let link = try #require(await lib.addClip(text: "https://github.com/mrlancus/trove"))
+        #expect(await lib.clip(link)?.tags == ["link", "github"])
+        #expect(await lib.clip(link)?.savedItem == nil)
+
+        // Rules ran on the Mac; the iPad (on-device AI) still picks it up, a rules-only device doesn't.
+        await lib.applyClipEnrichment(link, tier: .basic, by: "MAC")
+        #expect(await lib.clipsNeedingEnrichment().isEmpty)
+        #expect(await lib.clipsNeedingEnrichment(upTo: .onDevice).map(\.id) == [link])
+        await lib.applyClipEnrichment(link, title: "Trove", tags: ["Repo"], tier: .onDevice, by: "IPAD")
+        #expect(await lib.clipsNeedingEnrichment(upTo: .cloud).isEmpty)
+        #expect(await lib.clip(link)?.tags == ["link", "github", "repo"])
+
+        // Older than two weeks: not worth AI any more.
+        let old = try #require(await lib.addClip(text: "Some old note about things"))
+        await lib.applyClipEnrichment(old, tier: .basic, by: "MAC")
+        box.advance(15 * 86_400)
+        #expect(await lib.clipsNeedingEnrichment(upTo: .onDevice).isEmpty)
+
+        await lib.setClipAutoSave([.link, .image])
+        #expect(await lib.clipAutoSaveKinds() == [.link, .image])
+        let saved = try #require(await lib.addClip(text: "https://example.com/auto"))
+        let item = try #require(await lib.clip(saved)?.savedItem)
+        #expect(await lib.item(item)?.source == .clipboard)
+        let text = try #require(await lib.addClip(text: "Not saved automatically"))
+        #expect(await lib.clip(text)?.savedItem == nil)
+
+        await lib.editClip(text, text: "Email anna@example.org")
+        #expect(await lib.clip(text)?.tags == ["contact"])
     }
 
     @Test func editingRenamingTaggingAndSaving() async throws {

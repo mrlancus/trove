@@ -22,6 +22,8 @@ extension Library {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 256 * 1024 else { return nil }
         var fields: [String: JSONValue] = [Clip.Field.text: .string(text)]
         fields.merge(ClipInsights.of(text).json) { _, b in b }
+        let tags = ClipInsights.ruleTags(text)
+        if !tags.isEmpty { fields[Clip.Field.tags] = JSONValue(tags) }
         return await upsertClip(hash: Clip.hash(text: text), fields: fields, sourceApp: sourceApp, sourceDevice: sourceDevice, source: source)
     }
 
@@ -73,7 +75,23 @@ extension Library {
         all.merge(source.json) { _, b in b }
         let id = newId()
         await engine.set(all, record: id, kind: "clip")
+        if let kind = await clip(id)?.kind, await clipAutoSaveKinds().contains(kind) { _ = try? await saveClipToLibrary(id) }
         return id
+    }
+
+    // MARK: Settings
+
+    /// Synced clipboard settings: one record every device writes (PROTOCOL.md §8).
+    public static let clipSettingsId = "settings.clipboard"
+
+    /// Kinds of copy saved into the library as soon as they're copied (by the device that copied them).
+    public func clipAutoSaveKinds() async -> Set<ClipKind> {
+        guard let r = await engine.record(Self.clipSettingsId), !r.isDeleted else { return [] }
+        return Set((r["autoSave"]?.stringArray ?? []).compactMap(ClipKind.init(rawValue:)))
+    }
+
+    public func setClipAutoSave(_ kinds: Set<ClipKind>) async {
+        await engine.set(["autoSave": JSONValue(kinds.map(\.rawValue).sorted())], record: Self.clipSettingsId, kind: "setting")
     }
 
     /// Pasting from history moves the clip to the top.
@@ -96,6 +114,7 @@ extension Library {
                                            Clip.Field.editedAt: JSONValue(now()), Clip.Field.needsEnrichment: true,
                                            Clip.Field.aiTitle: .null, Clip.Field.summary: .null]
         fields.merge(ClipInsights.of(text).json) { _, b in b }
+        fields[Clip.Field.tags] = JSONValue(Self.cleanTags(clip.tags + ClipInsights.ruleTags(text)))
         await engine.set(fields, record: id, kind: "clip")
     }
 
@@ -115,9 +134,16 @@ extension Library {
 
     // MARK: Enrichment
 
-    /// Clips that AI (or text recognition) hasn't looked at yet, newest first.
-    public func clipsNeedingEnrichment(limit: Int = 10) async -> [Clip] {
-        Array(await clips().filter(\.needsEnrichment).prefix(limit))
+    /// Clips that text recognition or AI hasn't looked at yet, newest first. With `upTo` above
+    /// `.basic`, also the last two weeks' clips that only the built-in rules have seen, so a device
+    /// with AI (the iPad, or cloud AI) names and tags what the others copied.
+    public func clipsNeedingEnrichment(upTo tier: Enrichment.Tier = .basic, limit: Int = 10) async -> [Clip] {
+        let since = now().addingTimeInterval(-14 * 86_400)
+        return Array(await clips().filter { clip in
+            if clip.needsEnrichment { return true }
+            guard let done = clip.enrichment, done.tier == .basic, tier > .basic else { return false }
+            return clip.createdAt >= since
+        }.prefix(limit))
     }
 
     /// What enrichment found: a better title, a summary, tags (added to yours) and text in an image.

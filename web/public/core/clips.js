@@ -61,6 +61,41 @@ function clipTitle(s) {
   return cut.trim() + "…";
 }
 
+/** The built-in rules' tags (ClipInsights.ruleTags): the kind, a link's site, code's language,
+ * `contact` for text with an email or phone number, and the text's hashtags. */
+export function ruleTags(text, kind = classify(text)) {
+  const s = text.trim();
+  const tags = [];
+  const kindTag = { link: "link", email: "email", phone: "phone", color: "colour", json: "json", path: "path", code: "code" }[kind];
+  if (kindTag) tags.push(kindTag);
+  if (kind === "link") { try { const site = siteName(new URL(s).hostname); if (site) tags.push(site); } catch { /* not a URL */ } }
+  if (kind === "code") { const language = codeLanguage(text); if (language) tags.push(language); }
+  const found = insights(text, kind);
+  if (kind === "text" && (found.emails.length || found.phones.length)) tags.push("contact");
+  return uniq([...tags, ...found.hashtags]).slice(0, 8);
+}
+
+/** "github" for github.com, "bbc" for www.bbc.co.uk. */
+export function siteName(host) {
+  const labels = host.toLowerCase().split(".").filter(Boolean);
+  const n = labels.length;
+  if (n < 2) return null;
+  if (n >= 3 && labels[n - 1].length === 2 && ["co", "com", "org", "net", "gov", "ac", "edu"].includes(labels[n - 2])) return labels[n - 3];
+  return labels[n - 2];
+}
+
+function codeLanguage(code) {
+  const has = (s) => code.includes(s);
+  if (has("#include")) return "c";
+  if (has("fn ") && has("let mut")) return "rust";
+  if (has("func ") && (has("let ") || has("var ") || has("->"))) return "swift";
+  if (has("def ") || (has("import ") && has("print("))) return "python";
+  if (has("SELECT ") && has(" FROM ")) return "sql";
+  if (has("</") || has("/>")) return "html";
+  if (has("const ") || has("=>") || has("console.") || has("function ")) return "javascript";
+  return null;
+}
+
 /** Insights as record fields. */
 export function insightFields(ins) {
   return {

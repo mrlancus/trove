@@ -4,13 +4,14 @@ import { b64uDecode, b64uEncode, fromUtf8, hex, utf8 } from "./bytes.js";
 import { decodeSegment, encodeSegment, Journal, RecordStore } from "./records.js";
 import { cleanURL, dedupeKey, Field, hashtags, itemView } from "./items.js";
 import { generateVaultSecrets, importInboxKey, importVaultKeys } from "./keys.js";
-import { ClipField, cleanTags, clipView, hashImageHex, hashText, insightFields, insights } from "./clips.js";
+import { ClipField, cleanTags, clipView, hashImageHex, hashText, insightFields, insights, ruleTags } from "./clips.js";
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
 import { encodePoints, InkField, strokeView } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
+const CLIP_SETTINGS_ID = "settings.clipboard";
 const newId = () => crypto.randomUUID().toLowerCase();
 /** The item id for a relay inbox entry, the same on every device (Library.inboxItemId). */
 export const inboxItemId = (entryId) => `inbox-${String(entryId).toLowerCase()}`;
@@ -512,7 +513,9 @@ export class Vault {
   /** Adds copied text, or moves the same text's clip back to the top. Callers skip sensitive text. */
   addClip(text, { sourceApp = null, sourceURL = null, sourceTitle = null } = {}) {
     if (!text.trim() || utf8.encode(text).length > 256 * 1024) return null;
-    return this.upsertClip(hashText(text), { [ClipField.text]: text, ...insightFields(insights(text)) }, sourceApp, { sourceURL, sourceTitle });
+    const tags = ruleTags(text);
+    return this.upsertClip(hashText(text), { [ClipField.text]: text, ...insightFields(insights(text)), ...(tags.length ? { [ClipField.tags]: tags } : {}) },
+      sourceApp, { sourceURL, sourceTitle });
   }
 
   async addImageClip(bytes, mime = "image/png") {
@@ -554,7 +557,22 @@ export class Vault {
     const clip = this.clip(id);
     if (!clip || clip.image || clip.text === text || !text) return;
     this.set({ [ClipField.text]: text, [ClipField.hash]: hashText(text), [ClipField.editedAt]: this.now(), [ClipField.needsEnrichment]: true,
-      [ClipField.aiTitle]: null, [ClipField.summary]: null, ...insightFields(insights(text)) }, id, "clip");
+      [ClipField.aiTitle]: null, [ClipField.summary]: null, ...insightFields(insights(text)), [ClipField.tags]: cleanTags([...clip.tags, ...ruleTags(text)]) },
+    id, "clip");
+  }
+
+  /** Kinds of copy saved into the library as soon as they're copied (synced; Library.clipAutoSaveKinds). */
+  clipAutoSaveKinds() {
+    const r = this.store.records.get(CLIP_SETTINGS_ID);
+    return r && r.fields._deleted !== true && Array.isArray(r.fields.autoSave) ? r.fields.autoSave.filter((k) => typeof k === "string") : [];
+  }
+
+  setClipAutoSave(kinds) { this.set({ autoSave: [...new Set(kinds)].sort() }, CLIP_SETTINGS_ID, "setting"); }
+
+  /** Saves a new clip into the library if its kind is set to save automatically. */
+  async autoSaveClip(id) {
+    const clip = id && this.clip(id);
+    if (clip && !clip.savedItem && this.clipAutoSaveKinds().includes(clip.kind)) await this.saveClipToLibrary(id);
   }
 
   setClipTags(id, tags) { this.set({ [ClipField.tags]: cleanTags(tags) }, id, "clip"); }

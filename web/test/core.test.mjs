@@ -175,6 +175,9 @@ test("clip insights match Fixtures/clip-cases.json (ClipInsights.swift)", async 
   const cases = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/clip-cases.json", import.meta.url), "utf8"));
   assert.ok(cases.insights.length >= 10);
   for (const { text, ...expected } of cases.insights) assert.deepEqual(insights(text), expected, text);
+  const { ruleTags } = await import("../public/core/clips.js");
+  assert.ok(cases.rules.length >= 15);
+  for (const { text, tags } of cases.rules) assert.deepEqual(ruleTags(text), tags, text);
 });
 
 test("clips: rename, edit, tag, note, search and save with where they came from", async () => {

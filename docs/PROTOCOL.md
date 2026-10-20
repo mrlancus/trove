@@ -250,6 +250,19 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   Unicode scalars). `entities` is `{links, emails, phones, colors, hashtags}`, each unique and at most
   20; colours are lowercased `#rgb`/`#rrggbb` and aren't hashtags. `ClipInsights.swift` and
   `clips.js insights` both check `Fixtures/clip-cases.json` (made by `web/test/make-clip-fixture.mjs`).
+- **Rule tags:** a new or edited text clip gets the built-in rules' tags in `tags` (merged with
+  what's there): the kind (`link`, `email`, `phone`, `colour`, `json`, `path`, `code`), a link's site
+  (`github` for github.com, `bbc` for bbc.co.uk), code's language (`swift`, `python`, `javascript`,
+  `sql`, `html`, `c`, `rust`), `contact` for prose with an email or phone number, then hashtags;
+  unique, at most 8 (`ClipInsights.ruleTags` / `clips.js ruleTags`, same fixture under `rules`).
+- **Enrichment:** devices with Vision read the text in image clips (`ocrText`, and the entities of
+  that text). Then the best tier the device has names, summarises and tags the clip: on-device AI,
+  cloud AI (opt-in), or the rules (for an image, its first line of text becomes `aiTitle`). A clip
+  is picked up while `needsEnrichment` is true, or, by a device with AI, while only the rules have
+  seen it (`enrichment.tier == 0`) and it's less than 14 days old.
+- **Settings:** one synced record, id `settings.clipboard`, kind `setting`: `autoSave` is a sorted
+  list of clip kinds (`link`, `image`, `code`, `text`, …). The device that records a new clip of one of
+  those kinds saves it to the library at once (below).
 - **Title shown:** `title`, else `aiTitle`, else the image's name, the files' names, or `autoTitle`.
 - **Editing text** sets `text`, `hash`, `editedAt`, fresh insights and `needsEnrichment: true`, and
   clears `aiTitle` and `summary`. The user's `title`, `tags` and `note` stay.

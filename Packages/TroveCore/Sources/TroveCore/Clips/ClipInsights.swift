@@ -34,6 +34,53 @@ public struct ClipInsights: Equatable, Sendable {
             hashtags: unique(Markdown.hashtags(in: text).filter { !isHexColour($0) }))
     }
 
+    /// The built-in rules' tags, for devices without AI: the kind, the site a link is on, the
+    /// language of code, `contact` for text with an email or phone number, and the text's hashtags.
+    public static func ruleTags(_ text: String, kind: ClipKind? = nil) -> [String] {
+        let kind = kind ?? ClipClassifier.classify(text)
+        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var tags: [String] = []
+        switch kind {
+        case .link:
+            tags.append("link")
+            if let site = URL(string: s)?.host.flatMap(siteName) { tags.append(site) }
+        case .email: tags.append("email")
+        case .phone: tags.append("phone")
+        case .color: tags.append("colour")
+        case .json: tags.append("json")
+        case .path: tags.append("path")
+        case .code:
+            tags.append("code")
+            if let language = language(of: text) { tags.append(language) }
+        default: break
+        }
+        let found = of(text, kind: kind)
+        if kind == .text, !found.emails.isEmpty || !found.phones.isEmpty { tags.append("contact") }
+        return Array(unique(tags + found.hashtags).prefix(8))
+    }
+
+    /// "github" for github.com, "bbc" for www.bbc.co.uk.
+    static func siteName(_ host: String) -> String? {
+        let labels = host.lowercased().split(separator: ".").map(String.init)
+        guard labels.count >= 2 else { return nil }
+        let n = labels.count
+        let second = ["co", "com", "org", "net", "gov", "ac", "edu"]
+        if n >= 3, labels[n - 1].count == 2, second.contains(labels[n - 2]) { return labels[n - 3] }
+        return labels[n - 2]
+    }
+
+    static func language(of code: String) -> String? {
+        let has = { (s: String) in code.contains(s) }
+        if has("#include") { return "c" }
+        if has("fn ") && has("let mut") { return "rust" }
+        if has("func ") && (has("let ") || has("var ") || has("->")) { return "swift" }
+        if has("def ") || (has("import ") && has("print(")) { return "python" }
+        if has("SELECT ") && has(" FROM ") { return "sql" }
+        if has("</") || has("/>") { return "html" }
+        if has("const ") || has("=>") || has("console.") || has("function ") { return "javascript" }
+        return nil
+    }
+
     /// A colour like #ff8800 isn't a hashtag.
     static func isHexColour(_ tag: String) -> Bool {
         (tag.count == 3 || tag.count == 6) && tag.allSatisfy { "0123456789abcdef".contains($0) }

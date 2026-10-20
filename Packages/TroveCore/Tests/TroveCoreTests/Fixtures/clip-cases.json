@@ -138,5 +138,128 @@
    "colors": [],
    "hashtags": []
   }
+ ],
+ "rules": [
+  {
+   "text": "https://www.example.com/blog/post-1/?utm_source=x",
+   "tags": [
+    "link",
+    "example"
+   ]
+  },
+  {
+   "text": "Meeting notes\nCall Anna on +44 20 7946 0958 or anna@example.org about #budget and #Q3 plans.\nSee https://docs.example.com/plan. Colour #FF8800.",
+   "tags": [
+    "contact",
+    "budget",
+    "q3"
+   ]
+  },
+  {
+   "text": "#3366ff",
+   "tags": [
+    "colour"
+   ]
+  },
+  {
+   "text": "/Users/me/Documents/report.pdf",
+   "tags": [
+    "path"
+   ]
+  },
+  {
+   "text": "{\"a\":1}",
+   "tags": [
+    "json"
+   ]
+  },
+  {
+   "text": "A really long sentence that keeps going and going past the sixty character limit for titles here",
+   "tags": []
+  },
+  {
+   "text": "  \n  indented first line  \nsecond",
+   "tags": []
+  },
+  {
+   "text": "Ünïcödé 😀 text",
+   "tags": []
+  },
+  {
+   "text": "Links (https://a.example.com/x), and https://b.example.com/y.",
+   "tags": []
+  },
+  {
+   "text": "",
+   "tags": []
+  },
+  {
+   "text": "https://github.com/mrlancus/trove",
+   "tags": [
+    "link",
+    "github"
+   ]
+  },
+  {
+   "text": "https://www.bbc.co.uk/news/x",
+   "tags": [
+    "link",
+    "bbc"
+   ]
+  },
+  {
+   "text": "func greet() -> String {\n    let name = \"x\"\n    return name\n}",
+   "tags": [
+    "code",
+    "swift"
+   ]
+  },
+  {
+   "text": "def add(a, b):\n    return a + b\n\nprint(add(1, 2))",
+   "tags": [
+    "code",
+    "python"
+   ]
+  },
+  {
+   "text": "const f = (x) => x * 2;\nconsole.log(f(2));",
+   "tags": [
+    "code",
+    "javascript"
+   ]
+  },
+  {
+   "text": "SELECT id, name FROM users WHERE id = 1;\nSELECT * FROM t;",
+   "tags": [
+    "code",
+    "sql"
+   ]
+  },
+  {
+   "text": "<div class=\"a\">\n  <p>Hi</p>\n</div>",
+   "tags": [
+    "code",
+    "html"
+   ]
+  },
+  {
+   "text": "anna@example.org",
+   "tags": [
+    "email"
+   ]
+  },
+  {
+   "text": "+44 20 7946 0958",
+   "tags": [
+    "phone"
+   ]
+  },
+  {
+   "text": "Write to #team about the #launch",
+   "tags": [
+    "team",
+    "launch"
+   ]
+  }
  ]
 }
