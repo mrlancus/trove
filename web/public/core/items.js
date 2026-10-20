@@ -1,3 +1,4 @@
+import { pageListOf, PAPERS } from "./ink.js";
 // Item view, search and smart collections for the web app. Mirrors Item.swift, SearchIndex.swift,
 // SmartCollections.swift, URLCleaner.swift and Markdown.hashtags closely enough to feel the same.
 
@@ -33,7 +34,7 @@ export function itemView(record) {
     collections: Array.isArray(f.collections) ? f.collections : [],
     isPinned: f.pinned === true,
     readAt: typeof f.readAt === "number" ? f.readAt : null,
-    ocrText: str(f.ocrText), siteName: str(f.siteName), imageURL: str(f.imageURL),
+    ocrText: str(f.ocrText), sketchText: str(f.sketchText), inkText: str(f.inkText), siteName: str(f.siteName), imageURL: str(f.imageURL),
     extracted: f.extracted && typeof f.extracted === "object" ? f.extracted : {},
     attachments: Array.isArray(f.attachments) ? f.attachments.filter(isAttachment) : [],
     folder: str(f.folder),
@@ -48,8 +49,9 @@ export function itemView(record) {
   };
   if (item.kind === "sketch") {
     const size = Array.isArray(f.pageSize) && f.pageSize.length === 2 && f.pageSize.every((v) => typeof v === "number" && v > 0) ? f.pageSize : [768, 1024];
-    Object.assign(item, { paper: ["blank", "lined", "grid", "dotted"].includes(f.paper) ? f.paper : "blank",
-      sketchPages: Math.max(1, typeof f.pages === "number" ? Math.floor(f.pages) : 1), pageSize: size });
+    const pageList = pageListOf(f);
+    Object.assign(item, { paper: PAPERS.includes(f.paper) ? f.paper : "blank", pageList, sketchPages: pageList.length, pageSize: size,
+      infinite: f.canvas === "infinite" });
   }
   item.displayTitle = title || body.split("\n").find((l) => l.trim())?.slice(0, 80) || url?.host || (item.kind === "sketch" ? "Sketch" : "Untitled");
   return item;
@@ -157,7 +159,7 @@ export function search(items, input, now = Date.now()) {
     const tf = new Map();
     const add = (text, w) => { for (const t of terms(text ?? "")) tf.set(t, (tf.get(t) ?? 0) + w); };
     add(item.title, 3); add(item.tags.join(" "), 2.5); add(item.summary, 1.5); add(item.siteName, 1.5);
-    add(item.body, 1); add(item.ocrText, 1); add(item.url?.host, 1);
+    add(item.body, 1); add(item.ocrText, 1); add(item.sketchText, 1); add(item.inkText, 1); add(item.url?.host, 1);
     return { item, tf, length: [...tf.values()].reduce((a, b) => a + b, 0) };
   });
   const n = Math.max(docs.length, 1);

@@ -437,6 +437,68 @@ test("GoodNotes ink: every layout in the shared fixture decodes as GoodNotesInkT
   assert.equal(gn.pageText(nb.pages[1]), "Hello world\nagain");
 });
 
+test("sketching geometry matches Fixtures/ink-geometry.json (InkGeometry.swift, InkShapes.swift)", async () => {
+  const ink = await import("../public/core/ink.js");
+  const f = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-geometry.json", import.meta.url), "utf8"));
+  const pts = (a) => a.map(([x, y, p = 0.5, t = 0]) => ({ x, y, p, t }));
+  const flat = (a) => a.map((p) => [p.x, p.y, p.p, p.t]);
+  for (const c of f.shapes) {
+    const got = ink.recognizeShape(pts(c.points));
+    assert.deepEqual(got && { shape: got.shape, points: flat(got.points) }, c.expect, c.name);
+  }
+  for (const c of f.erasing) assert.deepEqual(ink.erase(pts(c.points), pts(c.path), c.radius)?.map(flat) ?? null, c.expect, c.name);
+  const polygon = pts(f.lasso.polygon);
+  for (const p of f.lasso.points) assert.equal(ink.inside(p.x, p.y, polygon), p.inside);
+  for (const s of f.lasso.strokes) assert.equal(ink.lassoSelects(pts(s.points), polygon), s.selected);
+  for (const w of f.widths) assert.equal(ink.widthAt(w.width, w.tool, w.pressure), w.expect);
+  for (const c of f.fountain) assert.equal(ink.fountainWidth(10, c.pressure, c.dx, c.dy), c.expect);
+  for (const c of f.taper) assert.equal(ink.brushTaper(c.index, c.count), c.expect);
+  assert.deepEqual(flat(ink.resample(pts(f.resampled.points), f.resampled.spacing)), f.resampled.expect);
+});
+
+test("sketch pages, text boxes, lasso and the partial eraser (Library+InkPages)", async () => {
+  const { v: vault } = await testVault();
+  const sketch = vault.addSketch({ paper: "lined" });
+  assert.deepEqual(vault.item(sketch).pageList.map((p) => p.id), ["0"]);
+  vault.addStroke({ on: sketch, page: 0, tool: "pen", color: "#000000", width: 4, points: [{ x: 0, y: 0, p: 0.5, t: 0 }, { x: 200, y: 0, p: 0.5, t: 16 }] });
+  const second = vault.addPage(sketch);
+  vault.setPage(sketch, second, { paper: "music", color: "#fbf6e9" });
+  const a = vault.addStroke({ on: sketch, page: second, tool: "fountain", color: "#112233", width: 6, points: [{ x: 10, y: 10, p: 0.5, t: 0 }, { x: 50, y: 50, p: 0.5, t: 0 }] });
+  const box = vault.addElement({ on: sketch, page: second, type: "text", frame: { x: 20, y: 20, w: 200, h: 40 }, text: "Buy milk" });
+  let item = vault.item(sketch);
+  assert.deepEqual(item.pageList, [{ id: "0", paper: null, color: null }, { id: second, paper: "music", color: "#fbf6e9" }]);
+  assert.equal(item.sketchText, "Buy milk");
+  const { search } = await import("../public/core/items.js");
+  assert.deepEqual(search(vault.items(), "milk").map((i) => i.id), [sketch]);
+  assert.equal(vault.strokes(sketch, "", "0").length, 1);
+
+  vault.transformStrokes([a], { t: { sx: 2, sy: 2, ox: 10, oy: 10, dx: 5, dy: 0 }, color: "#ff0000" });
+  const moved = vault.strokes(sketch, "", second)[0];
+  assert.deepEqual(moved.points.map((p) => p.x), [15, 95]);
+  assert.equal(moved.width, 12);
+  assert.equal(moved.color, "#ff0000");
+  vault.transformElements([box], { sx: 1, sy: 1, ox: 0, oy: 0, dx: 10, dy: 10 });
+  assert.equal(vault.elements(sketch, "", second)[0].x, 30);
+  assert.equal(vault.duplicateInk({ strokes: [a], elements: [box], on: sketch, page: second }).length, 2);
+  assert.equal(vault.item(sketch).sketchText, "Buy milk\nBuy milk");
+
+  const third = vault.duplicatePage(sketch, second);
+  assert.equal(vault.strokes(sketch, "", third).length, 2);
+  vault.movePage(sketch, third, 0);
+  assert.deepEqual(vault.item(sketch).pageList.map((p) => p.id), [third, "0", second]);
+  vault.deletePage(sketch, third);
+  assert.deepEqual(vault.item(sketch).pageList.map((p) => p.id), ["0", second]);
+
+  const before = vault.strokes(sketch, "", "0")[0];
+  const pieces = vault.eraseStrokes({ on: sketch, page: "0", path: [{ x: 100, y: -20 }, { x: 100, y: 20 }], radius: 5 });
+  const after = vault.strokes(sketch, "", "0");
+  assert.equal(pieces.length, 2);
+  assert.ok(after.length === 2 && after.every((s) => s.createdAt === before.createdAt));
+  assert.equal(vault.eraseStrokes({ on: sketch, page: "0", path: [{ x: 50, y: 0 }], radius: 5, only: ["highlighter"] }).length, 0);
+  vault.setSketchCanvas(sketch, true);
+  assert.equal(vault.item(sketch).infinite, true);
+});
+
 test("drawing: packed points, widths and strokes in the vault match Ink.swift", async () => {
   const ink = await import("../public/core/ink.js");
   const cases = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-cases.json", import.meta.url), "utf8"));

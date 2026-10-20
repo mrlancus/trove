@@ -5,19 +5,19 @@ import Foundation
 /// sketch item's own pages, or on top of a file (a PDF page or an image), which never changes.
 /// web/public/core/ink.js is the same code for the website; both check Fixtures/ink-cases.json.
 public enum InkTool: String, Codable, CaseIterable, Sendable {
-    case pen, pencil, marker, highlighter
+    case pen, pencil, marker, highlighter, fountain, brush
 
     /// How see-through the ink is.
     public var opacity: Double {
         switch self {
-        case .pen, .marker: 1
+        case .pen, .marker, .fountain, .brush: 1
         case .pencil: 0.85
         case .highlighter: 0.35
         }
     }
 
-    /// Pen and pencil get thinner when pressed lightly; markers and highlighters don't.
-    public var usesPressure: Bool { self == .pen || self == .pencil }
+    /// Pens, pencils, fountain pens and brushes get thinner when pressed lightly; markers and highlighters don't.
+    public var usesPressure: Bool { self != .marker && self != .highlighter }
 }
 
 public struct InkPoint: Sendable, Equatable {
@@ -37,7 +37,7 @@ public struct InkPoint: Sendable, Equatable {
 public struct InkStroke: Identifiable, Sendable {
     public enum Field {
         public static let on = "on", layer = "layer", page = "page", tool = "tool", color = "color", width = "width"
-        public static let points = "points", createdAt = "createdAt", device = "device"
+        public static let points = "points", createdAt = "createdAt", device = "device", shape = "shape"
     }
 
     public let record: Record
@@ -48,8 +48,12 @@ public struct InkStroke: Identifiable, Sendable {
     public var on: String { record[Field.on]?.string ?? "" }
     /// "" for a sketch's own pages, or the attachment id of the file it's drawn on.
     public var layer: String { record[Field.layer]?.string ?? "" }
-    /// 0-based page.
-    public var page: Int { Int(record[Field.page]?.number ?? 0) }
+    /// 0-based page of a file (PDF page, or 0 for an image).
+    public var page: Int { Int(record[Field.page]?.number ?? Double(record[Field.page]?.string ?? "") ?? 0) }
+    /// The page as a sketch knows it: its id in `pageList` (a number n is the page "n").
+    public var pageKey: String { InkPage.key(record[Field.page]) }
+    /// The clean shape this stroke was snapped to, if any.
+    public var shape: String? { record[Field.shape]?.string }
     public var tool: InkTool { InkTool(rawValue: record[Field.tool]?.string ?? "") ?? .pen }
     /// "#rrggbb".
     public var color: String { record[Field.color]?.string ?? "#000000" }
@@ -58,9 +62,16 @@ public struct InkStroke: Identifiable, Sendable {
     public var points: [InkPoint] { InkPoints.decode(record[Field.points]?.string ?? "") }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
 
-    /// The width at a point: pressure thins pens and pencils (35 % of `width` at no pressure).
+    /// The width at a point: pressure thins pens and pencils (35 % of `width` at no pressure) and
+    /// brushes (15 %). A fountain pen also follows its direction (`InkGeometry.fountainWidth`).
     public static func width(_ width: Double, tool: InkTool, pressure: Double) -> Double {
-        tool.usesPressure ? width * (0.35 + 0.65 * min(1, max(0, pressure))) : width
+        let p = min(1, max(0, pressure))
+        switch tool {
+        case .pen, .pencil: return width * (0.35 + 0.65 * p)
+        case .brush: return width * (0.15 + 0.85 * p)
+        case .fountain: return width * (0.6 + 0.4 * p)
+        case .marker, .highlighter: return width
+        }
     }
 
     /// Red, green and blue (0…1) from "#rrggbb".
@@ -94,22 +105,97 @@ public enum InkPoints {
     }
 }
 
-/// Lined, squared or dotted paper for a sketch.
+/// The paper a sketch page is printed with.
 public enum InkPaper: String, Codable, CaseIterable, Sendable {
-    case blank, lined, grid, dotted
+    case blank, lined, narrow, grid, smallgrid, dotted, cornell, music
 
-    /// Line spacing in page points.
+    /// Line spacing in page points (the default for every lined, squared and dotted paper).
     public static let spacing = 32.0
+
+    /// This paper's spacing: narrow ruled 24, small squares 16, music staves' lines 8.
+    public var spacing: Double {
+        switch self {
+        case .narrow: 24
+        case .smallgrid: 16
+        case .music: 8
+        default: Self.spacing
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .blank: "Blank"
+        case .lined: "Lined"
+        case .narrow: "Narrow lined"
+        case .grid: "Squared"
+        case .smallgrid: "Small squares"
+        case .dotted: "Dotted"
+        case .cornell: "Cornell notes"
+        case .music: "Music"
+        }
+    }
+}
+
+/// One page of a sketch: a stable id (so pages can be reordered while another device draws), and
+/// its own paper and colour when they differ from the sketch's.
+public struct InkPage: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var paper: InkPaper?
+    /// "#rrggbb"; white when nil.
+    public var color: String?
+
+    public init(id: String, paper: InkPaper? = nil, color: String? = nil) { self.id = id; self.paper = paper; self.color = color }
+
+    init?(json: JSONValue) {
+        guard let o = json.object, let id = o["id"]?.string, !id.isEmpty else { return nil }
+        self.init(id: id, paper: o["paper"]?.string.flatMap(InkPaper.init(rawValue:)), color: o["color"]?.string)
+    }
+
+    var json: JSONValue {
+        var o: [String: JSONValue] = ["id": .string(id)]
+        if let paper { o["paper"] = .string(paper.rawValue) }
+        if let color { o["color"] = .string(color) }
+        return .object(o)
+    }
+
+    /// A stroke's or element's `page` field as a page id: numbers are the old page indexes.
+    public static func key(_ value: JSONValue?) -> String {
+        if let s = value?.string { return s }
+        if let n = value?.number { return String(Int(n)) }
+        return "0"
+    }
+
+    /// Colours offered for pages.
+    public static let colors = ["#ffffff", "#fbf6e9", "#fff7c2", "#eef5ec", "#eaf1fb", "#f2f2f2", "#26282c"]
+
+    /// Paper lines show up on dark pages too.
+    public static func isDark(_ color: String?) -> Bool {
+        guard let color else { return false }
+        let (r, g, b) = InkStroke.rgb(color)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.4
+    }
 }
 
 extension Item {
     public enum SketchField {
         public static let paper = "paper", pages = "pages", pageSize = "pageSize"
+        public static let pageList = "pageList", canvas = "canvas", sketchText = "sketchText", inkText = "inkText"
     }
 
     /// A sketch's paper, page count and page size (768 × 1024 points unless set).
     public var paper: InkPaper { InkPaper(rawValue: record[SketchField.paper]?.string ?? "") ?? .blank }
-    public var sketchPages: Int { max(1, Int(record[SketchField.pages]?.number ?? 1)) }
+    public var sketchPages: Int { sketchPageList.count }
+    /// The pages in order. Sketches made before page ids have pages "0", "1", …
+    public var sketchPageList: [InkPage] {
+        let list = record[SketchField.pageList]?.array?.compactMap(InkPage.init(json:)) ?? []
+        if !list.isEmpty { return list }
+        return (0..<max(1, Int(record[SketchField.pages]?.number ?? 1))).map { InkPage(id: String($0)) }
+    }
+    /// One endless page instead of pages.
+    public var isInfiniteCanvas: Bool { record[SketchField.canvas]?.string == "infinite" }
+    /// The words in a sketch's text boxes, and the handwriting an Apple device read, for search.
+    public var sketchText: String? { record[SketchField.sketchText]?.string }
+    public var inkText: String? { record[SketchField.inkText]?.string }
     public var sketchPageSize: (width: Double, height: Double) {
         let a = record[SketchField.pageSize]?.array?.compactMap(\.number) ?? []
         return a.count == 2 && a[0] > 0 && a[1] > 0 ? (a[0], a[1]) : (768, 1024)
@@ -142,9 +228,7 @@ extension Library {
         guard !points.isEmpty else { return nil }
         let id = givenId ?? newId()
         // Strokes draw in creation order, so each one gets a later time than the last, even within a millisecond.
-        let latest = await engine.records.filter { $0.kind == "stroke" && $0[InkStroke.Field.on]?.string == itemId }
-            .compactMap { $0[InkStroke.Field.createdAt]?.number }.max() ?? 0
-        let created = max((now().timeIntervalSince1970 * 1000).rounded(), latest + 1)
+        let created = await nextInkTime(on: itemId)
         await engine.set([
             InkStroke.Field.on: .string(itemId), InkStroke.Field.layer: .string(layer), InkStroke.Field.page: .number(Double(page)),
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
@@ -166,11 +250,12 @@ extension Library {
 
     /// A new, empty sketch.
     @discardableResult
-    public func addSketch(title: String = "", paper: InkPaper = .blank, folder: [String] = []) async -> String {
+    public func addSketch(title: String = "", paper: InkPaper = .blank, folder: [String] = [], infinite: Bool = false) async -> String {
         let id = newId()
         var fields = await baseFields(kind: .sketch, source: .app, title: title)
         fields[Item.SketchField.paper] = .string(paper.rawValue)
         fields[Item.SketchField.pages] = .number(1)
+        if infinite { fields[Item.SketchField.canvas] = .string("infinite") }
         fields.merge(await filing(kind: .sketch, source: .app, importPath: folder)) { _, b in b }
         await engine.set(fields, record: id, kind: "item")
         return id
@@ -179,7 +264,16 @@ extension Library {
     public func setSketch(_ id: String, paper: InkPaper? = nil, pages: Int? = nil) async {
         var fields: [String: JSONValue] = [:]
         if let paper { fields[Item.SketchField.paper] = .string(paper.rawValue) }
-        if let pages { fields[Item.SketchField.pages] = .number(Double(max(1, pages))) }
+        if let pages {
+            // Sketches with page ids grow or shrink at the end.
+            if let sketch = await item(id), sketch.record[Item.SketchField.pageList] != nil {
+                var list = sketch.sketchPageList
+                while list.count < max(1, pages) { list.append(InkPage(id: String(newId().prefix(8)), paper: list.last?.paper, color: list.last?.color)) }
+                if list.count > max(1, pages) { list = Array(list.prefix(max(1, pages))) }
+                fields[Item.SketchField.pageList] = .array(list.map(\.json))
+            }
+            fields[Item.SketchField.pages] = .number(Double(max(1, pages)))
+        }
         if !fields.isEmpty { await update(id, fields) }
     }
 }

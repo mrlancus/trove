@@ -8,10 +8,12 @@ import { ClipField, cleanTags, clipView, hashImageHex, hashText, insightFields, 
 import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { parseHLC } from "./records.js";
-import { encodePoints, InkField, strokeView } from "./ink.js";
+import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, widthScale } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
+/** Pages as the `pageList` field (InkPage.json: no null paper or colour). */
+const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}) }));
 const newId = () => crypto.randomUUID().toLowerCase();
 /** The item id for a relay inbox entry, the same on every device (Library.inboxItemId). */
 export const inboxItemId = (entryId) => `inbox-${String(entryId).toLowerCase()}`;
@@ -458,10 +460,11 @@ export class Vault {
 
   // ---------- drawing (PROTOCOL.md §10) ----------
 
-  /** Strokes on an item (a sketch's own pages, or `layer` = a file's attachment id), oldest first. */
+  /** Strokes on an item (a sketch's own pages, or `layer` = a file's attachment id), oldest first.
+   * `page` is a file's page number, or a sketch page's id (string). */
   strokes(on, layer = "", page = null) {
     return this.store.visible.filter((r) => r.kind === "stroke").map(strokeView)
-      .filter((s) => s.on === on && s.layer === layer && (page === null || s.page === page))
+      .filter((s) => s.on === on && s.layer === layer && (page === null || (typeof page === "string" ? s.pageKey === page : s.page === page)))
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
@@ -472,32 +475,212 @@ export class Vault {
     return out;
   }
 
-  addStroke({ on, layer = "", page, tool, color, width, points }) {
+  /** A later time than anything drawn on the item, so new ink draws on top (Library.nextInkTime). */
+  nextInkTime(on) {
+    const latest = Math.max(0, ...this.store.visible.filter((r) => (r.kind === "stroke" || r.kind === "element") && r.fields.on === on)
+      .map((r) => r.fields.createdAt).filter((t) => typeof t === "number"));
+    return Math.max(this.now(), latest + 1);
+  }
+
+  /** `page`: a file's page number or a sketch page's id. `createdAt` keeps an erased stroke's pieces in its place. */
+  addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null }) {
     if (!points.length) return null;
     const id = newId();
-    // Strokes draw in creation order, so each one gets a later time than the last, even within a millisecond (Library.addStroke).
-    const latest = Math.max(0, ...this.store.visible.filter((r) => r.kind === "stroke" && r.fields.on === on).map((r) => r.fields.createdAt).filter((t) => typeof t === "number"));
-    const created = Math.max(this.now(), latest + 1);
-    this.set({ [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
-      [InkField.points]: encodePoints(points), [InkField.createdAt]: created, [InkField.device]: this.journal.device }, id, "stroke");
+    const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
+      [InkField.points]: encodePoints(points), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
+    if (shape) fields[InkField.shape] = shape;
+    this.set(fields, id, "stroke");
     return id;
   }
 
   deleteStrokes(ids) { for (const id of ids) this.set({ _deleted: true }, id, "stroke"); }
 
-  /** A new, empty sketch (Library.addSketch). */
-  addSketch({ title = "", paper = "blank", folder = [] } = {}) {
+  /** Moves, resizes (`t` = {sx, sy, ox, oy, dx, dy}) or recolours strokes: the lasso (Library.transformStrokes). */
+  transformStrokes(ids, { t = null, color = null } = {}) {
+    for (const id of ids) {
+      const r = this.store.records.get(id);
+      if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
+      const s = strokeView(r), fields = {};
+      if (t) {
+        fields[InkField.points] = encodePoints(s.points.map((p) => transformPoint(t, p)));
+        if (widthScale(t) !== 1) fields[InkField.width] = s.width * widthScale(t);
+      }
+      if (color) fields[InkField.color] = color;
+      if (Object.keys(fields).length) this.set(fields, id, "stroke");
+    }
+  }
+
+  /** The partial eraser: crossed strokes become what's left of them, in the same place (Library.eraseStrokes). */
+  eraseStrokes({ on, layer = "", page, path, radius, only = null }) {
+    const added = [];
+    for (const s of this.strokes(on, layer, page)) {
+      if (only && !only.includes(s.tool)) continue;
+      const pieces = erase(s.points, path, radius + s.width / 2);
+      if (!pieces) continue;
+      this.deleteStrokes([s.id]);
+      for (const piece of pieces) added.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width, points: piece, createdAt: s.createdAt }));
+    }
+    return added;
+  }
+
+  /** Copies of strokes and elements (duplicate, paste), moved by `t`. */
+  duplicateInk({ strokes = [], elements = [], on, layer = "", page, t = moveBy(20, 20) }) {
+    const out = [];
+    for (const id of strokes) {
+      const r = this.store.records.get(id);
+      if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
+      const s = strokeView(r);
+      out.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)), shape: s.shape }));
+    }
+    for (const id of elements) {
+      const e = this.element(id);
+      if (!e) continue;
+      out.push(this.addElement({ on, layer, page, type: e.type, frame: transformRect(t, e), text: e.text, size: e.size * widthScale(t), color: e.color, image: e.image }));
+    }
+    return out;
+  }
+
+  // Text boxes and pictures (`element` records).
+
+  element(id) {
+    const r = this.store.records.get(id);
+    return r && r.kind === "element" && r.fields._deleted !== true ? elementView(r) : null;
+  }
+
+  elements(on, layer = "", page = null) {
+    return this.store.visible.filter((r) => r.kind === "element").map(elementView)
+      .filter((e) => e.on === on && e.layer === layer && (page === null || e.pageKey === String(page)))
+      .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+  }
+
+  addElement({ on, layer = "", page, type, frame, text = "", size = 20, color = "#000000", image = null }) {
     const id = newId();
-    this.set({ ...this.baseFields("sketch", title), paper, pages: 1, ...this.filing({ kind: "sketch", source: "web", importPath: folder }) }, id, "item");
+    const fields = { on, layer, page, type, x: frame.x, y: frame.y, w: frame.w, h: frame.h, createdAt: this.nextInkTime(on), device: this.journal.device };
+    if (type === "text") Object.assign(fields, { text, size, color });
+    if (image) fields.image = image;
+    this.set(fields, id, "element");
+    if (type === "text") this.refreshSketchText(on);
+    return id;
+  }
+
+  /** Picture bytes become an encrypted blob placed at `frame`. */
+  async addPicture(bytes, mime, { on, layer = "", page, frame }) {
+    const ext = mime === "image/jpeg" ? "jpg" : mime.split("/")[1] ?? "png";
+    const image = await this.storeBlob(bytes, `Picture.${ext}`, mime);
+    return this.addElement({ on, layer, page, type: "image", frame, image });
+  }
+
+  updateElement(id, { frame = null, text = null, size = null, color = null } = {}) {
+    const e = this.element(id);
+    if (!e) return;
+    const fields = {};
+    if (frame) Object.assign(fields, { x: frame.x, y: frame.y, w: frame.w, h: frame.h });
+    if (text !== null) fields.text = text;
+    if (size !== null) fields.size = size;
+    if (color) fields.color = color;
+    if (!Object.keys(fields).length) return;
+    this.set(fields, id, "element");
+    if (text !== null) this.refreshSketchText(e.on);
+  }
+
+  transformElements(ids, t) {
+    for (const id of ids) {
+      const e = this.element(id);
+      if (e) this.updateElement(id, { frame: transformRect(t, e), size: e.type === "text" && widthScale(t) !== 1 ? e.size * widthScale(t) : null });
+    }
+  }
+
+  deleteElements(ids) {
+    const items = new Set();
+    for (const id of ids) { const e = this.element(id); if (e) items.add(e.on); this.set({ _deleted: true }, id, "element"); }
+    for (const on of items) this.refreshSketchText(on);
+  }
+
+  /** The item's `sketchText`: every text box's words, for search. */
+  refreshSketchText(on) {
+    const text = this.store.visible.filter((r) => r.kind === "element").map(elementView).filter((e) => e.on === on && e.type === "text")
+      .sort((a, b) => a.createdAt - b.createdAt).map((e) => e.text).filter(Boolean).join("\n");
+    if ((this.item(on)?.sketchText ?? "") !== text) this.update(on, { sketchText: text });
+  }
+
+  /** A new, empty sketch (Library.addSketch). */
+  addSketch({ title = "", paper = "blank", folder = [], infinite = false } = {}) {
+    const id = newId();
+    this.set({ ...this.baseFields("sketch", title), paper, pages: 1, ...(infinite ? { canvas: "infinite" } : {}),
+      ...this.filing({ kind: "sketch", source: "web", importPath: folder }) }, id, "item");
     return id;
   }
 
   setSketch(id, { paper, pages } = {}) {
     const fields = {};
     if (paper) fields.paper = paper;
-    if (pages) fields.pages = Math.max(1, pages);
+    if (pages) {
+      const item = this.item(id);
+      if (item && Array.isArray(item.record.fields.pageList)) {
+        const list = pageListOf(item.record.fields);
+        while (list.length < Math.max(1, pages)) list.push({ id: newId().slice(0, 8), paper: list.at(-1)?.paper ?? null, color: list.at(-1)?.color ?? null });
+        fields.pageList = pageJSON(list.slice(0, Math.max(1, pages)));
+      }
+      fields.pages = Math.max(1, pages);
+    }
     if (Object.keys(fields).length) this.update(id, fields);
   }
+
+  // Pages (Library+InkPages: addPage, duplicatePage, movePage, deletePage, setPage).
+
+  setPages(id, pages) { this.update(id, { pageList: pageJSON(pages), pages: pages.length }); }
+
+  addPage(sketch, after = null) {
+    const item = this.item(sketch);
+    if (!item) return null;
+    const pages = [...item.pageList];
+    const at = after !== null && pages.some((p) => p.id === after) ? pages.findIndex((p) => p.id === after) + 1 : pages.length;
+    const like = pages[Math.max(0, Math.min(pages.length - 1, at - 1))];
+    const page = { id: newId().slice(0, 8), paper: like.paper, color: like.color };
+    pages.splice(at, 0, page);
+    this.setPages(sketch, pages);
+    return page.id;
+  }
+
+  duplicatePage(sketch, page) {
+    const item = this.item(sketch);
+    const at = item?.pageList.findIndex((p) => p.id === page) ?? -1;
+    if (at < 0) return null;
+    const pages = [...item.pageList];
+    const copy = { ...pages[at], id: newId().slice(0, 8) };
+    pages.splice(at + 1, 0, copy);
+    this.setPages(sketch, pages);
+    this.duplicateInk({ strokes: this.strokes(sketch, "", page).map((s) => s.id), elements: this.elements(sketch, "", page).map((e) => e.id),
+      on: sketch, page: copy.id, t: moveBy(0, 0) });
+    return copy.id;
+  }
+
+  movePage(sketch, page, index) {
+    const item = this.item(sketch);
+    const from = item?.pageList.findIndex((p) => p.id === page) ?? -1;
+    if (from < 0) return;
+    const pages = [...item.pageList];
+    const [moved] = pages.splice(from, 1);
+    pages.splice(Math.max(0, Math.min(pages.length, index)), 0, moved);
+    this.setPages(sketch, pages);
+  }
+
+  deletePage(sketch, page) {
+    const item = this.item(sketch);
+    if (!item || item.pageList.length <= 1) return;
+    this.setPages(sketch, item.pageList.filter((p) => p.id !== page));
+    this.deleteStrokes(this.strokes(sketch, "", page).map((s) => s.id));
+    this.deleteElements(this.elements(sketch, "", page).map((e) => e.id));
+  }
+
+  /** One page's paper or colour ("" colour = white). */
+  setPage(sketch, page, { paper = null, color = null } = {}) {
+    const item = this.item(sketch);
+    if (!item) return;
+    this.setPages(sketch, item.pageList.map((p) => (p.id !== page ? p : { ...p, ...(paper ? { paper } : {}), ...(color !== null ? { color: color || null } : {}) })));
+  }
+
+  setSketchCanvas(sketch, infinite) { this.update(sketch, { canvas: infinite ? "infinite" : "pages" }); }
 
   // ---------- clipboard history (PROTOCOL.md §8) ----------
 

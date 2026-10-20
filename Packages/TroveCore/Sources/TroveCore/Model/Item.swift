@@ -146,7 +146,8 @@ public struct Item: Identifiable, Hashable, Sendable {
 
     /// Everything searchable, in one string.
     public var searchableText: String {
-        ([title, body, summary ?? "", ocrText ?? "", url?.absoluteString ?? "", siteName ?? ""] + tags).joined(separator: "\n")
+        ([title, body, summary ?? "", ocrText ?? "", record["sketchText"]?.string ?? "", record["inkText"]?.string ?? "",
+          url?.absoluteString ?? "", siteName ?? ""] + tags).joined(separator: "\n")
     }
 }
 

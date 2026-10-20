@@ -32,6 +32,8 @@ public struct SearchIndex: Sendable {
         add(item.siteName ?? "", weight: 1.5)
         add(item.body, weight: 1)
         add(item.ocrText ?? "", weight: 1)
+        add(item.sketchText ?? "", weight: 1)
+        add(item.inkText ?? "", weight: 1)
         add(item.url?.host ?? "", weight: 1)
         let length = terms.values.reduce(0, +)
         docs[item.id] = Doc(terms: terms, length: length, item: item)

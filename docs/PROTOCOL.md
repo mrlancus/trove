@@ -349,8 +349,9 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 |---|---|
 | `on` | the item id the ink belongs to |
 | `layer` | `""` for a sketch's own pages; the attachment id of a file (PDF or image) drawn on |
-| `page` | 0-based page (a PDF page, or 0 for an image) |
-| `tool` | `pen`, `pencil`, `marker` or `highlighter` |
+| `page` | a file's 0-based page (a PDF page, or 0 for an image); on a sketch, the page's id (a string; a number n means the page `"n"`) |
+| `tool` | `pen`, `pencil`, `marker`, `highlighter`, `fountain` or `brush` |
+| `shape` | optional: the clean shape it was snapped to (`line`, `polyline`, `triangle`, `rectangle`, `polygon`, `circle`, `ellipse`); drawn as straight segments at even width |
 | `color` | `"#rrggbb"` |
 | `width` | full width in page points |
 | `points` | base64url of little-endian float32 quadruples `x, y, pressure (0…1), t (ms since the stroke began)` |
@@ -359,11 +360,44 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 
 - **Coordinates** are page points: a PDF page's points, an image's pixels, or a sketch page
   (768 × 1024 unless the item's `pageSize` says otherwise).
-- **Look**: pen and pencil widths follow pressure (`width × (0.35 + 0.65 × pressure)`); markers and
-  highlighters are even. Opacity: pencil 0.85, highlighter 0.35 (blended under the ink), others 1.
+- **Look**: pen and pencil widths follow pressure (`width × (0.35 + 0.65 × pressure)`), brushes
+  `width × (0.15 + 0.85 × pressure)` tapering over their first and last 15 % of points, and fountain
+  pens `width × (0.25 + 0.75 × |sin(direction − 45°)|) × (0.6 + 0.4 × pressure)`, where the
+  direction runs from the previous to the next point. Markers and highlighters are even. Opacity:
+  pencil 0.85, highlighter 0.35 (blended under the ink), others 1.
+- **Drawing order**: pictures, then strokes, then text boxes, each by `createdAt` (a new stroke or
+  element gets a later time than anything on the item).
+- **Partial eraser**: a crossed stroke is deleted and replaced by the pieces outside the eraser (a
+  circle of the eraser's radius plus half the stroke's width moved along its path, with segments cut
+  to half the radius first; pieces of fewer than 2 points go). Pieces keep the stroke's `createdAt`.
+  The highlighter eraser only touches `highlighter` strokes.
+- **Lasso**: picks strokes with at least half their points inside the loop (even-odd rule) and
+  elements whose centre is inside. Moving and resizing rewrite `points` (x' = ox + (x − ox)·sx + dx)
+  and multiply `width` by √(sx·sy); recolouring sets `color`; duplicating adds copies 20 points
+  down and right.
+- **Shapes**: `InkShapes.swift` / `recognizeShape` in ink.js. Open drawings: a line if no point is
+  further than 8 % of the ends' distance from it, else up to 3 straight pieces (Ramer–Douglas–Peucker
+  at 8 % of the diagonal). Closed ones (ends within 20 % of the diagonal): an ellipse (a circle when
+  the radii are within 12 %) or the polygon through the corners (RDP at 10 %), whichever fits closer;
+  a near-upright quadrilateral snaps to its box. The geometry is checked by both sides against
+  `Fixtures/ink-geometry.json` (made by `web/test/make-ink-fixture.mjs`).
 - **The file under the ink never changes.** Ink on a new version of a file (a new attachment id) starts
   empty; the old version keeps its ink.
 
-**Sketch items** have `kind: "sketch"` and are filed in "Sketches". Extra fields: `paper`
-(`blank`, `lined`, `grid` or `dotted`, lines 32 points apart), `pages` (count), and optionally
-`pageSize` `[w, h]`.
+**Sketch items** have `kind: "sketch"` and are filed in "Sketches". Extra fields:
+- `paper`: `blank`, `lined`, `narrow` (24 apart), `grid`, `smallgrid` (16), `dotted`, `cornell`
+  (lined, a cue column at 28 % of the width and a summary area below 80 % of the height) or `music`
+  (five lines 8 apart, a stave every 80). Lines are 32 points apart unless noted.
+- `pages`: the page count. `pageList`: the pages in order, `[{id, paper?, color?}]` (a page's own
+  paper and `"#rrggbb"` colour; white when unset). Without `pageList` the pages are `"0"` … `"pages-1"`.
+  Adding, duplicating (with everything on the page), reordering and deleting pages rewrite the list;
+  the last page can't be deleted. Two devices changing the list at once: the last write wins.
+- `pageSize` `[w, h]` (optional), and `canvas`: `"infinite"` for one endless page `"0"` (any
+  coordinates, paper drawn everywhere) instead of pages.
+- `sketchText`: the words in its text boxes (rewritten when they change), and `inkText`: handwriting
+  an Apple device read off the pages (Vision). Search covers both.
+
+**Elements** (`kind: "element"`) are text boxes and pictures, on a sketch page or a file like
+strokes (`on`, `layer`, `page`, `createdAt`, `device`), with `type` (`text` or `image`) and a box
+`x`, `y`, `w`, `h` in page points. Text has `text`, `size` (points) and `color`, wrapped to `w`
+with lines 1.25 × size apart. Pictures have `image` (an attachment, stored as a blob).
