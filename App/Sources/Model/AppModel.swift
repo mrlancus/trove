@@ -101,6 +101,9 @@ final class AppModel {
     // MARK: Lifecycle
 
     func start() async {
+        #if os(macOS)
+        Updater.shared.start()
+        #endif
         guard vault.isSetUp else { phase = .onboarding; return }
         do {
             try await openLibrary()

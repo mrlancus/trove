@@ -56,7 +56,7 @@ private struct UpdatesSection: View {
     @State private var updater = Updater.shared
 
     var body: some View {
-        Section("Updates") {
+        Section {
             LabeledContent("This version", value: "\(updater.currentVersion) (build \(updater.currentBuild))")
             Toggle("Download and offer updates automatically", isOn: Binding(get: { updater.automatic }, set: { updater.automatic = $0 }))
                 .disabled(!updater.isEnabled)
@@ -66,6 +66,8 @@ private struct UpdatesSection: View {
                 Spacer()
                 Text(status).foregroundStyle(.secondary).font(.callout)
             }
+        } header: {
+            Text("Updates")
         } footer: {
             FormFooter("New versions come from the latest build on GitHub. Each one is checked against Trove's signing key before it's installed, and permissions you've given Trove stay as they are.")
         }

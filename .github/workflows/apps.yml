@@ -5,6 +5,8 @@
 # Successful builds of main are also published as the "latest" release, with stable links:
 #   https://github.com/mrlancus/trove/releases/download/latest/Trove.ipa
 #   https://github.com/mrlancus/trove/releases/download/latest/Trove-macOS.zip
+#   https://github.com/mrlancus/trove/releases/download/latest/update.json     (Mac self-updates)
+#   https://github.com/mrlancus/trove/releases/download/latest/sidestore.json  (SideStore source)
 name: Apple apps
 
 on:
@@ -43,6 +45,12 @@ jobs:
 
       - name: Build apps
         id: build
+        env:
+          # Optional (see NOTES.md → Mac updates). Without them the Mac app is ad-hoc signed and
+          # doesn't get an update feed.
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: ./scripts/ci-build-apps.sh
 
       - name: Error report
@@ -89,6 +97,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest build/out/Trove.ipa build/out/Trove-macOS.zip \
+          gh release create latest build/out/* \
             --prerelease --target "${{ github.sha }}" --title "Latest build" \
-            --notes "Built from ${{ github.sha }}. iPhone/iPad: install Trove.ipa with Sideloadly using your Apple ID (redo every 7 days). Mac: unzip, then System Settings → Privacy & Security → Open Anyway the first time."
+            --notes "Built from ${{ github.sha }}. iPhone/iPad: in SideStore add the source https://github.com/${{ github.repository }}/releases/download/latest/sidestore.json (or install Trove.ipa with Sideloadly). Mac: unzip, then System Settings → Privacy & Security → Open Anyway the first time; after that it updates itself."

@@ -95,6 +95,22 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Start on the website:** https://trove-relay.lancus.workers.dev → New vault → save the recovery code in a password manager.
 - **iPhone/iPad now:** open the site in Safari → Setup code tab, using a code from Devices & extension on the computer. Then Share → Add to Home Screen.
 - **Chrome extension:** load `extensions/browser` unpacked (chrome://extensions → Developer mode), then paste the extension code from Devices & extension.
+- **Mac updates (one-time setup):** in GitHub → mrlancus/trove → Settings → Secrets and variables → Actions,
+  add three repository secrets: `MAC_CERT_P12`, `MAC_CERT_PASSWORD` and `UPDATE_SIGNING_KEY`. A cloud
+  session generated their values and gave them to the user privately; they're never in the repo. If
+  they're lost, generate new ones (see `scripts/ci-build-apps.sh`) and put the new public key in
+  `TroveUpdatePublicKey` in `App/project.yml`. Builds that already have the old key won't trust the new
+  one, so the user would download one build by hand. With the secrets set, every build is signed with
+  the same certificate, so macOS keeps Trove's permissions across updates, and `update.json` is
+  published. The app checks it about 15 s after launch and every 6 h, downloads, verifies the Ed25519
+  signature, and asks to restart (Settings → General → Updates; Trove → Check for Updates…).
+  - **First time only:** download Trove-macOS.zip by hand, use Open Anyway, and grant Accessibility
+    again. After that it updates itself.
+- **iPhone/iPad with SideStore (instead of Sideloadly):** install SideStore once (needs the Mac for the
+  pairing file). Then in SideStore → Sources add
+  `https://github.com/mrlancus/trove/releases/download/latest/sidestore.json`. New builds show up as
+  updates and install over the old one, keeping its data. SideStore refreshes the 7-day signature on
+  the phone by itself.
 - **The real apps:** download from https://github.com/mrlancus/trove/releases/tag/latest.
   - **iPhone/iPad:** install `Trove.ipa` with Sideloadly (sideloadly.io; works on Intel Macs) using your Apple ID. Then on the device: Settings → General → VPN & Device Management → trust it, and turn on Developer Mode if asked. Redo every 7 days.
   - **Mac:** unzip `Trove-macOS.zip` and move Trove to Applications. On first open, macOS blocks it; go to System Settings → Privacy & Security → **Open Anyway**.

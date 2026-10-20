@@ -31,13 +31,10 @@ final class Updater {
     }
 
     static let feed = URL(string: "https://github.com/mrlancus/trove/releases/download/latest/update.json")!
-    private static let autoKey = "updates.automatic"
-
     private(set) var state: State = .idle
     private(set) var lastChecked: Date?
-    var automatic: Bool {
-        get { UserDefaults.standard.object(forKey: Self.autoKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: Self.autoKey) }
+    var automatic: Bool = UserDefaults.standard.object(forKey: "updates.automatic") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(automatic, forKey: "updates.automatic") }
     }
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private var staged: (release: Release, app: URL)?
