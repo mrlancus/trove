@@ -567,3 +567,76 @@ export function drawTextElement(ctx, e) {
   wrapText(ctx, e.text, e.w).forEach((line, i) => ctx.fillText(line, e.x, e.y + i * e.size * 1.25));
   ctx.restore();
 }
+
+// ---------- scribble to erase (InkScribble.swift; both check Fixtures/ink-scribble.json) ----------
+
+/** How many times a line turns back along x or y (moves under 2 points are ignored), the larger. */
+export function reversals(pts) {
+  let best = 0;
+  for (const axis of ["x", "y"]) {
+    let dir = 0, count = 0, anchor = pts[0]?.[axis] ?? 0;
+    for (const p of pts) {
+      const d = p[axis] - anchor;
+      if (Math.abs(d) < 2) continue;
+      const s = Math.sign(d);
+      if (dir && s !== dir) count++;
+      dir = s;
+      anchor = p[axis];
+    }
+    best = Math.max(best, count);
+  }
+  return best;
+}
+
+function segmentsCross(a, b, c, d) {
+  const cross = (o, p, q) => (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/** How many times two lines cross. */
+export function crossings(a, b) {
+  let n = 0;
+  for (let i = 0; i < a.length - 1; i++) {
+    const lo = { x: Math.min(a[i].x, a[i + 1].x), y: Math.min(a[i].y, a[i + 1].y) }, hi = { x: Math.max(a[i].x, a[i + 1].x), y: Math.max(a[i].y, a[i + 1].y) };
+    for (let j = 0; j < b.length - 1; j++) {
+      if (Math.max(b[j].x, b[j + 1].x) < lo.x || Math.min(b[j].x, b[j + 1].x) > hi.x || Math.max(b[j].y, b[j + 1].y) < lo.y || Math.min(b[j].y, b[j + 1].y) > hi.y) continue;
+      if (segmentsCross(a[i], a[i + 1], b[j], b[j + 1])) n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Scribble to erase: is this new line a scratch-out over other strokes? A scratch-out turns back at
+ * least 6 times, packs at least 3.5 times its longest side of ink, and crosses each stroke it
+ * removes at least twice (once if 90 % of it is under the scribble), with 70 % of that stroke inside
+ * its box, crossing them at least 4 times in all. Returns the ids it crosses out,
+ * or null (then it's an ordinary line). `strokes`: [{id, points}].
+ */
+export function scribbleTargets(points, strokes) {
+  if (points.length < 12) return null;
+  const box = bounds(points);
+  if (!box || Math.max(box.w, box.h) < 12) return null;
+  let length = 0;
+  for (let i = 1; i < points.length; i++) length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  if (reversals(points) < 6 || length < 3.5 * Math.max(box.w, box.h)) return null;
+  const pad = 4, x0 = box.x - pad, y0 = box.y - pad, x1 = box.x + box.w + pad, y1 = box.y + box.h + pad;
+  const out = [];
+  let total = 0;
+  for (const s of strokes) {
+    if (!s.points.length) continue;
+    const b = bounds(s.points);
+    if (b.x > x1 || b.x + b.w < x0 || b.y > y1 || b.y + b.h < y0) continue;
+    const pts = resample(s.points, 4);
+    const within = pts.filter((p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1).length;
+    if (within < 0.7 * pts.length) continue;
+    // A dot or tiny mark can't be crossed twice: being under the scribble is enough.
+    const n = Math.max(b.w, b.h) < 6 ? (hitsPoints(points, 2, b.x + b.w / 2, b.y + b.h / 2, 3) ? 2 : 0) : crossings(points, s.points);
+    // Crossed twice, or once when it lies wholly under the scribble (an upright letter under an upright zigzag).
+    if (n < (within >= 0.9 * pts.length ? 1 : 2)) continue;
+    total += n;
+    out.push(s.id);
+  }
+  return out.length && total >= 4 ? out : null;
+}

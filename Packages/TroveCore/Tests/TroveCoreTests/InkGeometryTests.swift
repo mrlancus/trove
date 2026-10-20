@@ -174,3 +174,19 @@ import Testing
         }
     }
 }
+
+@Suite struct InkScribbleTests {
+    @Test func scribblesMatchTheWebsite() throws {
+        let url = try #require(Bundle.module.url(forResource: "ink-scribble", withExtension: "json", subdirectory: "Fixtures"))
+        let file = try JSONDecoder().decode([String: [[String: JSONValue]]].self, from: Data(contentsOf: url))
+        func pts(_ v: JSONValue?) -> [InkPoint] {
+            (v?.array ?? []).compactMap { $0.object }.map { InkPoint(x: $0["x"]?.number ?? 0, y: $0["y"]?.number ?? 0, pressure: $0["p"]?.number ?? 0.5, t: $0["t"]?.number ?? 0) }
+        }
+        for c in file["cases"] ?? [] {
+            let strokes = (c["strokes"]?.array ?? []).compactMap { $0.object }.map { (id: $0["id"]?.string ?? "", points: pts($0["points"])) }
+            let got = InkScribble.targets(pts(c["points"]), strokes: strokes)
+            let expect = c["expect"]?.array?.compactMap(\.string)
+            #expect(got == expect, "\(c["name"]?.string ?? "")")
+        }
+    }
+}
