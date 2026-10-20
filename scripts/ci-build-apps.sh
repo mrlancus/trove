@@ -63,6 +63,20 @@ sign_mac() {
   codesign --verify --deep --strict "$app" && codesign -d -r- "$app" || { echo "step failed: verify"; return 1; }
 }
 
+# SideStore refuses an app whose build number differs from the feed's, and the Mac updater compares
+# build numbers, so every bundle must carry this build's numbers.
+check_versions() {
+  local bundle plist v b bad=0
+  for bundle in "$1" "$1"/Contents/PlugIns/*.appex "$1"/PlugIns/*.appex; do
+    plist="$bundle/Contents/Info.plist"; [ -f "$plist" ] || plist="$bundle/Info.plist"
+    [ -f "$plist" ] || continue
+    v=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null)
+    b=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null)
+    [ "$v" = "$VERSION" ] && [ "$b" = "$BUILD" ] || { echo "error: $plist is version $v ($b), expected $VERSION ($BUILD)"; bad=1; }
+  done
+  return $bad
+}
+
 echo "▶ macOS"
 xcodebuild "${common[@]}" -destination 'generic/platform=macOS' \
   ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
@@ -70,6 +84,7 @@ xcodebuild "${common[@]}" -destination 'generic/platform=macOS' \
   build > build/logs/macos.log 2>&1 || status=1
 MAC_APP=build/dd/Build/Products/Release/Trove.app
 signed=no
+[ -d "$MAC_APP" ] && { check_versions "$MAC_APP" >> build/logs/macos.log || status=1; }
 if [ -d "$MAC_APP" ] && [ -n "${MAC_CERT_P12:-}" ] && [ -n "${MAC_CERT_PASSWORD:-}" ]; then
   if sign_mac "$MAC_APP" >> build/logs/macos.log 2>&1; then signed=yes; else echo "Signing failed, see macos.log"; status=1; fi
 fi
@@ -99,6 +114,7 @@ xcodebuild "${common[@]}" -destination 'generic/platform=iOS' \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= \
   build > build/logs/ios.log 2>&1 || status=1
 if [ -d build/dd/Build/Products/Release-iphoneos/Trove.app ]; then
+  check_versions build/dd/Build/Products/Release-iphoneos/Trove.app >> build/logs/ios.log || status=1
   rm -rf build/ipa && mkdir -p build/ipa/Payload
   cp -R build/dd/Build/Products/Release-iphoneos/Trove.app build/ipa/Payload/
   (cd build/ipa && zip -qry ../out/Trove.ipa Payload)

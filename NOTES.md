@@ -108,6 +108,10 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
     certificate ("Trove Self-Signed Code Signing"), and its `update.json` signature was checked
     against `TroveUpdatePublicKey`. If signing breaks again, `macos.log` on `ci-logs` names the
     failing step and fingerprints of the secrets (never their values).
+  - Builds up to 23 had version 1.0 (1) inside the app (XcodeGen's default Info.plist), so SideStore
+    rejected the IPA and the Mac updater stayed off. Fixed in build 24 (`project.yml` sets both keys
+    from `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`; CI fails if a bundle's numbers differ).
+    **The user has to download build 24+ of the Mac app by hand once**; it updates itself after that.
   - **First time only:** download Trove-macOS.zip by hand, use Open Anyway, and grant Accessibility
     again. After that it updates itself.
 - **SideStore sign-in error -80045** (Apple changed sign-in for all sideloading tools in Oct 2026). What

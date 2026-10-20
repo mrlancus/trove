@@ -54,6 +54,8 @@ targets:
     info:
       path: Config/Trove-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Trove
         LSApplicationCategoryType: public.app-category.productivity
         UILaunchScreen: {}
@@ -104,6 +106,8 @@ targets:
     info:
       path: Config/TroveShare-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Save to Trove
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
@@ -140,6 +144,8 @@ targets:
     info:
       path: Config/TroveWidgets-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Trove Widgets
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
@@ -165,6 +171,8 @@ targets:
     info:
       path: Config/TroveSafari-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Save to Trove
         NSExtension:
           NSExtensionPointIdentifier: com.apple.Safari.web-extension
@@ -187,6 +195,8 @@ targets:
     info:
       path: Config/TroveKeyboard-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Trove
         TroveAppGroup: $(TROVE_APP_GROUP)
         NSExtension:
