@@ -16,7 +16,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, erasers, lasso, shapes, text, pictures, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
-| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (not yet with the search/tags round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version fdbed6d6, after the search/tags/settings round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
@@ -78,8 +78,8 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   `AppModel.setShared`). Folder paths, permissions and layout stay per device.
 - Tests: TroveCore 87 (new: GoodNotes sources, sorted-vocabulary prefixes, `#tag`, tag colours),
   web 31 unit + 9 Chromium e2e (new: tag sections, type-to-search, Sketches section).
-- **Website not deployed this round**: the deploy was blocked by the session's permission
-  settings. Deploy with `cd server && npx wrangler deploy` (the token is in the cloud environment).
+- Website deployed (version fdbed6d6) once the user said "publish" (the session's permission
+  settings block deploys until the user asks).
 
 ## Round before (user: "clipboard upgrade" + "sketching, aiming at GoodNotes")
 - **Clipboard** (PROTOCOL.md §8):
