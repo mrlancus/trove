@@ -34,8 +34,13 @@ sign_mac() {
   security create-keychain -p "$kcpass" "$kc" || return 1
   security set-keychain-settings -lut 3600 "$kc"
   security unlock-keychain -p "$kcpass" "$kc"
-  printf '%s' "$MAC_CERT_P12" | base64 --decode > "$TMP/trove-cert.p12"
-  security import "$TMP/trove-cert.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign || return 1
+  # Pasted secrets often pick up a stray space or newline; base64 and the hex password have none.
+  local password
+  password=$(printf '%s' "$MAC_CERT_PASSWORD" | tr -d '[:space:]')
+  printf '%s' "$MAC_CERT_P12" | tr -d '[:space:]' | base64 --decode > "$TMP/trove-cert.p12"
+  # Fingerprints only (no secret values), to compare with the file the secrets came from.
+  echo "certificate file: $(wc -c < "$TMP/trove-cert.p12" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$TMP/trove-cert.p12" | cut -c1-12); password: ${#password} characters"
+  security import "$TMP/trove-cert.p12" -k "$kc" -P "$password" -T /usr/bin/codesign || return 1
   rm -f "$TMP/trove-cert.p12"
   security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" > /dev/null
   local identity
@@ -72,7 +77,7 @@ echo "Mac app signed with Trove's certificate: $signed"
 if [ "$signed" = yes ] && [ -n "${UPDATE_SIGNING_KEY:-}" ] && [ -f build/out/Trove-macOS.zip ]; then
   OPENSSL=$(brew --prefix openssl@3 2>/dev/null)/bin/openssl
   [ -x "$OPENSSL" ] || OPENSSL=openssl
-  { printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'; printf '%s' "$UPDATE_SIGNING_KEY" | base64 --decode; } > "$TMP/update-key.der"
+  { printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'; printf '%s' "$UPDATE_SIGNING_KEY" | tr -d '[:space:]' | base64 --decode; } > "$TMP/update-key.der"
   if "$OPENSSL" pkeyutl -sign -inkey "$TMP/update-key.der" -keyform DER -rawin -in build/out/Trove-macOS.zip -out "$TMP/update.sig"; then
     SIG=$(base64 < "$TMP/update.sig" | tr -d '\n') SIZE=$(stat -f%z build/out/Trove-macOS.zip) VERSION=$VERSION BUILD=$BUILD URL="$RELEASE_URL/Trove-macOS.zip" \
       python3 -c 'import json, os; print(json.dumps({"version": os.environ["VERSION"], "build": int(os.environ["BUILD"]), "url": os.environ["URL"],
