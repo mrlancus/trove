@@ -109,7 +109,9 @@
     <aside class="sidebar" aria-label="Library">
       <div class="brand"><img src="/icon.svg" alt="" width="28" height="28"><span>Trove</span></div>
       <nav id="smart-list"></nav>
-      <h2 class="side-heading">Collections</h2>
+      <h2 class="side-heading with-action" id="folders-heading">Folders <button id="new-folder" type="button" class="side-add" aria-label="New folder" title="New folder">+</button></h2>
+      <nav id="folder-list" aria-label="Folders"></nav>
+      <h2 class="side-heading" id="collection-heading">Collections</h2>
       <nav id="collection-list"></nav>
       <div class="side-footer">
         <div id="sync-status" class="sync-status" role="status"><span class="dot"></span><span class="label">Connecting…</span></div>
@@ -132,7 +134,14 @@
         <label class="upload-button">Upload<input id="upload" type="file" multiple hidden></label>
       </form>
       <div id="heading" class="heading"></div>
+      <div id="folder-tiles" class="folder-tiles" hidden></div>
       <div id="grid" class="grid" aria-live="polite"></div>
+      <section id="graph-view" class="graph-view" hidden aria-labelledby="graph-title">
+        <div class="graph-head"><h1 id="graph-title" class="heading">Connections</h1><span id="graph-count" class="saved"></span></div>
+        <div id="graph-tools" class="graph-tools"></div>
+        <div id="graph-stage" class="graph-stage"></div>
+        <p class="fine">Drag to move around, scroll or pinch to zoom, click a point to open it. Colours are your top folders.</p>
+      </section>
       <p id="empty" class="empty" hidden>Nothing here yet.</p>
       <section id="import-view" class="import-view" hidden aria-labelledby="import-title">
         <h1 id="import-title">Bring everything in</h1>

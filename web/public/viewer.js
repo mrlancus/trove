@@ -1,0 +1,245 @@
+// File previews for the item panel: PDFs (pdf.js, vendored), images, GoodNotes notebooks, Word,
+// Excel, PowerPoint, Pages/Keynote/Numbers, text and CSV (editable, each save a new version),
+// audio and video. Plus small JPEG thumbnails for cards.
+import { h } from "./dom.js";
+import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
+import { renderMarkdown } from "./markdown.js";
+
+let pdfjs = null;
+async function loadPdfjs() {
+  if (!pdfjs) {
+    pdfjs = await import("/vendor/pdfjs/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+  }
+  return pdfjs;
+}
+
+async function openPdf(bytes) {
+  const lib = await loadPdfjs();
+  // pdf.js takes ownership of the buffer, so give it a copy.
+  return lib.getDocument({ data: bytes.slice(), isEvalSupported: false, useSystemFonts: true }).promise;
+}
+
+const objectURLs = new Set();
+function urlFor(bytes, mime) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  objectURLs.add(url);
+  return url;
+}
+
+/** Shows an image full screen; click or Escape closes it. */
+export function lightbox(src, alt = "") {
+  const close = () => { box.remove(); removeEventListener("keydown", onKey); };
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  const img = h("img", { src, alt });
+  const box = h("div", { class: "lightbox", role: "dialog", "aria-label": alt || "Image", onclick: (e) => { if (e.target !== img || !img.classList.contains("zoomed")) close(); } }, img,
+    h("button", { type: "button", class: "icon-button lightbox-close", "aria-label": "Close", onclick: close }, "✕"));
+  img.addEventListener("dblclick", (e) => { e.stopPropagation(); img.classList.toggle("zoomed"); });
+  addEventListener("keydown", onKey);
+  document.body.append(box);
+}
+
+/** A scrolling PDF: pages render as they come into view; zoom buttons. */
+export async function pdfViewer(bytes, { onExpand } = {}) {
+  const doc = await openPdf(bytes);
+  let zoom = 1;
+  const pages = h("div", { class: "pdf-pages" });
+  const label = h("span", { class: "saved", text: `${doc.numPages} page${doc.numPages === 1 ? "" : "s"}` });
+  const setZoom = (z) => { zoom = Math.min(4, Math.max(0.5, z)); pages.style.setProperty("--zoom", zoom); for (const p of pages.children) p.dataset.rendered = ""; observeAll(); };
+  const bar = h("div", { class: "viewer-bar" }, label, h("span", { class: "spacer" }),
+    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.25) }, "−"),
+    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.25) }, "+"),
+    onExpand ? h("button", { type: "button", class: "secondary small", onclick: onExpand }, "⤢ Wide") : null);
+  const first = await doc.getPage(1);
+  const base = first.getViewport({ scale: 1 });
+  for (let n = 1; n <= doc.numPages; n++) {
+    pages.append(h("div", { class: "pdf-page", "data-page": n, style: `aspect-ratio: ${base.width} / ${base.height}` }));
+  }
+  const render = async (el) => {
+    const n = Number(el.dataset.page);
+    const width = el.clientWidth;
+    if (!width || el.dataset.rendered === String(width)) return;
+    el.dataset.rendered = String(width);
+    const page = await doc.getPage(n);
+    const vp1 = page.getViewport({ scale: 1 });
+    el.style.aspectRatio = `${vp1.width} / ${vp1.height}`;
+    const scale = (width / vp1.width) * Math.min(devicePixelRatio || 1, 2);
+    const vp = page.getViewport({ scale });
+    const canvas = h("canvas", { width: Math.floor(vp.width), height: Math.floor(vp.height), "aria-label": `Page ${n}` });
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    el.replaceChildren(canvas);
+  };
+  const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
+  const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
+  observeAll();
+  return h("div", { class: "pdf-viewer" }, bar, pages);
+}
+
+function table(rows) {
+  const width = Math.max(0, ...rows.map((r) => r.length));
+  return h("div", { class: "table-wrap" }, h("table", { class: "sheet" },
+    rows.map((r, i) => h("tr", {}, Array.from({ length: width }, (_, c) => h(i === 0 ? "th" : "td", { text: r[c] ?? "" }))))));
+}
+
+/**
+ * The preview for one attachment. `load()` returns its decrypted bytes. `edit(bytes)` saves an
+ * edited version (text files only). Returns an element that fills in as it loads.
+ */
+export function attachmentPreview(att, { load, edit, onExpand, eager = true }) {
+  const kind = previewKind(att.name, att.mime);
+  const box = h("div", { class: `viewer viewer-${kind}` });
+  const start = async () => {
+    box.replaceChildren(h("p", { class: "saved", text: `Decrypting ${att.name}…` }));
+    try {
+      const bytes = await load();
+      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand }));
+    } catch (e) {
+      box.replaceChildren(h("p", { class: "danger", text: `Couldn't open ${att.name}: ${e.message}` }));
+    }
+  };
+  if (eager) start();
+  else box.append(h("button", { type: "button", class: "secondary", onclick: start }, `Show ${att.name}`));
+  return box;
+}
+
+async function build(kind, att, bytes, { edit, onExpand }) {
+  switch (kind) {
+    case "image": {
+      const url = urlFor(bytes, att.mime);
+      const img = h("img", { src: url, alt: att.name, class: "zoomable", onclick: () => lightbox(url, att.name) });
+      img.addEventListener("error", () => img.replaceWith(h("p", { class: "saved", text: "This browser can't show this image type (HEIC shows in Safari). Download it to open it." })));
+      return img;
+    }
+    case "pdf": return pdfViewer(bytes, { onExpand });
+    case "audio": case "video": return h(kind, { src: urlFor(bytes, att.mime), controls: true, preload: "metadata" });
+    case "goodnotes": {
+      const parts = await goodnotesParts(bytes);
+      const out = h("div", { class: "goodnotes" });
+      const head = h("div", { class: "goodnotes-head" });
+      if (parts.thumbnail) {
+        const url = urlFor(parts.thumbnail.bytes, parts.thumbnail.mime);
+        head.append(h("img", { src: url, alt: "Notebook cover", class: "cover zoomable", onclick: () => lightbox(url, att.name) }));
+      }
+      head.append(h("div", {}, h("strong", { text: "GoodNotes notebook" }),
+        h("p", { class: "saved", text: `${parts.pages} page${parts.pages === 1 ? "" : "s"}${parts.attachments.length ? ` · ${parts.attachments.length} document${parts.attachments.length === 1 ? "" : "s"} inside` : ""}` }),
+        h("p", { class: "hint", text: "Handwriting is stored in GoodNotes' own format. To see your ink here, set GoodNotes → Settings → Auto Backup → Format to PDF." })));
+      out.append(head);
+      for (const a of parts.attachments) {
+        if (a.mime === "application/pdf") out.append(h("p", { class: "section-title", text: "Document inside" }), await pdfViewer(a.bytes, { onExpand }));
+        else { const url = urlFor(a.bytes, a.mime); out.append(h("img", { src: url, alt: "", class: "zoomable", onclick: () => lightbox(url) })); }
+      }
+      return out;
+    }
+    case "iwork": {
+      const preview = await iworkPreview(bytes);
+      if (!preview) return h("p", { class: "saved", text: "This file has no saved preview. Download it to open it in Pages, Keynote or Numbers." });
+      const url = urlFor(preview.bytes, preview.mime);
+      return h("div", {}, h("img", { src: url, alt: att.name, class: "zoomable", onclick: () => lightbox(url, att.name) }),
+        h("p", { class: "saved", text: "The preview saved with the file (first page or slide)." }));
+    }
+    case "docx": {
+      const paras = await docxParagraphs(bytes);
+      if (!paras.length) return h("p", { class: "saved", text: "No text found in this document." });
+      const doc = h("article", { class: "doc-page" });
+      let list = null;
+      for (const p of paras) {
+        if (p.style === "li") { if (!list) { list = h("ul"); doc.append(list); } list.append(h("li", { text: p.text })); continue; }
+        list = null;
+        doc.append(h(p.style === "p" ? "p" : p.style, { text: p.text || " " }));
+      }
+      return doc;
+    }
+    case "xlsx": {
+      const rows = await xlsxRows(bytes);
+      return rows.length ? h("div", {}, table(rows), h("p", { class: "saved", text: "First sheet" + (rows.length >= 200 ? ", first 200 rows" : "") })) : h("p", { class: "saved", text: "This sheet is empty." });
+    }
+    case "pptx": {
+      const slides = await pptxSlides(bytes);
+      return h("ol", { class: "slides" }, slides.map((lines) => h("li", { class: "slide" }, lines.map((l, i) => h(i === 0 ? "strong" : "p", { text: l })))));
+    }
+    case "text": case "csv": return textViewer(kind, att, bytes, edit);
+    default:
+      return h("div", { class: "no-preview" }, h("div", { class: "type-tile large", text: typeLabel(att.name, att.mime) }),
+        h("p", { class: "saved", text: "There's no preview for this kind of file. Download it to open it." }));
+  }
+}
+
+function textViewer(kind, att, bytes, edit) {
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return h("p", { class: "saved", text: "This file isn't plain text." }); }
+  const wrap = h("div", { class: "text-viewer" });
+  const isMarkdown = /\.(md|markdown)$/i.test(att.name);
+  const show = () => {
+    let view;
+    if (kind === "csv") view = table(parseDelimited(text, /\.tsv$/i.test(att.name) ? "\t" : ","));
+    else if (isMarkdown) { view = h("div", { class: "preview" }); view.innerHTML = renderMarkdown(text); } // escaped by renderMarkdown
+    else view = h("pre", { class: "file-text", text: text.length > 400_000 ? text.slice(0, 400_000) + "\n…" : text });
+    wrap.replaceChildren(edit ? h("div", { class: "viewer-bar" }, h("span", { class: "spacer" }),
+      h("button", { type: "button", class: "secondary small", onclick: editMode }, "Edit")) : null, view);
+  };
+  const editMode = () => {
+    const area = h("textarea", { class: "body-input file-edit", "aria-label": `Edit ${att.name}`, spellcheck: "false" });
+    area.value = text;
+    const status = h("span", { class: "saved" });
+    wrap.replaceChildren(h("div", { class: "viewer-bar" }, status, h("span", { class: "spacer" }),
+      h("button", { type: "button", class: "secondary small", onclick: show }, "Cancel"),
+      h("button", { type: "button", class: "primary small", onclick: async () => {
+        status.textContent = "Saving…";
+        try { await edit(new TextEncoder().encode(area.value)); text = area.value; show(); } catch (e) { status.textContent = `Couldn't save: ${e.message}`; }
+      } }, "Save as new version")), area);
+    area.focus();
+  };
+  show();
+  return wrap;
+}
+
+/** A small JPEG preview of a file for cards, or null when there's nothing to draw. */
+export async function makeThumbnail(att, bytes, size = 480) {
+  const kind = previewKind(att.name, att.mime);
+  let source = null;
+  if (kind === "image" && !/svg/.test(att.mime)) source = new Blob([bytes], { type: att.mime });
+  else if (kind === "goodnotes") {
+    const parts = await goodnotesParts(bytes);
+    if (parts.thumbnail) source = new Blob([parts.thumbnail.bytes], { type: parts.thumbnail.mime });
+    else if (parts.attachments[0]?.mime === "application/pdf") return pdfThumbnail(parts.attachments[0].bytes, size);
+    else if (parts.attachments[0]) source = new Blob([parts.attachments[0].bytes], { type: parts.attachments[0].mime });
+  } else if (kind === "iwork") {
+    const p = await iworkPreview(bytes);
+    if (p) source = new Blob([p.bytes], { type: p.mime });
+  } else if (kind === "pdf") return pdfThumbnail(bytes, size);
+  if (!source) return null;
+  const bitmap = await createImageBitmap(source);
+  const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height));
+  const canvas = h("canvas", { width: Math.max(1, Math.round(bitmap.width * scale)), height: Math.max(1, Math.round(bitmap.height * scale)) });
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvasJPEG(canvas);
+}
+
+async function pdfThumbnail(bytes, size) {
+  const doc = await openPdf(bytes);
+  const page = await doc.getPage(1);
+  const vp1 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: size / Math.max(vp1.width, vp1.height) });
+  const canvas = h("canvas", { width: Math.round(vp.width), height: Math.round(vp.height) });
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  doc.destroy();
+  return canvasJPEG(canvas);
+}
+
+async function canvasJPEG(canvas) {
+  const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.8));
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+}
+
+/** Whether a card should try to make a thumbnail for this file (and it's small enough to fetch). */
+export function wantsThumbnail(att) {
+  const kind = previewKind(att.name, att.mime);
+  const limit = kind === "image" ? 25e6 : kind === "pdf" ? 60e6 : 120e6;
+  return ["image", "pdf", "goodnotes", "iwork"].includes(kind) && (!att.size || att.size < limit) && !/heic|svg/.test(att.mime);
+}

@@ -325,3 +325,29 @@ test("zip imports keep their folders, like FileImport.placed", async () => {
   assert.deepEqual(actions.find((a) => a.name === "photo.png").folder, ["Dropped", "import-sample", "Export"]);
   assert.ok(actions.some((a) => a.type === "note" && a.folder.join("/") === "Dropped/import-sample/Export/nested"));
 });
+
+test("file previews: kinds, GoodNotes, Word, Excel, PowerPoint, iWork and CSV", async () => {
+  const f = await import("../public/core/files.js");
+  const read = (n) => new Uint8Array(readFileSync(new URL(`./fixtures/files/${n}`, import.meta.url)));
+  assert.equal(f.previewKind("a.pdf", "application/pdf"), "pdf");
+  assert.equal(f.previewKind("Bio.goodnotes", "application/octet-stream"), "goodnotes");
+  assert.equal(f.previewKind("x.KEY", ""), "iwork");
+  assert.equal(f.previewKind("main.swift", "application/octet-stream"), "text");
+  assert.equal(f.previewKind("data.csv", "text/csv"), "csv");
+  assert.equal(f.previewKind("song.m4a", "audio/m4a"), "audio");
+  assert.equal(f.previewKind("thing.bin", "application/octet-stream"), "other");
+  assert.equal(f.typeLabel("Bio.goodnotes"), "GOODNOTES");
+  assert.ok(f.isEditableText("notes.md", "text/markdown") && !f.isEditableText("a.pdf", "application/pdf"));
+
+  const gn = await f.goodnotesParts(read("sample.goodnotes"));
+  assert.equal(gn.pages, 2);
+  assert.equal(gn.thumbnail.mime, "image/jpeg");
+  assert.deepEqual(gn.attachments.map((a) => a.mime), ["application/pdf", "image/png"]);
+
+  assert.deepEqual(await f.docxParagraphs(read("sample.docx")), [
+    { style: "h1", text: "Essay & notes" }, { style: "h2", text: "Intro" }, { style: "p", text: "Hello world\ttabbed" }, { style: "li", text: "a point" }]);
+  assert.deepEqual(await f.xlsxRows(read("sample.xlsx")), [["Name", "Cost"], ["Café", "", "3.5"], ["x < y"]]);
+  assert.deepEqual(await f.pptxSlides(read("sample.pptx")), [["Title slide", "Point"], ["Second"]]);
+  assert.equal((await f.iworkPreview(read("sample.pages"))).mime, "image/jpeg");
+  assert.deepEqual(f.parseDelimited('a,"b, c",d\n1,"say ""hi""",3\r\nlast'), [["a", "b, c", "d"], ["1", 'say "hi"', "3"], ["last"]]);
+});

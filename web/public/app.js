@@ -5,31 +5,28 @@ import { availableTransforms, color, colorFormats, isSensitive } from "./core/cl
 import { RelayError, Vault } from "./core/vault.js";
 import { importActions } from "./core/importer.js";
 import { renderMarkdown } from "./markdown.js";
+import { $, ago, fileSize, h } from "./dom.js";
+import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.js";
+import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
+import { isEditableText, previewKind, typeLabel } from "./core/files.js";
+import { attachmentPreview, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
+import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
-  importRun: null };
+  importRun: null, expanded: new Set(loadPref("expanded", [])), wide: false, history: false, graphOpts: loadPref("graph", { tags: true, folderNodes: false, unlinked: false }) };
+
+function loadPref(key, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(`trove.${key}`)); return v ?? fallback; } catch { return fallback; }
+}
+function savePref(key, value) {
+  try { localStorage.setItem(`trove.${key}`, JSON.stringify(value)); } catch { /* private mode */ }
+}
+const ITEM_DRAG = "application/x-trove-item";
 const blobURLs = new Map();
 const MAX_UPLOAD = 100 * 1024 * 1024;
 const MAX_ZIP = 1024 * 1024 * 1024;
 const MAX_CARDS = 400;
-
-// ---------- tiny DOM helper ----------
-
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === undefined || v === null || v === false) continue;
-    if (k === "class") el.className = v;
-    else if (k === "text") el.textContent = v;
-    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else el.setAttribute(k, v === true ? "" : v);
-  }
-  for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : String(c));
-  return el;
-}
-
-const $ = (sel, root = document) => root.querySelector(sel);
 
 function toast(message) {
   const el = $("#toast");
@@ -38,15 +35,6 @@ function toast(message) {
   el.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { el.hidden = true; }, 3500);
-}
-
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-function ago(ms) {
-  const s = (ms - Date.now()) / 1000;
-  for (const [unit, size] of [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]]) {
-    if (Math.abs(s) >= size) return relative.format(Math.round(s / size), unit);
-  }
-  return "just now";
 }
 
 function money(amount, currency) {
@@ -231,6 +219,8 @@ function showMain(vault) {
   $("#menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
+  $("#new-folder").addEventListener("click", (e) => { e.stopPropagation(); newFolder(null); });
+  folderDropTarget($("#folders-heading"), null);
   addEventListener("hashchange", handleSharedAdd);
   $("#forget").addEventListener("click", async () => {
     if (!confirm("Remove this browser from your vault? Its access is revoked and everything stored here is deleted. Your vault stays safe on your other devices.")) return;
@@ -272,7 +262,7 @@ function onKey(e) {
 function wireDrops() {
   const overlay = $("#drop-overlay"), zone = $("#dropzone");
   let depth = 0;
-  const carriesFiles = (e) => e.dataTransfer?.types.includes("Files");
+  const carriesFiles = (e) => e.dataTransfer?.types.includes("Files") && !e.dataTransfer.types.includes(ITEM_DRAG);
   const reset = () => { depth = 0; overlay.hidden = true; zone.classList.remove("hover"); };
   document.addEventListener("dragenter", (e) => {
     if (!carriesFiles(e)) return;
@@ -287,7 +277,7 @@ function wireDrops() {
   });
   document.addEventListener("drop", async (e) => {
     const dt = e.dataTransfer;
-    if (!dt) return;
+    if (!dt || dt.types.includes(ITEM_DRAG) || e.defaultPrevented) return; // moving a card is handled by the folder it's dropped on
     if (e.target.closest?.("input, textarea") && !dt.files.length) return; // let text drop into fields
     e.preventDefault();
     reset();
@@ -309,7 +299,12 @@ async function droppedFiles(dt) {
   const out = [];
   const walk = async (entry) => {
     if (entry.name.startsWith(".")) return;
-    if (entry.isFile) { const f = await new Promise((ok, fail) => entry.file(ok, fail)).catch(() => null); if (f) out.push(f); return; }
+    if (entry.isFile) {
+      const f = await new Promise((ok, fail) => entry.file(ok, fail)).catch(() => null);
+      // Where it sat in the dropped folder, so it's filed the same way ("/Uni/Maths/a.pdf" → Uni › Maths).
+      if (f) { folderOfFile.set(f, entry.fullPath.split("/").filter(Boolean).slice(0, -1)); out.push(f); }
+      return;
+    }
     const reader = entry.createReader();
     for (;;) {
       const batch = await new Promise((ok, fail) => reader.readEntries(ok, fail)).catch(() => []);
@@ -320,6 +315,9 @@ async function droppedFiles(dt) {
   for (const e of entries) await walk(e);
   return out;
 }
+
+const folderOfFile = new WeakMap();
+const folderOf = (file) => folderOfFile.get(file) ?? (file.webkitRelativePath ? file.webkitRelativePath.split("/").slice(0, -1) : []);
 
 /** Imports files one by one (zips opened, exports parsed; core/importer.js), animating the Import page. */
 async function importFiles(files) {
@@ -334,7 +332,7 @@ async function importFiles(files) {
     try {
       if (file.size > (isZip ? MAX_ZIP : MAX_UPLOAD)) toast(`${file.name} is too big to import here`);
       else {
-        for (const action of await importActions(file.name, new Uint8Array(await file.arrayBuffer()))) {
+        for (const action of await importActions(file.name, new Uint8Array(await file.arrayBuffer()), folderOf(file))) {
           const [count, label] = await applyImport(action);
           run.added += count;
           if (count) run.recent.unshift({ id: ++run.seq, label });
@@ -361,11 +359,11 @@ async function applyImport(action) {
     return [n, `${n} ${kind}${n === 1 ? "" : "s"}`];
   }
   if (action.type === "note") {
-    vault.addNote({ title: action.title, body: action.body, tags: action.tags, source: "import" });
+    vault.addNote({ title: action.title, body: action.body, tags: action.tags, source: "import", folder: action.folder });
     return [1, action.title || "Note"];
   }
   if (action.bytes.length > MAX_UPLOAD) { toast(`${action.name} is over 100 MB`); return [0, action.name]; }
-  await vault.addFile(action.bytes, action.name, action.mime, { source: "import" });
+  await vault.addFile(action.bytes, action.name, action.mime, { source: "import", folder: action.folder });
   return [1, action.name];
 }
 
@@ -417,34 +415,57 @@ function render() {
   const vault = state.vault;
   const items = vault.items();
   const collections = vault.collections();
+  const folders = vault.folders();
   const now = Date.now();
+  const liveFolders = new Set(folders.map((f) => f.id));
+  const unfiled = items.filter((i) => !i.folder || !liveFolders.has(i.folder));
+  const graph = linkGraph(items);
+  const connected = items.filter((i) => graph.outgoing[i.id] || graph.incoming[i.id]).length;
 
   $("#smart-list").replaceChildren(...smartCollections.map((s) => {
     const count = items.filter((i) => s.contains(i, now)).length;
     if (!count && !["all", "notes", "pinned"].includes(s.id)) return null;
     return navLink(s.id, s.title, count);
-  }).filter(Boolean), navLink("clips", "Clipboard", vault.clips().length),
+  }).filter(Boolean), navLink("graph", "Connections", connected || ""), navLink("clips", "Clipboard", vault.clips().length),
   navLink("import", "Import", state.importRun && !state.importRun.finished ? state.importRun.total - state.importRun.done : ""));
+  renderFolderNav(folders, items, unfiled);
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
-  if (!collections.length) $("#collection-list").replaceChildren(h("p", { class: "side-note", text: "Make collections in the app." }));
+  $("#collection-heading").hidden = !collections.length;
 
-  const clipsMode = state.selection === "clips", importMode = state.selection === "import" && !state.query.trim();
-  $("#grid").classList.toggle("clip-list", clipsMode);
-  $("#capture").hidden = clipsMode || importMode;
-  $("#import-view").hidden = !importMode;
-  for (const id of ["#heading", "#grid"]) $(id).hidden = importMode;
-  if (importMode) { $("#empty").hidden = true; $("#clip-tools")?.remove(); renderImport(); renderDetail(); return; }
-  if (clipsMode) { renderClips(); renderDetail(); return; }
-  $("#clip-tools")?.remove();
+  const mode = state.query.trim() && !["clips", "graph"].includes(state.selection) ? "items"
+    : state.selection === "clips" ? "clips" : state.selection === "import" ? "import" : state.selection === "graph" ? "graph" : "items";
+  $("#grid").classList.toggle("clip-list", mode === "clips");
+  $("#capture").hidden = mode === "clips" || mode === "import" || mode === "graph";
+  $("#import-view").hidden = mode !== "import";
+  $("#graph-view").hidden = mode !== "graph";
+  for (const id of ["#heading", "#grid"]) $(id).hidden = mode === "import" || mode === "graph";
+  $("#folder-tiles").hidden = true;
+  if (mode !== "graph" && graphView) { graphView.stop(); graphView = null; }
+  if (mode !== "clips") $("#clip-tools")?.remove();
+  if (mode === "import") { $("#empty").hidden = true; renderImport(); renderDetail(); return; }
+  if (mode === "clips") { renderClips(); renderDetail(); return; }
+  if (mode === "graph") { $("#empty").hidden = true; renderGraphView(items, folders); renderDetail(); return; }
 
   let shown;
   let title;
-  if (state.selection.startsWith("c:")) {
-    const id = state.selection.slice(2);
+  const sel = state.selection;
+  if (sel.startsWith("c:")) {
+    const id = sel.slice(2);
     shown = items.filter((i) => i.collections.includes(id));
     title = collections.find((c) => c.id === id)?.name ?? "Collection";
+  } else if (sel.startsWith("f:") && liveFolders.has(sel.slice(2))) {
+    const id = sel.slice(2);
+    // Searching looks inside subfolders too; browsing shows this folder's own things.
+    const inside = state.query.trim() ? folderAndDescendants(id, folders) : new Set([id]);
+    shown = items.filter((i) => inside.has(i.folder));
+    title = folderHeading(id, folders, items);
+    renderFolderTiles(id, folders, items);
+  } else if (sel === "unfiled") {
+    shown = unfiled;
+    title = h("div", { class: "heading-row" }, h("span", { text: "Unfiled" }),
+      unfiled.length ? h("button", { type: "button", class: "secondary small", onclick: tidyUp }, "Tidy up: file everything") : null);
   } else {
-    const smart = smartCollections.find((s) => s.id === state.selection) ?? smartCollections[0];
+    const smart = smartCollections.find((s) => s.id === sel) ?? smartCollections[0];
     shown = items.filter((i) => smart.contains(i, now));
     title = smart.title;
   }
@@ -452,9 +473,12 @@ function render() {
     shown = search(shown, state.query, now);
     title = `${shown.length} result${shown.length === 1 ? "" : "s"}`;
   }
-  $("#heading").textContent = title;
-  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map(card));
-  $("#empty").hidden = shown.length > 0;
+  if (typeof title === "string") $("#heading").textContent = title; else $("#heading").replaceChildren(title);
+  const folderNames = new Map(folders.map((f) => [f.id, f.name]));
+  const inFolder = sel.startsWith("f:");
+  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => card(item, inFolder ? null : folderNames.get(item.folder))));
+  $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
+  $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
   renderDetail();
 }
@@ -462,8 +486,164 @@ function render() {
 function navLink(id, title, count) {
   return h("a", {
     href: "#", "aria-current": state.selection === id ? "true" : "false",
-    onclick: (e) => { e.preventDefault(); state.selection = id; $(".sidebar").classList.remove("open"); render(); },
+    onclick: (e) => { e.preventDefault(); select(id); },
   }, h("span", { text: title }), h("span", { class: "count", text: count }));
+}
+
+function select(id) {
+  state.selection = id;
+  $(".sidebar").classList.remove("open");
+  if (id.startsWith("f:")) for (const f of folderPathOf(id.slice(2), state.vault.folders()).slice(0, -1)) state.expanded.add(f.id);
+  render();
+  $(".main").scrollTop = 0;
+}
+
+// ---------- folders ----------
+
+const FOLDER_DRAG = "application/x-trove-folder";
+
+/** Accepts dropped cards (move the item) and dragged folders (move the folder) onto `el`. */
+function folderDropTarget(el, folderId) {
+  el.addEventListener("dragover", (e) => {
+    const types = e.dataTransfer?.types ?? [];
+    if (!types.includes(ITEM_DRAG) && !types.includes(FOLDER_DRAG)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    el.classList.add("drop-target");
+  });
+  el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+  el.addEventListener("drop", (e) => {
+    el.classList.remove("drop-target");
+    const itemId = e.dataTransfer.getData(ITEM_DRAG), dragged = e.dataTransfer.getData(FOLDER_DRAG);
+    if (!itemId && !dragged) return;
+    e.preventDefault();
+    const name = folderId ? state.vault.folders().find((f) => f.id === folderId)?.name : "the top level";
+    if (itemId) { state.vault.moveItem(itemId, folderId); toast(`Moved to ${name}`); }
+    else if (dragged !== folderId) {
+      if (state.vault.moveFolder(dragged, folderId)) toast(`Moved into ${name}`); else toast("A folder can't go inside itself");
+    }
+    syncSoon();
+  });
+}
+
+function folderCounts(folders, items) {
+  const parent = new Map(folders.map((f) => [f.id, f.parent]));
+  const total = new Map();
+  for (const item of items) {
+    const seen = new Set();
+    for (let f = item.folder; f && parent.has(f) && !seen.has(f); f = parent.get(f)) { seen.add(f); total.set(f, (total.get(f) ?? 0) + 1); }
+  }
+  return total;
+}
+
+function renderFolderNav(folders, items, unfiled) {
+  const counts = folderCounts(folders, items);
+  const tree = folderTree(folders);
+  const hasChildren = new Set(folders.map((f) => f.parent).filter(Boolean));
+  const rows = [];
+  const hiddenUnder = [];
+  for (const { folder, depth } of tree) {
+    while (hiddenUnder.length && hiddenUnder.at(-1) >= depth) hiddenUnder.pop();
+    if (hiddenUnder.length) continue;
+    const id = `f:${folder.id}`, open = state.expanded.has(folder.id);
+    const toggle = hasChildren.has(folder.id)
+      ? h("button", { type: "button", class: `disclosure${open ? " open" : ""}`, "aria-label": open ? "Collapse" : "Expand", "aria-expanded": String(open),
+        onclick: (e) => { e.preventDefault(); e.stopPropagation(); open ? state.expanded.delete(folder.id) : state.expanded.add(folder.id); savePref("expanded", [...state.expanded]); render(); } }, "›")
+      : h("span", { class: "disclosure-space" });
+    const row = h("a", { href: "#", class: "folder-row", style: `--depth:${depth}`, draggable: "true", "aria-current": state.selection === id ? "true" : "false",
+      onclick: (e) => { e.preventDefault(); select(id); } },
+      toggle, h("span", { class: "folder-dot", style: `background:${folderColor(folderPathOf(folder.id, folders)[0]?.id, folders)}` }),
+      h("span", { class: "folder-name", text: folder.name }), h("span", { class: "count", text: counts.get(folder.id) ?? "" }));
+    row.addEventListener("dragstart", (e) => { e.dataTransfer.setData(FOLDER_DRAG, folder.id); e.dataTransfer.effectAllowed = "move"; });
+    folderDropTarget(row, folder.id);
+    rows.push(row);
+    if (hasChildren.has(folder.id) && !open) hiddenUnder.push(depth);
+  }
+  if (unfiled.length) rows.push(navLink("unfiled", "Unfiled", unfiled.length));
+  if (!folders.length && !unfiled.length) rows.push(h("p", { class: "side-note", text: "New things are filed into folders by themselves." }));
+  $("#folder-list").replaceChildren(...rows);
+}
+
+function folderHeading(id, folders, items) {
+  const path = folderPathOf(id, folders);
+  const folder = path.at(-1);
+  const crumbs = h("nav", { class: "crumbs", "aria-label": "Folder path" },
+    path.map((f, i) => [i ? h("span", { class: "crumb-sep", "aria-hidden": "true", text: "›" }) : null,
+      i === path.length - 1 ? h("span", { text: f.name }) : h("a", { href: "#", onclick: (e) => { e.preventDefault(); select(`f:${f.id}`); } }, f.name)]));
+  const count = items.filter((i) => i.folder === id).length;
+  const menu = h("div", { class: "folder-actions" },
+    h("button", { type: "button", class: "secondary small", onclick: () => newFolder(id) }, "New folder"),
+    h("button", { type: "button", class: "secondary small", onclick: () => {
+      const name = prompt("Rename folder", folder.name);
+      if (name?.trim()) { state.vault.renameFolder(id, name); syncSoon(); }
+    } }, "Rename"),
+    folder.parent ? h("button", { type: "button", class: "secondary small", onclick: () => { state.vault.moveFolder(id, null); toast("Moved to the top level"); syncSoon(); } }, "Move to top") : null,
+    h("button", { type: "button", class: "secondary small danger", onclick: () => {
+      if (!confirm(`Delete “${folder.name}”? ${count ? `Its ${count} item${count === 1 ? "" : "s"} and any folders inside move up a level. ` : ""}Nothing is deleted.`)) return;
+      state.vault.deleteFolder(id);
+      select(folder.parent ? `f:${folder.parent}` : "all");
+      syncSoon();
+    } }, "Delete folder"));
+  return h("div", { class: "heading-row" }, crumbs, menu);
+}
+
+function renderFolderTiles(id, folders, items) {
+  const counts = folderCounts(folders, items);
+  const children = folders.filter((f) => f.parent === id).sort((a, b) => a.name.localeCompare(b.name));
+  const el = $("#folder-tiles");
+  el.hidden = !children.length;
+  el.replaceChildren(...children.map((f) => {
+    const tile = h("button", { type: "button", class: "folder-tile", onclick: () => select(`f:${f.id}`) },
+      h("span", { class: "folder-icon", style: `--tint:${folderColor(folderPathOf(f.id, folders)[0]?.id, folders)}`, "aria-hidden": "true" }),
+      h("span", { class: "folder-name", text: f.name }), h("span", { class: "count", text: counts.get(f.id) ?? 0 }));
+    folderDropTarget(tile, f.id);
+    return tile;
+  }));
+}
+
+function newFolder(parent = null) {
+  const name = prompt(parent ? "New folder inside this one" : "New folder");
+  if (!name?.trim()) return;
+  const id = state.vault.createFolder(name, parent);
+  if (parent) state.expanded.add(parent);
+  syncSoon();
+  select(`f:${id}`);
+}
+
+function tidyUp() {
+  const n = state.vault.tidyUp();
+  toast(n ? `Filed ${n} thing${n === 1 ? "" : "s"} into folders` : "Everything is already filed");
+  syncSoon();
+}
+
+// ---------- connections graph ----------
+
+let graphView = null;
+
+function renderGraphView(items, folders) {
+  const opts = state.graphOpts;
+  const data = buildGraph(items, folders, opts);
+  const sig = `${data.nodes.length}/${data.edges.length}/${JSON.stringify(opts)}`;
+  const toggles = [["tags", "Tags"], ["folderNodes", "Folders"], ["unlinked", "Unconnected items"]];
+  $("#graph-tools").replaceChildren(
+    h("div", { class: "chips", role: "group", "aria-label": "Show" }, toggles.map(([k, label]) =>
+      h("button", { type: "button", "aria-pressed": String(Boolean(opts[k])), onclick: () => { opts[k] = !opts[k]; savePref("graph", opts); render(); } }, label))),
+    h("div", { class: "legend" }, folders.filter((f) => !f.parent).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12).map((f) =>
+      h("span", {}, h("i", { style: `background:${folderColor(f.id, folders)}` }), f.name))));
+  $("#graph-count").textContent = data.nodes.length
+    ? `${data.nodes.filter((n) => n.type === "item").length} items, ${data.edges.filter((e) => e.kind === "link").length} links`
+    : "";
+  const stage = $("#graph-stage");
+  if (!data.nodes.length) {
+    graphView?.stop(); graphView = null;
+    stage.replaceChildren(h("div", { class: "graph-empty" }, h("p", { class: "dz-title", text: "No connections yet" }),
+      h("p", { class: "hint", text: "Link notes by typing [[ and a title, or use “Connect to…” on any item. Shared #tags show up here too." })));
+    return;
+  }
+  if (graphView?.sig === sig) return;
+  graphView?.stop();
+  graphView = graphCanvas(stage, data, { onOpen: (id) => { state.mode = null; openItem(id); } });
+  graphView.sig = sig;
 }
 
 // ---------- clipboard history ----------
@@ -601,12 +781,21 @@ async function pasteFromClipboard() {
 
 const kindLabel = { note: "Note", link: "Link", image: "Image", pdf: "PDF", audio: "Audio", video: "Video", file: "File", highlight: "Highlight", email: "Email" };
 
-function card(item) {
+function card(item, folderName) {
   const snippet = item.kind === "highlight" ? item.body.replace(/^> /gm, "") : item.summary || item.body.trim() || item.ocrText || "";
   const price = item.priceWatch?.price ?? item.extracted.product?.price;
   const currency = item.priceWatch?.currency ?? item.extracted.product?.currency;
-  const thumb = item.imageURL?.startsWith("https://") ? h("img", { class: "thumb", src: item.imageURL, alt: "", loading: "lazy", referrerpolicy: "no-referrer", onerror: (e) => e.target.remove() }) : null;
-  return h("button", { type: "button", class: `card ${item.kind}`, onclick: () => openItem(item.id) },
+  const att = item.attachments[0];
+  let thumb = null;
+  if (item.thumbnail || (att && wantsThumbnail(att))) {
+    thumb = h("div", { class: `thumb-wrap kind-${item.kind}`, "data-id": item.id }, h("span", { class: "type-tile", text: typeLabel(att?.name ?? "", att?.mime ?? "") }));
+    thumbObserver.observe(thumb);
+  } else if (item.imageURL?.startsWith("https://")) {
+    thumb = h("img", { class: "thumb", src: item.imageURL, alt: "", loading: "lazy", referrerpolicy: "no-referrer", onerror: (e) => e.target.remove() });
+  } else if (att) {
+    thumb = h("div", { class: `thumb-wrap small kind-${item.kind}` }, h("span", { class: "type-tile", text: typeLabel(att.name, att.mime) }));
+  }
+  const el = h("button", { type: "button", class: `card ${item.kind}`, draggable: "true", onclick: () => { state.mode = null; openItem(item.id); } },
     thumb,
     h("div", { class: "body" },
       h("div", { class: "meta" },
@@ -616,12 +805,51 @@ function card(item) {
       h("div", { class: "title", text: item.displayTitle }),
       snippet && snippet !== item.displayTitle ? h("div", { class: "snippet", text: snippet.slice(0, 400) }) : null,
       typeof price === "number" ? h("div", { class: "price", text: money(price, currency) }) : null,
-      item.tags.length ? h("div", { class: "tags" }, item.tags.slice(0, 4).map((t) => h("span", { class: "tag-chip", text: `#${t}` }))) : null));
+      item.tags.length || folderName ? h("div", { class: "tags" }, folderName ? h("span", { class: "folder-chip", text: folderName }) : null,
+        item.tags.slice(0, 4).map((t) => h("span", { class: "tag-chip", text: `#${t}` }))) : null));
+  el.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData(ITEM_DRAG, item.id);
+    e.dataTransfer.setData("text/plain", item.displayTitle);
+    e.dataTransfer.effectAllowed = "move";
+  });
+  return el;
+}
+
+// ---------- thumbnails (made once by whichever device sees the file first, then synced) ----------
+
+const thumbTried = new Set();
+let thumbQueue = Promise.resolve();
+const thumbObserver = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { thumbObserver.unobserve(e.target); fillThumb(e.target); }
+}, { rootMargin: "400px" });
+
+async function fillThumb(el) {
+  const item = state.vault?.item(el.dataset.id);
+  if (!item) return;
+  const show = (url) => { if (!el.isConnected) return; el.replaceChildren(h("img", { src: url, alt: "", class: "thumb" })); el.classList.add("loaded"); };
+  if (item.thumbnail) { blobURL(item.thumbnail).then(show).catch(() => {}); return; }
+  const att = item.attachments[0];
+  if (!att || thumbTried.has(att.id)) return;
+  thumbTried.add(att.id);
+  thumbQueue = thumbQueue.then(async () => {
+    try {
+      const bytes = await state.vault.attachment(att.id);
+      const jpeg = await makeThumbnail(att, bytes);
+      if (!jpeg || !state.vault.item(item.id) || state.vault.item(item.id).attachments[0]?.id !== att.id) return;
+      const thumb = await state.vault.setThumbnail(item.id, jpeg);
+      blobURLs.set(thumb.id, URL.createObjectURL(new Blob([jpeg], { type: "image/jpeg" })));
+      show(blobURLs.get(thumb.id));
+      syncSoon(4000);
+    } catch { /* no preview for this one */ }
+  });
 }
 
 // ---------- detail ----------
 
+const panelCache = { id: null, sig: null, previews: new Map() };
+
 function openItem(id) {
+  if (state.openId !== id) { state.history = false; panelCache.previews.clear(); panelCache.id = id; }
   state.openId = id;
   const item = state.vault.item(id);
   if (!state.mode) state.mode = item && item.kind === "note" && !item.body ? "edit" : "preview";
@@ -632,24 +860,50 @@ function closeItem() {
   flushBody();
   state.openId = null;
   state.mode = null;
+  state.wide = false;
+  panelCache.previews.clear();
+  panelCache.sig = null;
+  localGraph?.stop(); localGraph = null;
   $("#detail").hidden = true;
+  $("#detail").classList.remove("wide");
   $("#detail").replaceChildren();
+}
+
+let localGraph = null;
+let deviceNames = null;
+function deviceName(id) {
+  if (id === state.vault.journal.device) return "this browser";
+  if (!deviceNames) {
+    deviceNames = new Map();
+    state.vault.api("GET", "devices").then(({ devices }) => { for (const d of devices) deviceNames.set(d.deviceId, d.name); panelCache.sig = null; renderDetail(); }).catch(() => {});
+  }
+  return deviceNames.get(id) ?? "another device";
 }
 
 function renderDetail(force = false) {
   const panel = $("#detail");
   if (!state.openId) { panel.hidden = true; return; }
   // Don't redraw under the user's cursor; their own edits are already in the store.
-  if (!force && panel.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if (!force && panel.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
   const vault = state.vault;
   const item = vault.item(state.openId);
   if (!item) { closeItem(); return; }
+  const items = vault.items();
+  const graph = linkGraph(items);
+  const sig = [item.id, item.record.updatedHLC, state.mode, state.history, state.wide, (graph.incoming[item.id] ?? []).join(), (graph.outgoing[item.id] ?? []).join(),
+    vault.folders().length, items.length].join("|");
+  if (!force && sig === panelCache.sig) return;
+  panelCache.sig = sig;
   panel.hidden = false;
+  panel.classList.toggle("wide", state.wide);
+  const scroll = panel.scrollTop;
 
   const bar = h("div", { class: "detail-bar" },
     h("button", { type: "button", class: "secondary", onclick: () => { vault.setPinned(item.id, !item.isPinned); syncSoon(); } }, item.isPinned ? "Unpin" : "Pin"),
     item.kind === "link" ? h("button", { type: "button", class: "secondary", onclick: () => { vault.markRead(item.id, item.readAt === null); syncSoon(); } }, item.readAt === null ? "Mark read" : "Mark unread") : null,
     h("span", { class: "spacer" }),
+    h("button", { type: "button", class: "icon-button only-wide", "aria-label": state.wide ? "Narrow panel" : "Widen panel", title: state.wide ? "Narrow" : "Widen",
+      onclick: toggleWide }, state.wide ? "⤡" : "⤢"),
     h("button", { type: "button", class: "secondary danger", onclick: () => { if (confirm("Delete this item on all your devices?")) { vault.delete(item.id); closeItem(); syncSoon(); } } }, "Delete"),
     h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: closeItem }, "✕"));
 
@@ -663,7 +917,7 @@ function renderDetail(force = false) {
     item.source !== "app" ? h("span", { text: `from ${item.source}` }) : null,
     item.tags.length ? h("span", {}, item.tags.map((t) => h("a", { href: "#", onclick: (e) => { e.preventDefault(); searchFor(`tag:${t}`); } }, `#${t} `))) : null);
 
-  const parts = [bar, title, meta];
+  const parts = [bar, title, meta, folderPicker(item)];
   if (item.url) parts.push(h("a", { class: "url", href: item.url.toString(), target: "_blank", rel: "noopener noreferrer", text: item.url.toString() }));
   if (item.summary) parts.push(h("p", { class: "summary", text: item.summary }));
   for (const version of item.conflictingVersions) {
@@ -675,26 +929,21 @@ function renderDetail(force = false) {
       h("button", { type: "button", class: "secondary", onclick: () => { vault.resolveConflicts(item.id, item.body); syncSoon(); } }, "Keep the current text")));
   }
 
-  // Body: preview or edit.
+  if (item.attachments.length) parts.push(filesSection(item));
+
+  // Body: preview, edit or history.
+  const hasFiles = item.attachments.length > 0;
   const segmented = h("div", { class: "segmented", role: "group", "aria-label": "Body view" },
-    h("button", { type: "button", "aria-pressed": String(state.mode === "preview"), onclick: () => { flushBody(); state.mode = "preview"; renderDetail(true); } }, "Preview"),
-    h("button", { type: "button", "aria-pressed": String(state.mode === "edit"), onclick: () => { state.mode = "edit"; renderDetail(true); $("#body-input")?.focus(); } }, "Edit"));
+    h("button", { type: "button", "aria-pressed": String(state.mode === "preview" && !state.history), onclick: () => { flushBody(); state.mode = "preview"; state.history = false; renderDetail(true); } }, "Preview"),
+    h("button", { type: "button", "aria-pressed": String(state.mode === "edit" && !state.history), onclick: () => { state.mode = "edit"; state.history = false; renderDetail(true); $("#body-input")?.focus(); } }, "Edit"),
+    h("button", { type: "button", "aria-pressed": String(state.history), onclick: () => { flushBody(); state.history = !state.history; renderDetail(true); } }, "History"));
   const saved = h("span", { class: "saved", id: "saved" });
-  parts.push(h("section", {}, h("div", { class: "body-head" }, segmented, saved)));
-  if (state.mode === "edit") {
-    const body = h("textarea", { class: "body-input", id: "body-input", "aria-label": "Note", placeholder: "Write in Markdown. #tags work." });
-    body.value = item.body;
-    body.dataset.id = item.id;
-    body.addEventListener("input", () => {
-      saved.textContent = "Editing…";
-      clearTimeout(flushBody.timer);
-      flushBody.timer = setTimeout(flushBody, 700);
-    });
-    body.addEventListener("blur", flushBody);
-    parts.push(body);
-  } else {
+  parts.push(h("section", {}, hasFiles ? h("h3", { class: "section-title", text: "Notes" }) : null, h("div", { class: "body-head" }, segmented, saved)));
+  if (state.history) parts.push(historyView(item));
+  else if (state.mode === "edit") parts.push(bodyEditor(item, saved));
+  else {
     const preview = h("div", { class: "preview" });
-    preview.innerHTML = item.body ? renderMarkdown(item.body) : `<p class="saved">No text yet.</p>`; // escaped by renderMarkdown
+    preview.innerHTML = item.body ? renderMarkdown(item.body) : `<p class="saved">${hasFiles ? "No notes yet. Use Edit to add some, and [[links]] to other things." : "No text yet."}</p>`; // escaped by renderMarkdown
     preview.addEventListener("click", (e) => {
       const tag = e.target.closest("a.tag"), wiki = e.target.closest("a.wikilink");
       if (tag) { e.preventDefault(); searchFor(`tag:${tag.dataset.tag.toLowerCase()}`); }
@@ -703,7 +952,8 @@ function renderDetail(force = false) {
     parts.push(preview);
   }
 
-  if (item.attachments.length) parts.push(h("section", {}, h("h3", { class: "section-title", text: "Attachments" }), item.attachments.map(attachmentView)));
+  parts.push(connectionsSection(item, items, graph));
+
   if (item.ocrText && item.kind !== "note") parts.push(h("section", {}, h("h3", { class: "section-title", text: "Text found in the file" }), h("p", { class: "saved ocr", text: item.ocrText.slice(0, 4000) })));
   if (item.priceWatch) {
     const w = item.priceWatch;
@@ -718,7 +968,244 @@ function renderDetail(force = false) {
     parts.push(h("section", {}, h("h3", { class: "section-title", text: "Collections" }), h("div", { class: "chips" }, collections.map((c) =>
       h("button", { type: "button", "aria-pressed": String(item.collections.includes(c.id)), onclick: () => { vault.toggleCollection(item.id, c.id); syncSoon(); } }, c.name)))));
   }
+  localGraph?.stop(); localGraph = null;
   panel.replaceChildren(...parts);
+  panel.scrollTop = scroll;
+  const stage = $("#local-graph", panel);
+  if (stage) {
+    const data = buildGraph(items, vault.folders(), { tags: false, focus: item.id, depth: 2 });
+    if (data.nodes.length > 1) localGraph = graphCanvas(stage, data, { focus: item.id, compact: true, onOpen: (id) => { if (id !== item.id) { flushBody(); state.mode = null; openItem(id); } } });
+    else stage.parentElement.remove();
+  }
+}
+
+function toggleWide() {
+  state.wide = !state.wide;
+  panelCache.previews.clear(); // pages re-render at the new width
+  renderDetail(true);
+}
+
+function folderPicker(item) {
+  const vault = state.vault, folders = vault.folders();
+  const select = h("select", { class: "folder-select", "aria-label": "Folder" },
+    h("option", { value: "", text: "No folder" }),
+    folderTree(folders).map(({ folder, depth }) => h("option", { value: folder.id, selected: folder.id === item.folder ? true : null, text: `${" ".repeat(depth)}${folder.name}` })),
+    h("option", { value: "__new", text: "New folder…" }));
+  select.addEventListener("change", () => {
+    let target = select.value || null;
+    if (target === "__new") {
+      const name = prompt("New folder");
+      if (!name?.trim()) { select.value = item.folder ?? ""; return; }
+      target = vault.createFolder(name, null);
+    }
+    vault.moveItem(item.id, target);
+    toast(target ? `Moved to ${vault.folders().find((f) => f.id === target)?.name}` : "Removed from its folder");
+    syncSoon();
+  });
+  const path = item.folder ? folderPathOf(item.folder, folders) : [];
+  return h("div", { class: "folder-line" },
+    h("span", { class: "folder-icon small", "aria-hidden": "true" }),
+    path.length ? h("span", { class: "crumbs small" }, path.map((f, i) => [i ? h("span", { class: "crumb-sep", text: "›" }) : null,
+      h("a", { href: "#", onclick: (e) => { e.preventDefault(); select_(f.id); } }, f.name)])) : h("span", { class: "saved", text: "Not in a folder" }),
+    item.isAutoFiled ? h("span", { class: "saved", title: "Trove chose this folder. Move it and it stays where you put it.", text: "· filed automatically" }) : null,
+    h("label", { class: "move-label" }, "Move", select));
+}
+const select_ = (folderId) => { if (matchMedia("(max-width: 760px)").matches) closeItem(); select(`f:${folderId}`); };
+
+function filesSection(item) {
+  const vault = state.vault;
+  const section = h("section", { class: "files" });
+  item.attachments.forEach((att, index) => {
+    const upload = h("input", { type: "file", hidden: true });
+    upload.addEventListener("change", async () => {
+      const file = upload.files[0];
+      if (!file) return;
+      if (file.size > MAX_UPLOAD) { toast("That file is over 100 MB"); return; }
+      toast("Uploading the new version…");
+      try {
+        await vault.replaceFile(item.id, new Uint8Array(await file.arrayBuffer()), { name: file.name, mime: file.type || att.mime });
+        thumbTried.delete(att.id);
+        toast("Saved as a new version. The old one is under Versions.");
+        syncSoon();
+      } catch (e) { toast(`Couldn't upload: ${e.message}`); }
+    });
+    const head = h("div", { class: "file-head" },
+      h("span", { class: "type-tile mini", text: typeLabel(att.name, att.mime) }),
+      h("span", { class: "file-name", text: att.name }), h("span", { class: "saved", text: fileSize(att.size) }),
+      h("span", { class: "spacer" }),
+      h("button", { type: "button", class: "secondary small", onclick: () => download(att) }, "Download"),
+      index === 0 ? h("label", { class: "secondary small", title: "Upload an edited copy; the current file is kept as a version" }, "New version", upload) : null);
+    let preview = panelCache.previews.get(att.id);
+    if (!preview) {
+      const editable = index === 0 && isEditableText(att.name, att.mime);
+      preview = attachmentPreview(att, {
+        load: () => vault.attachment(att.id),
+        edit: editable ? async (bytes) => { await vault.replaceFile(item.id, bytes); syncSoon(); toast("Saved. The previous text is under Versions."); } : null,
+        onExpand: state.wide ? null : toggleWide,
+        eager: !att.size || att.size < 60e6 || index === 0 && att.size < 150e6,
+      });
+      panelCache.previews.set(att.id, preview);
+    }
+    section.append(head, preview);
+  });
+  if (item.fileVersions.length) {
+    const list = h("ul", { class: "versions" }, item.fileVersions.map((v) => h("li", {},
+      h("span", { class: "version-when", text: ago(v.at) }),
+      h("span", { class: "saved", text: [v.attachment.name !== item.attachments[0]?.name ? v.attachment.name : null, fileSize(v.attachment.size), v.by ? `replaced on ${deviceName(v.by)}` : null].filter(Boolean).join(" · ") }),
+      h("span", { class: "spacer" }),
+      h("button", { type: "button", class: "secondary small", onclick: () => openVersion(v.attachment) }, "Open"),
+      h("button", { type: "button", class: "secondary small", onclick: () => {
+        vault.restoreFileVersion(item.id, v);
+        panelCache.previews.clear();
+        toast("Restored. The file you had is kept as a version too.");
+        syncSoon();
+      } }, "Restore"))));
+    section.append(h("details", { class: "versions-box" }, h("summary", {}, `Versions (${item.fileVersions.length} earlier)`), list));
+  }
+  return section;
+}
+
+async function download(att) {
+  try {
+    const a = h("a", { href: await blobURL(att), download: att.name });
+    a.click();
+  } catch (e) { toast(`Couldn't download: ${e.message}`); }
+}
+
+async function openVersion(att) {
+  const kind = previewKind(att.name, att.mime);
+  if (kind === "image") { try { lightbox(await blobURL(att), att.name); } catch (e) { toast(e.message); } return; }
+  const box = h("div", { class: "dialog version-dialog", role: "dialog", "aria-modal": "true" },
+    h("div", { class: "dialog-head" }, h("h2", { text: `${att.name} (earlier version)` }), h("button", { type: "button", class: "icon-button", "aria-label": "Close", onclick: () => backdrop.remove() }, "✕")),
+    attachmentPreview(att, { load: () => state.vault.attachment(att.id) }));
+  const backdrop = h("div", { class: "dialog-backdrop", onclick: (e) => { if (e.target === backdrop) backdrop.remove(); } }, box);
+  backdrop.addEventListener("keydown", (e) => { if (e.key === "Escape") backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+function historyView(item) {
+  const versions = state.vault.textVersions(item.id);
+  if (!versions.length) return h("p", { class: "saved", text: "No edits yet." });
+  const pane = h("pre", { class: "history-text", text: versions[0].text });
+  let chosen = 0;
+  const restore = h("button", { type: "button", class: "primary small", disabled: true, onclick: () => {
+    state.vault.setBody(item.id, versions[chosen].text);
+    state.history = false;
+    toast("Restored. Your newer text is still in History.");
+    syncSoon();
+    renderDetail(true);
+  } }, "Restore this version");
+  const list = h("ol", { class: "history-list" }, versions.map((v, i) => {
+    const b = h("button", { type: "button", "aria-pressed": String(i === 0), onclick: () => {
+      chosen = i;
+      pane.textContent = v.text || "(empty)";
+      restore.disabled = i === 0 || v.text === item.body;
+      for (const x of list.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+    } }, h("strong", { text: i === 0 ? "Latest" : ago(v.at) }), h("span", { class: "saved", text: `${new Date(v.at).toLocaleString()} · ${deviceName(v.device)}` }));
+    return h("li", {}, b);
+  }));
+  return h("div", { class: "history" }, list, h("div", { class: "history-pane" }, pane, h("div", { class: "row" }, restore)));
+}
+
+function bodyEditor(item, saved) {
+  const body = h("textarea", { class: "body-input", id: "body-input", "aria-label": "Note", placeholder: "Write in Markdown. #tags work, and [[ links to anything in your Trove." });
+  body.value = item.body;
+  body.dataset.id = item.id;
+  const suggest = h("ul", { class: "suggest", role: "listbox", hidden: true });
+  let options = [], active = 0;
+  const close = () => { suggest.hidden = true; options = []; };
+  const pick = (choice) => {
+    const before = body.value.slice(0, body.selectionStart), after = body.value.slice(body.selectionEnd);
+    const start = before.lastIndexOf("[[");
+    const rest = after.startsWith("]]") ? after.slice(2) : after;
+    body.value = `${before.slice(0, start)}[[${choice}]]${rest}`;
+    const caret = start + choice.length + 4;
+    body.setSelectionRange(caret, caret);
+    close();
+    body.dispatchEvent(new Event("input"));
+  };
+  const update = () => {
+    const m = /\[\[([^[\]\n|#]*)$/.exec(body.value.slice(0, body.selectionStart));
+    if (!m) { close(); return; }
+    const q = m[1].trim().toLowerCase();
+    options = state.vault.items().filter((i) => i.id !== item.id && i.displayTitle.toLowerCase().includes(q))
+      .sort((a, b) => Number(!a.displayTitle.toLowerCase().startsWith(q)) - Number(!b.displayTitle.toLowerCase().startsWith(q)) || b.createdAt - a.createdAt)
+      .slice(0, 7).map((i) => i.displayTitle);
+    if (q && !options.some((o) => o.toLowerCase() === q)) options.push(m[1].trim());
+    active = 0;
+    suggest.hidden = !options.length;
+    suggest.replaceChildren(...options.map((o, i) => h("li", { role: "option", "aria-selected": String(i === active), onmousedown: (e) => { e.preventDefault(); pick(o); } },
+      i === options.length - 1 && q && !state.vault.items().some((x) => x.displayTitle.toLowerCase() === q) ? `New: ${o}` : o)));
+  };
+  body.addEventListener("input", () => {
+    saved.textContent = "Editing…";
+    clearTimeout(flushBody.timer);
+    flushBody.timer = setTimeout(flushBody, 700);
+    update();
+  });
+  body.addEventListener("keydown", (e) => {
+    if (suggest.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+      [...suggest.children].forEach((li, i) => li.setAttribute("aria-selected", String(i === active)));
+    } else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(options[active]); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+  });
+  body.addEventListener("blur", () => { setTimeout(close, 150); flushBody(); });
+  return h("div", { class: "editor" }, body, suggest);
+}
+
+function connectionsSection(item, items, graph) {
+  const vault = state.vault;
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const out = (graph.outgoing[item.id] ?? []).map((id) => byId.get(id)).filter(Boolean);
+  const inc = (graph.incoming[item.id] ?? []).map((id) => byId.get(id)).filter(Boolean);
+  const linked = new Set(neighbours(graph, item.id));
+  const mentioned = mentions(item, items, linked).slice(0, 8);
+  const suggestions = related(item, items).filter((i) => !linked.has(i.id)).slice(0, 5);
+  const unresolved = graph.unresolved[item.id] ?? [];
+  const chip = (other, { remove, action } = {}) => h("span", { class: "link-chip" },
+    h("a", { href: "#", onclick: (e) => { e.preventDefault(); flushBody(); state.mode = null; openItem(other.id); } }, other.displayTitle),
+    action ?? null,
+    remove ? h("button", { type: "button", class: "chip-x", "aria-label": `Disconnect ${other.displayTitle}`, onclick: () => { vault.disconnect(item.id, other.id); syncSoon(); } }, "×") : null);
+  const manual = new Set(item.links);
+  const group = (label, children) => (children.length ? h("div", { class: "link-group" }, h("span", { class: "link-label", text: label }), h("div", { class: "link-chips" }, children)) : null);
+  const textLinks = new Set(wikilinks(item.body).map((t) => t.toLowerCase()));
+  const section = h("section", { class: "connections" }, h("h3", { class: "section-title", text: "Connections" }),
+    group("Links to", out.map((o) => chip(o, { remove: manual.has(o.id) && !textLinks.has(o.displayTitle.toLowerCase()) }))),
+    group("Linked from", inc.map((o) => chip(o, { remove: o.links.includes(item.id) }))),
+    group("Not made yet", unresolved.map((t) => h("button", { type: "button", class: "link-chip new", onclick: () => {
+      const id = vault.addNote({ title: t });
+      toast(`Made “${t}”`);
+      syncSoon(); state.mode = "edit"; openItem(id);
+    } }, `+ ${t}`))),
+    group("Mentioned in", mentioned.map((o) => chip(o, { action: h("button", { type: "button", class: "chip-action", onclick: () => { vault.connect(o.id, item.id); syncSoon(); } }, "Link") }))),
+    group("Maybe related", suggestions.map((o) => chip(o, { action: h("button", { type: "button", class: "chip-action", onclick: () => { vault.connect(item.id, o.id); syncSoon(); } }, "Connect") }))),
+    connectPicker(item));
+  if (out.length || inc.length) section.append(h("div", { class: "local-graph-wrap" }, h("div", { id: "local-graph", class: "local-graph" }),
+    h("button", { type: "button", class: "link-button", onclick: () => select("graph") }, "Open the whole graph →")));
+  return section;
+}
+
+function connectPicker(item) {
+  const input = h("input", { type: "search", placeholder: "Connect to…", "aria-label": "Connect to another item", autocomplete: "off" });
+  const results = h("ul", { class: "suggest inline", hidden: true });
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    const hits = q ? search(state.vault.items().filter((i) => i.id !== item.id && !item.links.includes(i.id)), q).slice(0, 6) : [];
+    results.hidden = !hits.length;
+    results.replaceChildren(...hits.map((hit) => h("li", { onmousedown: (e) => {
+      e.preventDefault();
+      input.value = ""; results.hidden = true;
+      input.blur();
+      state.vault.connect(item.id, hit.id);
+      toast(`Connected to “${hit.displayTitle}”`);
+      syncSoon();
+    } }, h("strong", { text: hit.displayTitle }), h("span", { class: "saved", text: ` ${kindLabel[hit.kind] ?? hit.kind}` }))));
+  });
+  input.addEventListener("blur", () => setTimeout(() => { results.hidden = true; }, 150));
+  return h("div", { class: "connect-picker" }, input, results);
 }
 
 function flushBody() {
@@ -729,27 +1216,6 @@ function flushBody() {
   const saved = $("#saved");
   if (saved) saved.textContent = "Saved";
   syncSoon();
-}
-
-function attachmentView(att) {
-  const box = h("div", { class: "attachment" });
-  const label = `${att.name}${att.size ? ` · ${(att.size / 1024 / 1024).toFixed(att.size > 1e6 ? 1 : 2)} MB` : ""}`;
-  const inline = /^(image|video|audio)\//.test(att.mime);
-  const show = async () => {
-    box.replaceChildren(h("span", { class: "saved", text: `Decrypting ${att.name}…` }));
-    try {
-      const url = await blobURL(att);
-      const tag = att.mime.split("/")[0];
-      if (tag === "image") box.replaceChildren(h("img", { src: url, alt: att.name }));
-      else if (tag === "video" || tag === "audio") box.replaceChildren(h(tag, { src: url, controls: true }));
-      else box.replaceChildren(h("a", { href: url, download: att.name, target: "_blank", rel: "noopener", text: `Open ${label}` }));
-    } catch (e) {
-      box.replaceChildren(h("span", { class: "danger", text: `Couldn't load ${att.name}: ${e.message}` }));
-    }
-  };
-  if (inline && att.size < 25 * 1024 * 1024) show();
-  else box.append(h("button", { type: "button", class: "secondary", onclick: show }, `Decrypt ${label}`));
-  return box;
 }
 
 async function blobURL(att) {
@@ -772,7 +1238,13 @@ function searchFor(query) {
 function openByTitle(title) {
   const t = title.trim().toLowerCase();
   const match = state.vault.items().find((i) => i.displayTitle.toLowerCase() === t);
-  if (match) { flushBody(); state.mode = null; openItem(match.id); } else searchFor(title);
+  if (match) { flushBody(); state.mode = null; openItem(match.id); return; }
+  if (confirm(`There's nothing called “${title}” yet. Make a note with that title?`)) {
+    const id = state.vault.addNote({ title: title.trim() });
+    syncSoon();
+    state.mode = "edit";
+    openItem(id);
+  }
 }
 
 // ---------- sync ----------
