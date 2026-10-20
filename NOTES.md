@@ -10,13 +10,13 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
-| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing, sketch tools, clip editor | ✅ Done | 28 unit/interop tests; 9 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. Deployed (version 9a68b61f, after the clipboard + sketching round) |
+| `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing, sketch tools, clip editor | ✅ Done | 28 unit/interop tests; 9 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. Deployed (version 3d43d4ca, at f01c8a3) |
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 3cb7fcd, sketching/clipboard places/Paste round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
-| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version fdbed6d6, after the search/tags/settings round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version 3d43d4ca, deployed at f01c8a3 after the sketching/clipboard/Paste round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
@@ -125,7 +125,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   (apps); off-screen clips skip layout (website).
 - **img1** from the user's message never reached the session; ask them to send it again.
 - Tests: TroveCore 92, web 34 unit + 10 Chromium e2e (new: zoom/flip/precise/scribble e2e, papers,
-  scribble, clip events, Paste import). Website **not deployed** yet: deploy when the user says so.
+  scribble, clip events, Paste import). Website deployed (version 3d43d4ca, at f01c8a3) when the user said "publish everything"; apps for f01c8a3 are on the `latest` release.
 
 ## Round before (user: "sheet off the page, clipboard tags, GoodNotes source, type to search, where's sketching, no emoji, faster search, Liquid Glass icon")
 - **Mac sheets ran off the screen** (the GoodNotes reader asked for 700×800 at least, and its
