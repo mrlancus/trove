@@ -1,0 +1,20 @@
+{
+  "wikilinks": [
+    { "text": "See [[Dune]] and [[ Dune ]] and [[dune|the book]].", "expect": ["Dune"] },
+    { "text": "[[Paris#Food]] then [[Trip plan|plan]] `[[not this]]`\n```\n[[nor this]]\n```\n[[Last]]", "expect": ["Paris", "Trip plan", "Last"] },
+    { "text": "[[]] [[unclosed", "expect": [] }
+  ],
+  "items": [
+    { "id": "a", "title": "Dune", "body": "Read with [[Paris]] notes. Also [[Missing page]].", "createdAt": 1000, "tags": ["books", "scifi"] },
+    { "id": "b", "title": "Paris", "body": "Back to [[dune]].", "createdAt": 2000, "tags": ["travel"] },
+    { "id": "c", "title": "Paris", "body": "An older Paris note mentioning Dune.", "createdAt": 500, "tags": ["books"] },
+    { "id": "d", "title": "Reading list", "body": "", "createdAt": 3000, "links": ["c", "zzz", "d"], "tags": ["books", "scifi"] }
+  ],
+  "graph": {
+    "outgoing": { "a": ["b"], "b": ["a"], "d": ["c"] },
+    "incoming": { "a": ["b"], "b": ["a"], "c": ["d"] },
+    "unresolved": { "a": ["Missing page"] }
+  },
+  "mentions": { "a": ["c"] },
+  "related": { "a": ["d", "c"] }
+}

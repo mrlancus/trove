@@ -69,6 +69,10 @@ final class AppModel {
     private(set) var clipboardPalette: ClipboardPaletteController?
     #endif
     private var syncTask: Task<Void, Never>?
+    /// A sync was asked for while one was running (a live ping, an edit): run once more after it.
+    private var syncAgain = false
+    private var pushTask: Task<Void, Never>?
+    private var mirroring = false
     private var searchTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var live: LiveConnection?
@@ -235,25 +239,48 @@ final class AppModel {
         }
     }
 
+    /// Pulls and pushes. A request that arrives mid-sync (say a live ping because the website just
+    /// saved something) runs right after instead of being dropped. Enrichment and the Mac mirror run
+    /// after the sync lock is released, so slow OCR never holds up changes from other devices.
     func syncNow() async {
-        guard let library, !sync.syncing else { return }
+        guard let library else { return }
+        if sync.syncing { syncAgain = true; return }
         sync.syncing = true
-        defer { sync.syncing = false }
-        await importLocalInbox()
-        let report = await library.sync()
-        if let client = vault.relayClient, let keys = vault.keys {
-            let inbox = await InboxSync.run(client: client, keys: keys, library: library)
-            if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
-            let watches = await PriceWatchSync.run(client: client, library: library)
-            for drop in watches.drops { await PriceAlerts.notify(drop) }
-            if let drop = watches.drops.first { toast = PriceAlerts.message(drop) }
-        }
-        sync.lastSync = Date()
-        sync.lastError = report.errors.first
-        await reload()
-        saveNow()
+        repeat {
+            syncAgain = false
+            await importLocalInbox()
+            let report = await library.sync()
+            if let client = vault.relayClient, let keys = vault.keys {
+                let inbox = await InboxSync.run(client: client, keys: keys, library: library)
+                if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
+                let watches = await PriceWatchSync.run(client: client, library: library)
+                for drop in watches.drops { await PriceAlerts.notify(drop) }
+                if let drop = watches.drops.first { toast = PriceAlerts.message(drop) }
+            }
+            sync.lastSync = Date()
+            sync.lastError = report.errors.first
+            await reload()
+            saveNow()
+        } while syncAgain
+        sync.syncing = false
         await enrichSoon()
         await mirrorIfOwner()
+    }
+
+    /// Pushes local edits a moment after they're made, like the website does.
+    private func pushSoon() {
+        pushTask?.cancel()
+        pushTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await self?.syncNow()
+        }
+    }
+
+    /// Back from the background: the live socket has usually been dropped by then.
+    func becameActive() async {
+        if !sync.live { connectLive() }
+        await syncNow()
     }
 
     private func connectLive() {
@@ -286,6 +313,7 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             self?.saveNow()
             await self?.reload()
+            if let engine = self?.library?.engine, await engine.hasUnsentChanges { self?.pushSoon() }
         }
     }
 
@@ -318,7 +346,9 @@ final class AppModel {
 
     private func mirrorIfOwner() async {
         #if os(macOS)
-        guard let config = vault.config, config.mirrorOwner, let library else { return }
+        guard let config = vault.config, config.mirrorOwner, let library, !mirroring else { return }
+        mirroring = true
+        defer { mirroring = false }
         if let folder = try? vault.folderURL() {
             await ObsidianMirrorService.shared.export(items: items, to: folder.appendingPathComponent("Notes"), library: library)
         }
@@ -365,17 +395,17 @@ final class AppModel {
         guard importRun?.finished != false else { toast = "Still importing. Drop the rest when it's done."; return }
         let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
         defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
-        let files = urls.flatMap(Self.filesInside)
+        let files = urls.flatMap(Self.filesWithFolders)
         var run = ImportRun(total: files.count)
         importRun = run
-        for url in files {
+        for (url, folder) in files {
             run.current = url.lastPathComponent
             importRun = run
             if let data = try? Data(contentsOf: url) {
                 let name = url.lastPathComponent
-                let actions = await Task.detached(priority: .userInitiated) { FileImport.actions(name: name, data: data) }.value
-                for action in actions {
-                    let (count, label) = await perform(action, in: library, source: source)
+                let placed = await Task.detached(priority: .userInitiated) { FileImport.placed(name: name, data: data, folder: folder) }.value
+                for entry in placed {
+                    let (count, label) = await perform(entry.action, folder: entry.folder, in: library, source: source)
                     run.added += count
                     if count > 0 { run.recent.insert(.init(label: label), at: 0) }
                 }
@@ -398,18 +428,30 @@ final class AppModel {
     /// Clears a finished import so the drop zone shows again.
     func dismissImport() { if importRun?.finished == true { importRun = nil } }
 
-    private func perform(_ action: ImportAction, in library: Library, source: ItemSource) async -> (Int, String) {
+    private func perform(_ action: ImportAction, folder: [String], in library: Library, source: ItemSource) async -> (Int, String) {
         switch action {
         case .items(let items):
             let added = await library.importItems(items)
             let kind = items.first?.kind == .highlight ? "highlights" : "links"
             return (added, added == 1 ? "1 \(kind.dropLast())" : "\(added) \(kind)")
         case .note(let title, let body, let tags):
-            _ = await library.addNote(title: title, body: body, tags: tags, source: .import)
+            _ = await library.addNote(title: title, body: body, tags: tags, source: .import, folder: folder)
             return (1, title.isEmpty ? "Note" : title)
         case .file(let name, let data, let mime):
-            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source)) != nil
+            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source, folder: folder)) != nil
             return (ok ? 1 : 0, name)
+        }
+    }
+
+    /// Like `filesInside`, with the folders each file sat in (starting with the dropped folder's
+    /// name), so the organiser can keep the structure. A loose file has no folders.
+    nonisolated static func filesWithFolders(_ url: URL) -> [(URL, [String])] {
+        let files = filesInside(url)
+        guard files.count != 1 || files[0] != url else { return [(url, [])] }
+        let root = url.standardizedFileURL.pathComponents
+        return files.map { file in
+            let parts = file.standardizedFileURL.deletingLastPathComponent().pathComponents
+            return (file, [url.lastPathComponent] + Array(parts.dropFirst(root.count)))
         }
     }
 

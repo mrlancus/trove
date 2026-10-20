@@ -10,6 +10,7 @@ public actor SyncEngine {
         public var applied: [String]               // segment keys already applied
         public var ops: [Op]                       // local cache of every op (rebuilds state offline)
         public var unpushedBlobs: [String: [String]]? // transport name → blob ids still to upload
+        public var bridgeBlobs: [String]?               // attachments still to copy between transports
     }
 
     public struct Report: Sendable, Equatable {
@@ -33,6 +34,9 @@ public actor SyncEngine {
     private let blobCache: URL?
     private var memoryBlobs: [String: Data] = [:]
     private var unpushedBlobs: [String: Set<String>] = [:]
+    /// Attachments other devices put on one transport that a bridging device still has to copy to the rest.
+    private var bridgeBlobs: Set<String> = []
+    static let bridgeBlobsPerSync = 40
 
     public init(device: String, keys: VaultKeys?, encrypted: Bool = true, transports: [any SyncTransport] = [], bridge: Bool = false,
                 blobCache: URL? = nil, snapshot: Snapshot? = nil, now: (@Sendable () -> Int64)? = nil) {
@@ -46,6 +50,7 @@ public actor SyncEngine {
             applied = Set(snapshot.applied)
             unpushed = snapshot.unpushed.mapValues(Set.init)
             unpushedBlobs = (snapshot.unpushedBlobs ?? [:]).mapValues(Set.init)
+            bridgeBlobs = Set(snapshot.bridgeBlobs ?? [])
             store.apply(snapshot.ops)
             // Rebuild the outbox for anything not yet pushed from this device's own ops.
             let mine = snapshot.ops.filter { $0.device == device }
@@ -63,6 +68,8 @@ public actor SyncEngine {
     }
 
     public var device: String { journal.device }
+    /// Local edits not yet cut into segments, so the app can push them soon after the user types.
+    public var hasUnsentChanges: Bool { !journal.pending.isEmpty }
     public var records: [Record] { store.visible }
     public func record(_ id: String) -> Record? { store.record(id) }
 
@@ -70,7 +77,8 @@ public actor SyncEngine {
 
     public func snapshot() -> Snapshot {
         Snapshot(journal: journal.state, pending: journal.pending, unpushed: unpushed.mapValues { Array($0).sorted() },
-                 applied: Array(applied).sorted(), ops: store.allOps, unpushedBlobs: unpushedBlobs.mapValues { Array($0).sorted() })
+                 applied: Array(applied).sorted(), ops: store.allOps, unpushedBlobs: unpushedBlobs.mapValues { Array($0).sorted() },
+                 bridgeBlobs: bridgeBlobs.isEmpty ? nil : bridgeBlobs.sorted())
     }
 
     @discardableResult
@@ -176,16 +184,61 @@ public actor SyncEngine {
             }
         }
 
-        // 4. Bridge: give every transport the segments it lacks (identical bytes, idempotent).
+        // 4. Bridge: give every transport the segments it lacks (identical bytes, idempotent), and
+        //    the attachments those segments point at, so a phone on iCloud only can open a file
+        //    the website uploaded to the relay (and the other way round).
         if bridge {
             for (ref, data, source) in fetched {
                 for t in transports where t.name != source {
                     do { try await t.pushSegment(ref, data: data) } catch { report.errors.append("bridge \(t.name) \(ref.key): \(error)") }
                 }
             }
+            for (ref, _, _) in fetched {
+                for op in store.allOps where op.device == ref.device && op.seq >= ref.first && op.seq <= ref.last {
+                    bridgeBlobs.formUnion(Self.attachmentIds(in: op))
+                }
+            }
+            await copyBridgeBlobs(&report)
         }
         if report.pulled > 0 { notify() }
         return report
+    }
+
+    /// Attachment ids an op refers to: any `{id, mime}` object in its fields (attachments,
+    /// thumbnails, file versions, clip images).
+    static func attachmentIds(in op: Op) -> Set<String> {
+        var out: Set<String> = []
+        func visit(_ v: JSONValue) {
+            switch v {
+            case .object(let o):
+                if let id = o["id"]?.string, o["mime"]?.string != nil { out.insert(id) }
+                for child in o.values { visit(child) }
+            case .array(let a): for child in a { visit(child) }
+            default: break
+            }
+        }
+        for value in (op.fields ?? [:]).values { visit(value) }
+        return out
+    }
+
+    private func copyBridgeBlobs(_ report: inout Report) async {
+        for id in bridgeBlobs.sorted().prefix(Self.bridgeBlobsPerSync) {
+            var missing: [any SyncTransport] = []
+            var bytes: Data?
+            for t in transports {
+                // A folder can say whether it has the file; the relay can only be asked for it.
+                let has = t is FolderTransport ? (try? await t.hasBlob(id)) == true : nil
+                if has == false { missing.append(t); continue }
+                if bytes == nil, let data = try? await t.fetchBlob(id) { bytes = data; continue }
+                if has == nil { missing.append(t) }
+            }
+            guard let bytes else { bridgeBlobs.remove(id); continue } // nobody has it (yet): the uploader retries
+            var ok = true
+            for t in missing {
+                do { try await t.pushBlob(id, data: bytes) } catch { ok = false; report.errors.append("bridge \(t.name) blob \(id.prefix(8)): \(error)") }
+            }
+            if ok { bridgeBlobs.remove(id) }
+        }
     }
 
     private func encode(_ segment: Segment) throws -> Data {

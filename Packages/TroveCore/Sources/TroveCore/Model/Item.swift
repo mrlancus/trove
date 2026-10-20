@@ -50,6 +50,11 @@ public enum Field {
     public static let resolvedConflicts = "resolvedConflicts"
     public static let priceWatch = "priceWatch" // {"url","price","lowest","currency","checkedAt","droppedAt","previous"}
     public static let published = "published"   // {"slug","url"}
+    public static let folder = "folder"         // folder record id (PROTOCOL.md §9)
+    public static let folderAuto = "folderAuto" // true while the organiser chose the folder (the user hasn't moved it)
+    public static let links = "links"           // ids of items this one is connected to by hand
+    public static let fileVersions = "fileVersions" // earlier attachments, newest first: [{attachment, at, by}]
+    public static let thumbnail = "thumbnail"   // a small JPEG preview (attachment JSON)
     // text fields
     public static let body = "body"
 }
@@ -77,6 +82,18 @@ public struct Item: Identifiable, Hashable, Sendable {
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
     public var collections: [String] { record[Field.collections]?.stringArray ?? [] }
     public var space: String? { record[Field.space]?.string }
+    public var folder: String? { record[Field.folder]?.string }
+    public var isAutoFiled: Bool { record[Field.folderAuto]?.bool ?? false }
+    /// Items this one was connected to by hand (wikilinks in the body are found by `Links`).
+    public var links: [String] { record[Field.links]?.stringArray ?? [] }
+    public var thumbnail: Attachment? { record[Field.thumbnail].flatMap(Attachment.init(json:)) }
+    /// Earlier versions of the file, newest first.
+    public var fileVersions: [FileVersion] {
+        (record[Field.fileVersions]?.array ?? []).compactMap { v in
+            guard let o = v.object, let a = o["attachment"].flatMap(Attachment.init(json:)) else { return nil }
+            return FileVersion(attachment: a, at: o["at"]?.date ?? Date(timeIntervalSince1970: 0), by: o["by"]?.string)
+        }
+    }
     public var isPinned: Bool { record[Field.pinned]?.bool ?? false }
     public var readAt: Date? { record[Field.readAt]?.date }
     public var ocrText: String? { record[Field.ocrText]?.string }
@@ -110,11 +127,7 @@ public struct Item: Identifiable, Hashable, Sendable {
     }
 
     public var attachments: [Attachment] {
-        (record[Field.attachments]?.array ?? []).compactMap { v in
-            guard let o = v.object, let id = o["id"]?.string else { return nil }
-            return Attachment(id: id, name: o["name"]?.string ?? "file", mime: o["mime"]?.string ?? "application/octet-stream",
-                              size: Int(o["size"]?.number ?? 0))
-        }
+        (record[Field.attachments]?.array ?? []).compactMap(Attachment.init(json:))
     }
 
     public var enrichment: Enrichment? {
@@ -161,7 +174,25 @@ public struct PublishedLink: Hashable, Sendable {
     }
 }
 
+/// A file as it was before an edit or a newer backup replaced it.
+public struct FileVersion: Hashable, Sendable {
+    public var attachment: Attachment
+    public var at: Date
+    /// The device that replaced it.
+    public var by: String?
+    public var json: JSONValue {
+        var o: [String: JSONValue] = ["attachment": attachment.json, "at": JSONValue(at)]
+        if let by { o["by"] = .string(by) }
+        return .object(o)
+    }
+}
+
 extension Attachment {
+    public init?(json: JSONValue) {
+        guard let o = json.object, let id = o["id"]?.string else { return nil }
+        self.init(id: id, name: o["name"]?.string ?? "file", mime: o["mime"]?.string ?? "application/octet-stream", size: Int(o["size"]?.number ?? 0))
+    }
+
     public var json: JSONValue { ["id": .string(id), "name": .string(name), "mime": .string(mime), "size": .number(Double(size))] }
 }
 

@@ -8,6 +8,14 @@ public enum ImportAction: Equatable, Sendable {
     case file(name: String, data: Data, mime: String)
 }
 
+/// An import action plus the folders it came from (a dropped folder's subfolders, or the folders
+/// inside a zip, starting with the zip's own name). `Organizer` files it there.
+public struct PlacedImport: Equatable, Sendable {
+    public var action: ImportAction
+    public var folder: [String]
+    public init(action: ImportAction, folder: [String] = []) { self.action = action; self.folder = folder }
+}
+
 /// Decides how any dropped or chosen file is imported, opening zips (and zips inside zips) along
 /// the way. Pure, so every app and the website (web/public/core/importer.js) route files the same.
 public enum FileImport {
@@ -17,24 +25,38 @@ public enum FileImport {
     static let maxTextNote = 1_000_000
 
     public static func actions(name: String, data: Data) -> [ImportAction] {
-        var budget = maxUnzippedBytes
-        return actions(name: name, data: data, depth: 0, budget: &budget)
+        placed(name: name, data: data).map(\.action)
     }
 
-    static func actions(name: String, data: Data, depth: Int, budget: inout Int) -> [ImportAction] {
+    /// Like `actions`, keeping where each thing sat. `folder` is where the file itself was found.
+    public static func placed(name: String, data: Data, folder: [String] = []) -> [PlacedImport] {
+        var budget = maxUnzippedBytes
+        return actions(name: name, data: data, folder: folder, depth: 0, budget: &budget)
+    }
+
+    static func actions(name: String, data: Data, folder: [String], depth: Int, budget: inout Int) -> [PlacedImport] {
+        let here = { (actions: [ImportAction]) in actions.map { PlacedImport(action: $0, folder: folder) } }
         let ext = (name as NSString).pathExtension.lowercased()
         let base = (name as NSString).deletingPathExtension
         let file = ImportAction.file(name: name, data: data, mime: mime(forExtension: ext))
         switch ext {
         case "zip":
-            guard depth < maxNesting, let zip = try? ZipArchive(data) else { return [file] }
-            var out: [ImportAction] = []
+            guard depth < maxNesting, let zip = try? ZipArchive(data) else { return here([file]) }
+            var out: [PlacedImport] = []
             for entry in zip.entries where !entry.isDirectory && !isJunk(entry.path) && !entry.isEncrypted {
                 guard entry.size <= budget, let contents = try? zip.data(for: entry) else { continue }
                 budget -= contents.count
-                out += actions(name: entry.name, data: contents, depth: depth + 1, budget: &budget)
+                let dirs = entry.path.split(separator: "/").dropLast().map(String.init)
+                out += actions(name: entry.name, data: contents, folder: folder + [base] + dirs, depth: depth + 1, budget: &budget)
             }
             return out
+        default:
+            return here(single(name: name, ext: ext, base: base, data: data, file: file))
+        }
+    }
+
+    static func single(name: String, ext: String, base: String, data: Data, file: ImportAction) -> [ImportAction] {
+        switch ext {
         case "txt":
             guard let text = String(data: data, encoding: .utf8) else { return [file] }
             if name.lowercased().contains("clippings") {

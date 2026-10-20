@@ -27,7 +27,7 @@ struct TroveApp: App {
                 #endif
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await model.syncNow() } }
+            if phase == .active { Task { await model.becameActive() } }
             #if os(iOS)
             if phase == .background {
                 model.saveNow()

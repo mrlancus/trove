@@ -36,6 +36,20 @@ import Testing
         }
     }
 
+    @Test func placedImportsKeepTheirFolders() throws {
+        let placed = FileImport.placed(name: "import-sample.zip", data: try sample(), folder: ["Dropped"])
+        let byName = Dictionary(placed.compactMap { p -> (String, [String])? in
+            switch p.action {
+            case .note(let title, _, _): return (title, p.folder)
+            case .file(let name, _, _): return (name, p.folder)
+            case .items: return nil
+            }
+        }, uniquingKeysWith: { a, _ in a })
+        #expect(byName["photo.png"] == ["Dropped", "import-sample", "Export"])
+        #expect(byName.values.contains(["Dropped", "import-sample", "Export", "nested"]))
+        #expect(Organizer.clean(byName["photo.png"] ?? []) == ["Dropped", "import-sample", "Export"])
+    }
+
     @Test func rejectsCorruptData() {
         #expect(throws: ZipArchive.Failure.notAZip) { try ZipArchive(Data("not a zip at all, just some words".utf8)) }
         #expect(throws: Inflate.Corrupt.self) { try Inflate.portable(Data([0xFF, 0xFF, 0xFF]), limit: 100) }

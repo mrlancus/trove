@@ -82,7 +82,7 @@ public enum InboxSync {
             do {
                 let sealed = try await client.inboxEntry(entry.id)
                 let envelope = try InboxEnvelope.open(sealed, with: keys)
-                result.imported.append(try await library.importInbox(envelope))
+                result.imported.append(try await library.importInbox(envelope, entryId: entry.id))
                 // Make the item durable in the journal before deleting the server copy.
                 _ = await library.sync()
                 try await client.ackInbox(entry.id)

@@ -70,10 +70,12 @@ public actor Library {
     }
 
     @discardableResult
-    public func addNote(title: String = "", body: String, tags: [String] = [], source: ItemSource = .app) async -> String {
-        let id = newId()
+    public func addNote(title: String = "", body: String, tags: [String] = [], source: ItemSource = .app,
+                        id: String? = nil, folder: [String] = []) async -> String {
+        let id = id ?? newId()
         var fields = await baseFields(kind: .note, source: source, title: title)
         fields[Field.category] = .string(ItemCategory.note.rawValue)
+        fields.merge(await filing(kind: .note, source: source, importPath: folder)) { _, b in b }
         let allTags = Array(Set(tags.map { $0.lowercased() } + Markdown.hashtags(in: body))).sorted()
         if !allTags.isEmpty { fields[Field.tags] = JSONValue(allTags) }
         await engine.set(fields, record: id, kind: "item")
@@ -83,15 +85,17 @@ public actor Library {
 
     /// Adds a link, or returns the existing item if the same page was saved before.
     @discardableResult
-    public func addLink(_ url: URL, title: String = "", note: String = "", source: ItemSource = .app) async -> (id: String, isNew: Bool) {
+    public func addLink(_ url: URL, title: String = "", note: String = "", source: ItemSource = .app,
+                        id: String? = nil) async -> (id: String, isNew: Bool) {
         let cleaned = URLCleaner.clean(url)
         let key = URLCleaner.dedupeKey(cleaned)
         if let existing = await items().first(where: { $0.url.map(URLCleaner.dedupeKey) == key }) {
             return (existing.id, false)
         }
-        let id = newId()
+        let id = id ?? newId()
         var fields = await baseFields(kind: .link, source: source, title: title)
         fields[Field.url] = .string(cleaned.absoluteString)
+        fields.merge(await filing(kind: .link, source: source)) { _, b in b }
         await engine.set(fields, record: id, kind: "item")
         if !note.isEmpty { await engine.editText(Field.body, value: note, record: id, kind: "item") }
         return (id, true)
@@ -100,12 +104,13 @@ public actor Library {
     /// Stores the bytes (encrypted) and creates an item for them.
     @discardableResult
     public func addFile(_ data: Data, name: String, mime: String, kind: ItemKind? = nil, source: ItemSource = .app,
-                        title: String? = nil, createdAt: Date? = nil) async throws -> String {
+                        title: String? = nil, createdAt: Date? = nil, id: String? = nil, folder: [String] = []) async throws -> String {
         let blob = try await engine.storeBlob(data)
-        let id = newId()
+        let id = id ?? newId()
         let resolvedKind = kind ?? Self.kind(forMime: mime)
         var fields = await baseFields(kind: resolvedKind, source: source, title: title ?? Self.titleFromFileName(name), createdAt: createdAt)
         fields[Field.attachments] = [Attachment(id: blob, name: name, mime: mime, size: data.count).json]
+        fields.merge(await filing(kind: resolvedKind, source: source, fileName: name, importPath: folder)) { _, b in b }
         await engine.set(fields, record: id, kind: "item")
         return id
     }
@@ -164,6 +169,12 @@ public actor Library {
         }
         f[Field.enrichment] = Enrichment(tier: tier, by: by, at: now()).json
         f[Field.needsEnrichment] = .bool(tier < .onDevice)
+        // Re-file an item the organiser placed when it turns out to be, say, a recipe.
+        if item.isAutoFiled || item.folder == nil, let raw = f[Field.category]?.string, let category = ItemCategory(rawValue: raw),
+           category != item.category {
+            let filed = await filing(kind: item.kind, category: category, source: item.source, fileName: item.attachments.first?.name)
+            if filed[Field.folder] != item.record[Field.folder] { f.merge(filed) { _, b in b } }
+        }
         await update(id, f)
         return true
     }
@@ -245,6 +256,8 @@ public actor Library {
             if let author = entry.author { fields[Field.author] = .string(author) }
             if entry.kind == .highlight { fields[Field.category] = .string(ItemCategory.quote.rawValue) }
             if let ext = entry.externalId { fields[Field.origin] = ["externalId": .string(ext)] }
+            fields.merge(await filing(kind: entry.kind, category: entry.kind == .highlight ? .quote : nil, source: entry.source,
+                                      collection: entry.collection)) { _, b in b }
             if let name = entry.collection {
                 if collectionIds[name] == nil { collectionIds[name] = await createCollection(name) }
                 fields[Field.collections] = JSONValue([collectionIds[name]!])
@@ -258,22 +271,37 @@ public actor Library {
 
     /// Turns a decrypted inbox envelope (email, GoodNotes WebDAV, browser, iOS share) into an item.
     /// A newer GoodNotes backup of the same notebook replaces the older PDF instead of duplicating it.
+    ///
+    /// `entryId` is the relay's inbox id. The new item's id is made from it, so when two devices
+    /// (say the website and the Mac) import the same entry at once they write the same item.
     @discardableResult
-    public func importInbox(_ envelope: InboxEnvelope) async throws -> String {
+    public func importInbox(_ envelope: InboxEnvelope, entryId: String? = nil) async throws -> String {
         let h = envelope.header
+        let newItemId = entryId.map(Self.inboxItemId) ?? newId()
         switch h.source {
         case "webdav":
             let path = h.meta?["davPath"]?.string ?? h.name ?? "notebook.pdf"
             let blob = try await engine.storeBlob(envelope.body)
-            let attachment = Attachment(id: blob, name: h.name ?? "notebook.pdf", mime: h.mime ?? "application/pdf", size: envelope.body.count)
+            let name = h.name ?? "notebook.pdf"
+            let mime = h.mime ?? FileImport.mime(forExtension: (name as NSString).pathExtension)
+            let attachment = Attachment(id: blob, name: name, mime: mime == "application/octet-stream" && name.hasSuffix(".pdf") ? "application/pdf" : mime,
+                                        size: envelope.body.count)
             if let existing = await items().first(where: { $0.record[Field.origin]?.object?["davPath"]?.string == path }) {
-                await update(existing.id, [Field.attachments: [attachment.json], Field.needsEnrichment: true, Field.ocrText: .null, Field.enrichment: .null])
+                // A newer backup of the same notebook: keep the old one as a version.
+                var fields: [String: JSONValue] = [Field.attachments: [attachment.json], Field.needsEnrichment: true, Field.ocrText: .null,
+                                                   Field.enrichment: .null, Field.thumbnail: .null]
+                if let old = existing.attachments.first, old.id != attachment.id {
+                    fields[Field.fileVersions] = await versions(adding: old, to: existing)
+                }
+                await update(existing.id, fields)
                 return existing.id
             }
-            let id = newId()
-            var fields = await baseFields(kind: .pdf, source: .goodnotes, title: Self.titleFromFileName(h.name ?? "Notebook"))
+            let id = newItemId
+            var fields = await baseFields(kind: attachment.mime == "application/pdf" ? .pdf : .file, source: .goodnotes,
+                                          title: Self.titleFromFileName(name))
             fields[Field.attachments] = [attachment.json]
             fields[Field.origin] = ["davPath": .string(path)]
+            fields.merge(await filing(kind: .pdf, source: .goodnotes)) { _, b in b }
             await engine.set(fields, record: id, kind: "item")
             return id
 
@@ -281,13 +309,15 @@ public actor Library {
             if let mime = h.mime, mime == "text/html" || mime == "text/plain" {
                 let raw = String(decoding: envelope.body, as: UTF8.self)
                 let text = mime == "text/html" ? HTMLMetadata(html: raw).readableText : raw
-                let id = newId()
+                let id = newItemId
                 var fields = await baseFields(kind: .email, source: .email, title: h.title ?? "Email")
                 var origin: [String: JSONValue] = [:]
                 if let g = h.groupId { origin["emailGroup"] = .string(g) }
                 if let from = h.meta?["from"] { origin["from"] = from }
                 fields[Field.origin] = .object(origin)
-                if AutoTagger.category(url: nil, schema: .init(), text: text) == .receipt { fields[Field.category] = .string(ItemCategory.receipt.rawValue) }
+                let isReceipt = AutoTagger.category(url: nil, schema: .init(), text: text) == .receipt
+                if isReceipt { fields[Field.category] = .string(ItemCategory.receipt.rawValue) }
+                fields.merge(await filing(kind: .email, category: isReceipt ? .receipt : nil, source: .email)) { _, b in b }
                 await engine.set(fields, record: id, kind: "item")
                 await engine.editText(Field.body, value: text, record: id, kind: "item")
                 return id
@@ -299,24 +329,28 @@ public actor Library {
                 await update(parent.id, [Field.attachments: .array((parent.attachments + [attachment]).map(\.json))])
                 return parent.id
             }
-            return try await addFile(envelope.body, name: attachment.name, mime: attachment.mime, source: .email)
+            return try await addFile(envelope.body, name: attachment.name, mime: attachment.mime, source: .email, id: newItemId)
 
         default: // "web", "ios", "other": a page, selection, link or file sent from a browser / share sheet
             let source: ItemSource = h.source == "web" ? .web : .share
             if let urlString = h.url, let url = URL(string: urlString) {
                 let note = String(decoding: envelope.body, as: UTF8.self)
-                let (id, isNew) = await addLink(url, title: h.title ?? "", note: h.mime?.hasPrefix("text/") == true ? note : "", source: source)
+                let (id, isNew) = await addLink(url, title: h.title ?? "", note: h.mime?.hasPrefix("text/") == true ? note : "", source: source,
+                                                id: newItemId)
                 if !isNew, !note.isEmpty, let item = await item(id) {
                     await setBody(id, item.body.isEmpty ? note : item.body + "\n\n" + note)
                 }
                 return id
             }
             if let mime = h.mime, !mime.hasPrefix("text/") {
-                return try await addFile(envelope.body, name: h.name ?? "file", mime: mime, source: source, title: h.title)
+                return try await addFile(envelope.body, name: h.name ?? "file", mime: mime, source: source, title: h.title, id: newItemId)
             }
-            return await addNote(title: h.title ?? "", body: String(decoding: envelope.body, as: UTF8.self), source: source)
+            return await addNote(title: h.title ?? "", body: String(decoding: envelope.body, as: UTF8.self), source: source, id: newItemId)
         }
     }
+
+    /// The item id for an inbox entry (the same on every device).
+    public static func inboxItemId(_ entryId: String) -> String { "inbox-" + entryId.lowercased() }
 
     // MARK: Sync passthrough
 
