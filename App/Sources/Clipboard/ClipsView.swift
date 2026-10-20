@@ -42,17 +42,23 @@ enum ClipFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ entry: ClipEntry, thisDevice: String?) -> Bool {
+    @MainActor
+    func includes(_ entry: ClipEntry, thisDevice: String?, store: ClipboardStore) -> Bool {
         guard let clip = entry.clip else { return self == .all || self == .text }
         switch self {
         case .all: return true
         case .pinned: return clip.isPinned
-        case .links: return clip.kind == .link
-        case .images: return clip.kind == .image
-        case .code: return [.code, .json].contains(clip.kind)
-        case .colors: return clip.kind == .color
-        case .text: return [.text, .email, .phone, .number, .path].contains(clip.kind)
         case .otherDevices: return clip.device != nil && clip.device != thisDevice
+        default: break
+        }
+        let kind = store.facts(clip).kind
+        switch self {
+        case .links: return kind == .link
+        case .images: return kind == .image
+        case .code: return [.code, .json].contains(kind)
+        case .colors: return kind == .color
+        case .text: return [.text, .email, .phone, .number, .path].contains(kind)
+        default: return true
         }
     }
 }
@@ -96,7 +102,7 @@ final class ClipPaletteState {
             ? synced.filter { $0.clip?.isPinned == true } + synced.filter { $0.clip?.isPinned != true }
             : synced
         let found = (sensitive + pinnedFirst).filter { entry in
-            guard filter.includes(entry, thisDevice: thisDevice) else { return false }
+            guard filter.includes(entry, thisDevice: thisDevice, store: store) else { return false }
             switch entry {
             case .clip(let c):
                 if let tag, !c.tags.contains(tag) { return false }
@@ -137,8 +143,18 @@ struct ClipsView: View {
     /// contains an item…").
     var ownSearch = true
     @FocusState private var searchFocused: Bool
+    /// How many rows are on the page: more arrive as the end comes into view, so a history of tens
+    /// of thousands never has every row in the list at once.
+    @State private var shown = Self.page
+    static let page = 400
 
     private var entries: [ClipEntry] { state.entries(store, thisDevice: thisDevice) }
+    private var page: ArraySlice<ClipEntry> { entries.prefix(shown) }
+
+    /// Shows the next page when the last rows come into view.
+    private func reached(_ entry: ClipEntry, at index: Int) {
+        if index >= shown - 20, shown < entries.count { shown += Self.page }
+    }
     private var selected: ClipEntry? { entries.first { $0.id == state.selection } ?? entries.first }
 
     var body: some View {
@@ -190,6 +206,9 @@ struct ClipsView: View {
         .onChange(of: state.tag) { state.selection = entries.first?.id }
         .onChange(of: state.selection) { if state.editing != state.selection { state.editing = nil } }
         .onChange(of: state.filter) { state.selection = entries.first?.id }
+        .onChange(of: state.query) { shown = Self.page }
+        .onChange(of: state.filter) { shown = Self.page }
+        .onChange(of: state.tag) { shown = Self.page }
     }
 
     /// The kinds, then your tags in their colours (click one to see only its clips), then "+ Tag".
@@ -229,7 +248,7 @@ struct ClipsView: View {
             HStack(spacing: 5) {
                 Circle().fill(tag.color.color).frame(width: 8, height: 8)
                 Text(tag.name).font(.callout.weight(on ? .semibold : .regular))
-                Text("\(store.clips.lazy.filter { $0.tags.contains(tag.name) }.count)").font(.caption).foregroundStyle(.secondary)
+                Text("\(store.count(ofTag: tag.name))").font(.caption).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(tag.color.color.opacity(on ? 0.3 : 0.12), in: Capsule())
@@ -255,10 +274,11 @@ struct ClipsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    ForEach(Array(page.enumerated()), id: \.element.id) { index, entry in
                         ClipRow(entry: entry, store: store, index: index, selected: entry.id == (selected?.id),
                                 stacked: state.stack.firstIndex(of: entry.id).map { $0 + 1 })
                             .id(entry.id)
+                            .onAppear { reached(entry, at: index) }
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { activate(entry, nil) }
                             .onTapGesture { state.selection = entry.id }
@@ -325,7 +345,7 @@ struct ClipsView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             }
             Section {
-                ForEach(entries) { entry in
+                ForEach(Array(page.enumerated()), id: \.element.id) { index, entry in
                     HStack(spacing: 4) {
                         Button { activate(entry, nil) } label: {
                             ClipRow(entry: entry, store: store, index: nil, selected: false, stacked: nil)
@@ -338,6 +358,7 @@ struct ClipsView: View {
                         }
                     }
                     .contextMenu { menu(for: entry) }
+                    .onAppear { reached(entry, at: index) }
                     .swipeActions(edge: .leading) {
                         if let clip = entry.clip {
                             Button { Task { await store.togglePin(clip) } } label: { Label(clip.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
@@ -351,6 +372,9 @@ struct ClipsView: View {
             }
         }
         .modifier(OwnSearch(on: ownSearch, query: $state.query, focused: $searchFocused))
+        .onChange(of: state.query) { shown = Self.page }
+        .onChange(of: state.filter) { shown = Self.page }
+        .onChange(of: state.tag) { shown = Self.page }
         .onAppear { if Self.typingGoesToSearch { searchFocused = true } }
         .overlay {
             if entries.isEmpty { emptyState }
@@ -410,7 +434,7 @@ struct ClipRow: View {
                 Text(title).lineLimit(1).font(.callout.weight(entry.clip == nil ? .regular : .medium))
                 if let snippet {
                     Text(snippet).lineLimit(1).foregroundStyle(.secondary)
-                        .font(entry.clip.map { [.code, .json].contains($0.kind) } == true ? .caption.monospaced() : .caption)
+                        .font(entry.clip.map { [.code, .json].contains(store.facts($0).kind) } == true ? .caption.monospaced() : .caption)
                 }
                 HStack(spacing: 6) {
                     Text(subtitle).foregroundStyle(.secondary)
@@ -447,18 +471,13 @@ struct ClipRow: View {
 
     private var title: String {
         switch entry {
-        case .clip(let c): c.displayTitle
+        case .clip(let c): store.facts(c).title
         case .sensitive: "Hidden: looks like a password or code"
         }
     }
 
     /// The summary, the start of the text, or the text found in an image, when it isn't the title.
-    private var snippet: String? {
-        guard let c = entry.clip else { return nil }
-        let s = c.summary ?? (c.kind == .image ? c.ocrText?.split(separator: "\n").first.map(String.init) : c.preview)
-        guard let s, !s.isEmpty, s != c.displayTitle else { return nil }
-        return s
-    }
+    private var snippet: String? { entry.clip.flatMap { store.facts($0).snippet } }
 
     private var subtitle: String {
         switch entry {
@@ -482,7 +501,7 @@ struct ClipBadge: View {
         Group {
             if let image {
                 Image(platformImage: image).resizable().scaledToFill()
-            } else if let clip = entry.clip, clip.kind == .color, let c = ClipClassifier.color(clip.text) {
+            } else if let clip = entry.clip, let c = store.facts(clip).color {
                 RoundedRectangle(cornerRadius: 8).fill(Color(red: c.r, green: c.g, blue: c.b, opacity: c.a))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
             } else {
@@ -499,7 +518,7 @@ struct ClipBadge: View {
 
     private var symbol: String {
         switch entry {
-        case .clip(let c): c.kind.symbol
+        case .clip(let c): store.facts(c).kind.symbol
         case .sensitive: "lock.fill"
         }
     }

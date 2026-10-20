@@ -39,8 +39,12 @@ final class ClipboardStore {
     @ObservationIgnored private var shownStamp = ""
 
     @ObservationIgnored private var library: Library?
-    /// Each clip's folded search text, kept per version so typing only does `contains` checks.
-    @ObservationIgnored private var searchTexts: [String: (hlc: String, text: String)] = [:]
+    /// What each clip's row shows and is searched by, worked out once per version of the clip, off
+    /// the main thread after a reload. Working it out again on every draw (the kind is a set of
+    /// pattern checks) made a big history crawl.
+    @ObservationIgnored private var facts: [String: (hlc: String, facts: ClipFacts)] = [:]
+    @ObservationIgnored private var tagCounts: (revision: Int, counts: [String: Int]) = (-1, [:])
+    @ObservationIgnored private var warming: Task<Void, Never>?
     @ObservationIgnored private var images: [String: PlatformImage] = [:]
     @ObservationIgnored private var lastPrune = Date.distantPast
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
@@ -71,6 +75,7 @@ final class ClipboardStore {
         autoSave = await library.clipAutoSaveKinds()
         keep = await library.clipKeep()
         revision += 1
+        warmFacts()
         #if os(iOS)
         publishForKeyboard()
         #endif
@@ -79,11 +84,39 @@ final class ClipboardStore {
     // MARK: Searching
 
     /// The clip's folded search text (`Clip.searchText`), worked out once per version of the clip.
-    func searchText(_ clip: Clip) -> String {
-        if let cached = searchTexts[clip.id], cached.hlc == clip.record.updatedHLC { return cached.text }
-        let text = clip.searchText
-        searchTexts[clip.id] = (clip.record.updatedHLC, text)
-        return text
+    func searchText(_ clip: Clip) -> String { facts(clip).search }
+
+    /// A clip's row facts: from the cache, or worked out now (only for clips the background pass
+    /// hasn't reached yet).
+    func facts(_ clip: Clip) -> ClipFacts {
+        if let hit = facts[clip.id], hit.hlc == clip.record.updatedHLC { return hit.facts }
+        let made = ClipFacts(clip)
+        facts[clip.id] = (clip.record.updatedHLC, made)
+        return made
+    }
+
+    /// Works out the facts of new and changed clips in the background, then forgets deleted ones.
+    private func warmFacts() {
+        let pending = clips.filter { facts[$0.id]?.hlc != $0.record.updatedHLC }
+        let live = Set(clips.map(\.id))
+        facts = facts.filter { live.contains($0.key) }
+        guard !pending.isEmpty else { return }
+        warming?.cancel()
+        warming = Task { [weak self] in
+            let made = await Task.detached(priority: .userInitiated) { pending.map { ($0.id, $0.record.updatedHLC, ClipFacts($0)) } }.value
+            guard let self, !Task.isCancelled else { return }
+            for (id, hlc, f) in made where self.facts[id]?.hlc != hlc { self.facts[id] = (hlc, f) }
+        }
+    }
+
+    /// How many clips have this tag (counted once per change, not per chip per draw).
+    func count(ofTag tag: String) -> Int {
+        if tagCounts.revision != revision {
+            var counts: [String: Int] = [:]
+            for c in clips { for t in c.tags { counts[t, default: 0] += 1 } }
+            tagCounts = (revision, counts)
+        }
+        return tagCounts.counts[tag] ?? 0
     }
 
     func color(ofTag tag: String) -> TagColor? { customTags.first { $0.name == tag }?.color }
@@ -272,4 +305,23 @@ final class ClipboardStore {
         })
     }
     #endif
+}
+
+/// What a clip's row shows and what it's searched by, worked out once per version (`ClipboardStore.facts`).
+struct ClipFacts: Sendable {
+    let kind: ClipKind
+    let title: String
+    let snippet: String?
+    let color: (r: Double, g: Double, b: Double, a: Double)?
+    let search: String
+
+    nonisolated init(_ c: Clip) {
+        let kind = c.kind
+        self.kind = kind
+        title = c.displayTitle
+        let s = c.summary ?? (kind == .image ? c.ocrText?.split(separator: "\n").first.map(String.init) : c.preview)
+        snippet = s.flatMap { $0.isEmpty || $0 == c.displayTitle ? nil : String($0.prefix(200)) }
+        color = kind == .color ? ClipClassifier.color(c.text) : nil
+        search = c.searchText
+    }
 }
