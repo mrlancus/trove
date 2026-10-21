@@ -5,8 +5,9 @@
   "description": "Trove in any browser. Static files served by the relay (Workers static assets).",
   "scripts": {
     "test": "node --test test/core.test.mjs",
-    "test:e2e": "node --test test/relay.e2e.mjs test/ui.e2e.mjs test/organize.e2e.mjs test/draw.e2e.mjs",
-    "fixtures": "node test/make-fixtures.mjs"
+    "test:e2e": "node --test test/relay.e2e.mjs test/ui.e2e.mjs test/organize.e2e.mjs test/draw.e2e.mjs test/search.e2e.mjs",
+    "fixtures": "node test/make-fixtures.mjs",
+    "bench:search": "node --test test/search.bench.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.56.0"

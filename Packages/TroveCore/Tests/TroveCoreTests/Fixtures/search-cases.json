@@ -1,0 +1,781 @@
+{
+ "now": 1780315200000,
+ "folders": [
+  {
+   "id": "f-home",
+   "name": "Home",
+   "parent": null
+  },
+  {
+   "id": "f-garden",
+   "name": "Garden",
+   "parent": "f-home"
+  },
+  {
+   "id": "f-cook",
+   "name": "Cooking",
+   "parent": "f-home"
+  },
+  {
+   "id": "f-travel",
+   "name": "Travel",
+   "parent": null
+  },
+  {
+   "id": "f-work",
+   "name": "Work notes",
+   "parent": null
+  }
+ ],
+ "items": [
+  {
+   "id": "r1",
+   "fields": {
+    "title": "Miso ramen recipe",
+    "tags": [
+     "food",
+     "japan"
+    ],
+    "kind": "link",
+    "category": "recipe",
+    "url": "https://cooking.example.com/miso",
+    "createdAt": 1741608000000,
+    "folder": "f-cook"
+   },
+   "body": "Rich broth with miso paste and noodles."
+  },
+  {
+   "id": "n1",
+   "fields": {
+    "title": "Trip notes",
+    "kind": "note",
+    "category": "note",
+    "createdAt": 1743595200000,
+    "collections": [
+     "c-travel"
+    ],
+    "folder": "f-travel"
+   },
+   "body": "We had ramen in Tokyo. The best bowl was near the station."
+  },
+  {
+   "id": "p1",
+   "fields": {
+    "title": "Desk lamp",
+    "kind": "link",
+    "category": "product",
+    "pinned": true,
+    "url": "https://shop.example.com/lamp",
+    "createdAt": 1736078400000
+   },
+   "body": ""
+  },
+  {
+   "id": "s1",
+   "fields": {
+    "title": "Garden plan",
+    "kind": "sketch",
+    "inkText": "tomatoes beans compost bin",
+    "sketchText": "north fence",
+    "createdAt": 1747742400000,
+    "folder": "f-garden"
+   },
+   "body": ""
+  },
+  {
+   "id": "pdf1",
+   "fields": {
+    "title": "Tax return 2024",
+    "kind": "pdf",
+    "source": "import",
+    "createdAt": 1739534400000,
+    "ocrText": "Total income for the year. Deductions: charitable donations and pension contributions.",
+    "attachments": [
+     {
+      "id": "att1",
+      "name": "tax.pdf",
+      "mime": "application/pdf",
+      "size": 1000
+     }
+    ]
+   },
+   "body": ""
+  },
+  {
+   "id": "a1",
+   "fields": {
+    "title": "Voice memo",
+    "kind": "audio",
+    "source": "voice",
+    "createdAt": 1748779200000,
+    "attachments": [
+     {
+      "id": "att2",
+      "name": "memo.m4a",
+      "mime": "audio/mp4",
+      "size": 2000
+     }
+    ]
+   },
+   "body": "Remember to call the plumber about the leaking tap"
+  },
+  {
+   "id": "g1",
+   "fields": {
+    "title": "Lecture 5 notebook",
+    "kind": "file",
+    "createdAt": 1743336000000,
+    "inkText": "photosynthesis converts light energy",
+    "attachments": [
+     {
+      "id": "att3",
+      "name": "Biology.goodnotes",
+      "mime": "application/octet-stream",
+      "size": 3000
+     }
+    ]
+   },
+   "body": ""
+  },
+  {
+   "id": "e1",
+   "fields": {
+    "title": "Your order has shipped",
+    "kind": "email",
+    "source": "email",
+    "createdAt": 1746100800000,
+    "readAt": 1746187200000
+   },
+   "body": "Order 4471: the recipe book and the ramen bowls are on the way"
+  },
+  {
+   "id": "h1",
+   "fields": {
+    "title": "Thinking, Fast and Slow",
+    "kind": "highlight",
+    "source": "kindle",
+    "category": "quote",
+    "createdAt": 1733054400000
+   },
+   "body": "> Nothing in life is as important as you think it is, while you are thinking about it."
+  },
+  {
+   "id": "n2",
+   "fields": {
+    "title": "Recipe ideas",
+    "kind": "note",
+    "tags": [
+     "food"
+    ],
+    "createdAt": 1751889600000
+   },
+   "body": "Quick weeknight dinners: pasta, stir fry, curry"
+  },
+  {
+   "id": "n3",
+   "fields": {
+    "title": "Meeting notes",
+    "kind": "note",
+    "createdAt": 1754654400000,
+    "folder": "f-work"
+   },
+   "body": "Discussed the garden budget for next spring and who looks after the compost. Then a long aside about fonts, colours and the new logo that nobody could agree on, until someone said the exact words that matter: the quick brown fox. After that we went back to the budget and the meeting ran over by twenty minutes."
+  },
+  {
+   "id": "l2",
+   "fields": {
+    "title": "Brown fox facts",
+    "kind": "link",
+    "url": "https://facts.example.org/fox",
+    "createdAt": 1754740800000
+   },
+   "body": "A fox that is quick and brown"
+  }
+ ],
+ "cases": [
+  {
+   "query": "ramen",
+   "ids": [
+    "r1",
+    "e1",
+    "n1"
+   ]
+  },
+  {
+   "query": "ram",
+   "ids": [
+    "r1",
+    "e1",
+    "n1"
+   ]
+  },
+  {
+   "query": "ramen -tokyo",
+   "ids": [
+    "r1",
+    "e1"
+   ]
+  },
+  {
+   "query": "recipie",
+   "ids": [
+    "n2",
+    "r1",
+    "e1"
+   ]
+  },
+  {
+   "query": "recipe",
+   "ids": [
+    "n2",
+    "r1",
+    "e1"
+   ]
+  },
+  {
+   "query": "\"quick brown fox\"",
+   "ids": [
+    "n3"
+   ]
+  },
+  {
+   "query": "quick brown fox",
+   "ids": [
+    "l2",
+    "n3"
+   ]
+  },
+  {
+   "query": "title:fox",
+   "ids": [
+    "l2"
+   ]
+  },
+  {
+   "query": "title:recipe",
+   "ids": [
+    "n2",
+    "r1"
+   ]
+  },
+  {
+   "query": "title:\"recipe ideas\"",
+   "ids": [
+    "n2"
+   ]
+  },
+  {
+   "query": "in:garden",
+   "ids": [
+    "s1"
+   ]
+  },
+  {
+   "query": "in:home",
+   "ids": [
+    "s1",
+    "r1"
+   ]
+  },
+  {
+   "query": "in:c-travel",
+   "ids": [
+    "n1"
+   ]
+  },
+  {
+   "query": "in:\"work notes\"",
+   "ids": [
+    "n3"
+   ]
+  },
+  {
+   "query": "in:f-cook",
+   "ids": [
+    "r1"
+   ]
+  },
+  {
+   "query": "type:pdf",
+   "ids": [
+    "pdf1"
+   ]
+  },
+  {
+   "query": "type:sketch",
+   "ids": [
+    "s1"
+   ]
+  },
+  {
+   "query": "type:note fox",
+   "ids": [
+    "n3"
+   ]
+  },
+  {
+   "query": "from:kindle",
+   "ids": [
+    "h1"
+   ]
+  },
+  {
+   "query": "from:goodnotes",
+   "ids": [
+    "g1"
+   ]
+  },
+  {
+   "query": "has:ink",
+   "ids": [
+    "s1",
+    "g1"
+   ]
+  },
+  {
+   "query": "has:audio",
+   "ids": [
+    "a1"
+   ]
+  },
+  {
+   "query": "has:file",
+   "ids": [
+    "a1",
+    "g1",
+    "pdf1"
+   ]
+  },
+  {
+   "query": "has:link",
+   "ids": [
+    "l2",
+    "r1",
+    "p1"
+   ]
+  },
+  {
+   "query": "before:2025-02",
+   "ids": [
+    "p1",
+    "h1"
+   ]
+  },
+  {
+   "query": "after:2025-08",
+   "ids": [
+    "l2",
+    "n3"
+   ]
+  },
+  {
+   "query": "after:2025 before:2025-03",
+   "ids": [
+    "pdf1",
+    "p1"
+   ]
+  },
+  {
+   "query": "before:2025-01-05",
+   "ids": [
+    "h1"
+   ]
+  },
+  {
+   "query": "#food",
+   "ids": [
+    "n2",
+    "r1"
+   ]
+  },
+  {
+   "query": "tag:japan",
+   "ids": [
+    "r1"
+   ]
+  },
+  {
+   "query": "is:unread type:email",
+   "ids": []
+  },
+  {
+   "query": "is:pinned",
+   "ids": [
+    "p1"
+   ]
+  },
+  {
+   "query": "tomatoes",
+   "ids": [
+    "s1"
+   ]
+  },
+  {
+   "query": "photosyntesis",
+   "ids": [
+    "g1"
+   ]
+  },
+  {
+   "query": "donation",
+   "ids": [
+    "pdf1"
+   ]
+  },
+  {
+   "query": "plumbr",
+   "ids": [
+    "a1"
+   ]
+  },
+  {
+   "query": "lamp",
+   "ids": [
+    "p1"
+   ]
+  },
+  {
+   "query": "garden",
+   "ids": [
+    "s1",
+    "n3"
+   ]
+  },
+  {
+   "query": "garden -compost",
+   "ids": []
+  },
+  {
+   "query": "-ramen #food",
+   "ids": [
+    "n2"
+   ]
+  },
+  {
+   "query": "brown -\"quick brown fox\"",
+   "ids": [
+    "l2"
+   ]
+  },
+  {
+   "query": "fox title:brown",
+   "ids": [
+    "l2"
+   ]
+  },
+  {
+   "query": "",
+   "ids": [
+    "l2",
+    "n3",
+    "n2",
+    "a1",
+    "s1",
+    "e1",
+    "n1",
+    "g1",
+    "r1",
+    "pdf1",
+    "p1",
+    "h1"
+   ]
+  },
+  {
+   "query": "zzzz",
+   "ids": []
+  },
+  {
+   "query": "budget meeting",
+   "ids": [
+    "n3"
+   ]
+  },
+  {
+   "query": "bowl",
+   "ids": [
+    "e1",
+    "n1"
+   ]
+  },
+  {
+   "query": "4471",
+   "ids": [
+    "e1"
+   ]
+  },
+  {
+   "query": "Café",
+   "ids": []
+  },
+  {
+   "query": "the",
+   "ids": [
+    "l2",
+    "n3",
+    "n2",
+    "a1",
+    "s1",
+    "e1",
+    "n1",
+    "g1",
+    "r1",
+    "pdf1",
+    "p1",
+    "h1"
+   ]
+  },
+  {
+   "query": "fo",
+   "ids": [
+    "l2",
+    "n2",
+    "r1",
+    "n3"
+   ]
+  }
+ ],
+ "snippets": [
+  {
+   "id": "n1",
+   "query": "ramen",
+   "field": "body",
+   "text": "We had ramen in Tokyo. The best bowl was near the station.",
+   "highlights": [
+    "ramen"
+   ]
+  },
+  {
+   "id": "s1",
+   "query": "compost",
+   "field": "ink",
+   "text": "tomatoes beans compost bin",
+   "highlights": [
+    "compost"
+   ]
+  },
+  {
+   "id": "pdf1",
+   "query": "charitable donation",
+   "field": "ocr",
+   "text": "Total income for the year. Deductions: charitable donations and pension contributions.",
+   "highlights": [
+    "charitable",
+    "donations"
+   ]
+  },
+  {
+   "id": "n3",
+   "query": "fox",
+   "field": "body",
+   "text": "…words that matter: the quick brown fox. After that we went back to the budget and the meeting ran over by twenty minutes.",
+   "highlights": [
+    "fox"
+   ]
+  },
+  {
+   "id": "n3",
+   "query": "\"quick brown fox\"",
+   "field": "body",
+   "text": "…said the exact words that matter: the quick brown fox. After that we went back to the budget and the meeting ran over by twenty minutes.",
+   "highlights": [
+    "quick",
+    "brown",
+    "fox"
+   ]
+  },
+  {
+   "id": "a1",
+   "query": "plumbr",
+   "field": "body",
+   "text": "Remember to call the plumber about the leaking tap",
+   "highlights": [
+    "plumber"
+   ]
+  },
+  {
+   "id": "e1",
+   "query": "rec",
+   "field": "body",
+   "text": "Order 4471: the recipe book and the ramen bowls are on the way",
+   "highlights": [
+    "recipe"
+   ]
+  },
+  {
+   "id": "g1",
+   "query": "light",
+   "field": "ink",
+   "text": "photosynthesis converts light energy",
+   "highlights": [
+    "light"
+   ]
+  }
+ ],
+ "clips": [
+  {
+   "id": "c1",
+   "fields": {
+    "title": "Deploy command",
+    "text": "ssh deploy@10.0.0.4",
+    "sourceApp": "Terminal",
+    "createdAt": 1756728000000
+   }
+  },
+  {
+   "id": "c2",
+   "fields": {
+    "title": "Meeting",
+    "text": "Meeting at 3pm with Dana",
+    "sourceApp": "Slack",
+    "tags": [
+     "work"
+    ],
+    "createdAt": 1756814400000
+   }
+  },
+  {
+   "id": "c3",
+   "fields": {
+    "title": "Pricing page",
+    "text": "https://example.com/pricing",
+    "sourceApp": "Safari",
+    "createdAt": 1756900800000
+   }
+  },
+  {
+   "id": "c4",
+   "fields": {
+    "title": "Carbonara",
+    "text": "Pasta carbonara recipe with eggs",
+    "pinned": true,
+    "createdAt": 1756987200000
+   }
+  },
+  {
+   "id": "c5",
+   "fields": {
+    "title": "Dinner plans",
+    "text": "Pasta at Dana's on Friday",
+    "sourceApp": "Messages",
+    "createdAt": 1757073600000
+   }
+  }
+ ],
+ "clipCases": [
+  {
+   "query": "deplo",
+   "ids": [
+    "c1"
+   ]
+  },
+  {
+   "query": "meet dana",
+   "ids": [
+    "c2"
+   ]
+  },
+  {
+   "query": "app:slack",
+   "ids": [
+    "c2"
+   ]
+  },
+  {
+   "query": "#work",
+   "ids": [
+    "c2"
+   ]
+  },
+  {
+   "query": "is:pinned",
+   "ids": [
+    "c4"
+   ]
+  },
+  {
+   "query": "recipes",
+   "ids": [
+    "c4"
+   ]
+  },
+  {
+   "query": "pasta",
+   "ids": [
+    "c4",
+    "c5"
+   ]
+  },
+  {
+   "query": "pasta dan",
+   "ids": [
+    "c5"
+   ]
+  },
+  {
+   "query": "examp",
+   "ids": [
+    "c3"
+   ]
+  },
+  {
+   "query": "dana -friday",
+   "ids": [
+    "c2"
+   ]
+  }
+ ],
+ "rrf": [
+  {
+   "lists": [
+    [
+     "a",
+     "b",
+     "c"
+    ],
+    [
+     "c",
+     "d",
+     "a"
+    ]
+   ],
+   "ids": [
+    "a",
+    "c",
+    "b",
+    "d"
+   ]
+  },
+  {
+   "lists": [
+    [
+     "x"
+    ],
+    [],
+    [
+     "y",
+     "x"
+    ]
+   ],
+   "ids": [
+    "x",
+    "y"
+   ]
+  },
+  {
+   "lists": [
+    [
+     "a",
+     "b"
+    ],
+    [
+     "b",
+     "a"
+    ]
+   ],
+   "ids": [
+    "a",
+    "b"
+   ]
+  }
+ ]
+}

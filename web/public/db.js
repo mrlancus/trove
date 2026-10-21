@@ -22,5 +22,6 @@ function run(mode, fn) {
 export const storage = {
   get: (key) => run("readonly", (s) => s.get(key)),
   set: (key, value) => run("readwrite", (s) => s.put(value, key)),
-  clear: () => run("readwrite", (s) => s.clear()),
+  // The search Worker keeps its own (encrypted) index in another database: forgetting this browser removes it too.
+  clear: () => { try { indexedDB.deleteDatabase("trove-search"); } catch { /* none */ } return run("readwrite", (s) => s.clear()); },
 };

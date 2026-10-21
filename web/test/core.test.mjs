@@ -10,6 +10,7 @@ import { decodeSegment, encodeSegment, HLCClock, RecordStore } from "../public/c
 import { decrypt, encrypt } from "../public/core/trv1.js";
 import { parseSetupCode } from "../public/core/vault.js";
 import { expectedRecords, scenario } from "./scenario.mjs";
+import "./search.test.mjs"; // search core, Worker service and search-cases.json
 
 test("sha256 matches node's", () => {
   for (const s of ["", "abc", "café ☕️", "x".repeat(1000), "a".repeat(55), "a".repeat(56), "a".repeat(64)]) {
