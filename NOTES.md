@@ -16,7 +16,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
-| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version 3d43d4ca, deployed at f01c8a3 after the sketching/clipboard/Paste round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version 28f6c644, at c5eb332, after the performance/GoodNotes-editing round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
@@ -67,7 +67,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   on the notebook's layer (PROTOCOL.md §10, `editableInk`, fixture-checked in Swift and JS); item field
   `goodnotesInk`; viewers then draw background + Trove's copy. Website button: "Edit handwriting".
 - Tests: TroveCore 100 (index, GoodNotes layouts, editable ink), web 36 unit + 11 Chromium e2e (new:
-  GoodNotes edit). Website **not deployed** yet this round: deploy when the user says so.
+  GoodNotes edit). Website deployed (version 28f6c644, at c5eb332).
 
 ## Round before (user: "GoodNotes whiteboards open as a huge blank page; Connections should close what's open and switch Notes/Clipboard; Paste imports show as JSON; open clips on the right")
 
