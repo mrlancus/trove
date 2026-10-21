@@ -100,7 +100,7 @@ strokes themselves, and that's where the feel is lost.
   colour, bold/italic, bullet lists.
 - **Elements library**: save any selection as a reusable element (sticker), with folders, synced like
   other records. Ships with a small set (arrows, checkboxes, dividers, planner stickers). 🔒 new kind.
-- **Scribble-to-erase** stays opt-in; add **circle-to-select** (draw a loop and hold → lasso).
+- **Scribble-to-erase** stays opt-in. (Circle-to-select was dropped: the user doesn't want it.)
 
 ### S4. Notebooks, not just sketches **L**
 GoodNotes is organised around notebooks; Trove's sketches are cards. Keep the card (it's what makes
@@ -173,7 +173,7 @@ search and connections work), and give sketches a notebook face:
 ### S8. Drawing data that stays small 🔒 **M**
 - Points are float32 × 4 in base64url: about 21 bytes per point, so a long stroke is several KB and a
   full notebook is megabytes of ops to download, decrypt, keep in memory and save.
-- New points format `points2`: x/y as varint deltas at 1/20 pt, pressure as one byte, time deltas as
+- New points format `points2` (now version 2 at 1/256 pt, so it never shows at 10× zoom): x/y as varint deltas at 1/20 pt, pressure as one byte, time deltas as
   varints. About 4–5 bytes per point, 4× smaller, no visible change. Readers accept both; writers
   switch once every client reads it. Fixture-checked in Swift and JS.
 - **Page checkpoints**: a page whose strokes haven't changed for a while can be folded into one

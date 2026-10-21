@@ -513,9 +513,20 @@ test("outlines, arrowheads, compact points, pen settings, the grid and grain mat
   for (const c of f.points2.cases) {
     assert.equal(ink.encodePoints2(pts(c.points)), c.encoded, c.name);
     close(flat(ink.decodePoints2(c.encoded)), c.decoded, c.name);
-    // Within half a step of what was drawn: 1/40 point, half a millisecond, 1/510 pressure.
-    ink.decodePoints2(c.encoded).forEach((p, i) => assert.ok(Math.abs(p.x - c.points[i][0]) <= 0.0251 && Math.abs(p.p - c.points[i][2]) <= 0.002, c.name));
+    // Within half a step of what was drawn: 1/512 point (0.06 px at 10× zoom on a 3× screen),
+    // 1/8192 pressure, π/8192 nib angle (either way round).
+    ink.decodePoints2(c.encoded).forEach((p, i) => {
+      const [x, y, pr, , a] = c.points[i];
+      assert.ok(Math.abs(p.x - x) <= 1 / 512 + 1e-9 && Math.abs(p.y - y) <= 1 / 512 + 1e-9, `${c.name} position`);
+      assert.ok(Math.abs(p.p - pr) <= 1 / 8192 + 1e-9, `${c.name} pressure`);
+      if (a !== undefined) {
+        const d = Math.abs((((p.a - a) % Math.PI) + Math.PI) % Math.PI);
+        assert.ok(Math.min(d, Math.PI - d) <= Math.PI / 8192 + 1e-9, `${c.name} angle`);
+      }
+    });
   }
+  for (const c of f.points2.v1) close(flat(ink.decodePoints2(c.encoded)), c.decoded, c.name);
+  assert.ok(f.points2.v1[0].decoded.length === 40 && Math.abs(f.points2.v1[0].decoded[3][0] - f.points2.cases[0].points[3][0]) <= 0.0251, "v1 still reads");
   close(flat(ink.strokePoints({ points: f.points2.legacy.encoded })), f.points2.legacy.decoded, "legacy points");
   close(flat(ink.strokePoints({ points: "", points2: f.points2.cases[0].encoded })), f.points2.cases[0].decoded, "points2 wins");
   for (const c of f.nibs) { const got = ink.meanNib(c.angles.map((a) => ({ x: 0, y: 0, p: 0.5, t: 0, a }))); assert.ok(c.expect === null ? got === null : Math.abs(got - c.expect) < 1e-9); }

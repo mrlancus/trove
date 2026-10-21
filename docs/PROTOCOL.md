@@ -567,13 +567,20 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
 | `device` | device id |
 
-- **Compact points (`points2`)**: base64url of bytes: `1` (the version; readers give up on any
-  other), a flags byte (bit 0: every point has a nib angle), the point count as a varint (7 bits a
-  byte, low first, high bit = more), then per point: x and y as zigzag varints (n ≥ 0 → 2n, else
-  −2n − 1) of the step from the previous point in 1/20 page points (`floor(v × 20 + 0.5)`, so steps
-  of the rounded values never drift), the pressure as one byte (`floor(p × 255 + 0.5)`), the time
-  step in whole ms as a varint (never negative) and, with angles, the angle in [0, π) as one byte
-  (`floor(a / π × 256 + 0.5) mod 256`). About 5 bytes a point against `points`' 21 (base64 of 16).
+- **Compact points (`points2`)**: base64url of bytes: the version (`2`; readers also take `1`,
+  below, and give up on any other), a flags byte (bit 0: every point has a nib angle), the point
+  count as a varint (7 bits a byte, low first, high bit = more), then per point, each as a zigzag
+  varint (n ≥ 0 → 2n, else −2n − 1) of the step from the previous point's rounded value (so steps
+  never drift): x and y in 1/256 page points (`floor(v × 256 + 0.5)`, with v clamped to ±1e9), the
+  pressure in 1/4096 (`floor(p × 4096 + 0.5)`, p clamped to 0…1), then the time step in whole ms
+  as a plain varint (never negative) and, with angles, the angle in π/4096 steps
+  (`floor(a mod π / π × 4096 + 0.5) mod 4096`), stepped the short way round (−2048…2047; the sum
+  is taken mod 4096). 1/256 point is the resolution so it never shows: at the deepest zoom (10×)
+  on a 3× screen a point is 30 pixels, so a position is at most 0.06 of a pixel off, whatever the
+  zoom or pen size it was drawn at. About 6–8 bytes a point against `points`' 21 (base64 of 16).
+  **Version 1** (written before; still read): positions in 1/20 point, pressure as one byte
+  (`floor(p × 255 + 0.5)`, not a step) between the y step and the time step, and the angle as one
+  byte (`floor(a / π × 256 + 0.5) mod 256`, not a step).
   `encodePoints2`/`InkPoints.encode2`, checked against `Fixtures/ink-outline.json`.
   **Who writes it**: apps released before it can't read it (they'd see an empty stroke, and moving
   one there would wipe it), so writers keep writing `points` until the vault's `settings.ink`

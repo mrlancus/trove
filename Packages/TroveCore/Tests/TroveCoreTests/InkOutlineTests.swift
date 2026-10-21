@@ -64,6 +64,11 @@ import Testing
             #expect(InkPoints.encode2(Self.points(o["points"])) == encoded, "\(o["name"]?.string ?? "")")
             #expect(Self.same(InkPoints.decode2(encoded), Self.numbers(o["decoded"])), "\(o["name"]?.string ?? "")")
         }
+        for c in p2["v1"]?.array ?? [] {
+            let o = c.object ?? [:]
+            #expect(Self.same(InkPoints.decode2(o["encoded"]?.string ?? ""), Self.numbers(o["decoded"])), "\(o["name"]?.string ?? "")")
+        }
+        #expect(InkPoints.encode2([InkPoint(x: 1e300, y: -.infinity, pressure: 2, t: 0)]) == InkPoints.encode2([InkPoint(x: 1e9, y: 0, pressure: 1, t: 0)]))
         let legacy = p2["legacy"]?.object ?? [:]
         #expect(Self.same(InkPoints.decode(legacy["encoded"]?.string ?? ""), Self.numbers(legacy["decoded"])))
         // A stroke with both reads its compact points.

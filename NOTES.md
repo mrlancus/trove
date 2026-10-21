@@ -72,7 +72,8 @@ user says "publish" (`cd server && npx wrangler deploy`).
     pressure curve, min width) synced in `settings.ink`; up to 10 favourite pens; pencil grain;
     dashes/dots, arrowheads, shape fill; highlighter straightens when held; your/recent colours, hex,
     eyedropper (website); tape (`type: "tape"`). Pencil Pro (written, untested): hover preview, barrel
-    roll as nib, haptics. Compact `points2` (~4× smaller) is written only after "Smaller drawings" is
+    roll as nib, haptics. Compact `points2` (~2.5× smaller; version 2 keeps positions to 1/256 pt so
+    the rounding never shows even at 10× zoom on a 3× screen; version 1 at 1/20 pt still reads) is written only after "Smaller drawings" is
     turned on (vault flag `settings.ink.compactPoints`): **tell the user to turn it on only once every
     device runs this build** (older builds would see empty strokes). Swift point decoding ~6× faster.
     Not done: OffscreenCanvas in a Worker, Mac CGLayer tiles, page checkpoints (S8 says design first).

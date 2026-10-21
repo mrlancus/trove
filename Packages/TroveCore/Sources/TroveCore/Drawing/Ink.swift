@@ -193,8 +193,12 @@ public enum InkPoints {
         return t
     }()
 
-    /// Positions are kept to 1/20 point (core/ink.js `POINTS2_SCALE`).
-    public static let scale2 = 20.0
+    /// Positions are kept to 1/256 point (core/ink.js `POINTS2_SCALE`): at the deepest zoom (10×) on
+    /// a 3× screen a point is 30 pixels, so a position is never more than 0.06 of a pixel off,
+    /// whatever the zoom or size it was drawn at. Pressure and nib angle are kept to 1/4096.
+    public static let scale2 = 256.0, levels2: Int64 = 4096
+    /// Version 1 (still read): 1/20 point, one byte each for pressure and angle.
+    public static let scale2v1 = 20.0
 
     /// The fields that store points: `points2` when the vault writes compact points, else `points`.
     /// `had` (the record before) empties the other one if it was set.
@@ -215,36 +219,51 @@ public enum InkPoints {
         out.append(UInt8(v))
     }
 
-    /// `points2` (PROTOCOL.md §10, core/ink.js `encodePoints2`): version 1, flags (1 = nib angles),
-    /// a varint count, then per point zigzag varint x and y steps in 1/20 points, a pressure byte,
-    /// a varint time step in ms and, with angles, the angle in [0, π) as a byte.
+    /// A nib angle in [0, π) as a whole number of π/4096 steps, 0…4095.
+    private static func angleLevel(_ a: Double) -> Int64 {
+        var v = a.truncatingRemainder(dividingBy: Double.pi)
+        if v < 0 { v += Double.pi }
+        return roundHalfUp(v / Double.pi * Double(levels2)) % levels2
+    }
+
+    /// `points2` version 2 (PROTOCOL.md §10, core/ink.js `encodePoints2`): byte 2, flags (1 = nib
+    /// angles), a varint count, then per point zigzag varint steps: x and y in 1/256 points,
+    /// pressure in 1/4096, the time in ms (plain varint) and, with angles, the angle in π/4096 the
+    /// short way round.
     public static func encode2(_ points: [InkPoint]) -> String {
         let angles = points.contains { $0.angle != nil }
-        var out: [UInt8] = [1, angles ? 1 : 0]
+        var out: [UInt8] = [2, angles ? 1 : 0]
         varint(Int64(points.count), into: &out)
-        var px: Int64 = 0, py: Int64 = 0, pt: Int64 = 0
+        var px: Int64 = 0, py: Int64 = 0, pp: Int64 = 0, pt: Int64 = 0, pa: Int64 = 0
         func fin(_ v: Double) -> Double { v.isFinite ? v : 0 }
+        // Far past any page; keeps the steps inside Int64.
+        func place(_ v: Double) -> Int64 { roundHalfUp(min(1e9, max(-1e9, fin(v))) * scale2) }
         func zigzag(_ n: Int64) -> Int64 { n >= 0 ? 2 * n : -2 * n - 1 }
         for p in points {
-            let x = roundHalfUp(fin(p.x) * scale2), y = roundHalfUp(fin(p.y) * scale2)
+            let x = place(p.x), y = place(p.y)
+            let pr = roundHalfUp(min(1, max(0, fin(p.pressure))) * Double(levels2))
             let t = max(pt, roundHalfUp(max(0, fin(p.t))))
             varint(zigzag(x - px), into: &out)
             varint(zigzag(y - py), into: &out)
-            out.append(UInt8(roundHalfUp(min(1, max(0, fin(p.pressure))) * 255)))
+            varint(zigzag(pr - pp), into: &out)
             varint(t - pt, into: &out)
             if angles {
-                var a = fin(p.angle ?? InkGeometry.nibAngle).truncatingRemainder(dividingBy: Double.pi)
-                if a < 0 { a += Double.pi }
-                out.append(UInt8(roundHalfUp(a / Double.pi * 256) % 256))
+                let a = angleLevel(fin(p.angle ?? InkGeometry.nibAngle))
+                var d = (a - pa) % levels2
+                if d >= levels2 / 2 { d -= levels2 } else if d < -levels2 / 2 { d += levels2 }
+                varint(zigzag(d), into: &out)
+                pa = a
             }
-            px = x; py = y; pt = t
+            px = x; py = y; pp = pr; pt = t
         }
         return Data(out).base64URL
     }
 
+    /// Reads `points2` version 2, and version 1 (1/20 point, one byte each for pressure and angle).
     public static func decode2(_ string: String) -> [InkPoint] {
-        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 else { return [] }
-        let angles = bytes[1] & 1 == 1
+        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 || bytes[0] == 2 else { return [] }
+        let v1 = bytes[0] == 1, angles = bytes[1] & 1 == 1
+        let scale = v1 ? scale2v1 : scale2
         var i = 2
         func varint() -> Int64? {
             var n: UInt64 = 0, shift: UInt64 = 0
@@ -257,24 +276,34 @@ public enum InkPoints {
             }
             return nil
         }
+        func byte() -> Int64? {
+            guard i < bytes.count else { return nil }
+            i += 1
+            return Int64(bytes[i - 1])
+        }
         func unzigzag(_ z: Int64) -> Int64 { z % 2 == 0 ? z / 2 : -(z + 1) / 2 }
         var out: [InkPoint] = []
         guard let count = varint() else { return [] }
-        var x: Int64 = 0, y: Int64 = 0, t: Int64 = 0
+        var x: Int64 = 0, y: Int64 = 0, p: Int64 = 0, t: Int64 = 0, a: Int64 = 0
         var k: Int64 = 0
         while k < count {
-            guard let dx = varint(), let dy = varint(), i < bytes.count else { break }
+            guard let dx = varint(), let dy = varint() else { break }
             x += unzigzag(dx)
             y += unzigzag(dy)
-            let p = Double(bytes[i]) / 255
-            i += 1
+            if v1 { guard let b = byte() else { break }; p = b } else { guard let dp = varint() else { break }; p += unzigzag(dp) }
             guard let dt = varint() else { break }
             t += dt
-            var point = InkPoint(x: Double(x) / scale2, y: Double(y) / scale2, pressure: p, t: Double(t))
+            let pressure = min(1, max(0, v1 ? Double(p) / 255 : Double(p) / Double(levels2)))
+            var point = InkPoint(x: Double(x) / scale, y: Double(y) / scale, pressure: pressure, t: Double(t))
             if angles {
-                guard i < bytes.count else { break }
-                point.angle = Double(bytes[i]) * Double.pi / 256
-                i += 1
+                if v1 {
+                    guard let b = byte() else { break }
+                    point.angle = Double(b) * Double.pi / 256
+                } else {
+                    guard let da = varint() else { break }
+                    a = ((a + unzigzag(da)) % levels2 + levels2) % levels2
+                    point.angle = Double(a) * Double.pi / Double(levels2)
+                }
             }
             out.append(point)
             k += 1
