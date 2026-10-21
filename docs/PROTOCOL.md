@@ -634,3 +634,41 @@ drawn over everything else on the page, so what's under it is hidden until tappe
 pen, or the tape tool) opens it on that device only (a faint dashed outline); it isn't synced, so
 each device starts covered. Apps that don't know tape treat it as an empty text box (nothing drawn).
 Lasso picks it up like any element.
+
+## 11. Looking back and AI results
+
+All optional item fields; readers that don't know them ignore them, and nothing old changes.
+
+**Weekly digest.** A note (`kind: "note"`) with the id `digest-<ISO year>-w<2-digit ISO week>`, for
+example `digest-2026-w43`, so every device that makes it writes the same item (fields merge as usual).
+Weeks are ISO 8601 weeks in UTC (Monday 00:00 UTC to the next Monday). Extra fields:
+`digest: {year, week}`, `tags: ["digest"]`, `needsEnrichment: false`. Title `Week of <d> <Month> <yyyy>`
+(the Monday). The body is Markdown built only from the vault (Digest.swift = `web/public/core/digest.js`,
+checked by `Fixtures/digest-cases.json`): a count line ("You saved N things and wrote N notes this
+week." or "A quiet week: nothing new saved or written."), then, when not empty, `## Saved` (items that
+aren't notes or sketches, created that week, oldest first, `- [[Title]] (kind, host)`), `## Written`
+(notes and sketches), `## Not opened yet` (links unread, saved in the 4 weeks before, at most 10,
+`(saved <d> <Month>)`) and `## This week in other years` (same ISO week number, earlier years, newest
+first, at most 10, `(yyyy)`). Lists stop at 25 with `- and N more`. Titles in `[[ ]]` have `[ ] | #` and
+newlines replaced by spaces. Digests are never listed in digests. With cloud AI on, a device may add
+`## In short` (a summary paragraph) after the count line, ending `_Processed in the cloud (model)._`.
+Once a week, the first device to open after a sync writes **last** week's digest if no record with
+that id exists (a deleted digest isn't made again) and the week had anything saved or written.
+"Make this week's digest" remakes the current week's on demand.
+
+**On this day**: items created on today's month and day (UTC) in earlier years, newest first.
+
+**Possible duplicates**: among items that aren't notes or sketches, groups joined when two have the
+same `dedupeKey` (URL with tracking parameters removed, no scheme, `www.` or trailing `/`): reason
+`same link`; the same title words (folded, lowercased, one-letter words and `a an and the of to in on
+for with is at by from how what why` removed, 4 or more words): `same title`; or the same host and at
+least 3 title words each, sharing 80% (Jaccard) of them: `similar title`. A group's reason is the
+strongest of its joins. `notDuplicates: [id]` on either item stops that pair being joined ("Not
+duplicates"). Groups are listed newest first; ids in a group oldest first.
+
+**AI results.** Items made by AI carry `ai: {where: "cloud" | "device", model}` and say so in the body
+("processed in the cloud"). An Ask Trove answer is a note titled with the question, tagged
+`ask-trove`, whose body ends with `Sources:` and `- [[Title]]` lines, and which is connected (`links`)
+to the cited items. **Flashcards** are a note tagged `flashcards` with `flashcards: [{front, back}]`
+(for a study view) and the same cards in the body as `**Q:** front` / `**A:** back` pairs, connected to
+the note or sketch they came from.
