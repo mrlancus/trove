@@ -19,7 +19,7 @@ struct SettingsView: View {
                 .tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }
             Form { AISection() }.formStyle(.grouped)
                 .tabItem { Label("Intelligence", systemImage: "sparkles") }
-            Form { IntegrationsSection() }.formStyle(.grouped)
+            Form { IntegrationsSection(); BridgesSection() }.formStyle(.grouped)
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
         }
         .frame(width: 600, height: 560)
@@ -41,6 +41,7 @@ private struct SettingsList: View {
             RelaySection()
             AISection()
             IntegrationsSection()
+            BridgesSection()
             ClipboardSection()
             AboutSection()
         }

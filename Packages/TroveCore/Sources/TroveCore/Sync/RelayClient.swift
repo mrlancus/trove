@@ -97,6 +97,50 @@ public struct RelayClient: Sendable {
         public var id: String { slug }
     }
 
+    /// A bridge run by the relay (PROTOCOL.md §4 "Bridges"). Tokens are never sent back.
+    public struct Bridge: Codable, Sendable, Equatable, Identifiable {
+        public struct Status: Codable, Sendable, Equatable {
+            public var lastRunAt: Double?
+            public var nextRunAt: Double?
+            public var lastError: String?
+            public var lastErrorAt: Double?
+            public var itemsAdded: Int
+            public var lastAddedAt: Double?
+        }
+        public struct Telegram: Codable, Sendable, Equatable {
+            public var bot: String?
+            public var linked: Bool
+            public var linkURL: String?
+        }
+        public var id: String
+        /// "webhook", "rss", "github" or "telegram".
+        public var kind: String
+        public var enabled: Bool
+        public var settings: [String: JSONValue]
+        public var hasToken: Bool
+        public var createdAt: Double
+        public var status: Status
+        /// Webhook: the secret "add" address.
+        public var hookURL: String?
+        /// RSS: the feed's own title.
+        public var title: String?
+        public var telegram: Telegram?
+
+        public func setting(_ key: String) -> String? { settings[key]?.string }
+        public func flag(_ key: String) -> Bool { settings[key]?.bool ?? false }
+    }
+
+    /// What `POST /preview` returns for a link (any field may be missing).
+    public struct LinkPreview: Codable, Sendable, Equatable {
+        public var url: String
+        public var title: String?
+        public var description: String?
+        public var image: String?
+        public var site: String?
+        public var icon: String?
+        public var error: String?
+    }
+
     // MARK: Vault lifecycle
 
     /// `deviceId`: the journal id this device already uses (kept if free on the relay).
@@ -250,6 +294,41 @@ public struct RelayClient: Sendable {
         let l: L = try await json("GET", vaultPath("published"))
         return l.pages
     }
+
+    // MARK: Bridges (PROTOCOL.md §4 "Bridges")
+
+    public func bridges() async throws -> [Bridge] {
+        struct L: Decodable { var bridges: [Bridge] }
+        let l: L = try await json("GET", vaultPath("bridges"))
+        return l.bridges
+    }
+
+    /// `settings` holds strings, booleans and string arrays; `token` is for Telegram (required) or GitHub.
+    public func addBridge(kind: String, settings: [String: Any] = [:], token: String? = nil) async throws -> Bridge {
+        var body: [String: Any] = ["kind": kind, "settings": settings]
+        if let token { body["token"] = token }
+        return try await json("POST", vaultPath("bridges"), body: body, expect: [201])
+    }
+
+    /// Changes only what's given. A GitHub `token` of "" removes the stored token.
+    public func updateBridge(_ id: String, enabled: Bool? = nil, settings: [String: Any]? = nil, token: String? = nil) async throws -> Bridge {
+        var body: [String: Any] = [:]
+        if let enabled { body["enabled"] = enabled }
+        if let settings { body["settings"] = settings }
+        if let token { body["token"] = token }
+        return try await json("PUT", vaultPath("bridges/\(id)"), body: body)
+    }
+
+    public func deleteBridge(_ id: String) async throws { _ = try await raw("DELETE", vaultPath("bridges/\(id)"), expect: [204]) }
+
+    /// Checks a feed or GitHub bridge now.
+    public func runBridge(_ id: String) async throws -> Bridge { try await json("POST", vaultPath("bridges/\(id)/run"), body: [:]) }
+
+    /// A new secret address for a webhook or Telegram bridge; the old one stops working.
+    public func regenerateBridge(_ id: String) async throws -> Bridge { try await json("POST", vaultPath("bridges/\(id)/regenerate"), body: [:]) }
+
+    /// Title, description, picture and site for a link, fetched by the relay.
+    public func linkPreview(_ url: String) async throws -> LinkPreview { try await json("POST", vaultPath("preview"), body: ["url": url]) }
 
     /// WebSocket URL for live notifications (open with URLSessionWebSocketTask in the app).
     public var liveURL: URL? {
