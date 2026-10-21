@@ -14,9 +14,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"6.0.0"),
     ],
     targets: [
+        // SQLite for the local copy (LocalDatabase) on Linux; Apple platforms import the SDK's SQLite3.
+        .systemLibrary(name: "CSQLite", path: "Sources/CSQLite", providers: [.apt(["libsqlite3-dev"])]),
         .target(
             name: "TroveCore",
-            dependencies: [.product(name: "Crypto", package: "swift-crypto")]
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto"),
+                .target(name: "CSQLite", condition: .when(platforms: [.linux])),
+            ]
         ),
         .testTarget(
             name: "TroveCoreTests",

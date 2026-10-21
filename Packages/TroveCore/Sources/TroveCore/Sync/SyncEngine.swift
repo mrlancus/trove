@@ -11,13 +11,61 @@ public actor SyncEngine {
         public var ops: [Op]                       // local cache of every op (rebuilds state offline)
         public var unpushedBlobs: [String: [String]]? // transport name → blob ids still to upload
         public var bridgeBlobs: [String]?               // attachments still to copy between transports
+        /// The checkpoint the store starts from (`ops` then holds only what it doesn't cover).
+        public var base: Checkpoint?
+        /// When this device last wrote a checkpoint or looked for one to write (Unix ms).
+        public var checkpointCheckedAt: Double?
+
+        public init(journal: Journal.State, pending: [Op], unpushed: [String: [String]], applied: [String], ops: [Op],
+                    unpushedBlobs: [String: [String]]? = nil, bridgeBlobs: [String]? = nil, base: Checkpoint? = nil, checkpointCheckedAt: Double? = nil) {
+            self.journal = journal
+            self.pending = pending
+            self.unpushed = unpushed
+            self.applied = applied
+            self.ops = ops
+            self.unpushedBlobs = unpushedBlobs
+            self.bridgeBlobs = bridgeBlobs
+            self.base = base
+            self.checkpointCheckedAt = checkpointCheckedAt
+        }
+    }
+
+    /// The small part of the local state, rewritten on every save (`LocalDatabase`); ops, applied
+    /// segment keys and the checkpoint are saved apart, a little at a time.
+    public struct LocalState: Codable, Sendable, Equatable {
+        public var journal: Journal.State
+        public var pending: [Op]
+        public var unpushed: [String: [String]]
+        public var unpushedBlobs: [String: [String]]
+        public var bridgeBlobs: [String]
+        public var checkpointCheckedAt: Double?
+    }
+
+    /// What changed since the last save (`takeSaveDelta`). With `rewrite`, `newOps` and `newApplied`
+    /// are everything and the stored copy is replaced; `base` is set when the checkpoint changed.
+    public struct SaveDelta: Sendable {
+        public var state: LocalState
+        public var newOps: [Op]
+        public var newApplied: [String]
+        public var base: Checkpoint?
+        public var baseChanged: Bool
+        public var rewrite: Bool
     }
 
     public struct Report: Sendable, Equatable {
         public var pushed = 0
         public var pulled = 0
         public var errors: [String] = []
+        /// The checkpoint this sync started from, or wrote.
+        public var loadedCheckpoint: String?
+        public var wroteCheckpoint: String?
     }
+
+    /// Write a checkpoint once this many ops have piled up since the last one (PROTOCOL.md §3)…
+    public static let checkpointAfterOps = 5000
+    /// …and the newest one is at least a day old; look at most once an hour.
+    static let checkpointMinAge: Double = 24 * 60 * 60 * 1000
+    static let checkpointCheckEvery: Double = 60 * 60 * 1000
 
     public private(set) var store = RecordStore()
     private var journal: Journal
@@ -37,6 +85,15 @@ public actor SyncEngine {
     /// Attachments other devices put on one transport that a bridging device still has to copy to the rest.
     private var bridgeBlobs: Set<String> = []
     static let bridgeBlobsPerSync = 40
+    /// The checkpoint the store starts from, as written (kept for saving and for the snapshot).
+    private var checkpoint: Checkpoint?
+    private var checkpointCheckedAt: Double?
+    private let clock: @Sendable () -> Int64
+    // Saving a little at a time (`takeSaveDelta`).
+    private var unsavedOps: [Op] = []
+    private var unsavedApplied: [String] = []
+    private var baseChanged = false
+    private var needsRewrite = true
 
     public init(device: String, keys: VaultKeys?, encrypted: Bool = true, transports: [any SyncTransport] = [], bridge: Bool = false,
                 blobCache: URL? = nil, snapshot: Snapshot? = nil, now: (@Sendable () -> Int64)? = nil) {
@@ -45,13 +102,20 @@ public actor SyncEngine {
         self.encrypted = encrypted && keys != nil
         self.transports = transports
         self.bridge = bridge
+        self.clock = now ?? { Int64((Date().timeIntervalSince1970 * 1000).rounded()) }
         if let snapshot {
             journal = Journal(state: snapshot.journal, pending: snapshot.pending, now: now)
             applied = Set(snapshot.applied)
             unpushed = snapshot.unpushed.mapValues(Set.init)
             unpushedBlobs = (snapshot.unpushedBlobs ?? [:]).mapValues(Set.init)
             bridgeBlobs = Set(snapshot.bridgeBlobs ?? [])
+            checkpointCheckedAt = snapshot.checkpointCheckedAt
+            if let base = snapshot.base {
+                checkpoint = base
+                store.useBase(base.base)
+            }
             store.apply(snapshot.ops)
+            store.apply(snapshot.pending)
             // Rebuild the outbox for anything not yet pushed from this device's own ops.
             let mine = snapshot.ops.filter { $0.device == device }
             for key in unpushed.values.reduce(into: Set<String>(), { $0.formUnion($1) }) {
@@ -81,9 +145,45 @@ public actor SyncEngine {
 
     public func snapshot() -> Snapshot {
         Snapshot(journal: journal.state, pending: journal.pending, unpushed: unpushed.mapValues { Array($0).sorted() },
-                 applied: Array(applied).sorted(), ops: store.allOps, unpushedBlobs: unpushedBlobs.mapValues { Array($0).sorted() },
-                 bridgeBlobs: bridgeBlobs.isEmpty ? nil : bridgeBlobs.sorted())
+                 applied: Array(applied).sorted(), ops: store.opsAfterBase, unpushedBlobs: unpushedBlobs.mapValues { Array($0).sorted() },
+                 bridgeBlobs: bridgeBlobs.isEmpty ? nil : bridgeBlobs.sorted(), base: checkpoint, checkpointCheckedAt: checkpointCheckedAt)
     }
+
+    // MARK: Saving a little at a time (LocalDatabase)
+
+    private var localState: LocalState {
+        LocalState(journal: journal.state, pending: journal.pending, unpushed: unpushed.mapValues { Array($0).sorted() },
+                   unpushedBlobs: unpushedBlobs.mapValues { Array($0).sorted() }, bridgeBlobs: bridgeBlobs.sorted(),
+                   checkpointCheckedAt: checkpointCheckedAt)
+    }
+
+    /// What to write since the last save; the first save (or one after `saveFailed`) is everything.
+    public func takeSaveDelta() -> SaveDelta {
+        let delta: SaveDelta
+        if needsRewrite {
+            delta = SaveDelta(state: localState, newOps: store.opsAfterBase, newApplied: Array(applied).sorted(), base: checkpoint,
+                              baseChanged: true, rewrite: true)
+        } else {
+            delta = SaveDelta(state: localState, newOps: unsavedOps.filter { !store.isCovered($0) }, newApplied: unsavedApplied,
+                              base: baseChanged ? checkpoint : nil, baseChanged: baseChanged, rewrite: false)
+        }
+        unsavedOps = []
+        unsavedApplied = []
+        baseChanged = false
+        needsRewrite = false
+        return delta
+    }
+
+    /// The local copy is already what this engine holds (it was just loaded from it).
+    public func markSaved() {
+        unsavedOps = []
+        unsavedApplied = []
+        baseChanged = false
+        needsRewrite = false
+    }
+
+    /// A save didn't make it: the next one writes everything.
+    public func saveFailed() { needsRewrite = true }
 
     /// Hears that records changed (call `records` or `records(kind:)` for what's there now).
     @discardableResult
@@ -117,7 +217,7 @@ public actor SyncEngine {
     @discardableResult
     public func set(_ fields: [String: JSONValue], record: String, kind: String? = nil) -> Op {
         let op = journal.set(fields, record: record, kind: kind)
-        store.apply([op])
+        unsavedOps += store.apply([op])
         notify()
         return op
     }
@@ -127,7 +227,7 @@ public actor SyncEngine {
         let previous = store.record(record)?.texts[field] ?? ""
         guard previous != value else { return nil }
         let op = journal.text(field, value: value, previous: previous, record: record, kind: kind)
-        store.apply([op])
+        unsavedOps += store.apply([op])
         notify()
         return op
     }
@@ -139,12 +239,15 @@ public actor SyncEngine {
 
     public func sync() async -> Report {
         var report = Report()
+        // 0. A device with nothing yet starts from the newest checkpoint instead of every op.
+        //    (A device bridging iCloud and the relay fetches every segment anyway, to copy them across.)
+        if !bridge, store.opCount == 0, store.base == nil, applied.isEmpty { await loadCheckpoint(&report) }
         // 1. Cut pending ops into segments and queue them for every transport.
         do {
             for segment in try journal.takeSegments() {
                 let key = SegmentRef(device: segment.device, first: segment.first, last: segment.last).key
                 outbox[key] = segment
-                applied.insert(key)
+                if applied.insert(key).inserted { unsavedApplied.append(key) }
                 for t in transports { unpushed[t.name, default: []].insert(key) }
             }
         } catch {
@@ -183,12 +286,16 @@ public actor SyncEngine {
             do {
                 var ok = true
                 for ref in try await t.listSegments() where !applied.contains(ref.key) && ref.device != device {
+                    // Already inside the checkpoint: no need to download it.
+                    if !bridge, let base = store.base, Checkpoint.covers(base.covers, device: ref.device, first: ref.first, last: ref.last) {
+                        continue
+                    }
                     do {
                         let data = try await t.fetchSegment(ref)
                         let segment = try Segment.decodeAny(data, device: ref.device, keys: keys)
                         for op in segment.ops { journal.observe(op.hlc) }
-                        store.apply(segment.ops)
-                        applied.insert(ref.key)
+                        unsavedOps += store.apply(segment.ops)
+                        if applied.insert(ref.key).inserted { unsavedApplied.append(ref.key) }
                         fetched.append((ref, data, t.name))
                         report.pulled += 1
                     } catch {
@@ -218,9 +325,100 @@ public actor SyncEngine {
             }
             await copyBridgeBlobs(&report)
         }
-        if report.pulled > 0 { notify() }
+        if report.pulled > 0 || report.loadedCheckpoint != nil { notify() }
+        let nothingUnpushed = journal.pending.isEmpty && unpushed.values.allSatisfy(\.isEmpty)
+        if report.errors.isEmpty, nothingUnpushed { await writeCheckpointIfDue(&report) }
         return report
     }
+
+    // MARK: Checkpoints (PROTOCOL.md §3 "Checkpoints")
+
+    private var checkpointTransports: [any CheckpointTransport] { transports.compactMap { $0 as? any CheckpointTransport } }
+
+    /// Starts from the newest checkpoint any transport has (and this device can read).
+    private func loadCheckpoint(_ report: inout Report) async {
+        guard encrypted, let keys else { return }
+        for t in checkpointTransports {
+            let list: [CheckpointInfo]
+            do { list = try await t.listCheckpoints() } catch { continue } // an older relay: pull every op
+            for info in list.prefix(2) {
+                do {
+                    let cp = try Checkpoint.open(try await t.fetchCheckpoint(info.id), keys: keys)
+                    adopt(cp, id: info.id)
+                    report.loadedCheckpoint = info.id
+                    return
+                } catch {
+                    report.errors.append("\(t.name) checkpoint \(info.id): \(error)")
+                }
+            }
+        }
+    }
+
+    /// Uses a checkpoint as the store's base (and the local copy's, from the next save).
+    @discardableResult
+    private func adopt(_ cp: Checkpoint, id: String) -> Bool {
+        var base = cp.base
+        base.id = id
+        guard store.useBase(base) else { return false }
+        for op in cp.texts { journal.observe(op.hlc) }
+        journal.observe(cp.frontier)
+        // This device's own ops are in it (its local copy was lost): number new ones after them.
+        journal.skip(past: base.lastCovered(device))
+        if let cursor = cp.cursor {
+            for t in transports { (t as? RelayTransport)?.advanceCursor(to: cursor) }
+        }
+        checkpoint = cp
+        baseChanged = true
+        return true
+    }
+
+    /// Writes a checkpoint when enough ops have piled up since the last one and the newest anywhere is
+    /// a day old, then uses it locally too. Call only with nothing unpushed.
+    private func writeCheckpointIfDue(_ report: inout Report, force: Bool = false) async {
+        guard encrypted, let keys, !checkpointTransports.isEmpty else { return }
+        let since = store.opCount - (store.base?.texts.count ?? 0)
+        let now = Double(clock())
+        if !force {
+            guard since >= Self.checkpointAfterOps else { return }
+            guard now - (checkpointCheckedAt ?? 0) >= Self.checkpointCheckEvery else { return }
+        }
+        checkpointCheckedAt = now
+        var newest: Double = 0
+        for t in checkpointTransports {
+            if let first = try? await t.listCheckpoints().first { newest = max(newest, first.createdAt) }
+        }
+        if !force, now - newest < Self.checkpointMinAge { return }
+        let relayCursor = transports.compactMap { ($0 as? RelayTransport)?.currentCursor }.first
+        let cp = Checkpoint.make(from: store, cursor: relayCursor, device: device, createdAt: Date(timeIntervalSince1970: now / 1000))
+        let data: Data
+        do { data = try cp.sealed(with: keys) } catch { report.errors.append("checkpoint: \(error)"); return }
+        let id = UUID().uuidString.lowercased()
+        var wrote = false
+        for t in checkpointTransports {
+            let tid = t is FolderTransport ? "\(device)/\(id)" : id
+            do {
+                try await t.pushCheckpoint(tid, data: data)
+                wrote = true
+            } catch {
+                report.errors.append("\(t.name) checkpoint: \(error)")
+            }
+        }
+        if wrote, adopt(cp, id: id) { report.wroteCheckpoint = id }
+    }
+
+    /// Writes a checkpoint now, whatever the thresholds (tests, and "Make a checkpoint" in the app).
+    public func writeCheckpoint() async -> Report {
+        var report = Report()
+        guard journal.pending.isEmpty, unpushed.values.allSatisfy(\.isEmpty) else {
+            report.errors.append("checkpoint: sync first")
+            return report
+        }
+        await writeCheckpointIfDue(&report, force: true)
+        return report
+    }
+
+    /// The checkpoint the store starts from, if any.
+    public var checkpointId: String? { store.base?.id }
 
     /// Attachment ids an op refers to: any `{id, mime}` object in its fields (attachments,
     /// thumbnails, file versions, clip images).

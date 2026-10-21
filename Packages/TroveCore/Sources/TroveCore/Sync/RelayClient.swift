@@ -210,6 +210,25 @@ public struct RelayClient: Sendable {
 
     public func getBlob(_ id: String) async throws -> Data { try await raw("GET", vaultPath("blobs/\(id)")) }
 
+    // MARK: Checkpoints (PROTOCOL.md §3 "Checkpoints")
+
+    /// The relay's checkpoints, newest first; empty from a relay that doesn't know them.
+    public func checkpoints() async throws -> [CheckpointInfo] {
+        struct L: Decodable { var checkpoints: [CheckpointInfo] }
+        do {
+            let list: L = try await json("GET", vaultPath("checkpoints"))
+            return list.checkpoints
+        } catch TransportError.notFound {
+            return []
+        }
+    }
+
+    public func getCheckpoint(_ id: String) async throws -> Data { try await raw("GET", vaultPath("checkpoints/\(id)")) }
+
+    public func putCheckpoint(_ id: String, data: Data) async throws {
+        _ = try await raw("PUT", vaultPath("checkpoints/\(id)"), body: data, expect: [200, 201])
+    }
+
     // MARK: Inbox
 
     /// Upload an already-sealed envelope (an inbox token is enough).
@@ -377,7 +396,7 @@ public struct RelayClient: Sendable {
 }
 
 /// The relay as a `SyncTransport`. Remembers how far through the relay's segment list it has read.
-public final class RelayTransport: SyncTransport, @unchecked Sendable {
+public final class RelayTransport: SyncTransport, CheckpointTransport, @unchecked Sendable {
     public let client: RelayClient
     public var name: String { "relay" }
     private let lock = NSLock()
@@ -416,6 +435,20 @@ public final class RelayTransport: SyncTransport, @unchecked Sendable {
         }
         if let value { saveCursor(value) }
     }
+
+    /// Starts from a checkpoint's relay cursor (a new device that loaded one): never goes back.
+    public func advanceCursor(to value: Int) {
+        let saved: Int? = lock.withLock {
+            guard value > cursor else { return nil }
+            cursor = value
+            return cursor
+        }
+        if let saved { saveCursor(saved) }
+    }
+
+    public func listCheckpoints() async throws -> [CheckpointInfo] { try await client.checkpoints() }
+    public func fetchCheckpoint(_ id: String) async throws -> Data { try await client.getCheckpoint(id) }
+    public func pushCheckpoint(_ id: String, data: Data) async throws { try await client.putCheckpoint(id, data: data) }
 
     public func fetchSegment(_ ref: SegmentRef) async throws -> Data { try await client.getSegment(ref) }
     public func pushSegment(_ ref: SegmentRef, data: Data) async throws { try await client.putSegment(ref, data: data) }
