@@ -30,6 +30,18 @@ test("Fixtures/checkpoint-cases.json loads, and later (and older offline) ops ap
   }
 });
 
+test("a Swift-made checkpoint (fixtures/swift-checkpoint.json) loads to the same records", async () => {
+  const f = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/checkpoint-cases.json", import.meta.url), "utf8"));
+  const swift = JSON.parse(readFileSync(new URL("./fixtures/swift-checkpoint.json", import.meta.url), "utf8"));
+  const cp = await cpm.decodeCheckpoint(b64uDecode(swift.encoded));
+  assert.equal(cp.device, "SWIFT");
+  const s = new RecordStore();
+  assert.ok(s.useBase(cpm.parseCheckpoint(cp)));
+  assert.deepEqual(recordsView(s), f.expectedAtCheckpoint);
+  s.apply(f.ops);
+  assert.deepEqual(recordsView(s), f.expected);
+});
+
 test("any split by device prefixes, any arrival order, and a checkpoint of a checkpoint", () => {
   for (let seed = 1; seed <= 25; seed++) {
     const { all } = checkpointScenario(seed);
