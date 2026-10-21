@@ -618,12 +618,15 @@ export class Bridges {
     const url = str(b.url, 4000);
     if (!url) return json({ error: "url required" }, 400);
     if (!this.allow("preview", PREVIEWS_PER_HOUR)) return json({ error: "too many previews; try again later" }, 429);
+    // A page that can't be previewed is an answer, not a failure: 200 with `error` (browsers log
+    // every non-2xx response as a console error, and the website previews links in the background).
+    const none = { url, title: null, description: null, image: null, site: null, icon: null };
     try {
       return json(await linkPreview(url, this.fetch));
     } catch (e) {
-      if (e instanceof FetchRefused) return json({ error: e.message }, 400);
+      if (e instanceof FetchRefused) return json({ ...none, error: e.message, refused: true });
       const message = e instanceof Error ? e.message : String(e);
-      return json({ error: /abort|time/i.test(message) ? "the site took too long to answer" : `couldn't fetch it: ${message}` }, 502);
+      return json({ ...none, error: /abort|time/i.test(message) ? "the site took too long to answer" : `couldn't fetch it: ${message}` });
     }
   }
 }

@@ -109,8 +109,12 @@ describe("link previews", () => {
     const ok = await preview("https://short.example/x");
     expect(ok.status).toBe(200);
     expect(await ok.json()).toMatchObject({ url: "https://news.example/story", title: "A story", image: "https://cdn.example/s.jpg", site: "news.example" });
-    expect((await preview("https://short.example/evil")).status).toBe(400);
-    expect((await preview("http://127.0.0.1:8787/")).status).toBe(400);
+    for (const unsafe of ["https://short.example/evil", "http://127.0.0.1:8787/"]) {
+      const res = await preview(unsafe);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ refused: true, title: null, image: null });
+    }
+    expect((await preview("")).status).toBe(400);
     expect((await preview("https://news.example/", v.inboxToken)).status).toBe(403);
     expect(calls).toEqual(["https://short.example/x", "https://news.example/story", "https://short.example/evil"]);
   });

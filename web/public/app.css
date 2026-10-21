@@ -607,3 +607,15 @@ body.ink-open { overflow: hidden; }
 /* Long lists scroll smoothly: clips off screen aren't laid out or painted (cards sit in balanced
    columns, which need their real heights, so they keep being laid out). */
 #grid > .clip:not(.open) { content-visibility: auto; contain-intrinsic-size: auto 84px; }
+
+/* Bridges dialog (bridges.js) */
+.bridges-dialog { width: min(620px, 100%); }
+.bridge { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
+.bridge p { margin: 0; }
+.bridge .check { margin: 0; }
+.bridge-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bridge-controls .check { margin-right: auto; }
+.bridge-copy, .bridge-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.bridge-copy input, .bridge-form input { flex: 1 1 180px; min-width: 0; }
+.bridge-url { overflow-wrap: anywhere; }
+.bridge-error { color: var(--danger); font-size: 13px; }

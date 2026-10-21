@@ -15,6 +15,7 @@ import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThum
 import { openInkEditor, renderSketchPage, sketchPages, sketchThumbnail } from "./draw.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
+import { saveLink, showBridges } from "./bridges.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
@@ -178,7 +179,7 @@ function handleSharedAdd() {
   if (!value) return;
   let url = null;
   try { const u = new URL(value); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
-  if (url) toast(state.vault.addLink(url.toString()).isNew ? "Saved to Trove" : "Already saved");
+  if (url) toast(saveLink(state.vault, url.toString(), {}, () => syncSoon()).isNew ? "Saved to Trove" : "Already saved");
   else { state.vault.addNote({ body: value }); toast("Note saved to Trove"); }
   syncSoon(300);
 }
@@ -210,8 +211,8 @@ function showMain(vault) {
     let url = null;
     try { const u = new URL(text); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* plain text */ }
     if (url) {
-      const { isNew } = vault.addLink(url.toString());
-      toast(isNew ? "Link saved. Your Mac or iPhone will add the preview." : "Already saved");
+      const { isNew } = saveLink(vault, url.toString(), {}, () => syncSoon());
+      toast(isNew ? "Link saved" : "Already saved");
     } else {
       vault.addNote({ body: text });
       toast("Note saved");
@@ -238,6 +239,7 @@ function showMain(vault) {
   $("#select-mode").addEventListener("click", () => setSelecting(!state.selecting));
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
+  $("#bridges").addEventListener("click", () => showBridges(vault, { toast }));
   $("#new-folder").addEventListener("click", (e) => { e.stopPropagation(); newFolder(null); });
   folderDropTarget($("#folders-heading"), null);
   addEventListener("hashchange", handleSharedAdd);
@@ -312,7 +314,7 @@ function wireDrops() {
     if (!text) return;
     let url = null;
     try { const u = new URL(text); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
-    if (url) toast(state.vault.addLink(url.toString()).isNew ? "Link saved" : "Already saved");
+    if (url) toast(saveLink(state.vault, url.toString(), {}, () => syncSoon()).isNew ? "Link saved" : "Already saved");
     else { state.vault.addNote({ body: text }); toast("Note saved"); }
     syncSoon();
   });

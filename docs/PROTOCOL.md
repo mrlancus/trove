@@ -253,10 +253,12 @@ relay uses GitHub's anonymous limit (60 requests an hour, shared).
 
 **Link previews.** `POST /vaults/:v/preview {url}` fetches a page for a device (browsers can't fetch
 other sites) and returns `{url (after redirects), title, description, image, site, icon}` from Open
-Graph, Twitter and plain HTML tags (any may be `null`). The relay sees that URL, nothing else. It
+Graph, Twitter and plain HTML tags (any may be `null`). A page that can't be fetched still answers
+`200`, with every field `null` plus `error` (and `refused: true` when the URL wasn't allowed), so
+browsers don't log background previews as errors. The relay sees that URL, nothing else. It
 refuses non-http(s) URLs, user:password URLs, ports other than 80/443/8080/8443, `localhost`,
 single-label and `.local`/`.internal`/`.lan`/`.home.arpa` names, IP literals in private, loopback,
-link-local, CGNAT and multicast ranges, and IPv6 literals (`400`), re-checks every redirect (at most
+link-local, CGNAT and multicast ranges, and IPv6 literals, re-checks every redirect (at most
 4), stops after 8 seconds and reads at most 512 KB. 240 previews an hour per vault (`429`). Feeds are
 fetched under the same rules.
 
