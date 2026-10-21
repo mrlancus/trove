@@ -54,7 +54,7 @@ extension Library {
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
             InkStroke.Field.createdAt: .number(created), InkStroke.Field.device: .string(await engine.device),
         ]
-        fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
+        fields.merge(InkPoints.fields(tool.stored(points), compact: compact)) { _, b in b }
         if let shape { fields[InkStroke.Field.shape] = .string(shape) }
         if let style { fields.merge(style.fields) { _, b in b } }
         // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
@@ -72,6 +72,8 @@ extension Library {
 
     /// Moves, resizes or recolours strokes (the lasso). Widths scale with the shape.
     public func transformStrokes(_ ids: [String], by transform: InkGeometry.Transform? = nil, color: String? = nil) async {
+        // A move or resize that isn't a real number would store points nothing can draw.
+        if let transform, !transform.isUsable { return }
         let compact = await inkSettings().compactPoints
         for id in ids {
             guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { continue }
@@ -129,6 +131,7 @@ extension Library {
     public func duplicateInk(strokes strokeIds: [String], elements elementIds: [String], to itemId: String, layer: String = "",
                              pageKey: String, by transform: InkGeometry.Transform = .move(20, 20)) async -> [String] {
         var out: [String] = []
+        guard transform.isUsable else { return out }
         for id in strokeIds {
             guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { continue }
             let s = InkStroke(r)
@@ -147,9 +150,9 @@ extension Library {
     // MARK: Text boxes and pictures
 
     public func elements(on itemId: String, layer: String = "", pageKey: String? = nil) async -> [InkElement] {
-        await engine.ink(on: itemId).filter { $0.kind == "element" }.map(InkElement.init)
+        let elements = await engine.ink(on: itemId).filter { $0.kind == "element" }.map(InkElement.init)
             .filter { $0.layer == layer && (pageKey == nil || $0.pageKey == pageKey) }
-            .sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }
+        return Self.drawOrder(elements, createdAt: { $0.record[InkElement.Field.createdAt]?.number ?? 0 })
     }
 
     @discardableResult
@@ -200,6 +203,7 @@ extension Library {
 
     /// Moves or resizes elements (the lasso); text grows with the box.
     public func transformElements(_ ids: [String], by transform: InkGeometry.Transform) async {
+        guard transform.isUsable else { return }
         for id in ids {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
             let e = InkElement(r)

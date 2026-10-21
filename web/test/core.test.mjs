@@ -644,6 +644,29 @@ test("drawing: packed points, widths and strokes in the vault match Ink.swift", 
   assert.deepEqual([...vault.inkedLayers().get("pdf-item")], ["blob1"]);
 });
 
+test("drawing: the ballpoint keeps one thickness, stored at pressure 1 (InkSafetyTests.ballpointKeepsOneThickness)", async () => {
+  const ink = await import("../public/core/ink.js");
+  assert.ok(ink.TOOLS.includes("ballpoint") && !ink.usesPressure("ballpoint") && ink.toolOpacity("ballpoint") === 1);
+  for (const p of [0, 0.3, 1]) assert.equal(ink.widthAt(3, "ballpoint", p), 3);
+  const points = [{ x: 0, y: 0, p: 0.1, t: 0 }, { x: 30, y: 4, p: 0.9, t: 16 }, { x: 60, y: 0, p: 0.4, t: 32 }];
+  const { v: vault } = await testVault();
+  const sketch = vault.addSketch({});
+  vault.addStroke({ on: sketch, page: "0", tool: "ballpoint", color: "#1c1c1e", width: 3, points });
+  vault.setCompactPoints(true);
+  vault.addStroke({ on: sketch, page: "0", tool: "ballpoint", color: "#1c1c1e", width: 3, points });
+  vault.addStroke({ on: sketch, page: "0", tool: "pen", color: "#1c1c1e", width: 3, points });
+  const stored = vault.strokes(sketch);
+  assert.deepEqual(stored.map((s) => s.tool), ["ballpoint", "ballpoint", "pen"]);
+  for (const s of stored.slice(0, 2)) {
+    assert.ok(s.points.every((p) => p.p === 1));
+    // Drawn as one even line; a client that doesn't know it draws a pen at full width all along.
+    assert.equal(ink.strokeOutline(s), null);
+    assert.ok(s.points.every((p) => ink.widthAt(3, "pen", p.p) === 3));
+  }
+  assert.notDeepEqual(stored[2].points.map((p) => p.p), [1, 1, 1]);
+  assert.equal(ink.strokeView({ id: "f", fields: { tool: "gelpen" } }).tool, "pen");
+});
+
 test("how much clipboard history to keep is a synced setting (ClipTests.howMuchToKeepIsASyncedSetting)", async () => {
   let now = 1_760_000_000_000;
   const { v: vault } = await testVault();

@@ -43,6 +43,8 @@ public enum InkOutline {
     /// clean shapes, dashed lines). Draw it with quadratic curves through the corners' midpoints.
     public static func outline(tool: InkTool, width: Double, points raw: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) -> [InkPoint]? {
         if shape != nil || style.dash != nil || !tool.usesPressure { return nil }
+        // Points that aren't real numbers can't be drawn (and would stop the arcs below).
+        let raw = raw.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) ? raw : raw.filter { $0.x.isFinite && $0.y.isFinite }
         guard let firstRaw = raw.first else { return [] }
         var pts: [InkPoint] = [firstRaw]
         for p in raw.dropFirst() {
@@ -78,6 +80,7 @@ public enum InkOutline {
         var left: [InkPoint] = [], right: [InkPoint] = []
         func arc(_ side: inout [InkPoint], _ c: InkPoint, _ radius: Double, _ from: Double, _ to: Double) {
             var delta = to - from
+            if !delta.isFinite || !radius.isFinite { return }
             while delta > Double.pi { delta -= 2 * Double.pi }
             while delta <= -Double.pi { delta += 2 * Double.pi }
             let steps = max(1, Int((abs(delta) / (Double.pi / Double(capSteps))).rounded(.up)))
@@ -353,7 +356,7 @@ public struct InkGrid: Sendable {
 
     public mutating func add(_ id: String, _ r: InkGeometry.Rect?) {
         remove(id)
-        guard let r, r.x.isFinite, r.y.isFinite, r.width.isFinite, r.height.isFinite else { return }
+        guard let r, r.x.isFinite, r.y.isFinite, r.width.isFinite, r.height.isFinite, r.width >= 0, r.height >= 0 else { return }
         boxes[id] = r
         let (i0, j0, i1, j1) = span(r)
         // Huge strokes (a whiteboard's frame) go in one list every query looks at.

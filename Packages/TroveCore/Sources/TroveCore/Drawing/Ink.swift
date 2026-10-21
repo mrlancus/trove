@@ -5,19 +5,27 @@ import Foundation
 /// sketch item's own pages, or on top of a file (a PDF page or an image), which never changes.
 /// web/public/core/ink.js is the same code for the website; both check Fixtures/ink-cases.json.
 public enum InkTool: String, Codable, CaseIterable, Sendable {
-    case pen, pencil, marker, highlighter, fountain, brush
+    /// `ballpoint`: one even thickness however hard it's pressed. Its points are stored at pressure
+    /// 1, so a Trove that doesn't know it (and draws it as a `pen`) still draws it full and even.
+    case pen, ballpoint, pencil, marker, highlighter, fountain, brush
 
     /// How see-through the ink is.
     public var opacity: Double {
         switch self {
-        case .pen, .marker, .fountain, .brush: 1
+        case .pen, .ballpoint, .marker, .fountain, .brush: 1
         case .pencil: 0.85
         case .highlighter: 0.35
         }
     }
 
-    /// Pens, pencils, fountain pens and brushes get thinner when pressed lightly; markers and highlighters don't.
-    public var usesPressure: Bool { self != .marker && self != .highlighter }
+    /// Pens, pencils, fountain pens and brushes get thinner when pressed lightly; ballpoints, markers and highlighters don't.
+    public var usesPressure: Bool { self != .marker && self != .highlighter && self != .ballpoint }
+
+    /// The points as stored: a ballpoint's at pressure 1 (see above), the rest as drawn.
+    public func stored(_ points: [InkPoint]) -> [InkPoint] {
+        guard self == .ballpoint else { return points }
+        return points.map { var p = $0; p.pressure = 1; return p }
+    }
 }
 
 public struct InkPoint: Sendable, Equatable {
@@ -83,7 +91,7 @@ public struct InkStroke: Identifiable, Sendable {
     /// "" for a sketch's own pages, or the attachment id of the file it's drawn on.
     public var layer: String { record[Field.layer]?.string ?? "" }
     /// 0-based page of a file (PDF page, or 0 for an image).
-    public var page: Int { Int(record[Field.page]?.number ?? Double(record[Field.page]?.string ?? "") ?? 0) }
+    public var page: Int { InkPage.int(record[Field.page]?.number ?? Double(record[Field.page]?.string ?? "") ?? 0) ?? 0 }
     /// The page as a sketch knows it: its id in `pageList` (a number n is the page "n").
     public var pageKey: String { InkPage.key(record[Field.page]) }
     /// The clean shape this stroke was snapped to, if any.
@@ -116,7 +124,7 @@ public struct InkStroke: Identifiable, Sendable {
         case .pen, .pencil: return width * (0.35 + 0.65 * p)
         case .brush: return width * (0.15 + 0.85 * p)
         case .fountain: return width * (0.6 + 0.4 * p)
-        case .marker, .highlighter: return width
+        case .ballpoint, .marker, .highlighter: return width
         }
     }
 
@@ -415,8 +423,14 @@ public struct InkPage: Equatable, Sendable, Identifiable {
     /// A stroke's or element's `page` field as a page id: numbers are the old page indexes.
     public static func key(_ value: JSONValue?) -> String {
         if let s = value?.string { return s }
-        if let n = value?.number { return String(Int(n)) }
+        if let n = value?.number { return int(n).map(String.init) ?? "0" }
         return "0"
+    }
+
+    /// A number as an Int, truncated, or nil when it isn't one an Int can hold (NaN, ±∞, huge):
+    /// `Int(_:)` would stop the app on those.
+    public static func int(_ n: Double) -> Int? {
+        n.isFinite && abs(n) < 9e15 ? Int(n) : nil
     }
 
     /// Colours offered for pages.
@@ -445,7 +459,8 @@ extension Item {
     public var sketchPageList: [InkPage] {
         let list = record[SketchField.pageList]?.array?.compactMap(InkPage.init(json:)) ?? []
         if !list.isEmpty { return list }
-        return (0..<max(1, Int(record[SketchField.pages]?.number ?? 1))).map { InkPage(id: String($0)) }
+        let count = record[SketchField.pages]?.number.flatMap(InkPage.int) ?? 1
+        return (0..<min(1000, max(1, count))).map { InkPage(id: String($0)) }
     }
     /// One endless page instead of pages.
     public var isInfiniteCanvas: Bool { record[SketchField.canvas]?.string == "infinite" }
@@ -469,9 +484,17 @@ extension Library {
     /// Strokes on an item (a sketch, or `layer` = the file's attachment id), oldest first, which is
     /// the order they're drawn in.
     public func strokes(on itemId: String, layer: String = "", page: Int? = nil) async -> [InkStroke] {
-        await engine.ink(on: itemId).filter { $0.kind == "stroke" }.map(InkStroke.init)
+        let strokes = await engine.ink(on: itemId).filter { $0.kind == "stroke" }.map(InkStroke.init)
             .filter { $0.layer == layer && (page == nil || $0.page == page) }
-            .sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }
+        return Self.drawOrder(strokes, createdAt: { $0.record[InkStroke.Field.createdAt]?.number ?? 0 })
+    }
+
+    /// Oldest first, ties by id. Each record's time is read once (reading it in every comparison
+    /// made a page's reload several times slower).
+    static func drawOrder<T: Identifiable>(_ list: [T], createdAt: (T) -> Double) -> [T] where T.ID == String {
+        list.map { (key: createdAt($0), value: $0) }
+            .sorted { $0.key != $1.key ? $0.key < $1.key : $0.value.id < $1.value.id }
+            .map(\.value)
     }
 
     /// Every item that has ink on it, and on which layers.
@@ -498,7 +521,7 @@ extension Library {
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
             InkStroke.Field.createdAt: .number(created), InkStroke.Field.device: .string(await engine.device),
         ]
-        fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
+        fields.merge(InkPoints.fields(tool.stored(points), compact: compact)) { _, b in b }
         await engine.set(fields, record: id, kind: "stroke")
         return id
     }
