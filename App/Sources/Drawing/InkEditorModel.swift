@@ -3,6 +3,12 @@ import Foundation
 import Observation
 import SwiftUI
 import TroveCore
+import UniformTypeIdentifiers
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// What the drawing editor is open on: a sketch's own pages, or a file (PDF or image) with its ink.
 struct InkTarget: Identifiable, Hashable, Codable {
@@ -16,7 +22,7 @@ struct InkTarget: Identifiable, Hashable, Codable {
 
 /// The tools in the editor's toolbar, like the website's (web/public/draw.js).
 enum InkEditorTool: String, CaseIterable, Identifiable {
-    case pen, ballpoint, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser, tape
+    case pen, ballpoint, pencil, fountain, brush, marker, highlighter, eraser, lasso, shape, text, laser, tape
     var id: String { rawValue }
 
     var ink: InkTool? { InkTool(rawValue: rawValue) }
@@ -31,6 +37,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .highlighter: "Highlighter"
         case .eraser: "Eraser"
         case .lasso: "Lasso"
+        case .shape: "Shape"
         case .text: "Text"
         case .laser: "Laser pointer"
         case .tape: "Tape"
@@ -47,6 +54,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .highlighter: "highlighter"
         case .eraser: "eraser"
         case .lasso: "lasso"
+        case .shape: "square.on.circle"
         case .text: "character.textbox"
         case .laser: "cursorarrow.rays"
         case .tape: "bandage"
@@ -63,6 +71,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .highlighter: 22
         case .eraser: 10
         case .lasso: 1
+        case .shape: 3
         case .text: 20
         case .laser: 6
         case .tape: 24
@@ -79,7 +88,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         }
     }
     /// Pens and text have a colour; pens, text and the eraser a size.
-    var hasColor: Bool { ink != nil || self == .text || self == .laser || self == .tape }
+    var hasColor: Bool { ink != nil || self == .text || self == .laser || self == .tape || self == .shape }
     var hasSize: Bool { hasColor || self == .eraser }
 }
 
@@ -127,7 +136,7 @@ struct InkSelection: Equatable {
     var count: Int { strokes.count + elements.count }
 }
 
-/// A text box being typed in (a sheet in the editor).
+/// A text box being typed in, on the page.
 struct InkTextEdit: Identifiable {
     var id = UUID().uuidString
     var elementId: String?
@@ -136,6 +145,114 @@ struct InkTextEdit: Identifiable {
     var text: String
     var size: Double
     var color: String
+    var style = InkTextStyle()
+    /// A turned box is typed in turned (radians).
+    var rotate = 0.0
+}
+
+/// What the shape tool draws: a clean shape filling the box dragged, a line, an arrow or a connector
+/// (a line joined to the shapes at its ends that follows them; PROTOCOL.md §10).
+enum InkShapeKind: String, CaseIterable, Identifiable {
+    case line, arrow, connector, rectangle, ellipse, circle, triangle, diamond, star, heart, bubble
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .line: "Line"
+        case .arrow: "Arrow"
+        case .connector: "Connector"
+        case .rectangle: "Rectangle"
+        case .ellipse: "Ellipse"
+        case .circle: "Circle"
+        case .triangle: "Triangle"
+        case .diamond: "Diamond"
+        case .star: "Star"
+        case .heart: "Heart"
+        case .bubble: "Speech bubble"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .line: "line.diagonal"
+        case .arrow: "arrow.up.right"
+        case .connector: "point.3.connected.trianglepath.dotted"
+        case .rectangle: "rectangle"
+        case .ellipse: "oval"
+        case .circle: "circle"
+        case .triangle: "triangle"
+        case .diamond: "diamond"
+        case .star: "star"
+        case .heart: "heart"
+        case .bubble: "bubble.left"
+        }
+    }
+}
+
+/// What the lasso picks: everything, or only ink, text boxes, or pictures (and tape).
+enum InkLassoKinds: String, CaseIterable, Identifiable {
+    case all, ink, text, pictures
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .all: "Everything"
+        case .ink: "Ink"
+        case .text: "Text"
+        case .pictures: "Pictures"
+        }
+    }
+    var picksInk: Bool { self == .all || self == .ink }
+    func picks(_ kind: InkElement.Kind) -> Bool {
+        switch self {
+        case .all: true
+        case .ink: false
+        case .text: kind == .text
+        case .pictures: kind != .text
+        }
+    }
+}
+
+/// The ruler or the protractor.
+enum InkGuideKind { case ruler, protractor }
+
+/// Where a pen put down on a guide draws: along a ruler edge (−1 top, 1 bottom) or the protractor's arc.
+enum InkGuideSnap: Equatable { case ruler(Int), arc }
+
+/// Ask AI on a lasso selection: a picture of it goes to the relay's cloud AI, or (with Apple
+/// Intelligence) the handwriting read off it goes to the on-device model.
+enum InkAIAction: String, CaseIterable, Identifiable {
+    case summarise, explain, solve, flashcards
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .summarise: "Summarise"
+        case .explain: "Explain"
+        case .solve: "Solve the maths"
+        case .flashcards: "Make flashcards"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .summarise: "text.alignleft"
+        case .explain: "lightbulb"
+        case .solve: "function"
+        case .flashcards: "rectangle.on.rectangle.angled"
+        }
+    }
+    /// The task for the on-device model, which gets the handwriting as text.
+    var instruction: String {
+        switch self {
+        case .summarise: "This is handwriting read off a page. Summarise it in a few sentences."
+        case .explain: "This is handwriting read off a page. Explain it simply, as to a student."
+        case .solve: "This is handwriting read off a page. Solve the maths in it, showing the steps."
+        case .flashcards: "Make study flashcards."
+        }
+    }
+}
+
+/// What Ask AI answered, to show and save.
+struct InkAIResult: Identifiable {
+    var id = UUID()
+    var action: InkAIAction
+    var result: NoteAI.Result
 }
 
 /// What the lasso copied, for pasting into this or another drawing.
@@ -182,7 +299,45 @@ final class InkEditorModel {
     private(set) var content: [String: InkContent] = [:]
     private(set) var pictures: [String: CGImage] = [:]
     var page = 0
-    var tool: InkEditorTool { didSet { UserDefaults.standard.set(tool.rawValue, forKey: "ink.tool"); if tool != .lasso { clearSelection() } } }
+    var tool: InkEditorTool {
+        didSet {
+            UserDefaults.standard.set(tool.rawValue, forKey: "ink.tool")
+            if tool != .lasso { clearSelection() }
+            if tool != .text { commitTextEdit() }
+        }
+    }
+    /// What the shape tool draws.
+    var shapeKind: InkShapeKind { didSet { UserDefaults.standard.set(shapeKind.rawValue, forKey: "ink.shapeKind") } }
+    /// What the lasso picks.
+    var lassoKinds: InkLassoKinds { didSet { UserDefaults.standard.set(lassoKinds.rawValue, forKey: "ink.lassoKinds") } }
+    /// The font, bold and italic of the next text box.
+    var textStyle: InkTextStyle {
+        didSet {
+            let d = UserDefaults.standard
+            d.set(textStyle.font.rawValue, forKey: "ink.textFont")
+            d.set(textStyle.bold, forKey: "ink.textBold")
+            d.set(textStyle.italic, forKey: "ink.textItalic")
+        }
+    }
+    /// The ruler and protractor (this device only, never synced), on page `guidesKey`.
+    var ruler: InkEditing.Guide?
+    var protractor: InkEditing.Guide?
+    private(set) var guidesKey: String?
+    /// Where the pen or pointer is, for the protractor's angle reading.
+    private(set) var protractorReading: InkPoint?
+    /// The iPad uses PencilKit's own ruler (it draws along it as you write), so Trove's isn't drawn there.
+    @ObservationIgnored var nativeRuler = false
+    /// A clean shape being reshaped by one of its handles (lifted off the page meanwhile).
+    private(set) var shapeEdit: (key: String, line: InkLine)?
+    /// A shape being dragged out with the shape tool.
+    private(set) var shapeDraft: (key: String, line: InkLine)?
+    /// The turn (degrees) while the selection's turning handle is dragged.
+    private(set) var turning: Double?
+    /// Ask AI's answer, shown in a sheet; `aiBusy` while it works.
+    var aiResult: InkAIResult?
+    private(set) var aiBusy = false
+    /// The elements library (saved and built-in), loaded when it's opened.
+    private(set) var stickers: [InkSticker] = []
     var eraserMode: InkEraserMode { didSet { UserDefaults.standard.set(eraserMode.rawValue, forKey: "ink.eraserMode") } }
     var highlighterOnly: Bool { didSet { UserDefaults.standard.set(highlighterOnly, forKey: "ink.highlighterOnly") } }
     var shapeMode: Bool { didSet { UserDefaults.standard.set(shapeMode, forKey: "ink.shapes") } }
@@ -249,6 +404,10 @@ final class InkEditorModel {
         case laser(key: String)
         case drag(key: String, start: InkPoint, corner: Int?, box: InkGeometry.Rect)
         case tape(key: String, start: InkPoint, end: InkPoint)
+        case turn(key: String, centre: InkPoint, start: InkPoint)
+        case handle(key: String, id: String, index: Int)
+        case shape(key: String, start: InkPoint, end: InkPoint, from: String)
+        case guide(kind: InkGuideKind, turn: Int, start: InkPoint, origin: InkEditing.Guide, grab: Double)
     }
     private var gesture: Gesture?
     /// Strokes drawn here that the library hasn't stored yet, and ones erased here it hasn't
@@ -277,6 +436,10 @@ final class InkEditorModel {
         scribbleToErase = d.bool(forKey: "ink.scribble")
         layout = InkPageLayout(rawValue: d.string(forKey: "ink.layout") ?? "") ?? .vertical
         fitWholePage = !d.bool(forKey: "ink.fitWidth")
+        shapeKind = InkShapeKind(rawValue: d.string(forKey: "ink.shapeKind") ?? "") ?? .rectangle
+        lassoKinds = InkLassoKinds(rawValue: d.string(forKey: "ink.lassoKinds") ?? "") ?? .all
+        textStyle = InkTextStyle(font: InkTextStyle.Font(rawValue: d.string(forKey: "ink.textFont") ?? "") ?? .sans,
+                                 bold: d.bool(forKey: "ink.textBold"), italic: d.bool(forKey: "ink.textItalic"))
     }
 
     func requestZoom(_ kind: InkZoomRequest.Kind) { zoomRequest = InkZoomRequest(kind: kind) }
@@ -306,6 +469,7 @@ final class InkEditorModel {
         set {
             if let selection, tool == .lasso, selection.count > 0 { recolourSelection(newValue); return }
             if !tool.hasColor { tool = .pen }
+            if tool == .text { textEdit?.color = newValue }
             UserDefaults.standard.set(newValue, forKey: "ink.color.\(tool.rawValue)")
             recentColors = Array(([newValue] + recentColors.filter { $0 != newValue }).prefix(8))
             UserDefaults.standard.set(recentColors, forKey: "ink.recentColors")
@@ -314,7 +478,11 @@ final class InkEditorModel {
     }
     var width: Double {
         get { width(for: tool) }
-        set { UserDefaults.standard.set(newValue, forKey: "ink.width.\(widthKey(tool))"); styleRevision += 1 }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "ink.width.\(widthKey(tool))")
+            if tool == .text { textEdit?.size = newValue }
+            styleRevision += 1
+        }
     }
 
     func select(_ t: InkEditorTool) {
@@ -491,6 +659,11 @@ final class InkEditorModel {
                 }
             }
         }
+        // The box being typed in shows in its text field instead.
+        if let edit = textEdit, let id = edit.elementId, edit.pageKey == key { c.elements.removeAll { $0.id == id } }
+        if let edit = shapeEdit, edit.key == key {
+            if lifted { c.strokes.removeAll { $0.id == edit.line.id } } else { c.strokes = c.strokes.map { $0.id == edit.line.id ? edit.line : $0 } }
+        }
         if let t = dragTransform, let sel = selection, sel.pageKey == key {
             if lifted {
                 c.strokes.removeAll { sel.strokes.contains($0.id) }
@@ -527,7 +700,22 @@ final class InkEditorModel {
             (points: l.points, color: l.color, width: l.width, alpha: l.ended.map { max(0, 1 - now.timeIntervalSince($0) / Self.laserFade) } ?? 1)
         }
         if case .lasso(let k)? = gesture, k == key { o.lasso = lassoPath }
-        if selection?.pageKey == key { o.selection = selectionBox() }
+        if selection?.pageKey == key {
+            o.selection = selectionBox()
+            o.rotateHandle = shapeEdit == nil
+            o.turning = turning
+            if dragTransform == nil, shapeEdit == nil, let line = singleShape() {
+                o.handles = InkEditing.shapeHandles(shape: line.shape, points: line.points)
+                o.roundMiddle = line.shape == "line" || line.shape == "curve"
+            }
+        }
+        if let d = shapeDraft, d.key == key { o.preview = d.line }
+        if let e = shapeEdit, e.key == key { o.preview = e.line }
+        if guidesKey == key {
+            if !nativeRuler { o.ruler = ruler }
+            o.protractor = protractor
+            o.reading = protractorReading
+        }
         if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, color: color(for: .tape)) }
         if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
         return o
@@ -573,17 +761,22 @@ final class InkEditorModel {
             togglePeek(strip.id)
             return true
         }
-        var snapped = shapeMode || held ? InkShapes.recognize(points) : nil
+        // Put down on the ruler's edge or the protractor's arc: the line runs along it.
+        var guided: [InkPoint]?
+        if let first = points.first, let snap = guideSnap(first, pageKey: key, scale: zoom) {
+            guided = points.map { along(snap, $0) }
+        }
+        var snapped = guided == nil && (shapeMode || held) ? InkShapes.recognize(points) : nil
         // A highlighter only ever straightens; held still, it does from its start to its end.
         if tool == .highlighter, snapped != nil, snapped?.shape != .line {
             snapped = held ? Self.straightLine(points) : nil
         }
         if snapped != nil { haptic?(.snapped) }
-        let pts = snapped?.points ?? points
+        let pts = snapped?.points ?? guided ?? points
         let shape = snapped?.shape.rawValue
         let editorTool = InkEditorTool(rawValue: tool.rawValue) ?? .pen
         var style = InkStrokeStyle(dash: dash(for: editorTool), nib: nib)
-        if let shape, tool != .highlighter, shape == "line" || shape == "polyline" { style.arrow = arrow }
+        if let shape, tool != .highlighter, shape == "line" || shape == "polyline" || shape == "curve" { style.arrow = arrow }
         if let shape, InkStrokeStyle.closedShapes.contains(shape) { style.fill = fill }
         let id = id ?? UUID().uuidString.lowercased()
         let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape, style: style)
@@ -599,7 +792,7 @@ final class InkEditorModel {
             unsavedStrokes[id] = nil
             app?.inkChanged()
         }
-        return snapped != nil
+        return snapped != nil || guided != nil
     }
 
     /// A straight line from the first point to the last.
@@ -687,11 +880,32 @@ final class InkEditorModel {
     /// `scale` is screen points per page point, so handles and the eraser keep their size on screen.
     func pointerDown(_ p: InkPoint, pageKey key: String, scale: Double) {
         let s = max(0.05, scale)
+        // The ruler and protractor: their bodies move them, their knobs turn them.
+        if beginGuideDrag(p, pageKey: key, scale: s, pen: false) { return }
         switch tool {
         case .text:
+            if let edit = textEdit {
+                // A tap inside the box being typed in is the text field's.
+                if edit.pageKey == key, isInside(edit, p) { return }
+                commitTextEdit()
+            }
             if let box = textBox(at: p, key: key) { beginText(box, key: key) } else { newText(at: p, key: key) }
+        case .shape:
+            let from = shapeKind == .connector ? (connectableAt(p, key: key) ?? "") : ""
+            gesture = .shape(key: key, start: p, end: p, from: from)
         case .lasso:
             if let sel = selection, sel.pageKey == key, let box = selectionBox() {
+                if let index = shapeHandleIndex(at: p, scale: s), let line = singleShape() {
+                    gesture = .handle(key: key, id: line.id, index: index)
+                    shapeEdit = (key, line)
+                    revision += 1
+                    return
+                }
+                let knob = InkRenderer.rotateHandle(box, scale: s)
+                if hypot(knob.x - p.x, knob.y - p.y) <= 16 / s {
+                    gesture = .turn(key: key, centre: InkPoint(x: box.x + box.width / 2, y: box.y + box.height / 2), start: p)
+                    return
+                }
                 let r = 20 / s
                 let corner = corners(box).firstIndex { hypot($0.x - p.x, $0.y - p.y) <= r }
                 if corner != nil || (p.x >= box.x && p.x <= box.maxX && p.y >= box.y && p.y <= box.maxY) {
@@ -751,6 +965,29 @@ final class InkEditorModel {
             if dragTransform == nil { revision += 1 }
             dragTransform = t
             overlayRevision += 1
+        case .turn(_, let c, let start):
+            let a = atan2(p.y - c.y, p.x - c.x) - atan2(start.y - c.y, start.x - c.x)
+            let r = InkEditing.snapRotation(a)
+            let t = InkEditing.rotate(r, about: c)
+            guard t.isUsable else { return }
+            if dragTransform == nil { revision += 1 }
+            dragTransform = t
+            turning = r * 180 / Double.pi
+            overlayRevision += 1
+        case .handle(let key, let id, let index):
+            guard let line = content[key]?.strokes.first(where: { $0.id == id }) else { return }
+            let moved = InkEditing.moveShapeHandle(shape: line.shape, points: line.points, index: index, to: p)
+            var reshaped = line
+            reshaped.shape = moved.shape
+            reshaped.points = moved.points
+            shapeEdit = (key, reshaped)
+            overlayRevision += 1
+        case .shape(let key, let start, _, let from):
+            gesture = .shape(key: key, start: start, end: p, from: from)
+            if let line = shapeLine(key: key, from: start, to: p, fromId: from) { shapeDraft = (key, line) } else { shapeDraft = nil }
+            overlayRevision += 1
+        case .guide(let kind, let turn, let start, let origin, let grab):
+            moveGuide(kind, turn: turn, start: start, origin: origin, grab: grab, to: p)
         case nil:
             break
         }
@@ -781,6 +1018,14 @@ final class InkEditorModel {
             } else {
                 layTape(key, from: start, to: end)
             }
+        case .turn:
+            commitDrag()
+        case .handle:
+            commitHandle()
+        case .shape(let key, let start, let end, let from):
+            finishShape(key: key, from: start, to: end, fromId: from)
+        case .guide:
+            overlayRevision += 1
         case nil:
             break
         }
@@ -815,9 +1060,11 @@ final class InkEditorModel {
     func pointerCancelled() {
         switch gesture {
         case .partial: erasePreview = [:]
-        case .drag: dragTransform = nil
+        case .drag, .turn: dragTransform = nil; turning = nil
         case .lasso: lassoPath = []
         case .laser: endLaser()
+        case .handle: shapeEdit = nil
+        case .shape: shapeDraft = nil
         default: break
         }
         if case .erase(_, _, let removed) = gesture, !removed.isEmpty { record(Action(remove: removed.map { Ref(id: $0, kind: "stroke") })) }
@@ -908,10 +1155,11 @@ final class InkEditorModel {
         let extent = InkGeometry.bounds(loop).map { max($0.width, $0.height) * max(0.05, zoom) } ?? 0
         guard loop.count >= 3, extent >= 8 else { overlayRevision += 1; return false }
         let c = content[key] ?? InkContent()
-        let strokes = self.strokes(near: InkGeometry.bounds(loop), key: key).filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
-        let boxes = c.elements.filter { InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
-        let picked = InkSelection(pageKey: key, strokes: Set(strokes), elements: Set(boxes))
-        selection = picked.count > 0 ? picked : nil
+        let kinds = lassoKinds
+        let near: [InkLine] = kinds.picksInk ? self.strokes(near: InkGeometry.bounds(loop), key: key) : []
+        let strokes = near.filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
+        let boxes = c.elements.filter { kinds.picks($0.kind) && InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
+        selection = grown(key, ids: strokes + boxes)
         return true
     }
 
@@ -923,17 +1171,16 @@ final class InkEditorModel {
     private func tapSelect(_ p: InkPoint?, key: String) {
         guard let p else { return }
         let c = content[key] ?? InkContent()
-        if let box = c.elements.last(where: { b in
-            let f = b.drawnFrame
-            return p.x >= f.x && p.x <= f.maxX && p.y >= f.y && p.y <= f.maxY
-        }) {
-            selection = InkSelection(pageKey: key, strokes: [], elements: [box.id])
+        let kinds = lassoKinds
+        if let box = c.elements.last(where: { b in kinds.picks(b.kind) && b.contains(p) }) {
+            selection = grown(key, ids: [box.id])
             return
         }
+        guard kinds.picksInk else { return }
         let r = 8 / max(0.05, zoom)
         let hit = strokes(near: InkGeometry.Rect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r), key: key)
             .filter { InkGeometry.hits($0.points, width: $0.width, x: p.x, y: p.y, radius: r) }.map(\.id)
-        if !hit.isEmpty { selection = InkSelection(pageKey: key, strokes: Set(hit), elements: []) }
+        if !hit.isEmpty { selection = grown(key, ids: hit) }
     }
 
     /// The box around the selection, moved by the drag in progress.
@@ -942,7 +1189,7 @@ final class InkEditorModel {
         let c = content[sel.pageKey] ?? InkContent()
         var box: InkGeometry.Rect?
         for line in c.strokes where sel.strokes.contains(line.id) { box = InkGeometry.union(box, line.bounds) }
-        for b in c.elements where sel.elements.contains(b.id) { box = InkGeometry.union(box, b.drawnFrame) }
+        for b in c.elements where sel.elements.contains(b.id) { box = InkGeometry.union(box, b.drawnBounds) }
         if let box, let t = dragTransform { return t.apply(box) }
         return box
     }
@@ -951,36 +1198,55 @@ final class InkEditorModel {
         [InkPoint(x: b.x, y: b.y), InkPoint(x: b.maxX, y: b.y), InkPoint(x: b.maxX, y: b.maxY), InkPoint(x: b.x, y: b.maxY)]
     }
 
-    private static let strokeFields = ["points", "points2", "width", "color"], elementFields = ["x", "y", "w", "h", "size", "color", "text"]
+    private static let strokeFields = ["points", "points2", "width", "color", "nib", "shape"]
+    private static let elementFields = ["x", "y", "w", "h", "size", "color", "text", "rotate", "flip", "font", "bold", "italic"]
 
     /// Fields the lasso changes, read before and after, so undo can put them back.
-    private func snapshot(_ sel: InkSelection) async -> [(ref: Ref, fields: [String: JSONValue])] {
+    private func snapshot(_ sel: InkSelection, strokeFields: [String] = InkEditorModel.strokeFields,
+                          elementFields: [String] = InkEditorModel.elementFields) async -> [(ref: Ref, fields: [String: JSONValue])] {
         guard let library = app?.library else { return [] }
         var out: [(ref: Ref, fields: [String: JSONValue])] = []
-        for id in sel.strokes { out.append((Ref(id: id, kind: "stroke"), await library.inkFields(id, Self.strokeFields))) }
-        for id in sel.elements { out.append((Ref(id: id, kind: "element"), await library.inkFields(id, Self.elementFields))) }
+        for id in sel.strokes { out.append((Ref(id: id, kind: "stroke"), await library.inkFields(id, strokeFields))) }
+        for id in sel.elements { out.append((Ref(id: id, kind: "element"), await library.inkFields(id, elementFields))) }
         return out
     }
 
     private func commitDrag() {
-        guard let t = dragTransform, t.isUsable, t != InkGeometry.Transform(), let sel = selection, let library = app?.library else {
+        turning = nil
+        guard let t = dragTransform, t.isUsable, t != InkGeometry.Transform(), let sel = selection else {
             if dragTransform != nil { dragTransform = nil; revision += 1 }
+            overlayRevision += 1
             return
         }
+        dragTransform = nil
+        transformSelection(t, sel)
+    }
+
+    /// Moves, resizes, turns or flips what's selected with one transform, then brings connectors
+    /// joined to it back onto what they join. One undo step.
+    private func transformSelection(_ t: InkGeometry.Transform, _ sel: InkSelection) {
+        guard t.isUsable, let library = app?.library else { return }
         // Show it where it landed straight away.
         content[sel.pageKey]?.strokes = (content[sel.pageKey]?.strokes ?? []).map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
         content[sel.pageKey]?.elements = (content[sel.pageKey]?.elements ?? []).map { sel.elements.contains($0.id) ? $0.transformed(t) : $0 }
         for (id, s) in unsavedStrokes where sel.strokes.contains(id) { unsavedStrokes[id] = (s.key, s.line.transformed(t)) }
-        dragTransform = nil
         revision += 1
+        let own = (content[sel.pageKey]?.strokes ?? []).filter { sel.strokes.contains($0.id) && $0.isConnector }.map(\.id)
+        let itemId = target.itemId, layer = target.layer
         // After the lasso's previous write: its undo snapshot and reload then see this move's start, not half of it.
         let previous = lassoWrites
         lassoWrites = Task {
             await previous?.value
-            let before = await snapshot(sel)
+            let picked = Array(sel.strokes) + Array(sel.elements)
+            let joined = await library.connectors(on: itemId, layer: layer, pageKey: sel.pageKey, joinedTo: picked)
+            let links = Array(Set(joined + own))
+            var touched = sel
+            touched.strokes.formUnion(links)
+            let before = await snapshot(touched)
             await library.transformStrokes(Array(sel.strokes), by: t)
             await library.transformElements(Array(sel.elements), by: t)
-            record(Action(before: before, after: await snapshot(sel)))
+            await library.rerouteConnectors(links)
+            record(Action(before: before, after: await snapshot(touched)))
             await reloadInk()
             app?.inkChanged()
         }
@@ -1017,11 +1283,19 @@ final class InkEditorModel {
     }
 
     private func selectIds(_ ids: [String], key: String) {
-        let c = content[key] ?? InkContent()
-        let set = Set(ids)
         if tool != .lasso { tool = .lasso }
-        let picked = InkSelection(pageKey: key, strokes: Set(c.strokes.map(\.id)).intersection(set), elements: Set(c.elements.map(\.id)).intersection(set))
-        selection = picked.count > 0 ? picked : nil
+        selection = grown(key, ids: ids)
+    }
+
+    /// A selection of ids on a page with the rest of their groups (nil when none are there).
+    private func grown(_ key: String, ids: [String]) -> InkSelection? {
+        let c = content[key] ?? InkContent()
+        var all: [(id: String, group: String)] = c.strokes.map { (line: InkLine) -> (id: String, group: String) in (id: line.id, group: line.group) }
+        all += c.elements.map { (box: InkBox) -> (id: String, group: String) in (id: box.id, group: box.group) }
+        let set = Set(InkEditing.withGroups(ids, all: all))
+        let strokes = Set(c.strokes.map(\.id)).intersection(set), elements = Set(c.elements.map(\.id)).intersection(set)
+        let picked = InkSelection(pageKey: key, strokes: strokes, elements: elements)
+        return picked.count > 0 ? picked : nil
     }
 
     func copySelection() {
@@ -1071,7 +1345,7 @@ final class InkEditorModel {
             }
             for b in clip.boxes {
                 ids.append(await library.addElement(on: itemId, layer: layer, pageKey: key, kind: b.kind, frame: t.apply(b.frame), text: b.text,
-                                                    size: b.size, color: b.color, image: b.image))
+                                                    size: b.size, color: b.color, image: b.image, rotate: b.rotate, flip: b.flip, textStyle: b.textStyle))
             }
             await reloadInk()
             selectIds(ids, key: key)
@@ -1096,21 +1370,36 @@ final class InkEditorModel {
         let pageWidth = currentPage.map { $0.infinite ? 0 : $0.width } ?? 0
         let w = pageWidth > 0 ? max(120, min(360, pageWidth - p.x - 16)) : 320
         textEdit = InkTextEdit(elementId: nil, pageKey: key, frame: InkGeometry.Rect(x: p.x, y: p.y - size * 0.6, width: w, height: size * 1.25),
-                               text: "", size: size, color: color(for: .text))
+                               text: "", size: size, color: color(for: .text), style: textStyle)
     }
 
     private func beginText(_ box: InkBox, key: String) {
-        textEdit = InkTextEdit(elementId: box.id, pageKey: key, frame: box.frame, text: box.text, size: box.size, color: box.color)
+        textEdit = InkTextEdit(elementId: box.id, pageKey: key, frame: box.frame, text: box.text, size: box.size, color: box.color,
+                               style: box.textStyle, rotate: box.rotate)
+        // Shown in the text field while it's typed in.
+        revision += 1
     }
 
-    /// The text sheet's Done: a new box, a changed one, or (emptied) none.
+    /// Whether a point is on the box being typed in (as tall as its lines).
+    private func isInside(_ edit: InkTextEdit, _ p: InkPoint) -> Bool {
+        let h = max(edit.frame.height, InkRenderer.textHeight(edit.text, width: edit.frame.width, size: edit.size, style: edit.style))
+        return InkEditing.contains(InkEditing.Frame(edit.frame, rotate: edit.rotate), p, height: h)
+    }
+
+    /// Closes the text box being typed in, keeping what was typed.
+    func commitTextEdit() {
+        if let edit = textEdit { commitText(edit) }
+    }
+
+    /// A new box, a changed one, or (emptied) none.
     func commitText(_ edit: InkTextEdit) {
         textEdit = nil
         guard let library = app?.library else { return }
         let text = edit.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let itemId = target.itemId, layer = target.layer
         var frame = edit.frame
-        frame.height = InkRenderer.textHeight(text, width: frame.width, size: edit.size)
+        frame.height = InkRenderer.textHeight(text, width: frame.width, size: edit.size, style: edit.style)
+        revision += 1
         Task {
             if let id = edit.elementId {
                 let sel = InkSelection(pageKey: edit.pageKey, strokes: [], elements: [id])
@@ -1119,12 +1408,12 @@ final class InkEditorModel {
                     record(Action(remove: [Ref(id: id, kind: "element")]))
                 } else {
                     let before = await snapshot(sel)
-                    await library.updateElement(id, frame: frame, text: text, size: edit.size, color: edit.color)
+                    await library.updateElement(id, frame: frame, text: text, size: edit.size, color: edit.color, textStyle: edit.style)
                     record(Action(before: before, after: await snapshot(sel)))
                 }
             } else if !text.isEmpty {
                 let id = await library.addElement(on: itemId, layer: layer, pageKey: edit.pageKey, kind: .text, frame: frame, text: text,
-                                                  size: edit.size, color: edit.color)
+                                                  size: edit.size, color: edit.color, textStyle: edit.style)
                 record(Action(add: [Ref(id: id, kind: "element")]))
             }
             await reloadInk()
@@ -1301,6 +1590,7 @@ final class InkEditorModel {
 
     /// When the editor closes: a fresh card picture for a sketch, and its handwriting read for search.
     func finish() async {
+        commitTextEdit()
         guard edited, isSketch, let first = pages.first, let library = app?.library else { return }
         edited = false // once: Done and closing the window both land here
         let c = display(first.key)
@@ -1310,5 +1600,492 @@ final class InkEditorModel {
         }
         await Handwriting.read(target.itemId, library: library)
         app?.inkChanged(now: true)
+    }
+}
+
+// MARK: - Editing faster (ROADMAP S3): guides, shapes and handles, lasso actions, text styles, the elements library
+
+extension InkEditorModel {
+    // MARK: Ruler and protractor
+
+    /// Shows or hides the ruler or protractor on the page in view (in its middle).
+    func toggleGuide(_ kind: InkGuideKind) {
+        let key = currentKey
+        if guidesKey != key { ruler = nil; protractor = nil }
+        guidesKey = key
+        let c = guideCentre()
+        switch kind {
+        case .ruler: ruler = ruler == nil ? InkEditing.Guide(x: c.x, y: c.y, angle: -Double.pi / 12) : nil
+        case .protractor: protractor = protractor == nil ? InkEditing.Guide(x: c.x, y: c.y + 80, angle: 0) : nil
+        }
+        protractorReading = nil
+        if ruler == nil && protractor == nil { guidesKey = nil }
+        overlayRevision += 1
+    }
+
+    private func guideCentre() -> InkPoint {
+        guard let spec = currentPage, !spec.infinite else { return visibleCenter }
+        return InkPoint(x: spec.width / 2, y: spec.height / 2)
+    }
+
+    /// What a point is on: a guide's body (`turn` 0, to move it) or one of its knobs (−1, 1, to turn it).
+    func guideHit(_ p: InkPoint, pageKey key: String, scale: Double) -> (kind: InkGuideKind, turn: Int)? {
+        guard guidesKey == key else { return nil }
+        let px = 1 / max(0.05, scale), knob = 16 * px
+        if let g = protractor {
+            let (u, v) = g.local(p)
+            for side in [-1, 1] where hypot(u - Double(side) * (g.radius - InkRenderer.guideKnob), v - 10) <= knob { return (.protractor, side) }
+            if v <= 4 * px && hypot(u, v) <= g.radius - 18 { return (.protractor, 0) }
+        }
+        if let g = ruler, !nativeRuler {
+            let (u, v) = g.local(p)
+            for side in [-1, 1] where hypot(u - Double(side) * (g.length / 2 - InkRenderer.guideKnob), v) <= knob { return (.ruler, side) }
+            if abs(u) <= g.length / 2 && abs(v) <= g.width / 2 - 10 { return (.ruler, 0) }
+        }
+        return nil
+    }
+
+    /// Starts moving or turning a guide when `p` is on one. `pen`: a pen put down on an edge or the arc draws instead.
+    @discardableResult
+    func beginGuideDrag(_ p: InkPoint, pageKey key: String, scale: Double, pen: Bool) -> Bool {
+        guard let hit = guideHit(p, pageKey: key, scale: scale) else { return false }
+        if pen, guideSnap(p, pageKey: key, scale: scale) != nil { return false }
+        let found: InkEditing.Guide? = hit.kind == .ruler ? ruler : protractor
+        guard let g = found else { return false }
+        gesture = .guide(kind: hit.kind, turn: hit.turn, start: p, origin: g, grab: atan2(p.y - g.y, p.x - g.x))
+        return true
+    }
+
+    /// Moves a guide with its body, or turns it about its centre with a knob (snapping to 15° steps).
+    private func moveGuide(_ kind: InkGuideKind, turn: Int, start: InkPoint, origin: InkEditing.Guide, grab: Double, to p: InkPoint) {
+        var g = origin
+        if turn != 0 {
+            g.angle = InkEditing.snapRotation(origin.angle + atan2(p.y - origin.y, p.x - origin.x) - grab)
+        } else {
+            g.x = origin.x + p.x - start.x
+            g.y = origin.y + p.y - start.y
+        }
+        if kind == .ruler { ruler = g } else { protractor = g }
+        overlayRevision += 1
+    }
+
+    /// The guide a pen put down at `p` draws along (within 14 screen points of a ruler edge or the protractor's arc).
+    func guideSnap(_ p: InkPoint, pageKey key: String, scale: Double) -> InkGuideSnap? {
+        guard guidesKey == key else { return nil }
+        let tolerance = 14 / max(0.05, scale)
+        if let r = ruler, !nativeRuler {
+            let edge = InkEditing.rulerEdge(r, p, tolerance: tolerance)
+            if edge != 0 { return .ruler(edge) }
+        }
+        if let pro = protractor, InkEditing.onProtractorArc(pro, p, tolerance: tolerance) { return .arc }
+        return nil
+    }
+
+    /// A point moved onto the guide edge or arc it's drawn along (pressure and time kept).
+    func along(_ snap: InkGuideSnap?, _ p: InkPoint) -> InkPoint {
+        switch snap {
+        case .ruler(let edge)?:
+            guard let r = ruler else { return p }
+            return InkEditing.onRulerEdge(r, edge: edge, p)
+        case .arc?:
+            guard let pro = protractor else { return p }
+            return InkEditing.onArc(pro, p)
+        case nil:
+            return p
+        }
+    }
+
+    /// The protractor reads the angle of wherever the pen or pointer is near it.
+    func noteReading(_ p: InkPoint?, pageKey key: String?) {
+        guard let pro = protractor, guidesKey != nil else { return }
+        var next: InkPoint?
+        if let p, key == guidesKey, hypot(p.x - pro.x, p.y - pro.y) <= pro.radius * 1.6 { next = p }
+        if next == nil && protractorReading == nil { return }
+        protractorReading = next
+        overlayRevision += 1
+    }
+
+    // MARK: Shapes: the picker, handles and connectors
+
+    /// The selection when it's one clean shape on its own (it shows its own handles). Connectors follow what they join instead.
+    func singleShape() -> InkLine? {
+        guard let sel = selection, sel.strokes.count == 1, sel.elements.isEmpty, let id = sel.strokes.first,
+              let line = content[sel.pageKey]?.strokes.first(where: { $0.id == id }), line.shape != nil, !line.isConnector else { return nil }
+        return line
+    }
+
+    private func shapeHandleIndex(at p: InkPoint, scale: Double) -> Int? {
+        guard let line = singleShape() else { return nil }
+        let r = 14 / max(0.05, scale)
+        return InkEditing.shapeHandles(shape: line.shape, points: line.points).firstIndex { hypot($0.x - p.x, $0.y - p.y) <= r }
+    }
+
+    /// The box a connector end follows: a stroke's line grown by half its width, or an element's box as drawn.
+    private func localBox(_ id: String, key: String) -> InkGeometry.Rect? {
+        guard !id.isEmpty else { return nil }
+        let c = content[key] ?? InkContent()
+        if let line = c.strokes.first(where: { $0.id == id }) { return InkGeometry.bounds(line.points, pad: line.width / 2) }
+        if let box = c.elements.first(where: { $0.id == id }) { return box.drawnBounds }
+        return nil
+    }
+
+    /// The text box, picture or closed shape under a point that a connector can join.
+    private func connectableAt(_ p: InkPoint, key: String) -> String? {
+        let c = content[key] ?? InkContent()
+        if let box = c.elements.last(where: { $0.contains(p) }) { return box.id }
+        let shape = c.strokes.last { line in
+            guard InkEditing.connectable(shape: line.shape, from: line.from, to: line.to),
+                  let b = InkGeometry.bounds(line.points, pad: line.width / 2) else { return false }
+            return p.x >= b.x && p.x <= b.maxX && p.y >= b.y && p.y <= b.maxY
+        }
+        return shape?.id
+    }
+
+    /// The stroke the shape tool would add for a drag from `a` to `b`.
+    private func shapeLine(key: String, from a: InkPoint, to b: InkPoint, fromId: String) -> InkLine? {
+        var style = InkStrokeStyle(dash: dash(for: .shape))
+        let kind = shapeKind, color = color(for: .shape), width = width(for: .shape)
+        if kind == .line || kind == .arrow || kind == .connector {
+            var toId = ""
+            var ends = (InkPoint(x: a.x, y: a.y), InkPoint(x: b.x, y: b.y))
+            if kind == .connector {
+                toId = connectableAt(b, key: key) ?? ""
+                if toId == fromId { toId = "" }
+                ends = InkEditing.connectorEnds(a, b, from: localBox(fromId, key: key), to: localBox(toId, key: key))
+            }
+            if kind == .line { style.arrow = arrow } else { style.arrow = arrow == "both" ? "both" : "end" }
+            var line = InkLine(id: "shape-draft", tool: .pen, color: color, width: width, points: [ends.0, ends.1], shape: "line", style: style)
+            line.from = fromId
+            line.to = toId
+            return line
+        }
+        guard let pts = InkEditing.shapePoints(kind.rawValue, from: a, to: b) else { return nil }
+        if InkStrokeStyle.closedShapes.contains(kind.rawValue) { style.fill = fill }
+        return InkLine(id: "shape-draft", tool: .pen, color: color, width: width, points: pts, shape: kind.rawValue, style: style)
+    }
+
+    /// The shape tool lifts: the shape it dragged out (a tap adds nothing).
+    private func finishShape(key: String, from a: InkPoint, to b: InkPoint, fromId: String) {
+        shapeDraft = nil
+        overlayRevision += 1
+        guard hypot(b.x - a.x, b.y - a.y) * max(0.05, zoom) >= 6, var line = shapeLine(key: key, from: a, to: b, fromId: fromId),
+              let library = app?.library else { return }
+        let id = UUID().uuidString.lowercased()
+        line.id = id
+        content[key, default: InkContent()].strokes.append(line)
+        unsavedStrokes[id] = (key, line)
+        revision += 1
+        record(Action(add: [Ref(id: id, kind: "stroke")]))
+        let itemId = target.itemId, layer = target.layer, stored = line
+        Task {
+            await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: stored.tool, color: stored.color, width: stored.width,
+                                    points: stored.points, shape: stored.shape, style: stored.style.isEmpty ? nil : stored.style,
+                                    from: stored.from, to: stored.to)
+            unsavedStrokes[id] = nil
+            app?.inkChanged()
+        }
+    }
+
+    /// A handle lifts: the reshaped shape is stored, and connectors joined to it follow.
+    private func commitHandle() {
+        guard let edit = shapeEdit, let library = app?.library else { shapeEdit = nil; revision += 1; return }
+        shapeEdit = nil
+        let key = edit.key, line = edit.line
+        if let i = content[key]?.strokes.firstIndex(where: { $0.id == line.id }) { content[key]?.strokes[i] = line }
+        revision += 1
+        let itemId = target.itemId, layer = target.layer
+        let previous = lassoWrites
+        lassoWrites = Task {
+            await previous?.value
+            let links = await library.connectors(on: itemId, layer: layer, pageKey: key, joinedTo: [line.id])
+            let sel = InkSelection(pageKey: key, strokes: Set([line.id] + links), elements: [])
+            let before = await snapshot(sel)
+            await library.setStrokeShape(line.id, shape: line.shape, points: line.points)
+            await library.rerouteConnectors(links)
+            record(Action(before: before, after: await snapshot(sel)))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    // MARK: The lasso's actions
+
+    private func selectionCentre() -> InkPoint? {
+        guard let b = selectionBox() else { return nil }
+        return InkPoint(x: b.x + b.width / 2, y: b.y + b.height / 2)
+    }
+
+    /// Turns the selection about its middle (radians, clockwise).
+    func turnSelection(by r: Double) {
+        guard let sel = selection, let c = selectionCentre() else { return }
+        transformSelection(InkEditing.rotate(r, about: c), sel)
+    }
+
+    /// Mirrors the selection left to right (`horizontal`) or upside down.
+    func flipSelection(horizontal: Bool) {
+        guard let sel = selection, let c = selectionCentre() else { return }
+        transformSelection(InkEditing.flip(horizontal: horizontal, about: c), sel)
+    }
+
+    /// Straighten: turns slanted writing level (or upright) about its middle.
+    func straightenSelection() {
+        guard let sel = selection else { return }
+        let lines = (content[sel.pageKey]?.strokes ?? []).filter { sel.strokes.contains($0.id) }
+        let r = InkEditing.straightenAngle(lines.flatMap(\.points))
+        if abs(r) > 1e-4 { turnSelection(by: r) }
+    }
+
+    /// Bring to front (`front`) or send to back, keeping the picked things' own order.
+    func arrangeSelection(front: Bool) {
+        guard let sel = selection, let library = app?.library else { return }
+        Task {
+            let before = await snapshot(sel, strokeFields: ["createdAt"], elementFields: ["createdAt"])
+            await library.reorderInk(Array(sel.strokes) + Array(sel.elements), front: front)
+            record(Action(before: before, after: await snapshot(sel, strokeFields: ["createdAt"], elementFields: ["createdAt"])))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    /// The selection's group when it's exactly one whole group, else "".
+    var selectionGroup: String {
+        guard let sel = selection else { return "" }
+        let c = content[sel.pageKey] ?? InkContent()
+        var groups: Set<String> = []
+        for line in c.strokes where sel.strokes.contains(line.id) { groups.insert(line.group) }
+        for box in c.elements where sel.elements.contains(box.id) { groups.insert(box.group) }
+        guard groups.count == 1, let only = groups.first else { return "" }
+        return only
+    }
+
+    /// Groups the selection (picked and moved as one from then on), or ungroups it if it's one group.
+    func toggleGroup() {
+        guard let sel = selection, let library = app?.library else { return }
+        let ungroup = !selectionGroup.isEmpty
+        guard ungroup || sel.count >= 2 else { return }
+        Task {
+            let before = await snapshot(sel, strokeFields: ["group"], elementFields: ["group"])
+            await library.setInkGroup(Array(sel.strokes) + Array(sel.elements), group: ungroup ? "" : nil)
+            record(Action(before: before, after: await snapshot(sel, strokeFields: ["group"], elementFields: ["group"])))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    /// Just the selected ink, to draw on its own.
+    private func selectionContent(_ sel: InkSelection) -> InkContent {
+        let c = content[sel.pageKey] ?? InkContent()
+        var out = InkContent()
+        out.strokes = c.strokes.filter { sel.strokes.contains($0.id) }
+        out.elements = c.elements.filter { sel.elements.contains($0.id) }
+        out.pictures = pictures
+        return out
+    }
+
+    /// The selection's box with a little room round it.
+    private func selectionArea() -> InkGeometry.Rect? {
+        guard let b = selectionBox() else { return nil }
+        return InkGeometry.Rect(x: b.x - 8, y: b.y - 8, width: b.width + 16, height: b.height + 16)
+    }
+
+    /// Copy as image: a PNG of the selection on the clipboard.
+    func copySelectionAsImage() {
+        guard let sel = selection, let area = selectionArea() else { return }
+        let c = selectionContent(sel)
+        guard let image = InkRenderer.renderSelection(c, box: area, scale: 3), let png = InkRenderer.png(image) else { return }
+        #if os(iOS)
+        UIPasteboard.general.setData(png, forPasteboardType: UTType.png.identifier)
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setData(png, forType: .png)
+        #endif
+        app?.toast = "Copied as a picture"
+    }
+
+    /// Convert to text: the handwriting read off the selection (Vision, on this device) becomes a text box under it.
+    func convertSelectionToText() {
+        guard let sel = selection, let area = selectionArea(), let library = app?.library else { return }
+        var c = selectionContent(sel)
+        c.elements = []
+        let key = sel.pageKey, itemId = target.itemId, layer = target.layer
+        let size = width(for: .text), color = color(for: .text), style = textStyle
+        Task {
+            let text = await Task.detached(priority: .userInitiated) { () async -> String in
+                guard let image = InkRenderer.renderSelection(c, box: area, scale: 3, whiteBackground: true) else { return "" }
+                return await AppleEnricher.recognizeText(in: image)
+            }.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { app?.toast = "No handwriting found there"; return }
+            let w = max(120, area.width - 16)
+            let h = InkRenderer.textHeight(text, width: w, size: size, style: style)
+            let frame = InkGeometry.Rect(x: area.x + 8, y: area.maxY + 4, width: w, height: h)
+            let id = await library.addElement(on: itemId, layer: layer, pageKey: key, kind: .text, frame: frame, text: text, size: size,
+                                              color: color, textStyle: style)
+            record(Action(add: [Ref(id: id, kind: "element")]))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    /// Ask AI about the selection: on this device with Apple Intelligence (from the handwriting read
+    /// off it), else the relay's cloud AI (from a picture of it) when that's on.
+    func askAI(_ action: InkAIAction) {
+        guard let sel = selection, let area = selectionArea(), let app else { return }
+        let c = selectionContent(sel)
+        aiBusy = true
+        Task {
+            let picture = await Task.detached(priority: .userInitiated) { () async -> (png: Data?, text: String) in
+                guard let image = InkRenderer.renderSelection(c, box: area, scale: 2, whiteBackground: true) else { return (nil, "") }
+                let text = await AppleEnricher.recognizeText(in: image)
+                return (InkRenderer.png(image), text)
+            }.value
+            if let png = picture.png, let result = await app.runInkAI(action, image: png, text: picture.text) {
+                aiResult = InkAIResult(action: action, result: result)
+            }
+            aiBusy = false
+        }
+    }
+
+    /// Ask AI's answer as a note connected to this drawing (or its flashcards as a flashcards note).
+    func saveAIResult() {
+        guard let r = aiResult, let library = app?.library else { return }
+        aiResult = nil
+        let itemId = target.itemId, title = target.title
+        Task {
+            if !r.result.cards.isEmpty {
+                if let item = await library.item(itemId) { await app?.saveFlashcards(r.result, from: item) }
+                return
+            }
+            let body = r.result.text + "\n\n_" + r.result.label + "._"
+            let id = await library.addNote(title: r.action.label + ": " + title, body: body)
+            let ai: JSONValue = .object(["where": .string(r.result.place), "model": .string(r.result.model)])
+            await library.update(id, ["ai": ai, "needsEnrichment": .bool(false)])
+            await library.connect(id, itemId)
+            app?.toast = "Saved as a note"
+            app?.inkChanged(now: true)
+        }
+    }
+
+    // MARK: The elements library
+
+    func loadStickers() async {
+        guard let library = app?.library else { return }
+        stickers = await library.stickers()
+    }
+
+    /// Save as element: the selection becomes a reusable element (on every device).
+    func saveSelectionAsElement(name: String, folder: String) {
+        guard let sel = selection, let library = app?.library else { return }
+        let itemId = target.itemId, layer = target.layer
+        Task {
+            let strokes = await library.strokes(on: itemId, layer: layer, pageKey: sel.pageKey).filter { sel.strokes.contains($0.id) }
+            let elements = await library.elements(on: itemId, layer: layer, pageKey: sel.pageKey).filter { sel.elements.contains($0.id) }
+            await library.addSticker(name: name.trimmingCharacters(in: .whitespacesAndNewlines), folder: folder.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     strokes: strokes, elements: elements)
+            await loadStickers()
+            app?.toast = "Saved to your elements"
+            app?.inkChanged()
+        }
+    }
+
+    /// Puts a library element in the middle of the page (or of what's in view on an endless canvas), selected.
+    func placeSticker(_ sticker: InkSticker) {
+        guard let library = app?.library, let spec = currentPage else { return }
+        let key = spec.key, itemId = target.itemId, layer = target.layer
+        let at = spec.infinite ? visibleCenter : InkPoint(x: spec.width / 2, y: spec.height / 2)
+        Task {
+            let ids = await library.placeSticker(sticker, on: itemId, layer: layer, pageKey: key, at: at)
+            guard !ids.isEmpty else { return }
+            await reloadInk()
+            record(Action(add: ids.map { Ref(id: $0, kind: kind(of: $0, key: key)) }))
+            selectIds(ids, key: key)
+            app?.inkChanged()
+        }
+    }
+
+    func deleteSticker(_ sticker: InkSticker) {
+        guard !sticker.builtin, let library = app?.library else { return }
+        Task {
+            await library.deleteSticker(sticker.id)
+            await loadStickers()
+            app?.inkChanged()
+        }
+    }
+
+    /// A library element as ink to draw (its preview).
+    static func stickerContent(_ sticker: InkSticker) -> InkContent {
+        var c = InkContent()
+        var lines: [InkLine] = []
+        for (i, s) in sticker.strokes.enumerated() {
+            lines.append(InkLine(id: "\(sticker.id)#\(i)", tool: s.inkTool, color: s.color, width: s.width, points: s.points, shape: s.shape, style: s.style))
+        }
+        var boxes: [InkBox] = []
+        for (i, e) in sticker.elements.enumerated() { boxes.append(InkBox(id: "\(sticker.id)@\(i)", sticker: e)) }
+        c.strokes = lines
+        c.elements = boxes
+        return c
+    }
+
+    // MARK: Text style
+
+    /// Whether text boxes are among what the lasso picked (the text options then show).
+    var selectionHasText: Bool {
+        guard let sel = selection, !sel.elements.isEmpty else { return false }
+        return (content[sel.pageKey]?.elements ?? []).contains { sel.elements.contains($0.id) && $0.kind == .text }
+    }
+
+    /// The style the text options show: the box being typed in, else a selected text box, else the next box's.
+    var currentTextStyle: InkTextStyle {
+        if let edit = textEdit { return edit.style }
+        if let sel = selection, let box = (content[sel.pageKey]?.elements ?? []).first(where: { sel.elements.contains($0.id) && $0.kind == .text }) {
+            return box.textStyle
+        }
+        return textStyle
+    }
+
+    /// Font, bold or italic: on the box being typed in, the selected text boxes, and the next new box.
+    func applyTextStyle(_ style: InkTextStyle) {
+        textStyle = style
+        if textEdit != nil {
+            textEdit?.style = style
+            return
+        }
+        guard let sel = selection, let library = app?.library else { return }
+        let boxes = (content[sel.pageKey]?.elements ?? []).filter { sel.elements.contains($0.id) && $0.kind == .text }
+        guard !boxes.isEmpty else { return }
+        let only = InkSelection(pageKey: sel.pageKey, strokes: [], elements: Set(boxes.map(\.id)))
+        Task {
+            let before = await snapshot(only)
+            for box in boxes {
+                var frame = box.frame
+                frame.height = InkRenderer.textHeight(box.text, width: frame.width, size: box.size, style: style)
+                await library.updateElement(box.id, frame: frame, textStyle: style)
+            }
+            record(Action(before: before, after: await snapshot(only)))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    /// Bullets on every line of the box being typed in, or off when they all have one.
+    func toggleBullets() {
+        guard let edit = textEdit else { return }
+        textEdit?.text = InkTextStyle.toggleBullets(edit.text)
+    }
+}
+
+/// A Return in a bulleted line continues the list ("• "); on an empty bullet it ends it.
+enum InkBullets {
+    static func afterReturn(_ text: String, at location: Int) -> (text: String, cursor: Int)? {
+        let ns = text as NSString
+        guard location >= 0, location <= ns.length else { return nil }
+        let before = ns.substring(to: location) as NSString
+        let newline = before.range(of: "\n", options: .backwards).location
+        let start = newline == NSNotFound ? 0 : newline + 1
+        let line = before.substring(from: start)
+        guard line.hasPrefix("• ") else { return nil }
+        if line == "• " {
+            return (ns.replacingCharacters(in: NSRange(location: start, length: location - start), with: ""), start)
+        }
+        return (ns.replacingCharacters(in: NSRange(location: location, length: 0), with: "\n• "), location + 3)
     }
 }

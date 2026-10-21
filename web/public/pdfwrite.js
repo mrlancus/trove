@@ -118,6 +118,10 @@ export class PdfContext {
     return { fillStyle, strokeStyle, lineWidth, globalAlpha, lineCap, lineJoin, globalCompositeOperation, font, textBaseline };
   }
   setTransform() { /* drawings are already in page points */ }
+  // Turned and mirrored elements (within save/restore, like a canvas).
+  translate(x, y) { this.ops.push(`1 0 0 1 ${num(x)} ${num(y)} cm`); }
+  rotate(a) { const c = Math.cos(a), s = Math.sin(a); this.ops.push(`${num(c)} ${num(s)} ${num(-s)} ${num(c)} 0 0 cm`); }
+  scale(x, y) { this.ops.push(`${num(x)} 0 0 ${num(y)} 0 0 cm`); }
 
   beginPath() { this.path = []; this.last = null; this.start = null; }
   moveTo(x, y) { this.path.push(`${num(x)} ${num(y)} m`); this.last = [x, y]; this.start = [x, y]; }

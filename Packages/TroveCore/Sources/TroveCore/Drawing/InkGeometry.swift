@@ -58,11 +58,15 @@ public enum InkGeometry {
 
     // MARK: Moving and resizing
 
-    /// Scale about an origin, then move: x' = ox + (x − ox)·sx + dx.
+    /// Scale about an origin (ox, oy), turn by `r` radians (clockwise on the page) about it, then
+    /// move: x' = ox + cos r·(x − ox)·sx − sin r·(y − oy)·sy + dx, and y' likewise (PROTOCOL.md §10;
+    /// core/ink.js `transformPoint`). With r = 0 that's x' = ox + (x − ox)·sx + dx.
     public struct Transform: Equatable, Sendable {
         public var sx, sy, ox, oy, dx, dy: Double
-        public init(sx: Double = 1, sy: Double = 1, ox: Double = 0, oy: Double = 0, dx: Double = 0, dy: Double = 0) {
-            self.sx = sx; self.sy = sy; self.ox = ox; self.oy = oy; self.dx = dx; self.dy = dy
+        /// Radians, clockwise on the page.
+        public var r: Double
+        public init(sx: Double = 1, sy: Double = 1, ox: Double = 0, oy: Double = 0, dx: Double = 0, dy: Double = 0, r: Double = 0) {
+            self.sx = sx; self.sy = sy; self.ox = ox; self.oy = oy; self.dx = dx; self.dy = dy; self.r = r
         }
         public static func move(_ dx: Double, _ dy: Double) -> Transform { Transform(dx: dx, dy: dy) }
         /// What a stroke's width is multiplied by.
@@ -71,16 +75,42 @@ public enum InkGeometry {
         /// Real numbers, a scale that neither flattens (under 1/1000) nor blows up (over 10,000) and
         /// a move under a million points: anything else is a glitch, not something to store or draw.
         public var isUsable: Bool {
-            [sx, sy, ox, oy, dx, dy].allSatisfy(\.isFinite) && abs(sx) >= 1e-3 && abs(sy) >= 1e-3 && abs(sx) <= 1e4 && abs(sy) <= 1e4
+            [sx, sy, ox, oy, dx, dy, r].allSatisfy(\.isFinite) && abs(sx) >= 1e-3 && abs(sy) >= 1e-3 && abs(sx) <= 1e4 && abs(sy) <= 1e4
                 && abs(dx) < 1e6 && abs(dy) < 1e6
         }
 
+        /// Turns, mirrors or squashes the nib angle along with the ink: it's needed whenever the
+        /// transform does more than scale evenly and move.
+        public var changesAngles: Bool { r != 0 || sx != sy || sx < 0 }
+
         public func apply(_ p: InkPoint) -> InkPoint {
-            InkPoint(x: ox + (p.x - ox) * sx + dx, y: oy + (p.y - oy) * sy + dy, pressure: p.pressure, t: p.t, angle: p.angle)
+            let x = (p.x - ox) * sx, y = (p.y - oy) * sy
+            var out: InkPoint
+            if r == 0 {
+                out = InkPoint(x: ox + x + dx, y: oy + y + dy, pressure: p.pressure, t: p.t, angle: p.angle)
+            } else {
+                let c = cos(r), s = sin(r)
+                out = InkPoint(x: ox + c * x - s * y + dx, y: oy + s * x + c * y + dy, pressure: p.pressure, t: p.t, angle: p.angle)
+            }
+            if let a = p.angle, changesAngles { out.angle = angle(a) }
+            return out
         }
 
-        public func apply(_ r: Rect) -> Rect {
-            let a = apply(InkPoint(x: r.x, y: r.y)), b = apply(InkPoint(x: r.maxX, y: r.maxY))
+        /// A nib angle (radians, in [0, π)) after the transform: its direction scaled and turned (core/ink.js `transformAngle`).
+        public func angle(_ a: Double) -> Double {
+            let x = cos(a) * sx, y = sin(a) * sy
+            let turned = atan2(sin(r) * x + cos(r) * y, cos(r) * x - sin(r) * y)
+            let out = (turned.truncatingRemainder(dividingBy: Double.pi) + Double.pi).truncatingRemainder(dividingBy: Double.pi)
+            return out >= Double.pi - 1e-12 ? 0 : out
+        }
+
+        /// The box around a transformed box (its four corners when turned).
+        public func apply(_ rect: Rect) -> Rect {
+            if r != 0 {
+                let corners = [InkPoint(x: rect.x, y: rect.y), InkPoint(x: rect.maxX, y: rect.y), InkPoint(x: rect.maxX, y: rect.maxY), InkPoint(x: rect.x, y: rect.maxY)]
+                return InkGeometry.bounds(corners.map(apply)) ?? rect
+            }
+            let a = apply(InkPoint(x: rect.x, y: rect.y)), b = apply(InkPoint(x: rect.maxX, y: rect.maxY))
             return Rect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
         }
     }

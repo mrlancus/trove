@@ -8,6 +8,7 @@ public struct InkElement: Identifiable, Sendable {
     public enum Field {
         public static let on = "on", layer = "layer", page = "page", type = "type", x = "x", y = "y", w = "w", h = "h"
         public static let text = "text", size = "size", color = "color", image = "image", createdAt = "createdAt", device = "device"
+        public static let rotate = "rotate", flip = "flip", font = "font", bold = "bold", italic = "italic", group = "group"
     }
 
     public let record: Record
@@ -29,6 +30,61 @@ public struct InkElement: Identifiable, Sendable {
     public var color: String { record[Field.color]?.string ?? "#000000" }
     public var image: Attachment? { record[Field.image].flatMap(Attachment.init(json:)) }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
+    /// Radians, clockwise about the box's centre (0 when unset or not a real number).
+    public var rotate: Double {
+        guard let r = record[Field.rotate]?.number, r.isFinite else { return 0 }
+        return r
+    }
+    /// A picture mirrored left to right (before turning).
+    public var flip: Bool { kind == .image && record[Field.flip]?.bool == true }
+    public var font: InkTextStyle.Font { InkTextStyle.Font(rawValue: record[Field.font]?.string ?? "") ?? .sans }
+    public var bold: Bool { record[Field.bold]?.bool == true }
+    public var italic: Bool { record[Field.italic]?.bool == true }
+    public var textStyle: InkTextStyle { InkTextStyle(font: font, bold: bold, italic: italic) }
+    /// Strokes and elements sharing a group id are picked and moved as one; "" for none.
+    public var group: String { record[Field.group]?.string ?? "" }
+    /// The box, its turn and (pictures) mirroring, for hit tests and the lasso.
+    public var editFrame: InkEditing.Frame { InkEditing.Frame(frame, rotate: rotate, flip: flip) }
+}
+
+/// A text box's typeface and weight (PROTOCOL.md §10 "Text style"). Bullet lists are plain text:
+/// lines starting "• ".
+public struct InkTextStyle: Equatable, Sendable {
+    public enum Font: String, CaseIterable, Sendable {
+        case sans, serif, mono, rounded
+        public var title: String {
+            switch self {
+            case .sans: "Sans"
+            case .serif: "Serif"
+            case .mono: "Mono"
+            case .rounded: "Rounded"
+            }
+        }
+    }
+    public var font: Font
+    public var bold: Bool
+    public var italic: Bool
+    public init(font: Font = .sans, bold: Bool = false, italic: Bool = false) { self.font = font; self.bold = bold; self.italic = italic }
+
+    /// The fields to store; `all` writes the off values too (to turn a style off).
+    public func fields(all: Bool = false) -> [String: JSONValue] {
+        var out: [String: JSONValue] = [:]
+        if font != .sans || all { out[InkElement.Field.font] = .string(font.rawValue) }
+        if bold || all { out[InkElement.Field.bold] = .bool(bold) }
+        if italic || all { out[InkElement.Field.italic] = .bool(italic) }
+        return out
+    }
+
+    /// Bullets on (or off, when every line already has one) for the lines of `text`.
+    public static func toggleBullets(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let on = !lines.allSatisfy { $0.hasPrefix("• ") }
+        let out = lines.map { (l: String) -> String in
+            if on { return l.hasPrefix("• ") ? l : "• " + l }
+            return l.hasPrefix("• ") ? String(l.dropFirst(2)) : l
+        }
+        return out.joined(separator: "\n")
+    }
 }
 
 extension Library {
@@ -43,7 +99,8 @@ extension Library {
     /// eraser replaces it with its pieces; `shape` names a snapped shape.
     @discardableResult
     public func addStroke(id givenId: String? = nil, on itemId: String, layer: String = "", pageKey: String, tool: InkTool, color: String, width: Double,
-                          points: [InkPoint], shape: String? = nil, createdAt: Double? = nil, style: InkStrokeStyle? = nil) async -> String? {
+                          points: [InkPoint], shape: String? = nil, createdAt: Double? = nil, style: InkStrokeStyle? = nil,
+                          group: String = "", from: String = "", to: String = "") async -> String? {
         guard !points.isEmpty else { return nil }
         let id = givenId ?? newId()
         let created: Double
@@ -57,6 +114,9 @@ extension Library {
         fields.merge(InkPoints.fields(tool.stored(points), compact: compact)) { _, b in b }
         if let shape { fields[InkStroke.Field.shape] = .string(shape) }
         if let style { fields.merge(style.fields) { _, b in b } }
+        if !group.isEmpty { fields[InkStroke.Field.group] = .string(group) }
+        if !from.isEmpty { fields[InkStroke.Field.from] = .string(from) }
+        if !to.isEmpty { fields[InkStroke.Field.to] = .string(to) }
         // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
         if !compact, fields[InkStroke.Field.nib] == nil, let nib = InkOutline.meanNib(points) { fields[InkStroke.Field.nib] = .number(nib) }
         await engine.set(fields, record: id, kind: "stroke")
@@ -70,7 +130,8 @@ extension Library {
         return max((now().timeIntervalSince1970 * 1000).rounded(), latest + 1)
     }
 
-    /// Moves, resizes or recolours strokes (the lasso). Widths scale with the shape.
+    /// Moves, resizes, turns, flips or recolours strokes (the lasso). Widths scale with the shape,
+    /// and a fountain pen's nib turns with it.
     public func transformStrokes(_ ids: [String], by transform: InkGeometry.Transform? = nil, color: String? = nil) async {
         // A move or resize that isn't a real number would store points nothing can draw.
         if let transform, !transform.isUsable { return }
@@ -82,6 +143,7 @@ extension Library {
             if let transform {
                 fields.merge(InkPoints.fields(stroke.points.map(transform.apply), compact: compact, had: r)) { _, b in b }
                 if transform.widthScale != 1 { fields[InkStroke.Field.width] = .number(stroke.width * transform.widthScale) }
+                if let nib = stroke.style.nib, transform.changesAngles { fields[InkStroke.Field.nib] = .number(transform.angle(nib)) }
             }
             if let color { fields[InkStroke.Field.color] = .string(color) }
             if !fields.isEmpty { await engine.set(fields, record: id, kind: "stroke") }
@@ -102,7 +164,8 @@ extension Library {
             for piece in pieces {
                 if let id = await addStroke(on: itemId, layer: layer, pageKey: pageKey, tool: stroke.tool, color: stroke.color,
                                             width: stroke.width, points: piece, shape: nil,
-                                            createdAt: stroke.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(stroke.style)) { added.append(id) }
+                                            createdAt: stroke.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(stroke.style),
+                                            group: stroke.group) { added.append(id) }
             }
         }
         return added
@@ -121,28 +184,51 @@ extension Library {
         var out: [String] = []
         for piece in pieces where piece.count >= 2 {
             if let new = await addStroke(on: s.on, layer: s.layer, pageKey: s.pageKey, tool: s.tool, color: s.color, width: s.width, points: piece,
-                                         createdAt: s.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(s.style)) { out.append(new) }
+                                         createdAt: s.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(s.style), group: s.group) { out.append(new) }
         }
         return out
     }
 
-    /// Copies of strokes and elements on a page (duplicate, paste), moved by `offset`.
+    /// Copies of strokes and elements on a page (duplicate, paste), moved by `transform`. Copied
+    /// groups become new groups, and a copied connector stays joined only to copies.
     @discardableResult
     public func duplicateInk(strokes strokeIds: [String], elements elementIds: [String], to itemId: String, layer: String = "",
                              pageKey: String, by transform: InkGeometry.Transform = .move(20, 20)) async -> [String] {
         var out: [String] = []
         guard transform.isUsable else { return out }
+        var groups: [String: String] = [:], copies: [String: String] = [:]
+        var connectors: [(copy: String, from: String, to: String)] = []
+        func groupOf(_ g: String) -> String {
+            if g.isEmpty { return "" }
+            if let known = groups[g] { return known }
+            let fresh = newId()
+            groups[g] = fresh
+            return fresh
+        }
         for id in strokeIds {
             guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { continue }
             let s = InkStroke(r)
+            var style = s.style
+            if let nib = style.nib, transform.changesAngles { style.nib = transform.angle(nib) }
             if let new = await addStroke(on: itemId, layer: layer, pageKey: pageKey, tool: s.tool, color: s.color, width: s.width * transform.widthScale,
-                                         points: s.points.map(transform.apply), shape: s.shape, style: s.style) { out.append(new) }
+                                         points: s.points.map(transform.apply), shape: s.shape, style: style, group: groupOf(s.group)) {
+                out.append(new)
+                copies[id] = new
+                if !s.from.isEmpty || !s.to.isEmpty { connectors.append((new, s.from, s.to)) }
+            }
         }
         for id in elementIds {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
             let e = InkElement(r)
-            out.append(await addElement(on: itemId, layer: layer, pageKey: pageKey, kind: e.kind, frame: transform.apply(e.frame),
-                                        text: e.text, size: e.size * transform.widthScale, color: e.color, image: e.image))
+            let moved = InkEditing.transform(transform, e.editFrame, image: e.kind == .image)
+            let new = await addElement(on: itemId, layer: layer, pageKey: pageKey, kind: e.kind, frame: moved.rect,
+                                       text: e.text, size: e.size * transform.widthScale, color: e.color, image: e.image,
+                                       rotate: moved.rotate, flip: moved.flip, textStyle: e.textStyle, group: groupOf(e.group))
+            out.append(new)
+            copies[id] = new
+        }
+        for c in connectors {
+            await engine.set([InkStroke.Field.from: .string(copies[c.from] ?? ""), InkStroke.Field.to: .string(copies[c.to] ?? "")], record: c.copy, kind: "stroke")
         }
         return out
     }
@@ -157,7 +243,8 @@ extension Library {
 
     @discardableResult
     public func addElement(on itemId: String, layer: String = "", pageKey: String, kind: InkElement.Kind, frame: InkGeometry.Rect,
-                           text: String = "", size: Double = 20, color: String = "#000000", image: Attachment? = nil) async -> String {
+                           text: String = "", size: Double = 20, color: String = "#000000", image: Attachment? = nil,
+                           rotate: Double = 0, flip: Bool = false, textStyle: InkTextStyle = InkTextStyle(), group: String = "") async -> String {
         let id = newId()
         var fields: [String: JSONValue] = [
             InkElement.Field.on: .string(itemId), InkElement.Field.layer: .string(layer), InkElement.Field.page: .string(pageKey),
@@ -172,6 +259,10 @@ extension Library {
         }
         if kind == .tape { fields[InkElement.Field.color] = .string(color) }
         if let image { fields[InkElement.Field.image] = image.json }
+        if rotate != 0, rotate.isFinite { fields[InkElement.Field.rotate] = .number(rotate) }
+        if kind == .image, flip { fields[InkElement.Field.flip] = .bool(true) }
+        if kind == .text { fields.merge(textStyle.fields()) { _, b in b } }
+        if !group.isEmpty { fields[InkElement.Field.group] = .string(group) }
         await engine.set(fields, record: id, kind: "element")
         if kind == .text { await refreshSketchText(itemId) }
         return id
@@ -186,7 +277,9 @@ extension Library {
                                 image: Attachment(id: blob, name: "Picture.\(ext)", mime: mime, size: data.count))
     }
 
-    public func updateElement(_ id: String, frame: InkGeometry.Rect? = nil, text: String? = nil, size: Double? = nil, color: String? = nil) async {
+    /// Changes a text box, picture or tape strip; `textStyle` writes font, bold and italic (off values too).
+    public func updateElement(_ id: String, frame: InkGeometry.Rect? = nil, text: String? = nil, size: Double? = nil, color: String? = nil,
+                              rotate: Double? = nil, flip: Bool? = nil, textStyle: InkTextStyle? = nil) async {
         guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { return }
         var fields: [String: JSONValue] = [:]
         if let frame {
@@ -196,18 +289,24 @@ extension Library {
         if let text { fields[InkElement.Field.text] = .string(text) }
         if let size { fields[InkElement.Field.size] = .number(size) }
         if let color { fields[InkElement.Field.color] = .string(color) }
+        if let rotate, rotate.isFinite { fields[InkElement.Field.rotate] = .number(rotate) }
+        if let flip, InkElement(r).kind == .image { fields[InkElement.Field.flip] = .bool(flip) }
+        if let textStyle, InkElement(r).kind == .text { fields.merge(textStyle.fields(all: true)) { _, b in b } }
         guard !fields.isEmpty else { return }
         await engine.set(fields, record: id, kind: "element")
         if text != nil { await refreshSketchText(InkElement(r).on) }
     }
 
-    /// Moves or resizes elements (the lasso); text grows with the box.
+    /// Moves, resizes, turns or flips elements (the lasso): each moves by its centre and turns with
+    /// the selection; a mirrored picture flips; text grows with the box (InkEditing.transform).
     public func transformElements(_ ids: [String], by transform: InkGeometry.Transform) async {
         guard transform.isUsable else { return }
         for id in ids {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
             let e = InkElement(r)
-            await updateElement(id, frame: transform.apply(e.frame), size: e.kind == .text && transform.widthScale != 1 ? e.size * transform.widthScale : nil)
+            let next = InkEditing.transform(transform, e.editFrame, image: e.kind == .image)
+            let size: Double? = e.kind == .text && transform.widthScale != 1 ? e.size * transform.widthScale : nil
+            await updateElement(id, frame: next.rect, size: size, rotate: next.rotate != e.rotate ? next.rotate : nil, flip: next.flip != e.flip ? next.flip : nil)
         }
     }
 
@@ -249,17 +348,24 @@ extension Library {
         for item in items { await refreshSketchText(item) }
     }
 
-    /// Some fields of an ink record, to put back on undo.
+    /// Some fields of an ink record, to put back on undo. A field it doesn't have comes back as its
+    /// "off" value (no turn, no group, upright text…), so undo takes back a style that was added.
     public func inkFields(_ id: String, _ names: [String]) async -> [String: JSONValue] {
         guard let r = await engine.record(id) else { return [:] }
         var out: [String: JSONValue] = [:]
         for name in names {
             if let v = r[name] { out[name] = v }
             // Points not there are put back empty, so undo can't leave newer compact points in front.
-            else if name == InkStroke.Field.points || name == InkStroke.Field.points2 { out[name] = .string("") }
+            else if let off = Self.inkOffValues[name] { out[name] = off }
         }
         return out
     }
+
+    static let inkOffValues: [String: JSONValue] = [
+        InkStroke.Field.points: .string(""), InkStroke.Field.points2: .string(""), InkStroke.Field.group: .string(""),
+        InkStroke.Field.shape: .null, InkStroke.Field.nib: .null, InkElement.Field.rotate: .number(0), InkElement.Field.flip: .bool(false),
+        InkElement.Field.font: .string("sans"), InkElement.Field.bold: .bool(false), InkElement.Field.italic: .bool(false),
+    ]
 
     public func setInkFields(_ id: String, kind: String, _ fields: [String: JSONValue]) async {
         guard kind == "stroke" || kind == "element", !fields.isEmpty else { return }

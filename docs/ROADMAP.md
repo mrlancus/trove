@@ -90,6 +90,7 @@ strokes themselves, and that's where the feel is lost.
 - **Tape** (cover an answer, tap to peek): a new element type. 🔒
 
 ### S3. Editing that's faster than GoodNotes **M**
+**Status: landed** (website, TroveCore, apps; the apps not yet run on a device). Make flashcard is Ask AI → Make flashcards (a note of cards; a study view comes with S7); Convert to text uses Vision in the apps and cloud AI on the website.
 - **Lasso**: rotate handle (now resize only), flip, bring to front/back, lasso by type
   (ink / text / pictures), group, and an action bar: copy as image, convert to text, straighten,
   ask AI (§4), make flashcard (§S7), save as element.

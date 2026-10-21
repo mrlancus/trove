@@ -39,15 +39,30 @@ struct InkLine: Sendable, Identifiable {
     var shape: String?
     /// Fill, dashes, arrowheads and nib angle (PROTOCOL.md §10).
     var style = InkStrokeStyle()
+    /// Picked and moved with the rest of its group ("" for none).
+    var group = ""
+    /// A connector's joined ends ("" when free).
+    var from = ""
+    var to = ""
 
     init(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) {
         self.id = id; self.tool = tool; self.color = color; self.width = width; self.points = points; self.shape = shape; self.style = style
     }
-    init(_ s: InkStroke) { self.init(id: s.id, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape, style: s.style) }
+    init(_ s: InkStroke) {
+        self.init(id: s.id, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape, style: s.style)
+        group = s.group
+        from = s.from
+        to = s.to
+    }
 
     func transformed(_ t: InkGeometry.Transform) -> InkLine {
-        InkLine(id: id, tool: tool, color: color, width: width * t.widthScale, points: points.map { t.apply($0) }, shape: shape, style: style)
+        var out = self
+        out.width = width * t.widthScale
+        out.points = points.map { t.apply($0) }
+        if let nib = style.nib, t.changesAngles { out.style.nib = t.angle(nib) }
+        return out
     }
+    var isConnector: Bool { !from.isEmpty || !to.isEmpty }
     var bounds: InkGeometry.Rect? { InkOutline.bounds(points, width: width, arrow: style.arrow) }
     /// Changes when how the line looks does (for a canvas deciding what to redraw).
     /// Positions count to 1/20 point, so a stroke read back from storage (float32 or compact points)
@@ -59,7 +74,7 @@ struct InkLine: Sendable, Identifiable {
     }
 }
 
-/// A text box or picture as drawn.
+/// A text box, picture or tape strip as drawn.
 struct InkBox: Sendable, Identifiable {
     var id: String
     var kind: InkElement.Kind
@@ -68,22 +83,49 @@ struct InkBox: Sendable, Identifiable {
     var size: Double
     var color: String
     var image: Attachment?
+    /// Radians, clockwise about the box's centre.
+    var rotate: Double = 0
+    /// A picture mirrored left to right.
+    var flip = false
+    var textStyle = InkTextStyle()
+    var group = ""
 
-    init(_ e: InkElement) { id = e.id; kind = e.kind; frame = e.frame; text = e.text; size = e.size; color = e.color; image = e.image }
+    init(_ e: InkElement) {
+        id = e.id; kind = e.kind; frame = e.frame; text = e.text; size = e.size; color = e.color; image = e.image
+        rotate = e.rotate; flip = e.flip; textStyle = e.textStyle; group = e.group
+    }
 
+    /// A library element's box, for its preview.
+    init(id: String, sticker e: InkStickerElement) {
+        self.id = id
+        kind = InkElement.Kind(rawValue: e.kind) ?? .text
+        frame = InkGeometry.Rect(x: e.x, y: e.y, width: e.w, height: e.h)
+        text = e.text; size = e.size; color = e.color; image = e.image.flatMap(Attachment.init(json:))
+        rotate = e.rotate; flip = e.flip; textStyle = e.textStyle
+    }
+
+    /// Moved, resized, turned or flipped with the lasso (InkEditing.transform); text grows with it.
     func transformed(_ t: InkGeometry.Transform) -> InkBox {
         var b = self
-        b.frame = t.apply(frame)
+        let next = InkEditing.transform(t, InkEditing.Frame(frame, rotate: rotate, flip: flip), image: kind == .image)
+        b.frame = next.rect
+        b.rotate = next.rotate
+        b.flip = next.flip
         if kind == .text { b.size = size * t.widthScale }
         return b
     }
-    /// Its box as drawn: a text box is as tall as its wrapped lines.
+    /// Its box (unturned): a text box is as tall as its wrapped lines.
     var drawnFrame: InkGeometry.Rect {
         guard kind == .text else { return frame }
         var f = frame
-        f.height = InkRenderer.textHeight(text, width: frame.width, size: size)
+        f.height = InkRenderer.textHeight(text, width: frame.width, size: size, style: textStyle)
         return f
     }
+    /// The box, turn and mirroring as drawn, for hit tests.
+    var editFrame: InkEditing.Frame { InkEditing.Frame(drawnFrame, rotate: rotate, flip: flip) }
+    /// The upright box around it as drawn (turned boxes take more room).
+    var drawnBounds: InkGeometry.Rect { InkEditing.bounds(editFrame) }
+    func contains(_ p: InkPoint) -> Bool { InkEditing.contains(editFrame, p) }
 }
 
 /// Ink to draw on a page: strokes, plus text boxes and pictures with their images.
@@ -397,7 +439,24 @@ enum InkRenderer {
 
     /// Tape strips go over everything else on a page.
     static func drawTapes(_ elements: [InkBox], peeked: Set<String> = [], in ctx: CGContext) {
-        for e in elements where e.kind == .tape { drawTape(e.frame, color: e.color, peeked: peeked.contains(e.id), in: ctx) }
+        for e in elements where e.kind == .tape {
+            withElementTransform(e, in: ctx) { drawTape(e.frame, color: e.color, peeked: peeked.contains(e.id), in: ctx) }
+        }
+    }
+
+    /// Runs `body` with the context turned about the element's centre by its `rotate` (and a
+    /// picture mirrored when it has `flip`), so `body` draws the unturned box (ink.js `withElementTransform`).
+    static func withElementTransform(_ e: InkBox, in ctx: CGContext, _ body: () -> Void) {
+        let mirrored = e.flip && e.kind == .image
+        guard e.rotate != 0 || mirrored else { body(); return }
+        let cx = CGFloat(e.frame.x + e.frame.width / 2), cy = CGFloat(e.frame.y + e.frame.height / 2)
+        ctx.saveGState()
+        ctx.translateBy(x: cx, y: cy)
+        if e.rotate != 0 { ctx.rotate(by: CGFloat(e.rotate)) }
+        if mirrored { ctx.scaleBy(x: -1, y: 1) }
+        ctx.translateBy(x: -cx, y: -cy)
+        body()
+        ctx.restoreGState()
     }
 
     // MARK: Text boxes and pictures
@@ -406,17 +465,38 @@ enum InkRenderer {
         for e in elements where e.kind == .image {
             guard let id = e.image?.id, let image = pictures[id] else { continue }
             let f = e.frame
-            drawImage(image, in: CGRect(x: f.x, y: f.y, width: f.width, height: f.height), ctx: ctx)
+            withElementTransform(e, in: ctx) { drawImage(image, in: CGRect(x: f.x, y: f.y, width: f.width, height: f.height), ctx: ctx) }
         }
     }
 
     static func drawTexts(_ elements: [InkBox], in ctx: CGContext) {
-        for e in elements where e.kind == .text { drawText(e.text, frame: e.frame, size: e.size, color: e.color, in: ctx) }
+        for e in elements where e.kind == .text {
+            withElementTransform(e, in: ctx) { drawText(e.text, frame: e.frame, size: e.size, color: e.color, style: e.textStyle, in: ctx) }
+        }
     }
 
-    /// The system font at `size`, lines 1.25 × size apart, wrapped to the box's width (ink.js `drawTextElement`).
-    static func attributed(_ text: String, size: Double, color: String) -> NSAttributedString {
-        let font = CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+    /// A text box's font: the system font (`sans`), or Georgia, Menlo or a rounded face, bold and
+    /// italic as asked (ink.js `textFont`).
+    static func font(size: Double, style: InkTextStyle) -> CTFont {
+        let base: CTFont
+        switch style.font {
+        case .sans: base = CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        case .serif: base = CTFontCreateWithName("Georgia" as CFString, size, nil)
+        case .mono: base = CTFontCreateWithName("Menlo" as CFString, size, nil)
+        case .rounded: base = CTFontCreateWithName("Arial Rounded MT Bold" as CFString, size, nil)
+        }
+        // kCTFontItalicTrait is 1 << 0 and kCTFontBoldTrait 1 << 1.
+        var traits: UInt32 = 0
+        if style.italic { traits |= 1 }
+        if style.bold { traits |= 2 }
+        guard traits != 0 else { return base }
+        let wanted = CTFontSymbolicTraits(rawValue: traits)
+        return CTFontCreateCopyWithSymbolicTraits(base, size, nil, wanted, wanted) ?? base
+    }
+
+    /// The text box's font at `size`, lines 1.25 × size apart, wrapped to the box's width (ink.js `drawTextElement`).
+    static func attributed(_ text: String, size: Double, color: String, style: InkTextStyle = InkTextStyle()) -> NSAttributedString {
+        let font = Self.font(size: size, style: style)
         let lineHeight = CGFloat(size * 1.25)
         // The settings point at lineHeight, so the style is made while that pointer is valid.
         let style: CTParagraphStyle = withUnsafePointer(to: lineHeight) { pointer in
@@ -435,17 +515,17 @@ enum InkRenderer {
     }
 
     /// How tall a text box is once its words wrap.
-    static func textHeight(_ text: String, width: Double, size: Double) -> Double {
-        let setter = CTFramesetterCreateWithAttributedString(attributed(text.isEmpty ? " " : text, size: size, color: "#000000"))
+    static func textHeight(_ text: String, width: Double, size: Double, style: InkTextStyle = InkTextStyle()) -> Double {
+        let setter = CTFramesetterCreateWithAttributedString(attributed(text.isEmpty ? " " : text, size: size, color: "#000000", style: style))
         let fit = CTFramesetterSuggestFrameSizeWithConstraints(setter, CFRange(location: 0, length: 0), nil,
                                                                CGSize(width: width, height: .greatestFiniteMagnitude), nil)
         return max(size * 1.25, Double(fit.height))
     }
 
-    static func drawText(_ text: String, frame f: InkGeometry.Rect, size: Double, color: String, in ctx: CGContext) {
+    static func drawText(_ text: String, frame f: InkGeometry.Rect, size: Double, color: String, style: InkTextStyle = InkTextStyle(), in ctx: CGContext) {
         guard !text.isEmpty else { return }
-        let height = textHeight(text, width: f.width, size: size) + size
-        let setter = CTFramesetterCreateWithAttributedString(attributed(text, size: size, color: color))
+        let height = textHeight(text, width: f.width, size: size, style: style) + size
+        let setter = CTFramesetterCreateWithAttributedString(attributed(text, size: size, color: color, style: style))
         let path = CGPath(rect: CGRect(x: 0, y: 0, width: f.width, height: height), transform: nil)
         let frame = CTFramesetterCreateFrame(setter, CFRange(location: 0, length: 0), path, nil)
         ctx.saveGState()
@@ -521,6 +601,18 @@ struct InkOverlay {
     var tape: (frame: InkGeometry.Rect, color: String)?
     /// A hovering Apple Pencil's tip: where, in the pen's colour and size.
     var tip: (point: InkPoint, color: String, width: Double)?
+    /// The selection's turning handle (above its box), and the turn while it's dragged (degrees).
+    var rotateHandle = false
+    var turning: Double?
+    /// A lone clean shape's own handles (its ends, corners or bend); `roundMiddle`: the third is a line's middle.
+    var handles: [InkPoint] = []
+    var roundMiddle = false
+    /// A shape being dragged out with the shape tool, or reshaped by a handle.
+    var preview: InkLine?
+    /// The ruler and protractor (this device only), and where the pen is for the protractor's reading.
+    var ruler: InkEditing.Guide?
+    var protractor: InkEditing.Guide?
+    var reading: InkPoint?
 }
 
 extension InkRenderer {
@@ -538,6 +630,7 @@ extension InkRenderer {
             ctx.closePath()
             ctx.drawPath(using: .fillStroke)
         }
+        if let line = o.preview { draw([line], in: ctx) }
         if let b = o.selection {
             ctx.setLineWidth(1.5 * px)
             ctx.setStrokeColor(blue)
@@ -551,7 +644,40 @@ extension InkRenderer {
                 ctx.fillEllipse(in: dot)
                 ctx.strokeEllipse(in: dot)
             }
+            if o.rotateHandle {
+                // The turning handle: a knob above the middle of the top edge.
+                let knob = rotateHandle(b, scale: scale)
+                let kx = CGFloat(knob.x), ky = CGFloat(knob.y)
+                ctx.move(to: CGPoint(x: kx, y: CGFloat(b.y)))
+                ctx.addLine(to: CGPoint(x: kx, y: ky + 7 * px))
+                ctx.strokePath()
+                let r = 7 * px
+                let dot = CGRect(x: kx - r, y: ky - r, width: r * 2, height: r * 2)
+                ctx.fillEllipse(in: dot)
+                ctx.strokeEllipse(in: dot)
+                if let degrees = o.turning {
+                    drawLabel("\(Int(degrees.rounded()))°", at: CGPoint(x: kx, y: ky - 16 * px), size: 12 * px, color: blue, in: ctx)
+                }
+            }
         }
+        if !o.handles.isEmpty {
+            ctx.setLineDash(phase: 0, lengths: [])
+            ctx.setLineWidth(1.5 * px)
+            ctx.setStrokeColor(blue)
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            for (i, h) in o.handles.enumerated() {
+                let r = 5 * px
+                let rect = CGRect(x: CGFloat(h.x) - r, y: CGFloat(h.y) - r, width: r * 2, height: r * 2)
+                if i == 2 && o.roundMiddle {
+                    ctx.fillEllipse(in: rect)
+                    ctx.strokeEllipse(in: rect)
+                } else {
+                    ctx.fill(rect)
+                    ctx.stroke(rect)
+                }
+            }
+        }
+        if o.ruler != nil || o.protractor != nil { drawGuides(ruler: o.ruler, protractor: o.protractor, reading: o.reading, scale: scale, in: ctx) }
         for l in o.lasers where l.alpha > 0 {
             ctx.saveGState()
             ctx.setAlpha(l.alpha)
@@ -578,6 +704,154 @@ extension InkRenderer {
             ctx.strokeEllipse(in: CGRect(x: e.x - o.eraserRadius, y: e.y - o.eraserRadius, width: o.eraserRadius * 2, height: o.eraserRadius * 2))
         }
         ctx.restoreGState()
+    }
+}
+
+extension InkRenderer {
+    /// Where the selection's turning handle sits: above the middle of its top edge (26 screen points up).
+    static func rotateHandle(_ b: InkGeometry.Rect, scale: Double) -> InkPoint {
+        InkPoint(x: b.x + b.width / 2, y: b.y - 26 / max(0.05, scale))
+    }
+
+    /// A short label centred on a point in a top-left-origin context.
+    static func drawLabel(_ text: String, at p: CGPoint, size: CGFloat, color: CGColor, in ctx: CGContext) {
+        let font = CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
+        ]
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        let width = CTLineGetTypographicBounds(line, nil, nil, nil)
+        ctx.saveGState()
+        ctx.translateBy(x: p.x, y: p.y)
+        // Core Text draws bottom-up.
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.textMatrix = .identity
+        ctx.textPosition = CGPoint(x: -CGFloat(width) / 2, y: -size * 0.35)
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
+    }
+
+    /// The ruler and protractor, see-through with ticks, their angle in the middle and round knobs to
+    /// turn them (web/public/drawedit.js `drawGuides`). `reading`: the pen, whose angle the protractor shows.
+    static func drawGuides(ruler: InkEditing.Guide?, protractor: InkEditing.Guide?, reading: InkPoint?, scale: Double, in ctx: CGContext) {
+        let px = CGFloat(1 / max(0.05, scale))
+        let body = CGColor(red: 200 / 255, green: 205 / 255, blue: 215 / 255, alpha: 0.55)
+        let edge = CGColor(red: 60 / 255, green: 64 / 255, blue: 72 / 255, alpha: 0.8)
+        let ink = CGColor(red: 30 / 255, green: 32 / 255, blue: 36 / 255, alpha: 0.9)
+        let white = CGColor(red: 1, green: 1, blue: 1, alpha: 0.9)
+        ctx.saveGState()
+        ctx.setLineDash(phase: 0, lengths: [])
+        ctx.setLineWidth(px)
+        if let g = ruler {
+            let half = CGFloat(g.length / 2), w = CGFloat(g.width / 2)
+            ctx.saveGState()
+            ctx.translateBy(x: CGFloat(g.x), y: CGFloat(g.y))
+            ctx.rotate(by: CGFloat(g.angle))
+            let rect = CGRect(x: -half, y: -w, width: half * 2, height: w * 2)
+            ctx.setFillColor(body)
+            ctx.fill(rect)
+            ctx.setStrokeColor(edge)
+            ctx.stroke(rect)
+            var u = -half + 8
+            var i = 1
+            while u < half {
+                let long: CGFloat = i % 5 == 0 ? 12 : 6
+                ctx.move(to: CGPoint(x: u, y: -w)); ctx.addLine(to: CGPoint(x: u, y: -w + long))
+                ctx.move(to: CGPoint(x: u, y: w)); ctx.addLine(to: CGPoint(x: u, y: w - long))
+                u += 8
+                i += 1
+            }
+            ctx.strokePath()
+            for side in [CGFloat(-1), 1] {
+                let r = 9 * px
+                let knob = CGRect(x: side * (half - CGFloat(guideKnob)) - r, y: -r, width: r * 2, height: r * 2)
+                ctx.setFillColor(white)
+                ctx.fillEllipse(in: knob)
+                ctx.strokeEllipse(in: knob)
+            }
+            drawLabel("\(Int(InkEditing.degrees(g.angle).rounded()))°", at: .zero, size: 12 * px, color: ink, in: ctx)
+            ctx.restoreGState()
+        }
+        if let g = protractor {
+            let r = CGFloat(g.radius)
+            ctx.saveGState()
+            ctx.translateBy(x: CGFloat(g.x), y: CGFloat(g.y))
+            ctx.rotate(by: CGFloat(g.angle))
+            ctx.move(to: CGPoint(x: -r, y: 0))
+            ctx.addArc(center: .zero, radius: r, startAngle: .pi, endAngle: .pi * 2, clockwise: false)
+            ctx.closePath()
+            ctx.setFillColor(body)
+            ctx.setStrokeColor(edge)
+            ctx.drawPath(using: .fillStroke)
+            var d = 0
+            while d <= 180 {
+                let a = -CGFloat(d) * .pi / 180
+                let long: CGFloat = d % 30 == 0 ? 16 : (d % 10 == 0 ? 10 : 5)
+                ctx.move(to: CGPoint(x: r * cos(a), y: r * sin(a)))
+                ctx.addLine(to: CGPoint(x: (r - long) * cos(a), y: (r - long) * sin(a)))
+                d += 5
+            }
+            ctx.move(to: CGPoint(x: -4, y: 0)); ctx.addLine(to: CGPoint(x: 4, y: 0))
+            ctx.move(to: CGPoint(x: 0, y: -4)); ctx.addLine(to: CGPoint(x: 0, y: 4))
+            ctx.strokePath()
+            var label = 0
+            while label <= 180 {
+                let a = -CGFloat(label) * .pi / 180
+                drawLabel("\(label)", at: CGPoint(x: (r - 28) * cos(a), y: (r - 28) * sin(a)), size: 10 * px, color: ink, in: ctx)
+                label += 30
+            }
+            for side in [CGFloat(-1), 1] {
+                let k = 9 * px
+                let knob = CGRect(x: side * (r - CGFloat(guideKnob)) - k, y: 10 - k, width: k * 2, height: k * 2)
+                ctx.setFillColor(white)
+                ctx.fillEllipse(in: knob)
+                ctx.strokeEllipse(in: knob)
+            }
+            let shown = reading.map { InkEditing.protractorDegrees(g, $0) } ?? InkEditing.degrees(g.angle)
+            drawLabel("\(Int(shown.rounded()))°", at: CGPoint(x: 0, y: -r * 0.45), size: 13 * px, color: ink, in: ctx)
+            ctx.restoreGState()
+            if let p = reading {
+                // The line from the centre to the pen, whose angle is shown.
+                ctx.setStrokeColor(CGColor(red: 10 / 255, green: 132 / 255, blue: 1, alpha: 0.9))
+                ctx.setLineWidth(1.5 * px)
+                ctx.move(to: CGPoint(x: g.x, y: g.y))
+                ctx.addLine(to: CGPoint(x: p.x, y: p.y))
+                ctx.strokePath()
+            }
+        }
+        ctx.restoreGState()
+    }
+
+    /// Page points from a guide's end to its turning knob.
+    static let guideKnob = 20.0
+
+    /// A picture of some ink on a clear background (Copy as image), `scale` pixels a page point.
+    static func renderSelection(_ content: InkContent, box: InkGeometry.Rect, scale: Double, whiteBackground: Bool = false) -> CGImage? {
+        let w = Int((box.width * scale).rounded(.up)), h = Int((box.height * scale).rounded(.up))
+        guard w > 0, h > 0, w * h < 40_000_000,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        if whiteBackground {
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        ctx.translateBy(x: 0, y: CGFloat(h))
+        ctx.scaleBy(x: CGFloat(scale), y: -CGFloat(scale))
+        ctx.translateBy(x: -box.x, y: -box.y)
+        var c = content
+        // Copied tape shows what it covers' outline only.
+        c.peeked = Set(content.elements.map(\.id))
+        drawContent(c, in: ctx)
+        return ctx.makeImage()
+    }
+
+    /// PNG bytes of a picture.
+    static func png(_ image: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, nil)
+        return CGImageDestinationFinalize(dest) ? data as Data : nil
     }
 }
 

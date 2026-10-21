@@ -18,6 +18,10 @@ struct InkEditorView: View {
     @State private var penOptions = false
     /// The second row under the tools (the chosen tool's colours, sizes and modes), like GoodNotes.
     @State private var showOptions = true
+    @State private var elementsOpen = false
+    @State private var savingElement = false
+    @State private var elementName = ""
+    @State private var elementFolder = ""
 
     init(target: InkTarget, app: AppModel) {
         _editor = State(initialValue: InkEditorModel(target: target, app: app))
@@ -60,7 +64,15 @@ struct InkEditorView: View {
         .onAppear { app.drawingOpen += 1 }
         .onDisappear { app.drawingOpen = max(0, app.drawingOpen - 1) }
         .inspector(isPresented: $editor.showPages) { InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage) }
-        .sheet(item: $editor.textEdit) { edit in InkTextSheet(edit: edit) { editor.commitText($0) } }
+        .sheet(item: $editor.aiResult) { result in InkAIResultSheet(result: result, editor: editor) }
+        .alert("Save as element", isPresented: $savingElement) {
+            TextField("Name", text: $elementName)
+            TextField("Folder (optional)", text: $elementFolder)
+            Button("Save") { editor.saveSelectionAsElement(name: elementName, folder: elementFolder) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saved elements are on every device, in the Elements library.")
+        }
         .fileImporter(isPresented: $importingPicture, allowedContentTypes: [.image]) { result in
             guard case .success(let url) = result else { return }
             let scoped = url.startAccessingSecurityScopedResource()
@@ -101,7 +113,7 @@ struct InkEditorView: View {
 
     // MARK: Toolbar: the tools on top, the chosen one's options underneath
 
-    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .text, .laser, .tape]
+    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .shape, .text, .laser, .tape]
 
     private var toolbar: some View {
         @Bindable var editor = editor
@@ -146,6 +158,12 @@ struct InkEditorView: View {
                         .fixedSize()
                         .help("Insert a picture")
                         .accessibilityLabel("Picture")
+                        Button { elementsOpen = true } label: { Image(systemName: "square.grid.2x2").font(.title3).frame(width: 34, height: 34).inkTapArea() }
+                            .buttonStyle(.plain)
+                            .help("Elements: stickers, arrows, checkboxes and what you saved")
+                            .accessibilityLabel("Elements")
+                            .popover(isPresented: $elementsOpen) { InkElementsLibrary(editor: editor) { elementsOpen = false }.frame(minWidth: 320, idealWidth: 380, minHeight: 360) }
+                        InkGuideButtons(editor: editor)
                     }
                     if !editor.inkSettings.favourites.isEmpty {
                         Divider().frame(height: 26)
@@ -223,6 +241,25 @@ struct InkEditorView: View {
 
     private var hasOptions: Bool { editor.tool.hasColor || editor.tool.hasSize || editor.tool == .lasso }
 
+    /// The shape tool's shapes.
+    private var shapeKinds: some View {
+        HStack(spacing: 2) {
+            ForEach(InkShapeKind.allCases) { kind in
+                Button { editor.shapeKind = kind } label: {
+                    Image(systemName: kind.symbol)
+                        .frame(width: 32, height: 30)
+                        .foregroundStyle(editor.shapeKind == kind ? Color.accentColor : Color.primary)
+                        .background(editor.shapeKind == kind ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        .inkTapArea()
+                }
+                .buttonStyle(.plain)
+                .help(kind.label)
+                .accessibilityLabel(kind.label)
+                .accessibilityAddTraits(editor.shapeKind == kind ? .isSelected : [])
+            }
+        }
+    }
+
     /// The chosen tool's colours, sizes and modes.
     private var optionsBar: some View {
         @Bindable var editor = editor
@@ -250,13 +287,17 @@ struct InkEditorView: View {
                             .accessibilityLabel("Add to your colours")
                     }
                 }
-                if editor.tool.ink != nil {
-                    Button("Pen options") { penOptions = true }
+                if editor.tool == .shape { shapeKinds }
+                if editor.tool == .text || editor.textEdit != nil || editor.selectionHasText { InkTextStyleBar(editor: editor) }
+                if editor.tool.ink != nil || editor.tool == .shape {
+                    Button(editor.tool == .shape ? "Line options" : "Pen options") { penOptions = true }
                         .buttonStyle(.bordered)
                         .popover(isPresented: $penOptions) { InkPenOptions(editor: editor).frame(minWidth: 300, idealWidth: 320) }
-                    Button("Save pen") { editor.saveFavourite() }
-                        .buttonStyle(.bordered)
-                        .help("Keep this pen, colour and size as a favourite (on every device)")
+                    if editor.tool != .shape {
+                        Button("Save pen") { editor.saveFavourite() }
+                            .buttonStyle(.bordered)
+                            .help("Keep this pen, colour and size as a favourite (on every device)")
+                    }
                 }
                 if editor.tool.hasSize {
                     InkSizePresets(editor: editor)
@@ -272,7 +313,12 @@ struct InkEditorView: View {
                     Toggle("Highlighter only", isOn: $editor.highlighterOnly).fixedSize()
                 }
                 if editor.tool == .lasso {
-                    Text(editor.selection == nil ? "Draw a loop around what to select" : "Drag to move, corners to resize")
+                    Picker("Picks", selection: $editor.lassoKinds) {
+                        ForEach(InkLassoKinds.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Text(editor.selection == nil ? "Draw a loop around what to select" : "Drag to move, corners to resize, the knob on top to turn")
                         .font(.callout).foregroundStyle(.secondary)
                     if editor.selection != nil {
                         HStack(spacing: 6) {
@@ -292,22 +338,48 @@ struct InkEditorView: View {
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    /// The lasso's actions while something is selected.
+    /// The lasso's actions while something is selected: turn, flip, arrange, group, straighten, then
+    /// copy, copy as image, convert to text, Ask AI, save as element and delete.
     private func selectionBar(_ selection: InkSelection) -> some View {
-        HStack(spacing: 10) {
-            Text("\(selection.count) selected").font(.callout).foregroundStyle(.secondary)
-            Button("Duplicate") { editor.duplicateSelection() }
-            Button("Copy") { editor.copySelection() }
-            Button("Cut") { editor.cutSelection() }
-            Button("Delete", role: .destructive) { editor.deleteSelection() }
-            Button { editor.clearSelection() } label: { Image(systemName: "xmark") }.accessibilityLabel("Deselect")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text("\(selection.count) selected").font(.callout).foregroundStyle(.secondary)
+                InkSelectionArrangeButtons(editor: editor)
+                Group {
+                    Button(editor.selectionGroup.isEmpty ? "Group" : "Ungroup") { editor.toggleGroup() }
+                        .disabled(editor.selectionGroup.isEmpty && selection.count < 2)
+                    Button("Duplicate") { editor.duplicateSelection() }
+                    Button("Copy") { editor.copySelection() }
+                    Button("Copy as image") { editor.copySelectionAsImage() }
+                    if !selection.strokes.isEmpty { Button("Convert to text") { editor.convertSelectionToText() } }
+                }
+                if app.noteAIAvailable {
+                    Menu {
+                        ForEach(InkAIAction.allCases) { action in
+                            Button { editor.askAI(action) } label: { Label(action.label, systemImage: action.symbol) }
+                        }
+                    } label: {
+                        if editor.aiBusy { ProgressView().controlSize(.small) } else { Label("Ask AI", systemImage: "sparkles") }
+                    }
+                    .fixedSize()
+                    .disabled(editor.aiBusy)
+                }
+                Group {
+                    Button("Save as element") { elementName = ""; elementFolder = ""; savingElement = true }
+                    Button("Cut") { editor.cutSelection() }
+                    Button("Delete", role: .destructive) { editor.deleteSelection() }
+                    Button { editor.clearSelection() } label: { Image(systemName: "xmark") }.accessibilityLabel("Deselect")
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .padding(.horizontal, 12)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var pageBar: some View {
@@ -340,12 +412,14 @@ struct InkCanvasHost: View {
         #if os(iOS)
         PencilCanvas(editor: editor, pages: editor.pages, current: editor.page, layout: editor.isInfinite ? .vertical : editor.layout,
                      pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
-                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest, dark: scheme == .dark)
+                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest, dark: scheme == .dark,
+                     textEdit: editor.textEdit, rulerOn: editor.ruler != nil)
             .ignoresSafeArea(edges: .bottom)
         #else
         if let page = editor.currentPage {
             MouseInkCanvas(editor: editor, page: page, pageIndex: editor.page, pagesRevision: editor.pagesRevision, revision: editor.revision,
-                           overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest)
+                           overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest,
+                           textEdit: editor.textEdit)
         }
         #endif
     }
@@ -532,42 +606,6 @@ struct InkPagesPanel: View {
     }
 }
 
-// MARK: - Text boxes
-
-/// Typing in a text box: its words, size and colour.
-struct InkTextSheet: View {
-    @State var edit: InkTextEdit
-    var done: (InkTextEdit) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextEditor(text: $edit.text)
-                    .font(.system(size: min(28, max(13, edit.size * 0.8))))
-                    .foregroundStyle(Color(inkHex: edit.color))
-                    .frame(minHeight: 140)
-                LabeledContent("Size") {
-                    Slider(value: $edit.size, in: 8...72)
-                }
-                ColorPicker("Colour", selection: Binding(get: { Color(inkHex: edit.color) }, set: { edit.color = $0.inkHex }), supportsOpacity: false)
-                if edit.elementId != nil {
-                    Text("Delete all the text to remove the box.").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle(edit.elementId == nil ? "New text" : "Edit text")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { done(edit); dismiss() } }
-            }
-        }
-        #if os(macOS)
-        .sheetSize(width: 480, height: 400)
-        #endif
-    }
-}
-
 /// An exported drawing, for the save panel.
 struct PDFFile: FileDocument {
     static var readableContentTypes: [UTType] { [.pdf] }
@@ -747,6 +785,7 @@ struct InkPenOptions: View {
     var body: some View {
         let feel = editor.penSettings(ink)
         Form {
+            if editor.tool.ink != nil {
             Section("\(editor.tool.label): on every device") {
                 VStack(alignment: .leading) {
                     Text("Smoothing \(feel.smoothing)")
@@ -776,6 +815,7 @@ struct InkPenOptions: View {
                         }), in: 0...100, step: 1)
                     }
                 }
+            }
             }
             Section("Lines (this device)") {
                 Picker("Line", selection: Binding(get: { editor.dash(for: editor.tool) ?? "solid" }, set: { editor.setDash($0 == "solid" ? nil : $0, for: editor.tool) })) {

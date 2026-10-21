@@ -60,7 +60,8 @@ public struct InkStrokeStyle: Sendable, Equatable {
     }
 
     public static let dashes = ["dash", "dot"], arrows = ["end", "start", "both"]
-    public static let closedShapes: Set<String> = ["triangle", "rectangle", "polygon", "circle", "ellipse"]
+    /// Shapes that close on themselves (they can be filled); the last four come from the shape picker.
+    public static let closedShapes: Set<String> = ["triangle", "rectangle", "polygon", "circle", "ellipse", "diamond", "star", "heart", "bubble"]
 
     public var isEmpty: Bool { fill == nil && dash == nil && arrow == nil && nib == nil }
 
@@ -80,6 +81,7 @@ public struct InkStroke: Identifiable, Sendable {
         public static let on = "on", layer = "layer", page = "page", tool = "tool", color = "color", width = "width"
         public static let points = "points", createdAt = "createdAt", device = "device", shape = "shape"
         public static let points2 = "points2", fill = "fill", dash = "dash", arrow = "arrow", nib = "nib"
+        public static let group = "group", from = "from", to = "to"
     }
 
     public let record: Record
@@ -107,6 +109,12 @@ public struct InkStroke: Identifiable, Sendable {
         return InkPoints.decode(record[Field.points]?.string ?? "")
     }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
+    /// Strokes and elements sharing a group id are picked and moved as one; "" for none.
+    public var group: String { record[Field.group]?.string ?? "" }
+    /// A connector's joined ends: the ids of what it joins on the same page ("" when free).
+    public var from: String { record[Field.from]?.string ?? "" }
+    public var to: String { record[Field.to]?.string ?? "" }
+    public var isConnector: Bool { !from.isEmpty || !to.isEmpty }
     /// Fill, dashes, arrowheads and nib angle.
     public var style: InkStrokeStyle {
         let fill = record[Field.fill]?.string.flatMap { InkSettings.isHex($0) ? $0 : nil }
