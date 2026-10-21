@@ -521,9 +521,12 @@ extension Library {
     /// Oldest first, ties by id. Each record's time is read once (reading it in every comparison
     /// made a page's reload several times slower).
     static func drawOrder<T: Identifiable>(_ list: [T], createdAt: (T) -> Double) -> [T] where T.ID == String {
-        list.map { (key: createdAt($0), value: $0) }
-            .sorted { $0.key != $1.key ? $0.key < $1.key : $0.value.id < $1.value.id }
-            .map(\.value)
+        let keyed: [(key: Double, value: T)] = list.map { (key: createdAt($0), value: $0) }
+        let sorted = keyed.sorted { (a: (key: Double, value: T), b: (key: Double, value: T)) -> Bool in
+            if a.key != b.key { return a.key < b.key }
+            return a.value.id < b.value.id
+        }
+        return sorted.map { $0.value }
     }
 
     /// Every item that has ink on it, and on which layers.
