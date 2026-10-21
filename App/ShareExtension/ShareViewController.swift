@@ -62,6 +62,8 @@ struct ShareForm: View {
         }
         envelopes = out
         preview = titles.isEmpty ? "Nothing Trove can save here." : titles.joined(separator: "\n")
+        // Said before Save is pressed, so it's clear why it can't work (and what to do instead).
+        if let problem = CaptureDrop.problem { status = problem.localizedDescription }
     }
 
     private func save() {

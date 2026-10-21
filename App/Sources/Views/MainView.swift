@@ -30,7 +30,6 @@ struct RootView: View {
 struct MainView: View {
     @Environment(AppModel.self) private var model
     @State private var columns = NavigationSplitViewVisibility.all
-    @State private var showImporter = false
     @State private var showAsk = false
     @State private var showSettings = false
     @State private var showClipboard = false
@@ -68,20 +67,15 @@ struct MainView: View {
         #if os(iOS)
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
         #endif
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item, .folder], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result {
-                model.selection = .importer
-                Task { await model.importFiles(urls) }
-            }
-        }
         .overlay(alignment: .bottom) { ToastView() }
         .overlay { if dropTargeted, model.selection != .importer { WindowDropOverlay().transition(.opacity) } }
         .animation(.easeOut(duration: 0.2), value: dropTargeted)
         .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $dropTargeted) { providers in
             DropHandler.handle(providers, model: model)
         }
-        .environment(\.showImporter, { showImporter = true })
         .environment(\.showAsk, { showAsk = true })
+        // The one file picker (and Photos and the scanner) for everything in this window.
+        .importPickers()
     }
 
     /// Connections takes the whole right side (list and detail columns); what was open closes, and a
@@ -105,6 +99,7 @@ struct MainView: View {
                 ItemDetailView(item: item).id(item.id)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.selectedItemID = nil } } }
             }
+            .importPickers() // a sheet presents its own pickers
             #if os(macOS)
             .sheetSize(width: 760, height: 820)
             #endif
@@ -173,6 +168,7 @@ struct AddMenu: View {
         VoiceNoteButton()
         #if os(iOS)
         ScanDocumentButton()
+        PhotosImportButton()
         #endif
         Divider()
         Button { Task { await model.makeDigest() } } label: { Label("Make this week's digest", systemImage: "calendar.badge.clock") }

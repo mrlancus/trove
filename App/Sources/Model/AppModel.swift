@@ -148,6 +148,8 @@ final class AppModel {
     @ObservationIgnored private var sketchDeferred = false
     @ObservationIgnored private var inkChangeTask: Task<Void, Never>?
     var config: VaultConfig? { vault.config }
+    /// Files opened in Trove ("Copy to Trove" in the share sheet, Open With) before the vault was open.
+    @ObservationIgnored private var openedFiles: [URL] = []
 
     // MARK: Services
     let vault = VaultStore()
@@ -211,6 +213,28 @@ final class AppModel {
         startClipboard()
         startSyncLoop()
         connectLive()
+        if !openedFiles.isEmpty {
+            let files = openedFiles
+            openedFiles = []
+            Task { await importOpened(files) }
+        }
+    }
+
+    /// A file another app handed to Trove (the share sheet's "Trove" / "Copy to Trove", Open With,
+    /// AirDrop): imported like a picked file. iOS copies it into Documents/Inbox first; that copy
+    /// is removed once it's in the vault.
+    func openFile(_ url: URL) {
+        guard library != nil else { openedFiles.append(url); return }
+        Task { await importOpened([url]) }
+    }
+
+    private func importOpened(_ urls: [URL]) async {
+        selection = .importer // the progress ring shows there
+        await importFiles(urls, source: .share)
+        #if os(iOS)
+        let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox").standardizedFileURL.path
+        for url in urls where url.standardizedFileURL.path.hasPrefix(inbox) { try? FileManager.default.removeItem(at: url) }
+        #endif
     }
 
     // MARK: Clipboard
@@ -731,6 +755,9 @@ final class AppModel {
 
     /// Back from the background: the live socket has usually been dropped by then.
     func becameActive() async {
+        // The share sheet, widgets and keyboard read these: written every time Trove comes forward,
+        // not only at setup, so they're there even if an earlier write didn't reach them.
+        if vault.isSetUp { vault.publishCaptureSettings() }
         #if os(iOS)
         clipboardWatcher?.check()
         #endif

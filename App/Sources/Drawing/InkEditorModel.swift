@@ -346,6 +346,9 @@ final class InkEditorModel {
     var layout: InkPageLayout { didSet { UserDefaults.standard.set(layout.rawValue, forKey: "ink.layout") } }
     /// Zoom when a drawing opens: the whole page (true) or its width.
     var fitWholePage: Bool { didSet { UserDefaults.standard.set(!fitWholePage, forKey: "ink.fitWidth") } }
+    /// The sketch shown dark on this device: black pages, black and white ink swapped (`InkDark`).
+    /// Display only; light unless turned on, whatever the system's appearance.
+    var darkPage: Bool { didSet { UserDefaults.standard.set(darkPage, forKey: "ink.darkPage") } }
     /// Screen points per page point, as the canvas shows it (1 = 100 %).
     var zoom = 1.0
     var zoomRequest: InkZoomRequest?
@@ -436,6 +439,7 @@ final class InkEditorModel {
         scribbleToErase = d.bool(forKey: "ink.scribble")
         layout = InkPageLayout(rawValue: d.string(forKey: "ink.layout") ?? "") ?? .vertical
         fitWholePage = !d.bool(forKey: "ink.fitWidth")
+        darkPage = d.bool(forKey: "ink.darkPage")
         shapeKind = InkShapeKind(rawValue: d.string(forKey: "ink.shapeKind") ?? "") ?? .rectangle
         lassoKinds = InkLassoKinds(rawValue: d.string(forKey: "ink.lassoKinds") ?? "") ?? .all
         textStyle = InkTextStyle(font: InkTextStyle.Font(rawValue: d.string(forKey: "ink.textFont") ?? "") ?? .sans,

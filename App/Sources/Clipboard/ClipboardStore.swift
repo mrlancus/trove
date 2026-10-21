@@ -24,7 +24,11 @@ final class ClipboardStore {
     var enabled: Bool { didSet { UserDefaults.standard.set(enabled, forKey: "clipboard.enabled") } }
     /// Keep sensitive copies for two minutes on this device (off: ignore them entirely).
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
-    /// iPhone/iPad: save what was copied whenever Trove is opened.
+    /// iPhone/iPad: something new was copied that isn't saved yet (seen without reading it, so iOS
+    /// doesn't ask "Allow Paste?"; the Paste button saves it).
+    var copyWaiting = false
+    /// Saving what was copied whenever Trove opens. Synced, and still offered for the shared
+    /// setting; iPhone and iPad no longer read the clipboard by themselves (`ClipboardWatcher`).
     var captureOnOpen: Bool { didSet { UserDefaults.standard.set(captureOnOpen, forKey: "clipboard.captureOnOpen") } }
     /// Keep where you were with each copy and paste (synced: `recordPlaces`).
     var recordPlaces = true

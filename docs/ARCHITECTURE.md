@@ -133,4 +133,7 @@
 | Ink maths shared with the website: geometry, outlines, shapes, editing, elements library, vault ops | `Packages/TroveCore/Sources/TroveCore/Drawing/` (`InkEditing.swift`, `InkStickers.swift`, `InkArrange.swift`, …) |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
 | Share sheet | `App/ShareExtension/ShareViewController.swift` (seals via `CaptureDrop`) |
+| App Group lookup (re-signed installs rename it), capture settings for extensions | `App/Sources/Platform/SharedConfig.swift` |
+| File, Photos and scanner pickers (one set per window) | `App/Sources/Views/ImportPickers.swift` |
+| Sketch dark page (display-only black/white swap) | `App/Sources/Drawing/InkDark.swift` |
 | Widgets + Control Center | `App/Widgets/TroveWidgets.swift` |

@@ -34,6 +34,63 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
+## Latest round: iPad fixes (user, iPad Air M3 + Pencil Pro: "import does nothing", "sharing says open Trove once", "sketch opens partly hidden", page colours, a dark page, "Allow Paste" every launch)
+Written on Linux; CI build result below. **Check on the iPad** after installing the new build
+(SideStore update, or Sideloadly; reinstalling over the old one keeps the data).
+- **Import on iPhone/iPad** (Choose files did nothing): SwiftUI on iOS presents only one
+  `.fileImporter` per view tree, and the window's own (Import files… in the + menu) sat above the
+  Import screen's two, so theirs never opened (the Mac shows panels differently, so it worked there).
+  The scan button had the same problem inside the + menu. Now one set of pickers serves each window
+  (`Views/ImportPickers.swift`: `.importPickers()`, asked for through `pickFiles`, `pickPhotos`,
+  `scanDocument`, `showImporter`). The Import screen on iPhone/iPad has **Files…** (several, any
+  kind, folders), **Photos…** (several photos and videos, imported as files) and **Scan**; the +
+  menu has Import from Photos too. Check: each opens, and what's picked arrives with the progress ring.
+- **Share sheet "open Trove once"**: the app, its share extension, widgets and keyboard meet in the
+  App Group container. SideStore/AltStore (free Apple ID) re-sign the app and rename the group to
+  `group.com.mrlancus.trove.<TEAMID>`; Trove only tried the original name, so the app and the
+  extension each fell back to a private folder and never saw each other's files. Now
+  `SharedConfig.appGroupFound` tries the names listed in `ALTAppGroups` (which SideStore writes into
+  the app's Info.plist; the extension reads the app's too), the original, then the original plus the
+  team ID (from the re-signed bundle id or the keychain's access group). The app writes the capture
+  settings (public key only) on every launch and whenever it comes to the front. The extension now
+  says which problem it is: settings not written yet, or no shared storage at all.
+  **Check:** Trove → Settings → About → "Share sheet and widgets" should say Connected (and the group
+  name). Then share a file or link to "Save to Trove".
+  - If it says "Can't share storage on this install", the signing tool dropped the App Group (this
+    can't be fixed in code). Then use **Trove in the share sheet's row of apps** ("Copy to Trove"):
+    Trove now declares that it opens any file, iOS copies it into Trove and Trove imports it
+    (`AppModel.openFile`). Installing with SideStore keeps App Groups; Sideloadly may not.
+- **Sketch opened partly hidden (10 %)**: the canvas fitted the zoom on its first layout, when
+  SwiftUI had given it its width but not yet its height; fitting the whole page into a ~0-point-tall
+  view gave the 10 % minimum, and since the width never changed it was never fitted again. Now it
+  fits once the view has a usable size, again when the width changes (rotation, Split View) or when
+  the last fit was made while it was still too short, unless zoomed by hand; it opens at the top of
+  the page, centred. The Mac canvas had the same race (fit before the window had a size) and now
+  fits when its scroll view lays out (`InkScrollView`). Check: open existing sketches, PDFs and
+  images several times, rotate, use Split View.
+- **Colours**: pages stay white (#ffffff, as before) and the area around them is the same light
+  grey on iPad, iPhone and Mac, whatever the system's appearance (it used to turn near-black in dark
+  mode; the Mac used the system's under-page colour).
+- **Dark page** (new): a moon/sun button in the sketch editor's toolbar (sketches only), remembered
+  per device (`ink.darkPage`), off by default. On: pages black, only black and white ink swapped
+  (greys within 0.2 of black or white and nearly colourless, channel by channel 1 - c), every other
+  colour as it is, text boxes and what the lasso drags too; dark grey around the pages. Display
+  only (`Drawing/InkDark.swift`): stored colours, sync and PDF/image export stay light. PencilKit
+  is kept in light mode (it would otherwise invert dark ink itself); the iPad canvas draws each
+  stroke in its shown colour and turns a new stroke's colour back before storing it. PDFs and
+  pictures keep their look. The website editor didn't get it (apps first). Check: black and white
+  pens swap, red/blue stay, a stroke drawn in dark mode is black on another device, export is light.
+- **"Allow Paste?" on every launch** (and "Paste from MacBook" at random): Trove read the
+  clipboard each time it came to the front (and on every change, including Universal Clipboard
+  arriving from the Mac), and Capture read it to offer "Paste link". iPhone/iPad now never read the
+  clipboard by themselves: they only note that something new is there (no question), and the
+  system Paste button (Clipboard screen, Capture) reads it when tapped, which never asks. The Trove
+  keyboard and the Save Clipboard shortcut still work; the Mac's clipboard history is unchanged. The
+  "Save what I copied when I open Trove" toggle is gone on iPhone/iPad. Other questions (location
+  for clipboard places, notifications for price alerts, Photos for screenshots, microphone and
+  speech for voice notes, calendar) only come up when that feature is first used. The user can
+  also set Settings → Apps → Trove → Paste from Other Apps → Allow.
+
 ## Current round: the roadmap (user: "Bridges", iPad Air M3 + Pencil Pro; later "session ran out, continue; renaming clips doesn't work")
 Built from `docs/ROADMAP.md` with parallel workers on branches, merged into `main` one by one after
 the full test suites pass. **Not deployed yet**: the website/relay changes below go live when the

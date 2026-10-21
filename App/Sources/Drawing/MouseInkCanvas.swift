@@ -20,70 +20,118 @@ struct MouseInkCanvas: NSViewRepresentable {
     let zoomRequest: InkZoomRequest?
     /// The text box being typed in (a text field on the page).
     var textEdit: InkTextEdit?
+    /// The dark page (`InkDark`): black page, black and white ink swapped.
+    var dark = false
 
+    /// The grey around the page: fixed (not the system's appearance), darker with the dark page.
+    static func outside(dark: Bool) -> NSColor {
+        dark ? NSColor(srgbRed: 44 / 255.0, green: 44 / 255.0, blue: 46 / 255.0, alpha: 1)
+            : NSColor(srgbRed: 217 / 255.0, green: 217 / 255.0, blue: 222 / 255.0, alpha: 1)
+    }
+
+    @MainActor
     final class Coordinator {
         var handledZoom: UUID?
         var observer: NSObjectProtocol?
+        var editor: InkEditorModel?
+        /// The page to fit once the window has its real size.
+        var page: InkPageSpec?
+        var fitPending = false
+        var fittedSize: NSSize = .zero
+        var zoomedByHand = false
+
+        /// Fits the zoom when a page opens, once the scroll view has a usable size (it can be
+        /// zero for a moment while the window opens: fitting then gave 10 %), and again when the
+        /// window's width changes, unless zoomed by hand.
+        func fitIfNeeded(_ scroll: NSScrollView) {
+            guard let page, let editor else { return }
+            let size = scroll.contentSize
+            guard size.width >= 120, size.height >= 120 else { return }
+            let resized = fittedSize != .zero && size.width != fittedSize.width
+            let first = fitPending
+            guard first || (resized && !zoomedByHand && !page.infinite) else { return }
+            fitPending = false
+            fittedSize = size
+            let whole = editor.fitWholePage
+            DispatchQueue.main.async { [weak scroll] in
+                guard let scroll, let view = scroll.documentView as? InkNSView else { return }
+                if page.infinite {
+                    scroll.magnification = 1
+                    view.scroll(CGPoint(x: page.origin - 40, y: page.origin - 40))
+                } else {
+                    scroll.magnification = MouseInkCanvas.fit(page, whole: whole, in: scroll)
+                    if first { view.scroll(.zero) }
+                }
+                editor.zoom = Double(scroll.magnification)
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
+        let scroll = InkScrollView()
+        let coordinator = context.coordinator
+        scroll.onTile = { [weak scroll, weak coordinator] in
+            guard let scroll, let coordinator else { return }
+            coordinator.fitIfNeeded(scroll)
+        }
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.allowsMagnification = true
         scroll.minMagnification = InkEditorModel.minZoom
         scroll.maxMagnification = InkEditorModel.maxZoom
-        scroll.backgroundColor = NSColor.underPageBackgroundColor
+        scroll.backgroundColor = Self.outside(dark: dark)
         scroll.documentView = InkNSView()
         // The zoom shown bottom left follows pinching and ⌘-scrolling.
         let editor = editor
-        context.coordinator.observer = NotificationCenter.default.addObserver(forName: NSScrollView.didEndLiveMagnifyNotification, object: scroll, queue: .main) { [weak scroll] _ in
+        context.coordinator.observer = NotificationCenter.default.addObserver(forName: NSScrollView.didEndLiveMagnifyNotification, object: scroll, queue: .main) { [weak scroll, weak coordinator] _ in
             let z = Double(scroll?.magnification ?? 1)
-            MainActor.assumeIsolated { editor.zoom = z }
+            MainActor.assumeIsolated {
+                coordinator?.zoomedByHand = true
+                editor.zoom = z
+            }
         }
         return scroll
     }
 
     /// The zoom that fits the page (all of it, or its width) in the window.
-    private func fit(_ whole: Bool, in scroll: NSScrollView) -> Double {
-        let w = Double(scroll.contentSize.width) - 40, h = Double(scroll.contentSize.height) - 40
+    static func fit(_ page: InkPageSpec, whole: Bool, in scroll: NSScrollView) -> Double {
+        let w = max(80, Double(scroll.contentSize.width) - 40), h = max(80, Double(scroll.contentSize.height) - 40)
         let z = whole ? min(w / page.width, h / page.height) : w / page.width
         return min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, z))
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? InkNSView else { return }
+        let c = context.coordinator
+        c.editor = editor
+        let outside = Self.outside(dark: dark)
+        if scroll.backgroundColor != outside { scroll.backgroundColor = outside }
+        if view.dark != dark { view.dark = dark }
         view.editor = editor
         view.tool = tool
         view.color = color
         view.width = width
-        let key = "\(page.key)-\(pagesRevision)-\(page.width)x\(page.height)"
+        let key = "\(page.key)-\(pagesRevision)-\(page.width)x\(page.height)-\(dark)"
         if view.shownKey != key {
             let newPage = view.page?.key != page.key || view.page?.infinite != page.infinite
             view.show(page, key: key)
+            c.page = page
             if newPage {
-                DispatchQueue.main.async {
-                    if page.infinite {
-                        scroll.magnification = 1
-                        view.scroll(CGPoint(x: page.origin - 40, y: page.origin - 40))
-                    } else {
-                        scroll.magnification = fit(editor.fitWholePage, in: scroll)
-                        view.scroll(.zero)
-                    }
-                    editor.zoom = Double(scroll.magnification)
-                }
+                c.fitPending = true
+                c.fitIfNeeded(scroll)
             }
         }
         if let zoomRequest, zoomRequest.id != context.coordinator.handledZoom {
             context.coordinator.handledZoom = zoomRequest.id
             let z: Double = switch zoomRequest.kind {
             case .scale(let v): min(InkEditorModel.maxZoom, max(InkEditorModel.minZoom, v))
-            case .wholePage: fit(true, in: scroll)
-            case .pageWidth: fit(false, in: scroll)
+            case .wholePage: Self.fit(page, whole: true, in: scroll)
+            case .pageWidth: Self.fit(page, whole: false, in: scroll)
             }
+            if case .scale = zoomRequest.kind { c.zoomedByHand = true } else { c.zoomedByHand = false }
             let editor = editor
             DispatchQueue.main.async {
                 scroll.animator().magnification = z
@@ -95,8 +143,21 @@ struct MouseInkCanvas: NSViewRepresentable {
     }
 }
 
+/// The scroll view, telling the canvas when it lays out (to fit the page once it has its size).
+final class InkScrollView: NSScrollView {
+    var onTile: (@MainActor () -> Void)?
+    override func tile() {
+        super.tile()
+        onTile?()
+    }
+}
+
 final class InkNSView: NSView {
     var editor: InkEditorModel?
+    /// The dark page (`InkDark`): what's drawn is shown in its colours; what's stored isn't touched.
+    var dark = false { didSet { if dark != oldValue { inkCache = nil; needsDisplay = true } } }
+    /// Whether this page shows dark (sketch paper only).
+    private var darkHere: Bool { dark && page.map(InkDark.applies(to:)) == true }
     var tool: InkEditorTool = .pen { didSet { if tool != oldValue { window?.invalidateCursorRects(for: self) } } }
     var color = "#1c1c1e"
     var width = 2.5
@@ -143,8 +204,9 @@ final class InkNSView: NSView {
         setFrameSize(NSSize(width: spec.width, height: spec.height))
         guard !spec.infinite else { needsDisplay = true; return }
         let pixels = Int(min(4096, spec.width * 2.5))
+        let drawn = darkHere ? InkDark.spec(spec) : spec
         Task { @MainActor [weak self] in
-            let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(spec, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
+            let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(drawn, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
             guard let self, self.shownKey == key else { return }
             self.background = rendered?.image
             self.needsDisplay = true
@@ -157,19 +219,19 @@ final class InkNSView: NSView {
         ctx.translateBy(x: origin, y: origin)
         if page.infinite {
             let area = InkGeometry.Rect(x: dirtyRect.minX - origin, y: dirtyRect.minY - origin, width: dirtyRect.width, height: dirtyRect.height)
-            InkRenderer.drawBackground(page, area: area, in: ctx)
+            InkRenderer.drawBackground(darkHere ? InkDark.spec(page) : page, area: area, in: ctx)
         } else if let background {
             InkRenderer.drawImage(background, in: CGRect(x: 0, y: 0, width: page.width, height: page.height), ctx: ctx)
         } else {
-            ctx.setFillColor(NSColor.white.cgColor)
+            ctx.setFillColor(darkHere ? NSColor.black.cgColor : NSColor.white.cgColor)
             ctx.fill(CGRect(x: 0, y: 0, width: page.width, height: page.height))
         }
         drawInk(page, editor: editor, in: ctx)
         // What the lasso is dragging, over the rest: the cached picture of the page stays as it is while it moves.
-        if let moving = editor.dragPreview(page.key) { InkRenderer.drawContent(moving, in: ctx) }
+        if let moving = editor.dragPreview(page.key) { InkRenderer.drawContent(darkHere ? InkDark.content(moving) : moving, in: ctx) }
         if let ink = tool.ink, !points.isEmpty {
             let style = InkStrokeStyle(dash: editor.dash(for: tool))
-            InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, style: style, in: ctx)
+            InkRenderer.draw(tool: ink, color: darkHere ? InkDark.swap(color) : color, width: width, points: points, shape: snapped, style: style, in: ctx)
         }
         InkRenderer.drawOverlay(editor.overlay(page.key), scale: scale, in: ctx)
         ctx.restoreGState()
@@ -182,7 +244,7 @@ final class InkNSView: NSView {
     private func drawInk(_ page: InkPageSpec, editor: InkEditorModel, in ctx: CGContext) {
         let visible = visibleRect
         let k = CGFloat(scale) * (window?.backingScaleFactor ?? 2)
-        let key = "\(editor.revision)|\(shownKey)|\(scale)"
+        let key = "\(editor.revision)|\(shownKey)|\(scale)|\(darkHere)"
         if inkCache?.key != key || inkCache?.rect != visible {
             inkCache = nil
             let w = Int((visible.width * k).rounded(.up)), h = Int((visible.height * k).rounded(.up))
@@ -193,12 +255,18 @@ final class InkNSView: NSView {
                 bitmap.translateBy(x: 0, y: CGFloat(h))
                 bitmap.scaleBy(x: k, y: -k)
                 bitmap.translateBy(x: -visible.minX + origin, y: -visible.minY + origin)
-                InkRenderer.drawContent(editor.display(page.key, lifted: true), in: bitmap)
+                InkRenderer.drawContent(shownContent(page, editor: editor), in: bitmap)
                 if let image = bitmap.makeImage() { inkCache = (key, visible, image) }
             }
         }
-        guard let cache = inkCache else { InkRenderer.drawContent(editor.display(page.key, lifted: true), in: ctx); return }
+        guard let cache = inkCache else { InkRenderer.drawContent(shownContent(page, editor: editor), in: ctx); return }
         InkRenderer.drawImage(cache.image, in: cache.rect.offsetBy(dx: -origin, dy: -origin), ctx: ctx)
+    }
+
+    /// The page's ink as shown: swapped black and white on the dark page.
+    private func shownContent(_ page: InkPageSpec, editor: InkEditorModel) -> InkContent {
+        let stored = editor.display(page.key, lifted: true)
+        return darkHere ? InkDark.content(stored) : stored
     }
 
     /// Only the end of the line being drawn needs redrawing.
@@ -325,7 +393,7 @@ final class InkNSView: NSView {
             tv.isRichText = false
             tv.allowsUndo = true
             tv.drawsBackground = true
-            tv.backgroundColor = NSColor.white.withAlphaComponent(0.35)
+            tv.backgroundColor = (darkHere ? NSColor.black : NSColor.white).withAlphaComponent(0.35)
             tv.textContainerInset = .zero
             tv.textContainer?.lineFragmentPadding = 0
             tv.textContainer?.widthTracksTextView = true
@@ -347,7 +415,7 @@ final class InkNSView: NSView {
         let paragraph = NSMutableParagraphStyle()
         paragraph.minimumLineHeight = size * 1.25
         paragraph.maximumLineHeight = size * 1.25
-        let colour = NSColor(cgColor: InkRenderer.cgColor(edit.color)) ?? .black
+        let colour = NSColor(cgColor: InkRenderer.cgColor(darkHere ? InkDark.swap(edit.color) : edit.color)) ?? .black
         if tv.font != font || tv.textColor != colour {
             tv.font = font
             tv.textColor = colour

@@ -88,6 +88,7 @@ struct TroveApp: App {
     }
 
     private func handle(_ url: URL) {
+        if url.isFileURL { model.openFile(url); return }
         guard url.scheme == "trove" else { return }
         switch url.host {
         case "capture":

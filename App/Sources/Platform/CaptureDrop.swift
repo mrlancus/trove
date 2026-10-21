@@ -6,13 +6,29 @@ import TroveCore
 /// get it right away) or, offline / no relay, drop it in the App Group inbox for the app to import.
 enum CaptureDrop {
     enum Failure: LocalizedError {
+        /// The app hasn't left its settings in the shared container yet.
         case notSetUp
-        var errorDescription: String? { "Open Trove once on this device to finish setting it up." }
+        /// This install has no App Group the app and its extensions share (stripped when signed).
+        case noSharedStorage
+        var errorDescription: String? {
+            switch self {
+            case .notSetUp:
+                "Trove hasn't shared its settings with the share sheet yet. Open Trove on this device (set up, with your vault showing), then try again."
+            case .noSharedStorage:
+                "The share sheet can't reach Trove's shared storage on this install (the App Group wasn't kept when the app was signed). Use Trove in the share sheet's row of apps instead (it copies the file into Trove), or reinstall Trove with SideStore."
+            }
+        }
+    }
+
+    /// Why saving can't work here, before trying (nil when it can).
+    static var problem: Failure? {
+        guard SharedConfig.loadCapture() == nil else { return nil }
+        return SharedConfig.hasSharedContainer ? .notSetUp : .noSharedStorage
     }
 
     @discardableResult
     static func send(_ envelope: InboxEnvelope) async throws -> String {
-        guard let capture = SharedConfig.loadCapture() else { throw Failure.notSetUp }
+        guard let capture = SharedConfig.loadCapture() else { throw problem ?? .notSetUp }
         let sealed = try envelope.sealed(toPublicKey: capture.vaultPublicKey)
         if let url = capture.relayURL.flatMap(URL.init(string:)), let vault = capture.relayVaultId, let token = capture.inboxToken {
             let client = RelayClient(baseURL: url, vaultId: vault, token: token)
