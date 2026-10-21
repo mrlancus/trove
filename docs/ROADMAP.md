@@ -452,6 +452,30 @@ The repo already builds the apps on Actions (the user has no Apple Silicon Mac) 
 - Pinboards with drag to reorder, snippets with placeholders (`{date}`, `{clipboard}`), paste as plain
   text, merge several clips into one. **M**
 
+### Files: a viewer for (nearly) every type **M**
+The website already previews PDFs, images, GoodNotes, Office, iWork, text/CSV, audio and video; the
+apps use Quick Look. The vault is end-to-end encrypted, so every file is decoded on the device (no
+conversion services). Each viewer is a vendored library loaded only when that type is opened. Do it
+after S5, which shares the viewer code.
+- **Website**:
+  - Code with syntax colours, line numbers and folding; JSON/XML trees; logs.
+  - Rendered Markdown, HTML (sandboxed frame, no scripts, no remote loads) and emails (`.eml`).
+  - Zip archives: list the contents, open a file inside with the same viewers.
+  - Fonts: a sample sheet.
+  - HEIC photos where the browser can't show them (a WASM decoder; Safari shows them natively).
+  - 3D: glTF/GLB, OBJ, STL, PLY, FBX and USDZ with three.js (orbit, zoom, lighting). three.js reads
+    only some USDZ files; the apps show all of them.
+  - EPUB ebooks as a paged reader.
+  - Photoshop (`.psd`): the flattened image and a list of layers.
+- **Apps**: keep Quick Look (it already covers USDZ with AR, Office, iWork, media). Add what it can't
+  show: STL/OBJ/PLY through Model I/O + SceneKit/RealityKit, code highlighting, zip contents.
+- **Search**: text from code, ebooks, emails, HTML and zip contents goes into `ocrText` (the same
+  field PDFs use), so these files are found by search on every device.
+- **Everything else**: a clean fallback card (name, size, type, download; "open on an Apple device"
+  when Quick Look can show it).
+- **Not now** (the user's call): CAD (STEP/IGES, DWG), camera RAW, and converting video formats the
+  browser can't play (MKV, AVI, HEVC on Chrome).
+
 ### Organise and resurface
 - **Places map** (NOTES "later") from saved places and clip locations. **M**
 - **Resurfacing**: "on this day", "you saved this 3 months ago and never opened it". **S**
@@ -477,7 +501,7 @@ The repo already builds the apps on Actions (the user has no Apple Silicon Mac) 
 |---|---|---|
 | **Now** (next 3–5 sessions) | S1 writing feel + tiles · Q1 website search index in a Worker · 3.6 benchmarks · 3.2 IndexedDB saving · S5 PDF text on the website | The things the user feels every day, on the client they use every day, with numbers to prove it |
 | **Next** | S2 pens · S3 lasso/shapes/ruler · S4 notebooks (after the design pick) · Q2 matching · Q3 meaning on the website · A1 Ask Trove on the website · 5.2 `trove-mcp` local · 6 issues + CI | GoodNotes parity on the parts people compare first; Claude can use Trove |
-| **Then** | S6 handwriting as text · S7 audio + study · S8 smaller strokes · 3.1 SQLite + checkpoints · 5.3 bridges (RSS, GitHub, bot, link previews) · A2/A3 | Beyond GoodNotes; the vault stays fast as it grows |
+| **Then** | S5 PDFs · §7 file viewer (after S5) · S6 handwriting as text · S7 audio + study · S8 smaller strokes · 3.1 SQLite + checkpoints · 5.3 bridges (RSS, GitHub, bot, link previews) · A2/A3 | Beyond GoodNotes; the vault stays fast as it grows |
 | **Later** | 5.4 shared spaces → collaboration and remote MCP · key rotation · passkeys · notes editor rewrite | Needs design docs and protocol changes |
 
 Each step ships on its own, keeps the website and apps working, and updates NOTES.md.
