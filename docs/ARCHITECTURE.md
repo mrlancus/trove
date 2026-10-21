@@ -50,6 +50,16 @@
 | Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `bridges.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs`, `draw.e2e.mjs`, `offline.e2e.mjs`, `bridges.e2e.mjs` |
 | Benchmarks with a regression gate (CI: `.github/workflows/tests.yml`) | `web/test/bench.mjs`, `bench-baseline.json`; Swift: `TroveCoreTests/Benchmarks.swift` (`TROVE_BENCH=1`) |
 
+## AI and looking back (ROADMAP §4, PROTOCOL.md §4 "AI" and §11)
+| Concern | File |
+|---|---|
+| Relay: Claude enrich/ask/action (text and page pictures), monthly token allowance per vault, `ai/status` | `server/src/ai.ts`, `vault.ts` (`aiStatus`), tests `server/test/ai.test.ts` |
+| Ask Trove retrieval (local search → best ~20 snippets) | `web/public/core/ask.js` |
+| Weekly digest (id per ISO week), on this day, possible duplicates (port: `Digest.swift`, `Library+Digest.swift`) | `web/public/core/digest.js` (`Fixtures/digest-cases.json`, `web/test/make-digest-fixture.mjs`) |
+| Suggest links (no AI) | `web/public/core/suggest.js` |
+| Website AI function API (drawing hook: `pageAction`) / UI (Ask Trove, note AI menu, AI settings, Look back) | `web/public/aiactions.js` / `web/public/ai.js` |
+| Apps: note AI (Apple Intelligence, else cloud), digest, overnight iPad worker | `App/Sources/Model/AppModel+AI.swift`, `Views/NoteAIMenu.swift`, `Enrichment/OnDeviceAI.swift`, `Services/BackgroundTasks.swift` |
+
 ## Bridges and Trove for Claude
 | Concern | File |
 |---|---|
