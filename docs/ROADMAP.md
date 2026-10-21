@@ -71,7 +71,7 @@ strokes themselves, and that's where the feel is lost.
 - **Stabiliser and pressure curve** settings (per pen): smoothing slider (0 = raw, high = calligraphy
   steady), pressure curve (soft / normal / firm), minimum width. Synced in `settings.ink`.
 - **Pencil hover preview** (M2+ iPads and Pencil Pro): show the tip and colour before touching.
-  **Barrel roll** (Pencil Pro) turns the fountain and brush nibs. ❓ which iPad and Pencil the user has.
+  **Barrel roll** (Pencil Pro) turns the fountain and brush nibs. The user has an iPad Air M3 + Pencil Pro.
 - Done when: drawing on the website at 120 Hz on the iPad feels the same as Safari's own Notes-like
   apps (latency target under 25 ms input-to-paint, §3.6), and a 2,000-stroke page pans at 60 fps.
 
@@ -484,9 +484,9 @@ Each step ships on its own, keeps the website and apps working, and updates NOTE
 ---
 
 ## 9. Decisions for the user ❓
-1. **Name for "the connection thing"**: Bridges (recommended), Portals, Plugs, Channels or Hookups.
-2. **Which iPad and Apple Pencil** (model; Pencil Pro / 2 / USB-C)? Decides hover, squeeze and barrel
-   roll work.
+1. ~~Name for "the connection thing"~~ **Decided: Bridges.**
+2. ~~Which iPad and Pencil~~ **Decided: iPad Air M3 + Apple Pencil Pro** (hover, squeeze, barrel roll and
+   haptics all work). Everything must still work on any iPad and Pencil.
 3. **Cloud AI on?** Setting the relay's Anthropic key costs money per use (pennies with Haiku and a
    monthly cap). Without it, AI features run on the iPad only, and website handwriting recognition
    waits for an Apple device.
