@@ -6,6 +6,7 @@ every session by reading **NOTES.md** (status, what's next, manual steps). Specs
 - `docs/RESEARCH.md`: product spec and constraints
 - `docs/PROTOCOL.md`: the byte-level contract shared by Swift, the Worker and the extension
 - `docs/ARCHITECTURE.md`: code map
+- `docs/ROADMAP.md`: the plan for what to build next
 
 ## Layout
 - `server/`: Cloudflare Worker relay (TypeScript). **Done and tested.** Don't rewrite it. Change it

@@ -308,6 +308,9 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **Drawing**: researched and planned, not built (`docs/DRAWING_PLAN.md`).
 
 ## Next steps
+**The full plan is `docs/ROADMAP.md`** (sketching vs GoodNotes, search, performance, AI, bridges to
+other services, GitHub). Its "Decisions for the user" list is still open; ask before starting items marked ❓.
+
 1. **This round on devices**: the user tries drawing with Apple Pencil on the iPad (app and Safari),
    GoodNotes notebooks, select mode, the iPhone tabs and clipboard; we fix what breaks.
    - Sketching next: the Mac editor's scroll/flip layouts (it shows one page at a time), Connect
