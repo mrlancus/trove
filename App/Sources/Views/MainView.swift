@@ -174,6 +174,8 @@ struct AddMenu: View {
         #if os(iOS)
         ScanDocumentButton()
         #endif
+        Divider()
+        Button { Task { await model.makeDigest() } } label: { Label("Make this week's digest", systemImage: "calendar.badge.clock") }
     }
 }
 

@@ -112,6 +112,10 @@ final class AppModel {
     var sync = SyncStatus()
     var enriching = false
     var toast: String?
+    /// The relay's cloud AI state and this month's use (AppModel+AI.swift); nil without a relay.
+    var cloudAIStatus: RelayClient.AIStatus?
+    /// Last week's digest was checked this launch (AppModel+AI.swift).
+    var digestChecked = false
     var showCapture = false
     /// The drawing editor, when it's open.
     var inkTarget: InkTarget?
@@ -601,6 +605,7 @@ final class AppModel {
         Perf.end("Sync", signpost)
         sync.syncing = false
         await enrichSoon()
+        await afterSyncAI()
         await mirrorIfOwner()
     }
 
@@ -749,7 +754,11 @@ final class AppModel {
 
     var aiStatus: String {
         if OnDeviceAI.isAvailable { return "Apple Intelligence on this device" }
-        if vault.config?.cloudAI == true, vault.relayClient != nil { return "Cloud AI (opt-in) via your relay" }
+        if vault.config?.cloudAI == true, vault.relayClient != nil {
+            guard let s = cloudAIStatus else { return "Cloud AI (opt-in) via your relay" }
+            if !s.configured { return "Cloud AI is on here, but your relay has no Anthropic key yet" }
+            return "Cloud AI (opt-in) via your relay: \(s.used) of \(s.limit) tokens used this month"
+        }
         return "Basic (text recognition, dates, places, search by meaning). Smart summaries come from your iPad."
     }
 
