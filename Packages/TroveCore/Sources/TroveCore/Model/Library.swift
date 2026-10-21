@@ -61,7 +61,26 @@ public actor Library {
         }
     }
 
+    /// The search index's saved form, to write next to the vault snapshot (it isn't synced).
+    public func searchSnapshot() async -> SearchIndex.Snapshot {
+        await refreshIndex()
+        return index.snapshot()
+    }
+
+    /// Loads a saved search index: only items changed since it was saved are indexed again.
+    /// Returns how many were. Call before the first search.
+    @discardableResult
+    public func restoreSearch(_ snapshot: SearchIndex.Snapshot) async -> Int {
+        let records = await engine.store.all(kind: "item").filter { !$0.isStrayItem && !$0.isDeleted }
+        let fresh = index.restore(snapshot, items: records.map(Item.init))
+        indexed = [:]
+        for r in await engine.store.all(kind: "item") where !r.isStrayItem { indexed[r.id] = r.updatedHLC }
+        return fresh
+    }
+
     private func refreshIndex() async {
+        let folders = await engine.records(kind: "folder").map(Folder.init)
+        index.folders = Dictionary(folders.map { ($0.id, SearchFolder(name: $0.name, parent: $0.parent)) }, uniquingKeysWith: { a, _ in a })
         for record in await engine.store.all(kind: "item") where !record.isStrayItem {
             let id = record.id
             if indexed[id] != record.updatedHLC {
