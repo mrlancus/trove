@@ -1,0 +1,143 @@
+# Every test that runs on Linux, on every push and pull request (free on public repos; no secrets).
+#   relay      the Worker's tests on the Workers runtime, plus a type check
+#   web        website core + Swift interop fixtures, browser extension, benchmark gate (web/test/bench.mjs)
+#   e2e        the website in real Chromium against `wrangler dev --local` (no Cloudflare account needed)
+#   trovecore  TroveCore's Swift tests on Linux, then its benchmarks (printed, not gated)
+# The Apple apps are built by apps.yml.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Relay tests (Workers runtime)
+        run: npx vitest run
+      - name: Type check
+        run: npx tsc --noEmit
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Web core tests (+ Swift interop fixtures)
+        working-directory: web
+        run: npm test
+      - name: Browser extension tests
+        run: node --experimental-strip-types --test extensions/browser/test/trv1.test.mjs
+      - name: Benchmarks (fails if >20 % slower than web/test/bench-baseline.json)
+        working-directory: web
+        env:
+          BENCH_OUT: ${{ runner.temp }}/bench-results.json
+          NODE_OPTIONS: --max-old-space-size=6144
+        # One retry: a shared runner can be slow for a moment.
+        run: node test/bench.mjs || { echo "Retrying once"; node test/bench.mjs; }
+      - name: Keep the benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: ${{ runner.temp }}/bench-results.json
+          if-no-files-found: ignore
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TROVE_RELAY_URL: http://127.0.0.1:8787
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            web/package-lock.json
+      - name: Install
+        run: |
+          (cd server && npm ci)
+          (cd web && npm ci)
+      - name: Install Chromium
+        working-directory: web
+        run: |
+          npx playwright-core install --with-deps chromium
+          # The tests look for chromium-*/chrome-linux/chrome; newer builds use chrome-linux64.
+          CHROME=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -path "*/chromium-*/*" | head -1)
+          test -x "$CHROME"
+          echo "CHROMIUM_PATH=$CHROME" >> "$GITHUB_ENV"
+          "$CHROME" --version
+      - name: Start the relay (wrangler dev --local)
+        working-directory: server
+        run: |
+          nohup npx wrangler dev --local --config wrangler.test.jsonc --port 8787 --ip 127.0.0.1 > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf "$TROVE_RELAY_URL/health" > /dev/null; then echo "relay is up"; exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/wrangler.log"
+          exit 1
+      - name: Website e2e (relay + Chromium)
+        working-directory: web
+        run: npm run test:e2e
+      - name: Relay log
+        if: failure()
+        run: tail -200 "$RUNNER_TEMP/wrangler.log"
+
+  trovecore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container: swift:6.3-noble
+    defaults:
+      run:
+        working-directory: Packages/TroveCore
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: Packages/TroveCore/.build
+          key: trovecore-linux-${{ hashFiles('Packages/TroveCore/Package.swift', 'Packages/TroveCore/Package.resolved') }}
+          restore-keys: trovecore-linux-
+      - name: TroveCore tests
+        run: swift test
+      - name: TroveCore benchmarks (not gated)
+        env:
+          TROVE_BENCH: "1"
+          TROVE_BENCH_OUT: swift-bench.json
+        run: swift test --filter Benchmarks

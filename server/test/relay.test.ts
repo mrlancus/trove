@@ -212,7 +212,7 @@ describe("live websocket", () => {
     }
     await new Promise((r) => setTimeout(r, 800));
     expect(messages.length).toBe(1);
-    const ping = JSON.parse(messages[0]);
+    const ping = JSON.parse(messages[0]!);
     expect(ping).toMatchObject({ type: "segment", device: v.deviceId, first: 10, last: 59, count: 5 });
     const list = (await (await call(`/v1/vaults/${v.vaultId}/segments?after=0`, { headers: auth(v.deviceToken) })).json()) as { segments: { cursor: number }[] };
     expect(ping.cursor).toBe(Math.max(...list.segments.map((s) => s.cursor)));
