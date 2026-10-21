@@ -97,11 +97,47 @@ A segment is an immutable batch of consecutive ops from one device:
 - **File name:** `<firstSeq zero-padded to 12>-<lastSeq zero-padded to 12>.trv`.
 - **Limit:** 512 KiB of plaintext per segment.
 
+### Checkpoints
+A checkpoint is the materialised state of a set of ops, so a new device (or a website login) loads
+one file instead of replaying every op since the vault began (`core/checkpoint.js`,
+`Checkpoint.swift`, both checked against `Fixtures/checkpoint-cases.json`).
+
+- **Plaintext:** `"TRC1"`, a format byte (`0`: UTF-8 JSON follows; `1`: a u32 of the JSON's length,
+  then the JSON as raw DEFLATE, RFC 1951), then the JSON:
+  ```json
+  { "v": 1, "frontier": "<highest hlc covered>", "cursor": 1234, "device": "<writer>", "createdAt": 1760000000000,
+    "covers": { "<deviceId>": [[1, 500], [502, 610]] },
+    "records": [ { "id": "…", "k": "item", "ks": "<hlc of the last op that set the kind>",
+                   "c": "<first hlc>", "u": "<last hlc>", "g": [["<hlc>", { "title": "…" }], …] } ],
+    "texts": [ <every covered "text" op, verbatim> ] }
+  ```
+  `covers` lists exactly the ops inside (per device, merged sequence ranges). Each record's fields are
+  grouped by the HLC of the op that set them (`g`); `ks` is absent when no op named a kind. `cursor`
+  is the relay cursor up to which every relay segment is covered (`null` when written without a relay).
+- **Encrypted:** TRV1 mode 1 with the segment key (§1), like a segment. The relay and iCloud only
+  ever see ciphertext. Vaults made with encryption off don't use checkpoints.
+- **Loading** (same result as a full replay): start from the records (texts empty), then apply every
+  op in HLC order that isn't covered, plus the checkpoint's text ops. An op that isn't covered but is
+  older than what a field holds (a device that was offline) doesn't overwrite it: a `set` field or the
+  kind changes only if the op's `h` ≥ that field's HLC in `g` (or `ks`). `createdHLC` is the lowest
+  HLC seen. Text fields replay all their text ops in order, so merges and conflicts come out the same.
+  Covered ops that arrive again are ignored, and a whole segment inside `covers` needn't be fetched.
+- **Writing:** only with nothing unpushed (a pending op could still be renumbered). A device writes
+  one after a clean sync when at least 5,000 ops have piled up since its last checkpoint and the
+  newest one is a day old, then uses it as its own local base too. A checkpoint is only taken over the
+  one in use when it covers everything that one covers.
+- **Where:** the relay (§4, newest three kept) and iCloud
+  (`.sync/<deviceId>/checkpoints/<id>.trc`, the writer's newest two). A device starts from one only
+  when it has nothing yet (cursor 0, no local copy). Devices that bridge iCloud and the relay always
+  fetch every segment (so they can copy them across), but still write checkpoints. Segments are never
+  pruned yet: older apps that don't read checkpoints still replay from the start.
+
 ### iCloud Drive vault layout
 ```
 Trove/
   vault.json                 public info: { "v":1, "vaultId", "vaultPublicKey" (b64u), "createdAt", "encrypted": true }
   .sync/<deviceId>/<first>-<last>.trv      journals; ONLY that device writes in its own folder
+  .sync/<deviceId>/checkpoints/<id>.trc    that device's checkpoints (TRV1, see "Checkpoints")
   .blobs/<aa>/<blobId>.trv   attachments (blobId prefix folders); written once, never modified
   Notes/…                    readable Markdown mirror (written only by the "mirror owner" device, the Mac)
 ```
@@ -131,6 +167,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/segments/:device/:first/:last` | device | → TRV1 bytes |
 | `PUT /vaults/:v/blobs/:blobId` | device | TRV1 bytes → `201` (or `200` if it already exists) |
 | `GET /vaults/:v/blobs/:blobId` | device | → TRV1 bytes |
+| `PUT /vaults/:v/checkpoints/:id` | device | TRV1 checkpoint (§3), `id` 8–64 of `[A-Za-z0-9_-]`, up to 95 MB → `201 {id}` (`200` if that id exists). Stored in R2; only the newest 3 are kept |
+| `GET /vaults/:v/checkpoints` | device | → `{checkpoints:[{id, device, size, createdAt}]}`, newest first |
+| `GET /vaults/:v/checkpoints/:id` | device | → TRV1 bytes |
 | `POST /vaults/:v/inbox` | inbox or device | TRV1 **sealed** bytes, plus header `X-Trove-Source: web\|ios\|other` → `{id, cursor}` |
 | `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
 | `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
@@ -323,6 +362,12 @@ revoked the same way.
   `localOwner` holds the id of the copy that last opened the storage; an older copy (another tab)
   stops writing. This keeps vault content out of plain IndexedDB files; it does not protect against
   someone with the whole browser profile, since the key is stored there too.
+  **Checkpoint:** a copy that starts from a checkpoint (§3 "Checkpoints"), or wrote one, keeps it
+  under `base` as `{v: 1, id, cursor, data: b64u of the TRV1 checkpoint as the relay has it}` (already
+  encrypted with the segment key, so not sealed again), and its op chunks hold only the ops it
+  doesn't cover. `base` is written before the chunks are rewritten, so a crash leaves at worst
+  covered ops in old chunks, which are ignored. A `base` that can't be opened makes the copy open
+  empty with cursor 0, as above.
 - **Same results everywhere:** `web/test` and `WebInteropTests.swift` check journals written by
   each side materialise to identical records on the other.
 - **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to
