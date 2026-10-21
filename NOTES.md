@@ -101,8 +101,13 @@ user says "publish" (`cd server && npx wrangler deploy`).
     search's "From your clipboard" was rebuilt by a sync while typing (Safari then drops the
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
-- **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
-  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): editing (S3) and PDFs (S5).
+- **Not started (lost):** editing (S3) and PDFs (S5) workers were started but left no commits or
+  `wip/*` branch before the container restarted; start them fresh. (Back up worker commits to `wip/*`
+  branches on GitHub so a lost container doesn't lose them.)
+- **Publish pending:** `main` at 8973b32 passed everything (relay 57, TroveCore 128, web 59 unit +
+  21 e2e, trove-mcp 4 + e2e). The user said "publish everything", but the session's permission
+  rules block `wrangler deploy` and `wrangler secret put`. The user runs (or allows):
+  `cd server && npx wrangler secret put BRIDGE_KEY` (any random 32-byte base64) then `npx wrangler deploy`.
 - **Next**: notebooks (S4; design direction ❓8 still open), wire AI into the lasso, handwriting and
   audio (S6, S7), then the rest of the roadmap (§7).
 
