@@ -213,6 +213,17 @@ test("create a vault in the browser, save the recovery code, add a second browse
   await page.locator("nav a", { hasText: "Everything" }).click();
   await page.locator("#search").fill("tag:config");
   await page.locator("#clip-results .clip", { hasText: "Settings blob" }).waitFor();
+  // Renaming from the search results survives a render while typing (a sync used to drop it).
+  if (!(await page.locator("#clip-results .clip.open").count())) {
+    await page.locator("#clip-results .clip", { hasText: "Settings blob" }).getByRole("button", { name: "More" }).click();
+  }
+  await page.locator("#clip-results .clip.open").getByLabel("Name").fill("Settings blob two");
+  await page.evaluate(() => { document.activeElement.dataset.typing = "1"; });
+  await page.evaluate(() => new Promise((done) => { document.querySelector("#search").dispatchEvent(new Event("input")); requestAnimationFrame(() => requestAnimationFrame(done)); }));
+  // Safari drops a field's change when the field is removed, so it must survive the render.
+  assert.ok(await page.evaluate(() => document.activeElement?.dataset.typing === "1"), "the Name field kept the focus");
+  await page.locator("#clip-results .clip.open").getByLabel("Name").press("Enter");
+  await page.locator("#clip-results .clip-title", { hasText: "Settings blob two" }).waitFor();
   await page.locator("#search").fill("");
 
   // Your tags: make one with a colour, put a clip in it, filter by it, find it with #tag.

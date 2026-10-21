@@ -584,13 +584,16 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
   $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
   $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
-  $("#clip-results")?.remove();
-  const fromClips = state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query) : null;
+  // A clip opened from the search results keeps its fields while you type in them (a sync used to
+  // rebuild the results and throw the new name away before it was saved).
+  const editingClip = $("#clip-results .clip.open")?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  const fromClips = editingClip ? null : state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query) : null;
+  if (!editingClip) $("#clip-results")?.remove();
   if (fromClips) {
     fromClips.id = "clip-results";
     $("#grid").after(fromClips);
-    $("#empty").hidden = true;
   }
+  if (fromClips || editingClip) $("#empty").hidden = true;
   renderDetail();
 }
 
