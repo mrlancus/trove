@@ -10,6 +10,8 @@ const INDEX = "opChunks";
 const LOCAL_KEY = "localKey";
 const OWNER = "localOwner";
 const LEGACY_OPS = "ops";
+/** {v: 1, id, cursor, data: b64u of the TRV1 checkpoint as the relay keeps it} (PROTOCOL.md §7). */
+const BASE = "base";
 /** A chunk isn't merged past this many bytes of JSON, so no single write gets huge. */
 export const CHUNK_BYTES = 4 * 1024 * 1024;
 const chunkKey = (n) => `ops.${n}`;
@@ -66,6 +68,8 @@ export class LocalStore {
    */
   async load() {
     let readable = true;
+    // The checkpoint this copy starts from (already encrypted with the vault's segment key).
+    const base = await this.storage.get(BASE);
     const raw = {};
     for (const slot of ["journal", "applied", "cursor"]) raw[slot] = await this.storage.get(slot);
     // Something stored before encryption at rest: write it again, sealed.
@@ -92,7 +96,7 @@ export class LocalStore {
       // Keep the journal (unsent edits) if it could be read; pull everything else again.
       ops = []; applied = []; cursor = 0; this.needsRewrite = true;
     }
-    return { journal, ops, applied, cursor };
+    return { journal, ops, applied, cursor, base: readable && base?.data ? base : null };
   }
 
   // ---------- saving ----------
@@ -132,9 +136,16 @@ export class LocalStore {
    * Saves `fresh` (ops new since the last save) as one chunk, or every op in `all` when the store
    * was rebuilt or migrated. `all` may be a function, called only when needed.
    */
-  save({ journal, fresh, all, applied, cursor }) {
+  save({ journal, fresh, all, applied, cursor, base }) {
     return this.enqueue(async () => {
       if (!(await this.mayWrite())) return false;
+      if (base !== undefined) {
+        // A new checkpoint goes first: the ops it covers that are still in old chunks are then just
+        // ignored, so a crash before the chunks are rewritten loses nothing.
+        if (base) await this.storage.set(BASE, base);
+        else await this.remove([BASE]);
+        this.needsRewrite = true;
+      }
       try {
         if (this.chunks === null) {
           // Never loaded (a vault made in this session): whatever is stored is ours to replace.

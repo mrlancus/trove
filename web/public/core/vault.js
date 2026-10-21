@@ -9,8 +9,14 @@ import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
-import { parseHLC } from "./records.js";
+import { coversRange, parseHLC } from "./records.js";
 import { LocalStore } from "./localstore.js";
+import { lastCoveredSeq, makeCheckpoint, MAX_CHECKPOINT_BYTES, openCheckpoint, parseCheckpoint, sealCheckpoint } from "./checkpoint.js";
+
+/** Write a checkpoint once this many ops have piled up since the last one (PROTOCOL.md §3 "Checkpoints")… */
+export const CHECKPOINT_AFTER_OPS = 5000;
+/** …and the newest on the relay is at least this old, so devices don't all write one at once. */
+export const CHECKPOINT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
@@ -70,6 +76,7 @@ export class Vault {
     this.journal = new Journal(journalState, pending, this.now);
     this.local = options.local ?? new LocalStore(storage);
     this.store = new RecordStore();
+    if (options.base) this.store.useBase(options.base); // the checkpoint this copy starts from
     this.store.apply(ops);
     this.store.unsaved = []; // ops not yet in the local op store (LocalStore saves only these)
     this.store.apply(pending); // edits saved before the full op cache caught up
@@ -188,19 +195,33 @@ export class Vault {
     await local.claim();
     const saved = await local.load();
     const journal = saved.journal ?? { state: { device: config.deviceId }, pending: [] };
-    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local });
-    if (local.needsRewrite) await vault.save(); // data from before chunked, sealed storage
+    let base = null, dropBase = false;
+    if (saved.base) {
+      try {
+        base = parseCheckpoint(await openCheckpoint(b64uDecode(saved.base.data), keys.segment));
+        base.id = saved.base.id;
+      } catch {
+        // Unreadable: start again from nothing (the relay has everything; unsent edits are in the journal).
+        Object.assign(saved, { ops: [], applied: [], cursor: 0 });
+        dropBase = true;
+      }
+    }
+    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local, base });
+    if (dropBase) vault.newBase = null;
+    if (local.needsRewrite || dropBase) await vault.save(); // data from before chunked, sealed storage
     return vault;
   }
 
-  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor. */
+  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor (and a new checkpoint). */
   async save() {
     const fresh = this.store.unsaved ?? [];
     this.store.unsaved = [];
     const store = this.store;
+    const base = this.newBase;
+    this.newBase = undefined;
     await this.local.save({
       journal: { state: { ...this.journal.state }, pending: [...this.journal.pending] },
-      fresh, all: () => store.ops, applied: [...this.applied], cursor: this.cursor,
+      fresh, all: () => store.opsAfterBase, applied: [...this.applied], cursor: this.cursor, base,
     });
   }
 

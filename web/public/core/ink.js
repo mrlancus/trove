@@ -83,19 +83,90 @@ export function rgb(hex) {
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
 }
 
-/** Points [{x, y, p, t}] as little-endian float32 quadruples, in base64url. */
-export function encodePoints(points) {
+/**
+ * Whether new strokes are written in the compact `points2` format (PROTOCOL.md §10). Every reader
+ * accepts both; writers switch once every client the user runs reads `points2` (InkPoints.writeCompact
+ * in Swift).
+ */
+export const WRITE_COMPACT_POINTS = false;
+/** A `points` value in the compact format starts with this (":" never appears in base64url). */
+export const POINTS2_PREFIX = "2:";
+
+/** Points [{x, y, p, t}] as little-endian float32 quadruples in base64url, or `points2` when `compact`. */
+export function encodePoints(points, compact = WRITE_COMPACT_POINTS) {
+  if (compact) return encodePoints2(points);
   const buf = new DataView(new ArrayBuffer(points.length * 16));
   points.forEach((pt, i) => { [pt.x, pt.y, pt.p, pt.t].forEach((v, k) => buf.setFloat32(i * 16 + k * 4, v ?? 0, true)); });
   return b64uEncode(new Uint8Array(buf.buffer));
 }
 
 export function decodePoints(text) {
+  if (typeof text === "string" && text.startsWith(POINTS2_PREFIX)) return decodePoints2(text);
   let bytes;
   try { bytes = b64uDecode(text ?? ""); } catch { return []; }
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const out = [];
   for (let i = 0; i + 16 <= bytes.length; i += 16) out.push({ x: dv.getFloat32(i, true), y: dv.getFloat32(i + 4, true), p: dv.getFloat32(i + 8, true), t: dv.getFloat32(i + 12, true) });
+  return out;
+}
+
+// ---------- points2: about 4–6 bytes a point instead of 16 ----------
+
+/** Rounds half up (the same in Swift: floor(v + 0.5)); NaN and infinities are 0. */
+const quantise = (v, scale) => (Number.isFinite(v) ? Math.floor(v * scale + 0.5) : 0);
+/** Zigzag (0, -1, 1, -2 … → 0, 1, 2, 3 …) with arithmetic, not 32-bit bit operations. */
+const zigzag = (n) => (n >= 0 ? 2 * n : -2 * n - 1);
+const unzigzag = (z) => (z % 2 === 0 ? z / 2 : -(z + 1) / 2);
+
+function pushVarint(out, n) {
+  while (n >= 128) { out.push((n % 128) + 128); n = Math.floor(n / 128); }
+  out.push(n);
+}
+
+/**
+ * Per point: zigzag varints of Δx and Δy in 1/20 point, one byte of pressure (0…255), and a zigzag
+ * varint of Δt in whole milliseconds. Deltas are from the previous point (the first from 0).
+ */
+export function encodePoints2(points) {
+  const out = [];
+  let px = 0, py = 0, pt = 0;
+  for (const p of points) {
+    const x = quantise(p.x ?? 0, 20), y = quantise(p.y ?? 0, 20), t = quantise(p.t ?? 0, 1);
+    const pressure = Math.min(255, Math.max(0, quantise(p.p ?? 0, 255)));
+    pushVarint(out, zigzag(x - px));
+    pushVarint(out, zigzag(y - py));
+    out.push(pressure);
+    pushVarint(out, zigzag(t - pt));
+    px = x; py = y; pt = t;
+  }
+  return POINTS2_PREFIX + b64uEncode(Uint8Array.from(out));
+}
+
+export function decodePoints2(text) {
+  let bytes;
+  try { bytes = b64uDecode(text.slice(POINTS2_PREFIX.length)); } catch { return []; }
+  const out = [];
+  let i = 0, x = 0, y = 0, t = 0;
+  const varint = () => {
+    let n = 0, mul = 1;
+    for (;;) {
+      if (i >= bytes.length) return null;
+      const b = bytes[i++];
+      n += (b & 127) * mul;
+      if (b < 128) return n;
+      mul *= 128;
+      if (mul > 2 ** 49) return null; // longer than any coordinate needs: corrupt
+    }
+  };
+  while (i < bytes.length) {
+    const dx = varint(), dy = varint();
+    if (dx === null || dy === null || i >= bytes.length) break;
+    const p = bytes[i++];
+    const dt = varint();
+    if (dt === null) break;
+    x += unzigzag(dx); y += unzigzag(dy); t += unzigzag(dt);
+    out.push({ x: x / 20, y: y / 20, p: p / 255, t });
+  }
   return out;
 }
 
