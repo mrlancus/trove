@@ -76,6 +76,24 @@ user says "publish" (`cd server && npx wrangler deploy`).
     On iPad PencilKit draws the ink, so pen settings, dashes/fill/arrows/grain show as plain strokes.
     **Ask the user:** should tape's open/closed state sync? Should iPad draw styled strokes in Trove's
     overlay instead of PencilKit? **iPad checks:** hover dot (doubled with PencilKit's?), barrel roll, haptics.
+  - **AI** (ROADMAP A1–A3; PROTOCOL.md §4 AI, §11): relay counts tokens per vault per UTC month
+    (`AI_MONTHLY_LIMIT`, default 1M, friendly 429 over it), `GET ai/status`, `POST ai/action` (text and
+    picture actions); default model is the cheapest Haiku. Website: Ask Trove with citations and "Save
+    as note", AI menu on notes, flashcards (note tagged `flashcards`), Settings → AI usage, Suggest
+    links (no AI), Look back (weekly digest `digest-YYYY-wNN`, on this day, possible duplicates). Apps:
+    note AI menu (Foundation Models on iPad, else cloud), weekly digest, overnight enrichment drains the
+    queue. **Cloud AI stays off** until the user decides ❓3; then `npx wrangler secret put
+    ANTHROPIC_API_KEY`, deploy, switch on under AI. Hook for drawing: `runPageAction` in `ai.js`
+    (not yet wired into the lasso). Apps lack Ask-with-citations, Look back and Suggest links.
+    **Ask the user:** is 1M tokens/month right? Digest weeks in UTC or local time?
+  - **Sync scaling** (ROADMAP §3.1, S8; PROTOCOL.md §3 Checkpoints, §4, §7): encrypted checkpoints
+    ("TRC1", DEFLATE, TRV1 with the segment key) of all records + text ops + covered op ranges; a new
+    device starts from the newest one and skips the segments in it. Written after a clean sync once
+    5,000 ops have piled up and the newest is a day old. Relay `PUT/GET /checkpoints/:id`, R2, newest 3
+    kept; iCloud `.sync/<device>/checkpoints/`. Older relays answer 404 and devices replay as before;
+    segments are never deleted. Apps: local copy in SQLite (`vault.sqlite`, `LocalDatabase` in
+    TroveCore; `state.json` migrates once). CI installs `libsqlite3-dev`. **Needs a relay deploy**
+    for checkpoints to go live. Open: prune old segments once every device reads checkpoints?
   - **Clip renaming fixed.** Apps: the clip form saved only with the Save button at its bottom, so
     Return, swiping the sheet away or picking another clip lost the name, and on iPhone/iPad the
     row's four buttons all fired at once (Cancel too). Now Return saves the name, closing saves
@@ -84,10 +102,9 @@ user says "publish" (`cd server && npx wrangler deploy`).
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
 - **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
-  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): AI (A1–A3;
-  cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
-- **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
-  audio (S5–S7), then the rest of the roadmap.
+  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): editing (S3) and PDFs (S5).
+- **Next**: notebooks (S4; design direction ❓8 still open), wire AI into the lasso, handwriting and
+  audio (S6, S7), then the rest of the roadmap (§7).
 
 ## Round before (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
 - **Why drawing lagged** (found, not guessed): every stroke reloaded the drawing three times, rebuilt
