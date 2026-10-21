@@ -283,6 +283,67 @@ Speed claims need numbers, or they come back.
 - A GitHub Actions job runs them on every push and fails if anything is more than 20 % slower than
   the stored baseline (`bench-baseline.json`).
 
+### 3.7 Battery on iPad and iPhone **M** (apps first)
+The iPad is used for hours of note-taking, so battery and heat matter more than raw speed. Commit
+4887684 already holds back lists, meaning search, Spotlight, widget, clipboard, inbox, enrichment and
+AI while a sketch is open on iPhone/iPad. These gaps remain (found in an audit of the code):
+
+1. **The editor re-reads its own strokes (S).** Each save and sync bumps `inkRevision`
+   (`AppModel.swift` `reload()`), so `reloadInk()` re-reads and re-sorts every stroke of the notebook
+   about every 4 s while writing; its `inkSig` skip never matches local writes. Bump only when a sync
+   pulled ink, and update `inkSig` after own writes. Target: zero reloads when nothing came in.
+2. **Batch pushes while writing (S).** Each pause → save (4 s) → push (8 s): a new segment, an iCloud
+   file, a relay PUT and a live ping that wakes the other devices. With a sketch open, push at most
+   every 60 s (3 min in Low Power Mode) plus on page change, close and background
+   (`PushCoalescer` in TroveCore, tested on Linux).
+3. **Batch incoming live pings (S).** Each ping syncs at once (even a Mac clipboard copy mid-sketch).
+   Merge pings over 30 s while sketching or in Low Power Mode; stop the 25 s keep-alive in the
+   background.
+4. **Fewer requests per sync round (S).** AI status once per launch or when Settings opens; inbox on a
+   ping, on becoming active or every 15 min; price watches every ~6 h.
+5. **AI and OCR follow the power state (M).** Foundation Models and Vision run after every foreground
+   sync on battery. On battery: only this device's last hour, at most 5 per round; none in Low Power
+   Mode or when hot; the rest goes to the charging-only overnight worker.
+6. **Handwriting OCR only for changed pages (M).** Today any stroke change re-reads every page at
+   2400 px with Vision `.accurate`. Keep a signature and text per page; `.fast` in Low Power Mode.
+7. **Stop rewriting whole caches on every edit (S–M).** The meaning-vector cache is rewritten as JSON
+   (~10 MB at 2k items) and the search index in full after each change. Binary Float32; save after
+   60 s of quiet, on background or while charging.
+8. **Less work per stroke on the main thread (M).** `PencilCanvas.apply` and
+   `canvasViewDrawingDidChange` sign every stroke; `nextInkTime` scans all ink. Fast path for a known
+   added stroke; cache the newest time per item.
+9. **Spread out the work after closing a sketch (M).** Closing re-renders every page preview at 480 px
+   plus thumbnail, OCR, catch-up sync, enrichment and Spotlight at once. Only visible, changed
+   previews; group strokes by page once; run the catch-up at `.utility`, staggered.
+10. **Checkpoints only on charger or when idle (S).** Today one can be written mid-sketch inside
+    `sync()`.
+11. **Smaller overlay redraws (M).** The lasso/eraser overlay redraws the whole screen per move, and
+    eraser hover updates SwiftUI per move. Use `CAShapeLayer`s; cache text boxes in a layer.
+12. **Widget reloads (S).** Only when recent/pinned/counts change, at most every 15 min.
+
+**Policy** (one `PowerPolicy` in TroveCore, read by AppModel, EnrichmentService and SyncEngine):
+- *Sketch open*: keep ink save, batched push, batched pull (or every 2 min); pause everything else,
+  plus checkpoints, previews, AI status and widget.
+- *Charger or idle* (`BGProcessingTask`, `requiresExternalPower`): AI for items from other devices,
+  bulk OCR, re-embedding, checkpoints, pruning old segments, index rebuilds. The iPhone gets the same
+  task without AI.
+- *Low Power Mode*: poll ≥ 5 min, push every 3 min while sketching, no foreground AI or Vision
+  (`.fast` OCR), pings batched over 60 s, no automatic clipboard image capture.
+- *Heat* (`thermalState`): `.serious` acts as Low Power Mode and stops enrichment mid-batch;
+  `.critical` syncs only on close or background.
+- *Setting* (Settings → Battery, per device, not synced): Automatic / Save battery / Full speed, with
+  the counters below shown under it.
+
+**Measuring** (no Apple Silicon Mac): MetricKit daily payloads kept in Settings → Battery report with
+a share button; `os_signpost` intervals around sync, reloadInk, OCR, enrichment and checkpoints;
+in-app counters per sketch session (pushes, pulls, requests, reloads, Vision pages, AI calls, bytes
+written); iPadOS Settings → Battery before/after an hour of writing. In CI: TroveCore benchmarks for
+the per-stroke paths, unit tests for `PowerPolicy`/`PushCoalescer`, and a simulated 3-hour writing
+session that must make about 60 pushes (about 900 today).
+
+Order: 1–4 and 10 first (small, the biggest savings), then the policy and setting with 5–6, then 7–9,
+11–12.
+
 ---
 
 ## 4. AI
@@ -502,7 +563,7 @@ after S5, which shares the viewer code.
 |---|---|---|
 | **Now** (next 3–5 sessions) | S1 writing feel + tiles · Q1 website search index in a Worker · 3.6 benchmarks · 3.2 IndexedDB saving · S5 PDF text on the website | The things the user feels every day, on the client they use every day, with numbers to prove it |
 | **Next** | S2 pens · S3 lasso/shapes/ruler · S4 notebooks (after the design pick) · Q2 matching · Q3 meaning on the website · A1 Ask Trove on the website · 5.2 `trove-mcp` local · 6 issues + CI | GoodNotes parity on the parts people compare first; Claude can use Trove |
-| **Then** | S5 PDFs · §7 file viewer (after S5) · S6 handwriting as text · S7 audio + study · S8 smaller strokes · 3.1 SQLite + checkpoints · 5.3 bridges (RSS, GitHub, bot, link previews) · A2/A3 | Beyond GoodNotes; the vault stays fast as it grows |
+| **Then** | 3.7 battery (first) · S5 PDFs · §7 file viewer (after S5) · S6 handwriting as text · S7 audio + study · S8 smaller strokes · 3.1 SQLite + checkpoints · 5.3 bridges (RSS, GitHub, bot, link previews) · A2/A3 | Beyond GoodNotes; the vault stays fast as it grows |
 | **Later** | 5.4 shared spaces → collaboration and remote MCP · key rotation · passkeys · notes editor rewrite | Needs design docs and protocol changes |
 
 Each step ships on its own, keeps the website and apps working, and updates NOTES.md.
