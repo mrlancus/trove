@@ -52,6 +52,16 @@ user says "publish" (`cd server && npx wrangler deploy`).
   - **CI** (`.github/workflows/tests.yml`): relay, web unit + benchmarks (fails if >20 % slower than
     `web/test/bench-baseline.json`), Chromium e2e, trove-mcp unit + e2e, TroveCore + release-mode
     benchmarks, on every push and PR. Dependabot for npm and Actions.
+  - **Search** (ROADMAP Q1–Q4, §3.5): website index (postings + sorted vocabulary) in a Web Worker
+    (`core/search.js`, `search-worker.js`), typo tolerance, `"phrases"`, `-word`, `title:` `in:`
+    `type:` `from:` `has:` `before:`/`after:` `#tag`, bold snippets (handwriting/file labels), saved
+    index (gzipped, AES-GCM with a non-extractable key, IndexedDB `trove-search`). Apps: same in
+    TroveCore (`search-cases.json` fixture shared with JS), `search-index.json` snapshot, Float32/vDSP
+    meaning vectors with a disk cache, rank fusion, `ClipIndex` from 20,000 clips. Bench: 50k items +
+    50k clips, median 3.9 ms, p90 20 ms per keystroke (roadmap target 5 ms for 1–2 letters not yet met).
+    **Ask the user:** website search by meaning needs the CSP to allow `cdn.jsdelivr.net` and
+    `huggingface.co` (third-party script in the worker that sees vault text), or wait until the model
+    is self-hosted. Plumbing is built; the loader is blocked by `script-src 'self'`.
   - **Clip renaming fixed.** Apps: the clip form saved only with the Save button at its bottom, so
     Return, swiping the sheet away or picking another clip lost the name, and on iPhone/iPad the
     row's four buttons all fired at once (Cancel too). Now Return saves the name, closing saves
@@ -60,7 +70,7 @@ user says "publish" (`cd server && npx wrangler deploy`).
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
 - **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
-  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): search (Q1, Q2, Q4, §3.5), drawing feel + pens (S1, S2), AI (A1–A3;
+  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): drawing feel + pens (S1, S2), AI (A1–A3;
   cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
 - **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
   audio (S5–S7), then the rest of the roadmap.
