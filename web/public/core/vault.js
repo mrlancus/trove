@@ -10,6 +10,7 @@ import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
 import { parseHLC } from "./records.js";
+import { LocalStore } from "./localstore.js";
 import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
@@ -56,8 +57,9 @@ export class RelayError extends Error {
 
 export class Vault {
   /**
-   * @param storage {get(key), set(key, value), clear()} – IndexedDB in the browser, a Map in tests.
-   * @param options {origin, fetch, now}
+   * @param storage {get(key), set(key, value), clear(), delete?(key)} – IndexedDB in the browser, a
+   *   Map in tests. Ops, journal, applied and cursor go through `LocalStore` (chunked and sealed).
+   * @param options {origin, fetch, now, local}
    */
   constructor(storage, config, keys, journalState, pending, ops, applied, cursor, options = {}) {
     this.storage = storage;
@@ -66,8 +68,10 @@ export class Vault {
     this.fetch = options.fetch ?? ((...a) => fetch(...a));
     this.now = options.now ?? (() => Date.now());
     this.journal = new Journal(journalState, pending, this.now);
+    this.local = options.local ?? new LocalStore(storage);
     this.store = new RecordStore();
     this.store.apply(ops);
+    this.store.unsaved = []; // ops not yet in the local op store (LocalStore saves only these)
     this.store.apply(pending); // edits saved before the full op cache caught up
     this.applied = new Set(applied);
     this.cursor = cursor;
@@ -180,16 +184,24 @@ export class Vault {
     const config = await storage.get("config");
     const keys = await storage.get("keys");
     if (!config || !keys) return null;
-    const journal = (await storage.get("journal")) ?? { state: { device: config.deviceId }, pending: [] };
-    return new Vault(storage, config, keys, journal.state, journal.pending, (await storage.get("ops")) ?? [],
-      (await storage.get("applied")) ?? [], (await storage.get("cursor")) ?? 0, options);
+    const local = new LocalStore(storage);
+    await local.claim();
+    const saved = await local.load();
+    const journal = saved.journal ?? { state: { device: config.deviceId }, pending: [] };
+    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local });
+    if (local.needsRewrite) await vault.save(); // data from before chunked, sealed storage
+    return vault;
   }
 
+  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor. */
   async save() {
-    await this.storage.set("journal", { state: this.journal.state, pending: this.journal.pending });
-    await this.storage.set("ops", this.store.ops);
-    await this.storage.set("applied", [...this.applied]);
-    await this.storage.set("cursor", this.cursor);
+    const fresh = this.store.unsaved ?? [];
+    this.store.unsaved = [];
+    const store = this.store;
+    await this.local.save({
+      journal: { state: { ...this.journal.state }, pending: [...this.journal.pending] },
+      fresh, all: () => store.ops, applied: [...this.applied], cursor: this.cursor,
+    });
   }
 
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -363,7 +375,7 @@ export class Vault {
   edited() {
     this.changed();
     const journal = { state: { ...this.journal.state }, pending: [...this.journal.pending] };
-    this.writes = (this.writes ?? Promise.resolve()).then(() => this.storage.set("journal", journal)).catch(() => {});
+    this.local.writeJournal(journal).catch(() => {});
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.save().catch(() => {}), 1000);
   }
@@ -1171,6 +1183,8 @@ export class Vault {
     this.journal.renumberFrom(last + 1);
     this.store = new RecordStore();
     this.store.apply([...kept, ...this.journal.pending]);
+    this.store.unsaved = [];
+    this.local.needsRewrite = true; // op ids changed: the local op store is written again whole
   }
 
   /** Decrypted bytes of an attachment. */
