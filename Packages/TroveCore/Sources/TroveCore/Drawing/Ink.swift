@@ -274,6 +274,8 @@ extension Item {
     /// The words in a sketch's text boxes, and the handwriting an Apple device read, for search.
     public var sketchText: String? { record[SketchField.sketchText]?.string }
     public var inkText: String? { record[SketchField.inkText]?.string }
+    /// Notebooks (attachment ids) whose ink was handed to Trove's editor (PROTOCOL.md §10).
+    public var goodnotesInk: [String] { record["goodnotesInk"]?.array?.compactMap(\.string) ?? [] }
     public var sketchPageSize: (width: Double, height: Double) {
         let a = record[SketchField.pageSize]?.array?.compactMap(\.number) ?? []
         return a.count == 2 && a[0] > 0 && a[1] > 0 ? (a[0], a[1]) : (768, 1024)

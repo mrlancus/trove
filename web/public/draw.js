@@ -161,11 +161,12 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const pagesNow = () => (sketch ? sketchPages(item()) : filePages.map((p, i) => ({ ...p, key: i })));
 
   // ---------- toolbar ----------
-  // One row: the tools and the current tool's options scroll sideways on a narrow screen; Done
-  // stays put. Page and editor settings live in popovers, so the row stays short.
+  // Two rows, like GoodNotes: the tools on top, the chosen tool's colours, size and modes under them
+  // (tapping the chosen tool again hides or shows that row). Both scroll sideways on a narrow
+  // screen; Done stays put. Page and editor settings live in popovers.
   const toolButtons = Object.entries(TOOL_INFO).map(([id, info]) => h("button", {
     type: "button", class: `ink-tool tool-${id}`, title: `${info.label} (${info.key.toUpperCase()})`, "aria-label": info.label.split(":")[0],
-    onclick: () => setTool(id),
+    onclick: () => { if (tool === id) { prefs.options = prefs.options === false; savePrefs(prefs); refreshToolbar(); requestAnimationFrame(layout); } else setTool(id); },
   }, icon(info.icon)));
   const shapeButton = h("button", { type: "button", class: "ink-tool", title: "Shapes: lines and shapes come out clean (S)", "aria-label": "Shapes",
     onclick: () => { prefs.shapes = !prefs.shapes; savePrefs(prefs); refreshToolbar(); } }, icon(SHAPE_ICON));
@@ -202,14 +203,19 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const bar = h("div", { class: "ink-bar", role: "toolbar", "aria-label": "Drawing tools" },
     h("div", { class: "ink-bar-scroll" },
       sketch ? h("div", { class: "ink-group" }, panelButton) : null,
-      h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
-      h("div", { class: "ink-group ink-colors" }, swatches, custom),
-      h("div", { class: "ink-group ink-size-group" }, sizeDot, size),
-      h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly),
       h("div", { class: "ink-group" }, undoButton, redoButton, pasteButton),
+      h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
       h("div", { class: "ink-group" }, pageButton, connectButton, exportButton, settingsButton),
       h("strong", { class: "ink-title", text: title })),
     h("button", { type: "button", class: "primary ink-done", onclick: close }, "Done"));
+  const toolName = h("span", { class: "ink-options-name" });
+  const optionsBar = h("div", { class: "ink-options", role: "toolbar", "aria-label": "Tool options" },
+    h("div", { class: "ink-bar-scroll" },
+      h("div", { class: "ink-group" }, toolName),
+      h("div", { class: "ink-group ink-colors" }, swatches, custom),
+      h("div", { class: "ink-group ink-size-group" }, sizeDot, size),
+      h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly)));
+  const head = h("div", { class: "ink-head" }, bar, optionsBar);
 
   // The lasso's actions, along the bottom while something is selected.
   const selectionBar = h("div", { class: "ink-selbar", hidden: true, role: "toolbar", "aria-label": "Selection" },
@@ -240,7 +246,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     if (pop === zoomPop) { pop.style.top = ""; pop.style.bottom = `${rr.bottom - r.top + 8}px`; } else { pop.style.bottom = ""; pop.style.top = `${r.bottom - rr.top + 6}px`; }
   }
   function closePops() { for (const p of [pagePop, settingsPop, zoomPop]) p.hidden = true; openPop = null; }
-  const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-bar, .ink-zoom-pill")) closePops(); };
+  const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-head, .ink-zoom-pill")) closePops(); };
   document.addEventListener("pointerdown", onOutside, true);
 
   const segmented = (label, options, value, onPick) => h("div", { class: "ink-seg", role: "radiogroup", "aria-label": label },
@@ -354,7 +360,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const flipNext = h("button", { type: "button", class: "ink-flip ink-flip-next", "aria-label": "Next page", onclick: () => flipBy(1) }, lineIcon("forward"));
   const pageCount = h("span", { class: "ink-page-count", "aria-live": "polite" });
   stage.append(h("div", { class: "ink-corner" }, zoomPill, pageCount), flipPrev, flipNext);
-  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, bar, body, selectionBar, pagePop, settingsPop, zoomPop);
+  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, head, body, selectionBar, pagePop, settingsPop, zoomPop);
   document.body.append(root);
   document.body.classList.add("ink-open");
 
@@ -1339,6 +1345,10 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     redoButton.disabled = !redo.length;
     pasteButton.hidden = !inkClipboard;
     root.dataset.tool = tool;
+    toolName.textContent = TOOL_INFO[tool].label.split(":")[0];
+    const options = hasColor || sized || tool === "lasso";
+    const showOptions = options && prefs.options !== false;
+    if (optionsBar.hidden === showOptions) { optionsBar.hidden = !showOptions; requestAnimationFrame(layout); }
     if (sketch) panelButton.hidden = item().infinite;
     panelButton?.setAttribute("aria-pressed", String(Boolean(prefs.panel)));
   }

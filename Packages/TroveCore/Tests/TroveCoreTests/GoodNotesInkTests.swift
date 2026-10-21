@@ -33,8 +33,12 @@ import Testing
             }
         }
         struct Page: Decodable { var id: String; var width: Double; var height: Double; var background: GoodNotesInk.Background?; var unread: Int; var layers: [Layer] }
+        struct EditStroke: Decodable { var tool: String; var color: String; var width: Double; var points: [[Double]]; var shape: String? }
+        struct EditText: Decodable { var x: Double; var y: Double; var w: Double; var h: Double; var text: String; var size: Double; var color: String }
+        struct EditPage: Decodable { var strokes: [EditStroke]; var texts: [EditText] }
         var lz4: LZ4
         var pages: [Page]
+        var editable: [EditPage]
     }
 
     func fixture(_ name: String, _ ext: String) throws -> Data {
@@ -106,5 +110,32 @@ import Testing
 
     @Test func notANotebook() {
         #expect(throws: GoodNotesInk.Failure.self) { try GoodNotesInk.read(Data("hello".utf8)) }
+    }
+
+    @Test func editsLikeTheWebsite() async throws {
+        let expected = try JSONDecoder().decode(Expected.self, from: try fixture("ink-expected", "json"))
+        let notebook = try GoodNotesInk.read(try fixture("ink", "goodnotes"))
+        let pages = notebook.pages.map(GoodNotesInk.editableInk)
+        #expect(pages.count == expected.editable.count)
+        for (page, want) in zip(pages, expected.editable) {
+            #expect(page.strokes.count == want.strokes.count)
+            for (s, w) in zip(page.strokes, want.strokes) {
+                #expect(s.tool.rawValue == w.tool && s.color == w.color && close(s.width, w.width) && s.shape == w.shape, "\(s.tool) \(s.color) \(s.width) vs \(w)")
+                #expect(s.points.count == w.points.count)
+                for (p, q) in zip(s.points, w.points) { #expect(close(p.x, q[0]) && close(p.y, q[1]) && close(p.pressure, q[2]) && p.t == q[3]) }
+            }
+            #expect(page.texts.count == want.texts.count)
+            for (t, w) in zip(page.texts, want.texts) {
+                #expect(t.text == w.text && t.color == w.color && close(t.size, w.size) && close(t.x, w.x) && close(t.y, w.y) && close(t.w, w.w))
+            }
+        }
+        // Handing it to Trove happens once.
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let id = await lib.addNote(title: "Notebook", body: "")
+        let n = await lib.importGoodNotesInk(id, attachment: "att", pages: pages)
+        #expect(n == pages.reduce(0) { $0 + $1.strokes.count + $1.texts.count })
+        #expect(await lib.item(id)?.goodnotesInk == ["att"])
+        #expect(await lib.importGoodNotesInk(id, attachment: "att", pages: pages) == 0)
+        #expect(await lib.strokes(on: id, layer: "att", page: 1).count == pages[1].strokes.count)
     }
 }

@@ -4,7 +4,7 @@
 import { h } from "./dom.js";
 import { icon } from "./icons.js";
 import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
-import { GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
+import { backgroundLayers, GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
 import { drawStrokes } from "./core/ink.js";
 import { renderMarkdown } from "./markdown.js";
 
@@ -85,7 +85,18 @@ export async function pdfViewer(bytes, { onExpand, ink } = {}) {
 }
 
 /** Pages to draw on for a PDF or an image: [{width, height, background(ctx, pxPerPoint)}], in PDF points or image pixels. */
-export async function inkPages(att, bytes) {
+export async function inkPages(att, bytes, notebook = null) {
+  if (previewKind(att.name, att.mime) === "goodnotes") {
+    // GoodNotes: its backgrounds and pictures under the ink (which Trove's editor now holds).
+    notebook ??= await readNotebook(bytes);
+    const draw = notebookPainter(notebook);
+    const out = [];
+    for (const page of notebook.pages) {
+      const s = await draw.size(page);
+      out.push({ width: s.width, height: s.height, background: async (ctx, k) => draw.page(ctx, page, k, { only: backgroundLayers(page) }) });
+    }
+    return out;
+  }
   if (previewKind(att.name, att.mime) === "pdf") {
     const doc = await openPdf(bytes);
     const pages = [];
@@ -106,21 +117,16 @@ export async function inkPages(att, bytes) {
 }
 
 /** Whether a file can be drawn on (PDFs and images the browser can show). */
-export const canInk = (att) => ["pdf", "image"].includes(previewKind(att.name, att.mime)) && !/heic|heif|svg/.test(att.mime);
+export const canInk = (att) => ["pdf", "image", "goodnotes"].includes(previewKind(att.name, att.mime)) && !/heic|heif|svg/.test(att.mime);
 
 /**
  * A GoodNotes notebook drawn from its own data (core/goodnotes.js): each page's PDF or image
  * background, then its ink, shapes, typed text and pictures in GoodNotes' order. Pages draw as they
  * scroll into view.
  */
-export function notebookViewer(notebook, { onExpand } = {}) {
+export function notebookViewer(notebook, { onExpand, ink = null, elements = null } = {}) {
   let zoom = 1;
-  const pdfs = new Map(), bitmaps = new Map();
-  const pdfFor = (id) => { if (!pdfs.has(id)) pdfs.set(id, openPdf(notebook.attachments.get(id).bytes)); return pdfs.get(id); };
-  const bitmapFor = (id) => {
-    if (!bitmaps.has(id)) { const a = notebook.attachments.get(id); bitmaps.set(id, createImageBitmap(new Blob([a.bytes], { type: a.mime }))); }
-    return bitmaps.get(id);
-  };
+  const draw = notebookPainter(notebook);
   const pages = h("div", { class: "pdf-pages notebook-pages" });
   const count = notebook.pages.length;
   const unread = notebook.pages.reduce((n, p) => n + (p.unread ?? 0), 0);
@@ -136,32 +142,90 @@ export function notebookViewer(notebook, { onExpand } = {}) {
   notebook.pages.forEach((page, i) => pages.append(h("div", { class: "pdf-page", "data-page": i, style: `aspect-ratio: ${page.width} / ${page.height}` })));
 
   const render = async (el) => {
-    const page = notebook.pages[Number(el.dataset.page)];
+    const index = Number(el.dataset.page), page = notebook.pages[index];
     const width = el.clientWidth;
     if (!width || el.dataset.rendered === String(width)) return;
     el.dataset.rendered = String(width);
-    let size = { width: page.width, height: page.height };
-    const bg = page.background && notebook.attachments.get(page.background.attachment);
-    let pdfPage = null;
-    if (bg?.mime === "application/pdf") {
-      try {
-        const doc = await pdfFor(page.background.attachment);
-        pdfPage = await doc.getPage(Math.min(Math.max(1, page.background.page), doc.numPages));
-        const vp = pdfPage.getViewport({ scale: 1 });
-        size = { width: vp.width, height: vp.height };
-        el.style.aspectRatio = `${size.width} / ${size.height}`;
-      } catch { pdfPage = null; }
-    }
+    const size = await draw.size(page);
+    el.style.aspectRatio = `${size.width} / ${size.height}`;
     // A big whiteboard would need a canvas bigger than browsers allow: draw it softer instead.
     const px = Math.min((width / size.width) * Math.min(devicePixelRatio || 1, 2), 16000 / size.height, Math.sqrt(30e6 / (size.width * size.height)));
-    const canvas = h("canvas", { width: Math.floor(size.width * px), height: Math.floor(size.height * px), "aria-label": `Page ${Number(el.dataset.page) + 1}` });
+    const canvas = h("canvas", { width: Math.floor(size.width * px), height: Math.floor(size.height * px), "aria-label": `Page ${index + 1}` });
     const ctx = canvas.getContext("2d");
+    // Edited in Trove: GoodNotes' background and pictures, then Trove's copy of the ink and text.
+    await draw.page(ctx, page, px, { only: ink ? backgroundLayers(page) : null });
+    if (ink) {
+      ctx.save();
+      ctx.setTransform(px, 0, 0, px, 0, 0);
+      drawStrokes(ctx, ink(index));
+      for (const e of elements?.(index) ?? []) if (e.type === "text") drawPlainText(ctx, e);
+      ctx.restore();
+    }
+    el.replaceChildren(canvas);
+  };
+  const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
+  const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
+  observeAll();
+  return h("div", { class: "pdf-viewer notebook" }, bar, pages);
+}
+
+/** A Trove text box (PROTOCOL.md §10): wrapped to its width, lines 1.25 × size apart. */
+function drawPlainText(ctx, e) {
+  ctx.save();
+  ctx.fillStyle = e.color ?? "#000";
+  ctx.font = `${e.size}px -apple-system, system-ui, sans-serif`;
+  ctx.textBaseline = "top";
+  let y = e.y;
+  for (const para of String(e.text ?? "").split("\n")) {
+    let line = "";
+    for (const word of para.split(/(\s+)/)) {
+      if (line && ctx.measureText(line + word).width > e.w) { ctx.fillText(line.trimEnd(), e.x, y); y += e.size * 1.25; line = word.trimStart(); }
+      else line += word;
+    }
+    ctx.fillText(line, e.x, y);
+    y += e.size * 1.25;
+  }
+  ctx.restore();
+}
+
+/**
+ * Draws notebook pages: `size(page)` in points (the background PDF's own when it has one), and
+ * `page(ctx, page, px, {only})` paints white, the background, then the layers (or just `only`)
+ * at `px` canvas pixels per point. Shared by the viewer and the drawing editor.
+ */
+export function notebookPainter(notebook) {
+  const pdfs = new Map(), bitmaps = new Map();
+  const pdfFor = (id) => { if (!pdfs.has(id)) pdfs.set(id, openPdf(notebook.attachments.get(id).bytes)); return pdfs.get(id); };
+  const bitmapFor = (id) => {
+    if (!bitmaps.has(id)) { const a = notebook.attachments.get(id); bitmaps.set(id, createImageBitmap(new Blob([a.bytes], { type: a.mime }))); }
+    return bitmaps.get(id);
+  };
+  const pdfPageOf = async (page) => {
+    const bg = page.background && notebook.attachments.get(page.background.attachment);
+    if (bg?.mime !== "application/pdf") return null;
+    try {
+      const doc = await pdfFor(page.background.attachment);
+      return await doc.getPage(Math.min(Math.max(1, page.background.page), doc.numPages));
+    } catch { return null; }
+  };
+  const size = async (page) => {
+    const pdfPage = await pdfPageOf(page);
+    if (!pdfPage) return { width: page.width, height: page.height };
+    const vp = pdfPage.getViewport({ scale: 1 });
+    return { width: vp.width, height: vp.height };
+  };
+  const paint = async (ctx, page, px, { only = null } = {}) => {
+    const s = await size(page);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, Math.ceil(s.width * px), Math.ceil(s.height * px));
+    const bg = page.background && notebook.attachments.get(page.background.attachment);
+    const pdfPage = await pdfPageOf(page);
     if (pdfPage) await pdfPage.render({ canvasContext: ctx, viewport: pdfPage.getViewport({ scale: px }) }).promise;
-    else if (bg?.mime.startsWith("image/")) { try { ctx.drawImage(await bitmapFor(page.background.attachment), 0, 0, canvas.width, canvas.height); } catch { /* no background */ } }
+    else if (bg?.mime.startsWith("image/")) { try { ctx.drawImage(await bitmapFor(page.background.attachment), 0, 0, s.width * px, s.height * px); } catch { /* no background */ } }
     const k = px * GN_SCALE;
-    for (const layer of page.layers) {
+    for (const layer of only ?? page.layers) {
       if (layer.kind === "ink" && layer.fill) {
         ctx.save();
         ctx.fillStyle = `rgb(${layer.rgb.map((c) => Math.round(c * 255)).join(",")})`;
@@ -184,12 +248,9 @@ export function notebookViewer(notebook, { onExpand } = {}) {
         drawTextBox(ctx, layer, k);
       }
     }
-    el.replaceChildren(canvas);
+    ctx.restore();
   };
-  const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
-  const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
-  observeAll();
-  return h("div", { class: "pdf-viewer notebook" }, bar, pages);
+  return { size, page: paint };
 }
 
 /** Typed text, wrapped to its box. Style runs flow on inside a paragraph; "\n" starts a new one. */
@@ -227,14 +288,14 @@ function table(rows) {
  * The preview for one attachment. `load()` returns its decrypted bytes. `edit(bytes)` saves an
  * edited version (text files only). Returns an element that fills in as it loads.
  */
-export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink = null }) {
+export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink = null, elements = null, inkEdited = false }) {
   const kind = previewKind(att.name, att.mime);
   const box = h("div", { class: `viewer viewer-${kind}` });
   const start = async () => {
     box.replaceChildren(h("p", { class: "saved", text: `Decrypting ${att.name}…` }));
     try {
       const bytes = await load();
-      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand, ink }));
+      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited }));
     } catch (e) {
       box.replaceChildren(h("p", { class: "danger", text: `Couldn't open ${att.name}: ${e.message}` }));
     }
@@ -244,7 +305,7 @@ export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink
   return box;
 }
 
-async function build(kind, att, bytes, { edit, onExpand, ink }) {
+async function build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited }) {
   switch (kind) {
     case "image": {
       const url = urlFor(bytes, att.mime);
@@ -269,7 +330,7 @@ async function build(kind, att, bytes, { edit, onExpand, ink }) {
     case "goodnotes": {
       let notebook = null;
       try { notebook = await readNotebook(bytes); } catch { notebook = null; }
-      if (notebook?.pages.length) return notebookViewer(notebook, { onExpand });
+      if (notebook?.pages.length) return notebookViewer(notebook, { onExpand, ink: inkEdited ? ink : null, elements: inkEdited ? elements : null });
       const parts = await goodnotesParts(bytes);
       const out = h("div", { class: "goodnotes" });
       const head = h("div", { class: "goodnotes-head" });

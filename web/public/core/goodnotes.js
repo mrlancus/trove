@@ -733,3 +733,44 @@ export const isHighlighter = (s) => s.alpha < 0.95;
 /** How opaque to draw a stroke: GoodNotes' pencil is grainy and light. */
 export const strokeOpacity = (s) => (s.pencil ? Math.min(s.alpha, 0.5) : s.alpha);
 export const cssColor = (s) => `rgb(${s.rgb.map((c) => Math.round(c * 255)).join(",")})`;
+
+// ---------- editing with Trove's tools ----------
+
+const hexColor = (rgb) => "#" + rgb.map((c) => Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, "0")).join("");
+const round3 = (v) => Math.round(v * 1000) / 1000;
+
+/**
+ * A page's ink and typed text as Trove strokes and text boxes (PROTOCOL.md §10), in page points,
+ * so Trove's pens, eraser and lasso work on them (GoodNotesInk.editableInk in Swift). Each pen-down
+ * run is a stroke; a pen's width follows the point radii (as pressure), highlighters and shapes are
+ * even. Fills, pictures and the background stay GoodNotes' and draw underneath.
+ */
+export function editableInk(page) {
+  const strokes = [], texts = [];
+  for (const l of page.layers) {
+    if (l.kind === "ink" && !l.fill) {
+      const highlighter = isHighlighter(l);
+      const tool = highlighter ? "highlighter" : l.pencil ? "pencil" : "pen";
+      const even = highlighter || l.shape;
+      const nominal = strokeWidth(l) * GN_SCALE;
+      for (const run of l.runs) {
+        if (!run.length) continue;
+        const widths = run.map((p) => 2 * (p[2] ?? 0) * GN_SCALE);
+        const width = round3(even ? nominal : Math.max(0.5, ...widths));
+        const points = run.map((p, i) => ({ x: p[0] * GN_SCALE, y: p[1] * GN_SCALE,
+          p: even ? 0.5 : round3(Math.min(1, Math.max(0, (widths[i] / width - 0.35) / 0.65))), t: i * 8 }));
+        const a = run[0], b = run[run.length - 1], closed = run.length > 2 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-3;
+        const shape = l.shape ? (run.length === 2 ? "line" : closed ? "polygon" : "polyline") : null;
+        strokes.push({ tool, color: hexColor(l.rgb), width, points, shape });
+      }
+    } else if (l.kind === "text") {
+      const first = l.runs[0];
+      texts.push({ x: l.x * GN_SCALE, y: l.y * GN_SCALE, w: l.w * GN_SCALE, h: l.h * GN_SCALE, text: l.runs.map((r) => r.text).join(""),
+        size: round3((first?.size ?? 24) * GN_SCALE), color: hexColor(first?.rgb ?? [0, 0, 0]) });
+    }
+  }
+  return { strokes, texts };
+}
+
+/** A page without what `editableInk` hands to Trove: what's drawn under Trove's copy once it's edited. */
+export const backgroundLayers = (page) => page.layers.filter((l) => l.kind === "image" || (l.kind === "ink" && l.fill));

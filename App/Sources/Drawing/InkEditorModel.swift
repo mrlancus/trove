@@ -291,8 +291,20 @@ final class InkEditorModel {
         } else {
             guard let item = await library.item(target.itemId), let att = item.attachments.first(where: { $0.id == target.layer }),
                   let data = try? await library.attachmentData(att) else { failed = "Couldn't open the file. It may still be syncing."; return }
-            let mime = att.mime
-            pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime) }.value
+            let mime = att.mime, name = att.name
+            if name.lowercased().hasSuffix(".goodnotes") {
+                // The first time: the notebook's ink and text become Trove's, so every tool works on them.
+                guard let notebook = await Task.detached(priority: .userInitiated, operation: { try? GoodNotesInk.read(data) }).value,
+                      !notebook.pages.isEmpty else { failed = "Couldn't read this notebook."; return }
+                if !item.goodnotesInk.contains(att.id) {
+                    let editable = await Task.detached(priority: .userInitiated) { notebook.pages.map(GoodNotesInk.editableInk) }.value
+                    await library.importGoodNotesInk(item.id, attachment: att.id, pages: editable)
+                    app.inkChanged(now: true)
+                }
+                pages = InkRenderer.pages(goodnotes: notebook)
+            } else {
+                pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value
+            }
             if pages.isEmpty { failed = "This file can't be drawn on."; return }
         }
         page = min(max(0, page), pages.count - 1)

@@ -500,6 +500,29 @@ export class Vault {
     return Math.max(this.now(), latest + 1);
   }
 
+  /**
+   * Hands a GoodNotes notebook's ink and typed text to Trove's editor: they become strokes and text
+   * boxes on the notebook's attachment (page n = the notebook's page n), and the item notes it in
+   * `goodnotesInk`, so viewers draw Trove's copy from then on and it's never imported twice.
+   * `pages` is [{strokes, texts}] from `editableInk`.
+   */
+  importGoodNotesInk(itemId, attId, pages) {
+    const item = this.item(itemId);
+    if (!item || item.goodnotesInk.includes(attId)) return 0;
+    let t = this.nextInkTime(itemId), n = 0;
+    pages.forEach(({ strokes, texts }, page) => {
+      for (const s of strokes) { if (this.addStroke({ on: itemId, layer: attId, page, ...s, createdAt: t++ })) n++; }
+      for (const x of texts) {
+        const id = newId();
+        this.set({ on: itemId, layer: attId, page, type: "text", x: x.x, y: x.y, w: x.w, h: x.h, text: x.text, size: x.size, color: x.color,
+          createdAt: t++, device: this.journal.device }, id, "element");
+        n++;
+      }
+    });
+    this.update(itemId, { goodnotesInk: [...item.goodnotesInk, attId] });
+    return n;
+  }
+
   /** `page`: a file's page number or a sketch page's id. `createdAt` keeps an erased stroke's pieces in its place. */
   addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null }) {
     if (!points.length) return null;

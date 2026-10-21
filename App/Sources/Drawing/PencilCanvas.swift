@@ -435,7 +435,7 @@ struct PencilCanvas: UIViewRepresentable {
                 switch slot.spec.background {
                 case .paper:
                     InkRenderer.drawBackground(slot.spec, area: local, in: ctx)
-                case .pdf, .image:
+                case .pdf, .image, .goodnotes:
                     if let image = bitmaps[slot.spec.key] {
                         InkRenderer.drawImage(image, in: CGRect(x: 0, y: 0, width: slot.spec.width, height: slot.spec.height), ctx: ctx)
                     }
@@ -474,7 +474,7 @@ struct PencilCanvas: UIViewRepresentable {
                 switch slot.spec.background {
                 case .paper:
                     continue
-                case .pdf, .image:
+                case .pdf, .image, .goodnotes:
                     guard slot.frame.intersects(near) else { bitmaps[key] = nil; continue }
                     guard bitmaps[key] == nil, !rendering.contains(key) else { continue }
                     rendering.insert(key)

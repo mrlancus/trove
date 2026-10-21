@@ -307,6 +307,7 @@ final class AppModel {
     /// Files that can be drawn on: PDFs and images.
     nonisolated static func canInk(_ attachment: Attachment) -> Bool {
         attachment.mime == "application/pdf" || (attachment.mime.hasPrefix("image/") && attachment.mime != "image/svg+xml")
+            || attachment.name.lowercased().hasSuffix(".goodnotes")
     }
 
     var visibleItems: [Item] {

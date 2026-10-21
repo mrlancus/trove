@@ -336,6 +336,82 @@ public enum GoodNotesInk {
         return tpl.values.contains { ($0.list?.count ?? 0) > 1 }
     }
 
+    // MARK: - Editing with Trove's tools
+
+    /// A stroke for Trove's editor (PROTOCOL.md §10), in page points.
+    public struct EditableStroke: Sendable, Equatable {
+        public var tool: InkTool
+        public var color: String
+        public var width: Double
+        public var points: [InkPoint]
+        public var shape: String?
+    }
+
+    /// A text box for Trove's editor, in page points.
+    public struct EditableText: Sendable, Equatable {
+        public var x: Double, y: Double, w: Double, h: Double
+        public var text: String
+        public var size: Double
+        public var color: String
+    }
+
+    public struct EditablePage: Sendable {
+        public var strokes: [EditableStroke] = []
+        public var texts: [EditableText] = []
+    }
+
+    static func hex(_ rgb: [Double]) -> String {
+        rgb.prefix(3).reduce("#") { $0 + String(format: "%02x", Int((min(1, max(0, $1)) * 255).rounded())) }
+    }
+
+    static func round3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+
+    /// A page's ink and typed text as Trove strokes and text boxes, so Trove's pens, eraser and lasso
+    /// work on them (core/goodnotes.js `editableInk`). Each pen-down run is a stroke; a pen's width
+    /// follows the point radii (as pressure), highlighters and shapes are even. Fills, pictures and
+    /// the background stay GoodNotes' and draw underneath.
+    public static func editableInk(_ page: Page) -> EditablePage {
+        var out = EditablePage()
+        for layer in page.layers {
+            switch layer {
+            case .ink(let s) where !s.isFill:
+                let tool: InkTool = s.isHighlighter ? .highlighter : s.isPencil ? .pencil : .pen
+                let even = s.isHighlighter || s.isShape
+                let nominal = s.lineWidth * scale
+                for run in s.runs where !run.isEmpty {
+                    let widths = run.map { 2 * $0.r * scale }
+                    let width = round3(even ? nominal : max(0.5, widths.max() ?? 0.5))
+                    let points = run.enumerated().map { i, p in
+                        InkPoint(x: p.x * scale, y: p.y * scale,
+                                 pressure: even ? 0.5 : round3(min(1, max(0, (widths[i] / width - 0.35) / 0.65))), t: Double(i * 8))
+                    }
+                    let a = run[0], b = run[run.count - 1]
+                    let closed = run.count > 2 && hypot(a.x - b.x, a.y - b.y) < 1e-3
+                    let shape: String? = s.isShape ? (run.count == 2 ? "line" : closed ? "polygon" : "polyline") : nil
+                    out.strokes.append(EditableStroke(tool: tool, color: hex(s.rgb), width: width, points: points, shape: shape))
+                }
+            case .text(let t):
+                let first = t.runs.first
+                out.texts.append(EditableText(x: t.x * scale, y: t.y * scale, w: t.w * scale, h: t.h * scale, text: t.runs.map(\.text).joined(),
+                                              size: round3((first?.size ?? 24) * scale), color: hex(first?.rgb ?? [0, 0, 0])))
+            default:
+                break
+            }
+        }
+        return out
+    }
+
+    /// What's drawn under Trove's copy once a notebook is edited: pictures and shape fills.
+    public static func backgroundLayers(_ page: Page) -> [Layer] {
+        page.layers.filter { layer in
+            switch layer {
+            case .image: true
+            case .ink(let s): s.isFill
+            case .text: false
+            }
+        }
+    }
+
     // MARK: - Strokes
 
     static let bv41: [UInt8] = Array("bv41".utf8)

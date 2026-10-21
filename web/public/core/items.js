@@ -49,6 +49,8 @@ function makeItemView(record) {
     collections: Array.isArray(f.collections) ? f.collections : [],
     isPinned: f.pinned === true,
     readAt: typeof f.readAt === "number" ? f.readAt : null,
+    // Notebooks (attachment ids) whose ink was handed to Trove's editor (PROTOCOL.md §10).
+    goodnotesInk: Array.isArray(f.goodnotesInk) ? f.goodnotesInk.filter((x) => typeof x === "string") : [],
     ocrText: str(f.ocrText), sketchText: str(f.sketchText), inkText: str(f.inkText), siteName: str(f.siteName), imageURL: str(f.imageURL),
     extracted: f.extracted && typeof f.extracted === "object" ? f.extracted : {},
     attachments: Array.isArray(f.attachments) ? f.attachments.filter(isAttachment) : [],

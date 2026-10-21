@@ -3,7 +3,7 @@
 // GoodNotesInkTests.swift decodes the same file and must agree. Run: node test/make-goodnotes-fixture.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { crc32 } from "../public/core/importer.js";
-import { readNotebook } from "../public/core/goodnotes.js";
+import { editableInk, readNotebook } from "../public/core/goodnotes.js";
 
 const te = new TextEncoder();
 const cat = (...parts) => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; } return out; };
@@ -188,6 +188,14 @@ const expected = {
       : l.kind === "text" ? { kind: "text", x: r2(l.x), y: r2(l.y), w: r2(l.w), h: r2(l.h), runs: l.runs.map((t) => ({ ...t, size: r2(t.size), rgb: t.rgb.map(r2) })) }
       : { kind: "image", attachment: l.attachment, x: r2(l.x), y: r2(l.y), w: r2(l.w), h: r2(l.h) }),
   })),
+  // What Trove's editor gets from each page (GoodNotesInk.editableInk must match).
+  editable: decoded.pages.map((p) => {
+    const e = editableInk(p);
+    return {
+      strokes: e.strokes.map((s) => ({ ...s, width: r2(s.width), points: s.points.map((q) => [r2(q.x), r2(q.y), r2(q.p), q.t]) })),
+      texts: e.texts.map((t) => ({ ...t, x: r2(t.x), y: r2(t.y), w: r2(t.w), h: r2(t.h), size: r2(t.size) })),
+    };
+  }),
 };
 writeFileSync(new URL("ink-expected.json", fixtures), JSON.stringify(expected, null, 1) + "\n");
 console.log("wrote ink.goodnotes", notebook.length, "bytes;", expected.pages.map((p) => `${p.layers.length} layers`).join(", "));

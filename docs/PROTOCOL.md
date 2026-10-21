@@ -420,6 +420,17 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   `Fixtures/ink-geometry.json` (made by `web/test/make-ink-fixture.mjs`).
 - **The file under the ink never changes.** Ink on a new version of a file (a new attachment id) starts
   empty; the old version keeps its ink.
+- **GoodNotes notebooks** (`.goodnotes`, docs/GOODNOTES.md) can be drawn on like files, page n being
+  the notebook's page n. The first time one is opened in the editor, its handwriting, shapes and
+  typed text are copied into Trove strokes and text elements on that layer (`editableInk` in
+  core/goodnotes.js, `GoodNotesInk.editableInk` in Swift, checked against `Fixtures/ink-expected.json`:
+  page points = GoodNotes units × 72/132; each pen-down run is a stroke; a highlighter (alpha < 0.95)
+  becomes `highlighter`, a pencil `pencil`, the rest `pen`; a pen's `width` is its widest point and
+  `pressure` = (point width / width − 0.35) / 0.65; highlighters and shapes are even with pressure 0.5,
+  and a shape gets `shape` `line` (2 points), `polygon` (closed) or `polyline`). The item's
+  `goodnotesInk` (array of attachment ids) records it, so it's never copied twice and viewers then
+  draw the notebook's background, pictures and shape fills with Trove's ink and text on top instead
+  of GoodNotes' own.
 
 **Sketch items** have `kind: "sketch"` and are filed in "Sketches". Extra fields:
 - `paper`: one of `blank`, `lined`, `narrow` (24 apart), `wide` (40), `margin` (lined with a red

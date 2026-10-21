@@ -203,6 +203,46 @@ enum NotebookRenderer {
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
+    /// A page into a context set up in points with a top-left origin (the drawing editor's), with
+    /// only `layers` on its background: what's left once Trove holds the ink and text.
+    static func draw(_ page: GoodNotesInk.Page, of notebook: GoodNotesInk.Notebook, layers: [GoodNotesInk.Layer], size: CGSize, in ctx: CGContext) {
+        ctx.saveGState()
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(origin: .zero, size: size))
+        if let bg = page.background, let file = notebook.attachments[bg.attachment] {
+            if file.mime == "application/pdf", let provider = CGDataProvider(data: file.data as CFData), let doc = CGPDFDocument(provider),
+               let pdfPage = doc.page(at: min(max(1, bg.page), doc.numberOfPages)) {
+                ctx.saveGState()
+                // PDF drawing is bottom-up: flip back for it.
+                ctx.translateBy(x: 0, y: size.height)
+                ctx.scaleBy(x: 1, y: -1)
+                let box = pdfPage.getBoxRect(.cropBox)
+                ctx.scaleBy(x: size.width / max(box.width, 1), y: size.height / max(box.height, 1))
+                ctx.translateBy(x: -box.minX, y: -box.minY)
+                ctx.drawPDFPage(pdfPage)
+                ctx.restoreGState()
+            } else if file.mime.hasPrefix("image/"), let image = cgImage(file.data) {
+                InkRenderer.drawImage(image, in: CGRect(origin: .zero, size: size), ctx: ctx)
+            }
+        }
+        // GoodNotes units from here, still top-left.
+        ctx.scaleBy(x: GoodNotesInk.scale, y: GoodNotesInk.scale)
+        for layer in layers {
+            switch layer {
+            case .ink(let stroke): draw(stroke, in: ctx)
+            case .image(let picture):
+                guard let file = notebook.attachments[picture.attachment], let image = cgImage(file.data) else { continue }
+                ctx.saveGState()
+                ctx.translateBy(x: picture.x, y: picture.y + picture.h)
+                ctx.scaleBy(x: 1, y: -1)
+                ctx.draw(image, in: CGRect(x: 0, y: 0, width: picture.w, height: picture.h))
+                ctx.restoreGState()
+            case .text(let box): draw(box, in: ctx, pageHeight: page.height / GoodNotesInk.scale)
+            }
+        }
+        ctx.restoreGState()
+    }
+
     static func color(_ rgb: [Double], _ alpha: Double) -> CGColor {
         CGColor(red: rgb.count > 0 ? rgb[0] : 0, green: rgb.count > 1 ? rgb[1] : 0, blue: rgb.count > 2 ? rgb[2] : 0, alpha: alpha)
     }

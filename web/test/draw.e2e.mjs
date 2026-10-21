@@ -409,3 +409,49 @@ test("zoom 10–1000 %, flipping pages, the precise eraser and scribble to erase
   assert.deepEqual(problems, []);
   await context.close();
 });
+
+test("a GoodNotes notebook opens in the editor with its ink as Trove's, editable and synced", async () => {
+  const v = await createVault();
+  const phone = await Vault.join(memoryStorage(), await v.setupCode(), { origin: BASE, deviceName: "iPhone" });
+  const bytes = new Uint8Array(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink.goodnotes", import.meta.url)));
+  const expected = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-expected.json", import.meta.url), "utf8"));
+  const want = expected.editable.reduce((n, p) => n + p.strokes.length, 0);
+  const id = await phone.addFile(bytes, "Lecture.goodnotes", "application/octet-stream");
+  await phone.sync();
+
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const problems = [];
+  page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource.*404/.test(m.text())) problems.push(m.text()); });
+  page.on("pageerror", (e) => problems.push(e.message));
+  await page.goto(BASE + "/");
+  await page.getByRole("tab", { name: "Setup code" }).click();
+  await page.getByLabel("Setup code").fill(await v.setupCode());
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.locator("#search").waitFor();
+  await until(async () => (await page.locator("#grid .card", { hasText: "Lecture" }).count()) === 1, "the notebook on the website", 15000);
+  await page.locator("#grid .card", { hasText: "Lecture" }).click();
+  await page.getByRole("button", { name: "Edit handwriting" }).click();
+  await page.locator(".ink-page .ink-live").first().waitFor();
+  await until(async () => (await page.locator(".ink-page .ink-live").first().boundingBox())?.width > 300, "the notebook page laid out");
+  // One more line, then the eraser takes one of GoodNotes' strokes away.
+  await mouseStroke(page, page.locator(".ink-page .ink-live").first(), [0.2, 0.8], [0.7, 0.85]);
+  if (shots) await page.screenshot({ path: join(shots, "web-goodnotes-edit.png") });
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Sync now" }).click();
+  const item = await until(async () => {
+    await phone.sync();
+    const i = phone.item(id);
+    return i?.goodnotesInk.length && phone.strokes(id, i.attachments[0].id).length === want + 1 ? i : null;
+  }, "the notebook's ink on the phone", 20000);
+  assert.deepEqual(item.goodnotesInk, [item.attachments[0].id]);
+  assert.equal(phone.elements(id, item.attachments[0].id).filter((e) => e.type === "text").length, expected.editable.reduce((n, p) => n + p.texts.length, 0));
+  assert.equal(item.fileVersions.length, 0, "the notebook file itself didn't change");
+  // Opening it again doesn't copy the ink twice.
+  await page.getByRole("button", { name: "Edit handwriting" }).click();
+  await page.locator(".ink-page .ink-live").first().waitFor();
+  await page.getByRole("button", { name: "Done" }).click();
+  assert.equal(phone.strokes(id, item.attachments[0].id).length, want + 1);
+  assert.deepEqual(problems, []);
+  await context.close();
+});

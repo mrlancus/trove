@@ -646,8 +646,8 @@ struct InkedFileView: View {
 
     private func render() async {
         guard let library = model.library else { return }
-        let data = data, mime = attachment.mime
-        if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime) }.value }
+        let data = data, mime = attachment.mime, name = attachment.name
+        if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value }
         for page in pages {
             let content = await SketchSection.content(library, itemId: item.id, layer: attachment.id, key: page.key)
             let width = Int(min(2400, page.width * 2))

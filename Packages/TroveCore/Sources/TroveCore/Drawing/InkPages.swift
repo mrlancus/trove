@@ -349,3 +349,38 @@ extension Library {
         await update(sketchId, [Item.SketchField.canvas: .string(infinite ? "infinite" : "pages")])
     }
 }
+
+extension Library {
+    /// Hands a GoodNotes notebook's ink and typed text to Trove's editor: they become strokes and
+    /// text boxes on the notebook's attachment (page n = the notebook's page n), and the item notes
+    /// it in `goodnotesInk`, so viewers draw Trove's copy from then on and it's never imported twice
+    /// (core/vault.js `importGoodNotesInk`). Returns how many were added.
+    @discardableResult
+    public func importGoodNotesInk(_ itemId: String, attachment attId: String, pages: [GoodNotesInk.EditablePage]) async -> Int {
+        guard let item = await item(itemId), !item.goodnotesInk.contains(attId) else { return 0 }
+        await engine.hold()
+        var t = await nextInkTime(on: itemId), n = 0
+        let device = await engine.device
+        for (index, page) in pages.enumerated() {
+            for s in page.strokes {
+                if await addStroke(on: itemId, layer: attId, pageKey: String(index), tool: s.tool, color: s.color, width: s.width,
+                                   points: s.points, shape: s.shape, createdAt: t) != nil { n += 1 }
+                t += 1
+            }
+            for x in page.texts {
+                await engine.set([
+                    InkElement.Field.on: .string(itemId), InkElement.Field.layer: .string(attId), InkElement.Field.page: .string(String(index)),
+                    InkElement.Field.type: .string(InkElement.Kind.text.rawValue), InkElement.Field.x: .number(x.x), InkElement.Field.y: .number(x.y),
+                    InkElement.Field.w: .number(x.w), InkElement.Field.h: .number(x.h), InkElement.Field.text: .string(x.text),
+                    InkElement.Field.size: .number(x.size), InkElement.Field.color: .string(x.color),
+                    InkElement.Field.createdAt: .number(t), InkElement.Field.device: .string(device),
+                ], record: newId(), kind: "element")
+                t += 1
+                n += 1
+            }
+        }
+        await update(itemId, ["goodnotesInk": .array((item.goodnotesInk + [attId]).map(JSONValue.string))])
+        await engine.release()
+        return n
+    }
+}

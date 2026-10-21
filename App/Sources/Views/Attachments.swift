@@ -22,7 +22,8 @@ struct AttachmentView: View {
     var body: some View {
         Group {
             if let data {
-                if let item, AppModel.canInk(attachment), model.inkedLayers[item.id]?.contains(attachment.id) == true {
+                if let item, AppModel.canInk(attachment),
+                   model.inkedLayers[item.id]?.contains(attachment.id) == true || item.goodnotesInk.contains(attachment.id) {
                     InkedFileView(item: item, attachment: attachment, data: data)
                 } else if attachment.mime.hasPrefix("image/"), let image = PlatformImage(data: data) {
                     Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14))

@@ -14,6 +14,7 @@ import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
 import { openInkEditor, renderSketchPage, sketchPages, sketchThumbnail } from "./draw.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
+import { editableInk, readNotebook } from "./core/goodnotes.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
@@ -1673,7 +1674,20 @@ async function markUp(item, att) {
   const vault = state.vault;
   toast(`Opening ${att.name}…`);
   let pages;
-  try { pages = await inkPages(att, await vault.attachment(att.id)); } catch (e) { toast(`Couldn't open ${att.name}: ${e.message}`); return; }
+  try {
+    const bytes = await vault.attachment(att.id);
+    let notebook = null;
+    if (previewKind(att.name, att.mime) === "goodnotes") {
+      // The first time: the notebook's ink and text become Trove's, so every tool works on them.
+      notebook = await readNotebook(bytes);
+      if (!vault.item(item.id).goodnotesInk.includes(att.id)) {
+        const n = vault.importGoodNotesInk(item.id, att.id, notebook.pages.map(editableInk));
+        toast(`${n} strokes and text boxes from GoodNotes are ready to edit`);
+        syncSoon(2000);
+      }
+    }
+    pages = await inkPages(att, bytes, notebook);
+  } catch (e) { toast(`Couldn't open ${att.name}: ${e.message}`); return; }
   openInkEditor({
     vault, itemId: item.id, layer: att.id, title: att.name, pages,
     changed: () => syncSoon(4000),
@@ -1729,10 +1743,11 @@ function filesSection(item) {
       h("span", { class: "type-tile mini", text: typeLabel(att.name, att.mime) }),
       h("span", { class: "file-name", text: att.name }), h("span", { class: "saved", text: fileSize(att.size) }),
       h("span", { class: "spacer" }),
-      canInk(att) ? h("button", { type: "button", class: "secondary small", title: "Write or draw on this file. The file itself doesn't change.", onclick: () => markUp(item, att) }, icon("pencil"), " Draw on it") : null,
+      canInk(att) ? h("button", { type: "button", class: "secondary small", title: previewKind(att.name, att.mime) === "goodnotes" ? "Edit the handwriting with Trove's pens, eraser and lasso. The notebook file itself doesn't change." : "Write or draw on this file. The file itself doesn't change.", onclick: () => markUp(item, att) }, icon("pencil"), previewKind(att.name, att.mime) === "goodnotes" ? " Edit handwriting" : " Draw on it") : null,
       h("button", { type: "button", class: "secondary small", onclick: () => download(att) }, "Download"),
       index === 0 ? h("label", { class: "secondary small", title: "Upload an edited copy; the current file is kept as a version" }, "New version", upload) : null);
-    const cacheKey = `${att.id}:${vault.strokes(item.id, att.id).length}`;
+    const inkEdited = item.goodnotesInk.includes(att.id);
+    const cacheKey = `${att.id}:${vault.strokes(item.id, att.id).length}:${inkEdited ? vault.elements(item.id, att.id).length : ""}`;
     let preview = panelCache.previews.get(cacheKey);
     if (!preview) {
       const editable = index === 0 && isEditableText(att.name, att.mime);
@@ -1742,6 +1757,7 @@ function filesSection(item) {
         onExpand: state.wide ? null : toggleWide,
         eager: !att.size || att.size < 60e6 || index === 0 && att.size < 150e6,
         ink: canInk(att) ? (page) => vault.strokes(item.id, att.id, page) : null,
+        elements: (page) => vault.elements(item.id, att.id, page), inkEdited,
       });
       panelCache.previews.set(cacheKey, preview);
     }

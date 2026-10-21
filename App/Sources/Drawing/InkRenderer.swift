@@ -10,6 +10,8 @@ enum InkBackground: Sendable {
     case paper(InkPaper, color: String?)
     case pdf(Data, page: Int)
     case image(Data)
+    /// A GoodNotes page: its background and pictures (its ink and text are Trove's once edited).
+    case goodnotes(GoodNotesInk.Notebook, page: Int)
 }
 
 /// A page to draw on, in page points (PROTOCOL.md §10). `key` is what strokes and elements name it
@@ -92,7 +94,11 @@ enum InkRenderer {
     // MARK: Pages
 
     /// The pages of a PDF or an image, sized like the website's (pdf.js at scale 1, image pixels).
-    static func pages(for data: Data, mime: String) -> [InkPageSpec] {
+    static func pages(for data: Data, mime: String, name: String = "") -> [InkPageSpec] {
+        if name.lowercased().hasSuffix(".goodnotes") {
+            guard let notebook = try? GoodNotesInk.read(data) else { return [] }
+            return pages(goodnotes: notebook)
+        }
         if mime == "application/pdf" {
             guard let provider = CGDataProvider(data: data as CFData), let doc = CGPDFDocument(provider) else { return [] }
             return (0..<doc.numberOfPages).compactMap { i in
@@ -104,6 +110,13 @@ enum InkRenderer {
         }
         guard let image = cgImage(data) else { return [] }
         return [InkPageSpec(key: "0", width: Double(image.width), height: Double(image.height), background: .image(data))]
+    }
+
+    /// A GoodNotes notebook's pages, to draw on (PROTOCOL.md §10: ink on a file, page n = its page n).
+    static func pages(goodnotes notebook: GoodNotesInk.Notebook) -> [InkPageSpec] {
+        notebook.pages.enumerated().map { i, page in
+            InkPageSpec(key: String(i), width: page.width, height: page.height, background: .goodnotes(notebook, page: i))
+        }
     }
 
     /// A sketch's pages as the editor and previews see them.
@@ -174,6 +187,10 @@ enum InkRenderer {
             ctx.fill(CGRect(origin: .zero, size: size))
             guard let image = cgImage(data) else { return }
             drawImage(image, in: CGRect(origin: .zero, size: size), ctx: ctx)
+        case .goodnotes(let notebook, let index):
+            guard notebook.pages.indices.contains(index) else { return }
+            let sheet = notebook.pages[index]
+            NotebookRenderer.draw(sheet, of: notebook, layers: GoodNotesInk.backgroundLayers(sheet), size: size, in: ctx)
         }
     }
 

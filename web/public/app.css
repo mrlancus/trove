@@ -422,6 +422,11 @@ body.ink-open { overflow: hidden; }
   background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line); box-shadow: var(--shadow); position: relative; z-index: 2; }
 .ink-group { display: flex; align-items: center; gap: 4px; flex: none; }
+.ink-head { position: relative; z-index: 2; flex: none; }
+.ink-options { display: flex; align-items: center; padding: 4px 10px; padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right));
+  background: color-mix(in srgb, var(--panel) 86%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
+.ink-options[hidden] { display: none; }
+.ink-options-name { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 /* The tools scroll sideways on a narrow screen instead of wrapping or being cut off. */
 .ink-bar-scroll { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); padding-right: 24px; }
@@ -435,8 +440,8 @@ body.ink-open { overflow: hidden; }
 .ink-tool[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent); }
 .ink-swatch { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel); background: var(--swatch); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
 .ink-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); transform: scale(1.08); }
-.ink-bar input.ink-custom { flex: none; width: 30px; min-width: 0; height: 30px; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; }
-.ink-bar input.ink-size { flex: none; width: 110px; min-width: 0; padding: 0; border: none; background: none; accent-color: var(--accent); }
+.ink-head input.ink-custom { flex: none; width: 30px; min-width: 0; height: 30px; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; }
+.ink-head input.ink-size { flex: none; width: 110px; min-width: 0; padding: 0; border: none; background: none; accent-color: var(--accent); }
 .ink-size-dot { display: inline-block; border-radius: 50%; border: 1px solid var(--line); flex: none; }
 .ink-zoom { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .ink-title { flex: none; max-width: 22vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 500; }
@@ -519,7 +524,7 @@ body.ink-open { overflow: hidden; }
 @media (max-width: 760px) {
   .ink-bar-scroll { gap: 8px; }
   .ink-bar-scroll .ink-group + .ink-group { padding-left: 8px; }
-  .ink-bar input.ink-size { width: 80px; }
+  .ink-head input.ink-size { width: 80px; }
   .ink-title { display: none; }
   .ink-swatch { width: 22px; height: 22px; }
   .ink-tool { width: 34px; height: 34px; }
