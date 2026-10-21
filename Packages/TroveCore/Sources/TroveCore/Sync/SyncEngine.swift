@@ -96,13 +96,15 @@ public actor SyncEngine {
     private var needsRewrite = true
 
     public init(device: String, keys: VaultKeys?, encrypted: Bool = true, transports: [any SyncTransport] = [], bridge: Bool = false,
-                blobCache: URL? = nil, snapshot: Snapshot? = nil, now: (@Sendable () -> Int64)? = nil) {
+                blobCache: URL? = nil, snapshot: Snapshot? = nil, snapshotIsSaved: Bool = false, now: (@Sendable () -> Int64)? = nil) {
         self.keys = keys
         self.blobCache = blobCache
         self.encrypted = encrypted && keys != nil
         self.transports = transports
         self.bridge = bridge
         self.clock = now ?? { Int64((Date().timeIntervalSince1970 * 1000).rounded()) }
+        // Loaded from a LocalDatabase: it already holds all of this, so the first save needn't rewrite it.
+        needsRewrite = !snapshotIsSaved
         if let snapshot {
             journal = Journal(state: snapshot.journal, pending: snapshot.pending, now: now)
             applied = Set(snapshot.applied)

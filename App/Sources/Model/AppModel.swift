@@ -729,10 +729,10 @@ final class AppModel {
     func saveNow() {
         guard let library else { return }
         let url = vault.snapshotURL
-        // Encoding the whole vault takes a while with a big history: off the main thread.
+        let database = vault.database
+        // Only what changed since the last save is written (SQLite), off the main thread.
         Task.detached(priority: .utility) {
-            let snapshot = await library.engine.snapshot()
-            await SnapshotWriter.shared.write(snapshot, to: url)
+            await SnapshotWriter.shared.save(library.engine, database: database, legacyURL: url)
         }
     }
 

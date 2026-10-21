@@ -71,7 +71,11 @@ final class VaultStore {
     }
 
     var configURL: URL { supportDir.appendingPathComponent("config.json") }
+    /// Older versions' local copy (one JSON file); read once, then replaced by `databaseURL`.
     var snapshotURL: URL { supportDir.appendingPathComponent("state.json") }
+    /// The local copy of the vault (ops, journal, checkpoint) in SQLite.
+    var databaseURL: URL { supportDir.appendingPathComponent("vault.sqlite") }
+    @ObservationIgnored private(set) var database: LocalDatabase?
     var blobCacheURL: URL { supportDir.appendingPathComponent("blobs", isDirectory: true) }
     /// This device's search index and "search by meaning" vectors (never synced; rebuilt if missing).
     var searchIndexURL: URL { supportDir.appendingPathComponent("search-index.json") }
@@ -280,10 +284,29 @@ final class VaultStore {
                 }
             }))
         }
-        let snapshot = Self.read(SyncEngine.Snapshot.self, from: snapshotURL)
+        // The local copy lives in SQLite (LocalDatabase); a state.json from an older version opens
+        // once and moves into it on the first save.
+        let database = try? LocalDatabase(url: databaseURL)
+        Self.protect(databaseURL)
+        var snapshot: SyncEngine.Snapshot? = nil
+        var saved = false
+        if let database, let stored = try? database.load() {
+            snapshot = stored
+            saved = true
+        } else {
+            snapshot = Self.read(SyncEngine.Snapshot.self, from: snapshotURL)
+        }
+        self.database = database
         // Bridge when this device has both, so iCloud-less devices' journals land in iCloud too.
         return SyncEngine(device: config.deviceId, keys: keys, encrypted: config.encrypted, transports: transports,
-                          bridge: transports.count > 1, blobCache: blobCacheURL, snapshot: snapshot)
+                          bridge: transports.count > 1, blobCache: blobCacheURL, snapshot: snapshot, snapshotIsSaved: saved)
+    }
+
+    /// The SQLite file is readable only after the first unlock, like state.json was.
+    nonisolated static func protect(_ url: URL) {
+        #if os(iOS)
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
+        #endif
     }
 
     func saveSnapshot(_ snapshot: SyncEngine.Snapshot) {
@@ -294,7 +317,9 @@ final class VaultStore {
     func reset() {
         Keychain.delete(Self.keysAccount)
         Keychain.delete(Self.relayTokenAccount)
-        for url in [configURL, snapshotURL, blobCacheURL, searchIndexURL, semanticURL] { try? FileManager.default.removeItem(at: url) }
+        database = nil
+        let databaseFiles = ["", "-wal", "-shm"].map { URL(fileURLWithPath: databaseURL.path + $0) }
+        for url in [configURL, snapshotURL, blobCacheURL, searchIndexURL, semanticURL] + databaseFiles { try? FileManager.default.removeItem(at: url) }
         scopedURL?.stopAccessingSecurityScopedResource()
         scopedURL = nil
         config = nil
@@ -315,15 +340,23 @@ final class VaultStore {
     }
 }
 
-/// Writes vault snapshots one at a time, off the main thread, never an older one over a newer one.
+/// Saves the local copy one save at a time, off the main thread: what changed since the last save goes
+/// into SQLite (`SyncEngine.takeSaveDelta`). Without a database it falls back to the old state.json.
 actor SnapshotWriter {
     static let shared = SnapshotWriter()
-    private var written = -1
 
-    func write(_ snapshot: SyncEngine.Snapshot, to url: URL) {
-        // Ops only ever grow, so a snapshot with fewer is older than one already saved.
-        guard snapshot.ops.count >= written else { return }
-        written = snapshot.ops.count
-        VaultStore.write(snapshot, to: url)
+    func save(_ engine: SyncEngine, database: LocalDatabase?, legacyURL: URL) async {
+        guard let database else {
+            VaultStore.write(await engine.snapshot(), to: legacyURL)
+            return
+        }
+        let delta = await engine.takeSaveDelta()
+        do {
+            try database.save(delta)
+            // The first save after an update holds everything: the old JSON copy isn't needed now.
+            if delta.rewrite { try? FileManager.default.removeItem(at: legacyURL) }
+        } catch {
+            await engine.saveFailed()
+        }
     }
 }
