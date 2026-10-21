@@ -1,0 +1,13 @@
+{
+  "name": "trove-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Trove for Claude: an MCP server (stdio) that joins your Trove vault as its own device. Reuses ../web/public/core; no dependencies.",
+  "bin": { "trove-mcp": "./bin/trove-mcp.js" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test test/server.test.mjs",
+    "test:e2e": "node --test test/mcp.e2e.mjs"
+  }
+}

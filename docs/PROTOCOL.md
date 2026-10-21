@@ -312,6 +312,12 @@ revoked the same way.
 - **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to
   the same origin only, no inline script or style.
 
+**Agent devices (`deviceKind: "agent"`).** `trove-mcp` (`mcp/`, Trove for Claude) joins with a setup
+code like the web app, using the same core, and is listed and revoked like any device. It keeps only
+the vault key (the setup code's X25519 private key is dropped, so it never imports the inbox), in a
+file readable by the user only (`~/.config/trove-mcp/device.json`, `0600`), and writes ordinary ops
+from its own journal. Its `--read-only` switch is enforced by the program, not the relay.
+
 ## 8. Clipboard history (clips)
 Clips are records with `kind: "clip"`, synced and encrypted like everything else. They're kept apart
 from library items (`kind: "item"`). Fields (all `set`, last writer wins):

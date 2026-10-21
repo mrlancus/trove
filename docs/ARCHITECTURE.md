@@ -44,7 +44,17 @@
 | Viewer (pdf.js in `vendor/pdfjs`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
 | UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
-| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs` |
+| Settings → Bridges, link previews for saved links | `web/public/bridges.js` |
+| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `bridges.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs`, `bridges.e2e.mjs` |
+
+## Bridges and Trove for Claude
+| Concern | File |
+|---|---|
+| Bridges on the relay: webhook, RSS/Atom, GitHub, Telegram; status, rate limits (PROTOCOL.md §4 "Bridges") | `server/src/bridges.ts`, `feeds.ts` |
+| Safe fetching (SSRF checks) and link previews | `server/src/preview.ts` |
+| Folder/tag hints when importing bridge entries | `Library.importInbox` / `Vault.importEnvelope` (`Fixtures/inbox-bridges.json`) |
+| Settings → Bridges in the apps | `App/Sources/Views/BridgesView.swift` (API in `RelayClient`) |
+| `trove-mcp`: MCP over stdio, joins as an `agent` device | `mcp/bin/trove-mcp.js`, `mcp/src/server.js`, `mcp/src/store.js` |
 
 ## Data model
 - Everything is a **record** (`kind`: `item` or `collection`), materialised from **ops** (PROTOCOL.md §3).
