@@ -18,6 +18,7 @@ import { b64uEncode, sha256Hex } from "../public/core/bytes.js";
 import { Journal, RecordStore } from "../public/core/records.js";
 import { decodePoints, encodePoints, erase, hits, strokeView } from "../public/core/ink.js";
 import { LocalStore } from "../public/core/localstore.js";
+import { makeCheckpoint, openCheckpoint, parseCheckpoint, sealCheckpoint } from "../public/core/checkpoint.js";
 import { Vault } from "../public/core/vault.js";
 
 const SCALE = Number(process.env.BENCH_SCALE ?? 1);
@@ -135,6 +136,18 @@ async function run() {
   // Not gated: what every save cost before the op store was append-only (IndexedDB structured-clones
   // the whole op array; structuredClone here is a lower bound for it).
   results.info = { saveWholeArrayBefore: await time(() => { structuredClone(ops); }, 2) };
+
+  // Checkpoints (PROTOCOL.md §3): what a new device downloads and does instead of replaying every op.
+  // Not gated yet (no baseline): written to the results so the next baseline update picks them up.
+  let cp, sealed;
+  results.info.makeCheckpoint = await time(() => { cp = makeCheckpoint(vault.store, { cursor: 0, device: "WEB" }); }, 1);
+  results.info.sealCheckpoint = await time(async () => { sealed = await sealCheckpoint(cp, keys.segment); }, 1);
+  results.info.checkpointMB = +(sealed.length / 1e6).toFixed(1);
+  results.info.segmentsMB = +(ops.reduce((n, op) => n + JSON.stringify(op).length + 1, 0) / 1e6).toFixed(1);
+  results.info.openCheckpoint = await time(async () => {
+    const s = new RecordStore();
+    s.useBase(parseCheckpoint(await openCheckpoint(sealed, keys.segment)));
+  }, 1);
 
   // Ink: decode every stroke; open one page (cold, through the vault); eraser on that page.
   const strokeRecords = vault.store.visibleOf("stroke");
