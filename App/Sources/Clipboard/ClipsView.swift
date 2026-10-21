@@ -137,6 +137,8 @@ final class ClipPaletteState {
             candidates = Array(rows.indices)
         }
         let words = parsed.words.map { Array($0.utf8) }
+        // Very many clips: the words were looked up in the clip index (memmem below that).
+        let indexed = store.indexedIDs(ClipQuery(parsed.words.joined(separator: " ")))
         var found: [Int] = []
         found.reserveCapacity(min(candidates.count, 4096))
         for i in candidates {
@@ -149,7 +151,9 @@ final class ClipPaletteState {
                     let app = ClipQuery.fold(c.sourceApp ?? "")
                     if !parsed.apps.allSatisfy(app.contains) { continue }
                 }
-                if !words.allSatisfy({ ClipSearchRow.contains(row.hay, $0) }) { continue }
+                if let indexed {
+                    if !indexed.contains(c.id) { continue }
+                } else if !words.allSatisfy({ ClipSearchRow.contains(row.hay, $0) }) { continue }
             case .sensitive(let e):
                 if !query.isEmpty, !e.text.localizedCaseInsensitiveContains(query) { continue }
             }

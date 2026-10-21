@@ -15,6 +15,7 @@ struct InkEditorView: View {
     @State private var exportFile: PDFFile?
     @State private var confirmDeletePage: String?
     @State private var pageSettings = false
+    @State private var penOptions = false
     /// The second row under the tools (the chosen tool's colours, sizes and modes), like GoodNotes.
     @State private var showOptions = true
 
@@ -100,7 +101,7 @@ struct InkEditorView: View {
 
     // MARK: Toolbar: the tools on top, the chosen one's options underneath
 
-    private static let tools: [InkEditorTool] = [.pen, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .text, .laser]
+    private static let tools: [InkEditorTool] = [.pen, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .text, .laser, .tape]
 
     private var toolbar: some View {
         @Bindable var editor = editor
@@ -145,6 +146,10 @@ struct InkEditorView: View {
                         .help("Insert a picture")
                         .accessibilityLabel("Picture")
                     }
+                    if !editor.inkSettings.favourites.isEmpty {
+                        Divider().frame(height: 26)
+                        InkFavouritesRow(editor: editor)
+                    }
                     Divider().frame(height: 26)
                     HStack(spacing: 6) {
                         Button { pageSettings = true } label: { Label(editor.isSketch ? "Page" : "View", systemImage: "doc.richtext") }
@@ -156,6 +161,19 @@ struct InkEditorView: View {
                         Menu {
                             Toggle("Scribble to erase", isOn: $editor.scribbleToErase)
                             Toggle("Shapes come out clean", isOn: $editor.shapeMode)
+                            Toggle("Smaller drawings (every device up to date)", isOn: Binding(get: { editor.inkSettings.compactPoints }, set: { editor.setCompactPoints($0) }))
+                            if !editor.inkSettings.favourites.isEmpty {
+                                Menu("Remove a favourite pen") {
+                                    ForEach(Array(editor.inkSettings.favourites.enumerated()), id: \.offset) { i, f in
+                                        Button("\(i + 1): \(InkEditorTool(rawValue: f.tool.rawValue)?.label ?? "Pen"), \(f.color), size \(f.width.formatted())") { editor.removeFavourite(f) }
+                                    }
+                                }
+                            }
+                            if !editor.inkSettings.palette.isEmpty {
+                                Menu("Remove one of your colours") {
+                                    ForEach(editor.inkSettings.palette, id: \.self) { c in Button(c) { editor.removeFromPalette(c) } }
+                                }
+                            }
                             Picker("When a drawing opens", selection: $editor.fitWholePage) {
                                 Text("Show the whole page").tag(true)
                                 Text("Fit the page width").tag(false)
@@ -193,6 +211,15 @@ struct InkEditorView: View {
         }
     }
 
+    /// The tool's colours, then your colours (every device) and recent ones (this device).
+    private var colourChoices: [String] {
+        let base = editor.tool == .tape ? InkEditorModel.tapeColors : InkEditorModel.colors
+        var out = base
+        for c in editor.inkSettings.palette where !out.contains(c) { out.append(c) }
+        for c in editor.recentColors.prefix(5) where !out.contains(c) { out.append(c) }
+        return out
+    }
+
     private var hasOptions: Bool { editor.tool.hasColor || editor.tool.hasSize || editor.tool == .lasso }
 
     /// The chosen tool's colours, sizes and modes.
@@ -203,7 +230,7 @@ struct InkEditorView: View {
                 Text(editor.tool.label).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
                 if editor.tool.hasColor {
                     HStack(spacing: 6) {
-                        ForEach(InkEditorModel.colors, id: \.self) { c in
+                        ForEach(colourChoices, id: \.self) { c in
                             Button { editor.color = c } label: {
                                 Circle().fill(Color(inkHex: c)).frame(width: 22, height: 22)
                                     .overlay(Circle().strokeBorder(.white, lineWidth: 2))
@@ -214,7 +241,19 @@ struct InkEditorView: View {
                         }
                         ColorPicker("Any colour", selection: Binding(get: { Color(inkHex: editor.color) }, set: { editor.color = $0.inkHex }), supportsOpacity: false)
                             .labelsHidden()
+                        Button { editor.addToPalette(editor.color) } label: { Image(systemName: "plus.circle") }
+                            .buttonStyle(.borderless)
+                            .help("Keep this colour in your colours (on every device)")
+                            .accessibilityLabel("Add to your colours")
                     }
+                }
+                if editor.tool.ink != nil {
+                    Button("Pen options") { penOptions = true }
+                        .buttonStyle(.bordered)
+                        .popover(isPresented: $penOptions) { InkPenOptions(editor: editor).frame(minWidth: 300, idealWidth: 320) }
+                    Button("Save pen") { editor.saveFavourite() }
+                        .buttonStyle(.bordered)
+                        .help("Keep this pen, colour and size as a favourite (on every device)")
                 }
                 if editor.tool.hasSize {
                     InkSizePresets(editor: editor)
@@ -653,5 +692,92 @@ struct InkedFileView: View {
             let width = Int(min(2400, page.width * 2))
             images[page.key] = await Task.detached(priority: .userInitiated) { InkRenderer.render(page, content: content, pixelWidth: width).map(InkImage.init) }.value
         }
+    }
+}
+
+/// Favourite pens: one tap brings back the tool, colour and size (the toolbar and the squeeze palette).
+struct InkFavouritesRow: View {
+    let editor: InkEditorModel
+    var close: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(editor.inkSettings.favourites.enumerated()), id: \.offset) { i, f in
+                Button { editor.use(f); close?() } label: {
+                    Circle().fill(Color(inkHex: f.color))
+                        .frame(width: min(20, max(8, f.width * 1.6 + 4)), height: min(20, max(8, f.width * 1.6 + 4)))
+                        .opacity(f.tool == .highlighter ? 0.6 : 1)
+                        .frame(width: 28, height: 28)
+                        .background(editor.isCurrent(f) ? Color.accentColor.opacity(0.18) : .clear, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("\(InkEditorTool(rawValue: f.tool.rawValue)?.label ?? "Pen"), size \(f.width.formatted())")
+                .accessibilityLabel("Favourite \(i + 1): \(InkEditorTool(rawValue: f.tool.rawValue)?.label ?? "Pen"), \(f.color), size \(f.width.formatted())")
+            }
+        }
+    }
+}
+
+/// A pen's feel (every device: smoothing, pressure, lightest touch) and lines (this device: dashes,
+/// arrows on straight lines, fill for closed shapes), like the website's Pen options.
+struct InkPenOptions: View {
+    let editor: InkEditorModel
+
+    private var ink: InkTool { editor.tool.ink ?? .pen }
+
+    var body: some View {
+        let feel = editor.penSettings(ink)
+        Form {
+            Section("\(editor.tool.label): on every device") {
+                VStack(alignment: .leading) {
+                    Text("Smoothing \(feel.smoothing)")
+                    Slider(value: Binding(get: { Double(feel.smoothing) }, set: { v in
+                        var next = feel
+                        next.smoothing = Int(v.rounded())
+                        editor.setPenSettings(next, for: ink)
+                    }), in: 0...100, step: 1)
+                }
+                if ink.usesPressure {
+                    Picker("Pressure", selection: Binding(get: { feel.curve }, set: { c in
+                        var next = feel
+                        next.curve = c
+                        editor.setPenSettings(next, for: ink)
+                    })) {
+                        Text("Soft").tag(PenSettings.Curve.soft)
+                        Text("Normal").tag(PenSettings.Curve.normal)
+                        Text("Firm").tag(PenSettings.Curve.firm)
+                    }
+                    .pickerStyle(.segmented)
+                    VStack(alignment: .leading) {
+                        Text("Lightest touch \(feel.minWidth) %")
+                        Slider(value: Binding(get: { Double(feel.minWidth) }, set: { v in
+                            var next = feel
+                            next.minWidth = Int(v.rounded())
+                            editor.setPenSettings(next, for: ink)
+                        }), in: 0...100, step: 1)
+                    }
+                }
+            }
+            Section("Lines (this device)") {
+                Picker("Line", selection: Binding(get: { editor.dash(for: editor.tool) ?? "solid" }, set: { editor.setDash($0 == "solid" ? nil : $0, for: editor.tool) })) {
+                    Text("Solid").tag("solid")
+                    Text("Dashes").tag("dash")
+                    Text("Dots").tag("dot")
+                }
+                .pickerStyle(.segmented)
+                Picker("Arrows on straight lines", selection: Binding(get: { editor.arrow ?? "none" }, set: { editor.arrow = $0 == "none" ? nil : $0 })) {
+                    Text("None").tag("none")
+                    Text("End").tag("end")
+                    Text("Both ends").tag("both")
+                }
+                Picker("Fill closed shapes", selection: Binding(get: { editor.fill ?? "none" }, set: { editor.fill = $0 == "none" ? nil : $0 })) {
+                    Text("No fill").tag("none")
+                    ForEach(InkEditorModel.colors + ["#ffffff"], id: \.self) { c in Text(c).tag(c) }
+                }
+            }
+        }
+        #if os(macOS)
+        .padding()
+        #endif
     }
 }

@@ -37,20 +37,22 @@ struct InkLine: Sendable, Identifiable {
     var width: Double
     var points: [InkPoint]
     var shape: String?
+    /// Fill, dashes, arrowheads and nib angle (PROTOCOL.md §10).
+    var style = InkStrokeStyle()
 
-    init(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint], shape: String? = nil) {
-        self.id = id; self.tool = tool; self.color = color; self.width = width; self.points = points; self.shape = shape
+    init(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) {
+        self.id = id; self.tool = tool; self.color = color; self.width = width; self.points = points; self.shape = shape; self.style = style
     }
-    init(_ s: InkStroke) { self.init(id: s.id, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape) }
+    init(_ s: InkStroke) { self.init(id: s.id, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape, style: s.style) }
 
     func transformed(_ t: InkGeometry.Transform) -> InkLine {
-        InkLine(id: id, tool: tool, color: color, width: width * t.widthScale, points: points.map { t.apply($0) }, shape: shape)
+        InkLine(id: id, tool: tool, color: color, width: width * t.widthScale, points: points.map { t.apply($0) }, shape: shape, style: style)
     }
-    var bounds: InkGeometry.Rect? { InkGeometry.bounds(points, pad: width / 2) }
+    var bounds: InkGeometry.Rect? { InkOutline.bounds(points, width: width, arrow: style.arrow) }
     /// Changes when how the line looks does (for a canvas deciding what to redraw).
     var stamp: String {
         let a = points.first, b = points.last
-        return "\(color)|\(width)|\(tool.rawValue)|\(points.count)|\(a?.x ?? 0),\(a?.y ?? 0)|\(b?.x ?? 0),\(b?.y ?? 0)"
+        return "\(color)|\(width)|\(tool.rawValue)|\(style.fill ?? "")\(style.dash ?? "")\(style.arrow ?? "")|\(points.count)|\(a?.x ?? 0),\(a?.y ?? 0)|\(b?.x ?? 0),\(b?.y ?? 0)"
     }
 }
 
@@ -86,6 +88,8 @@ struct InkContent: @unchecked Sendable {
     var strokes: [InkLine] = []
     var elements: [InkBox] = []
     var pictures: [String: CGImage] = [:]
+    /// Tape strips opened on this device.
+    var peeked: Set<String> = []
 }
 
 /// Draws strokes, paper, backgrounds, text boxes and pictures with Core Graphics, the same on
@@ -161,6 +165,7 @@ enum InkRenderer {
         drawPictures(content.elements, pictures: content.pictures, in: ctx)
         draw(content.strokes, in: ctx)
         drawTexts(content.elements, in: ctx)
+        drawTapes(content.elements, peeked: content.peeked, in: ctx)
     }
 
     /// The background, into a context set up in page points with a top-left origin.
@@ -248,63 +253,149 @@ enum InkRenderer {
     // MARK: Strokes
 
     static func draw(_ strokes: [InkLine], in ctx: CGContext) {
-        for s in strokes { draw(tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape != nil, in: ctx) }
+        for s in strokes { draw(tool: s.tool, color: s.color, width: s.width, points: s.points, shapeName: s.shape, style: s.style, in: ctx) }
     }
 
-    /// One stroke, like core/ink.js: pens, fountain pens and brushes vary in width segment by
-    /// segment; markers, highlighters, pencils and clean shapes are one even line (highlighters
-    /// blended under the ink).
-    static func draw(tool: InkTool, color: String, width: Double, points pts: [InkPoint], shape: Bool = false, in ctx: CGContext) {
+    /// A line being drawn or a laser line: `shape` draws it as straight pieces.
+    static func draw(tool: InkTool, color: String, width: Double, points pts: [InkPoint], shape: Bool = false, style: InkStrokeStyle = InkStrokeStyle(), in ctx: CGContext) {
+        draw(tool: tool, color: color, width: width, points: pts, shapeName: shape ? "polyline" : nil, style: style, in: ctx)
+    }
+
+    /// One stroke, like core/ink.js `drawStroke`: pens, pencils, fountain pens and brushes as one
+    /// filled outline (`InkOutline.outline`; pencils with grain); markers, highlighters, clean shapes
+    /// and dashed lines as one even line (highlighters blended under the ink). Closed shapes with a
+    /// fill are filled underneath; line shapes get their arrowheads.
+    static func draw(tool: InkTool, color: String, width: Double, points pts: [InkPoint], shapeName: String?, style: InkStrokeStyle, in ctx: CGContext) {
         guard let first = pts.first else { return }
         ctx.saveGState()
+        defer { ctx.restoreGState() }
         ctx.setAlpha(tool.opacity)
+        if tool == .highlighter { ctx.setBlendMode(.multiply) }
+        if let fill = style.fill, let shape = shapeName, InkStrokeStyle.closedShapes.contains(shape), pts.count > 2 {
+            ctx.setFillColor(cgColor(fill))
+            ctx.addLines(between: pts.map { CGPoint(x: $0.x, y: $0.y) })
+            ctx.closePath()
+            ctx.fillPath()
+        }
+        if let outline = InkOutline.outline(tool: tool, width: width, points: pts, shape: shapeName, style: style) {
+            let path = outlinePath(outline)
+            if tool == .pencil, let grain = grainImage(color) {
+                ctx.saveGState()
+                ctx.addPath(path)
+                ctx.clip()
+                // The grain repeats every 32 page points (a texel per half point), like the website.
+                let tile = CGFloat(InkOutline.grainSize) * CGFloat(InkOutline.grainTexel)
+                let box = path.boundingBoxOfPath
+                var y = (box.minY / tile).rounded(.down) * tile
+                while y < box.maxY {
+                    var x = (box.minX / tile).rounded(.down) * tile
+                    while x < box.maxX {
+                        ctx.draw(grain, in: CGRect(x: x, y: y, width: tile, height: tile))
+                        x += tile
+                    }
+                    y += tile
+                }
+                ctx.restoreGState()
+            } else {
+                ctx.setFillColor(cgColor(color))
+                ctx.addPath(path)
+                ctx.fillPath()
+            }
+            return
+        }
         ctx.setStrokeColor(cgColor(color))
         ctx.setFillColor(cgColor(color))
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
-        if tool == .highlighter { ctx.setBlendMode(.multiply) }
-        func mid(_ a: InkPoint, _ b: InkPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+        let w = InkOutline.lineWidth(tool: tool, width: width, points: pts)
         if pts.count == 1 {
-            let r = InkStroke.width(width, tool: tool, pressure: first.pressure) / 2
-            ctx.fillEllipse(in: CGRect(x: first.x - r, y: first.y - r, width: r * 2, height: r * 2))
-        } else if !tool.usesPressure || tool == .pencil || shape {
-            let average = pts.map(\.pressure).reduce(0, +) / Double(pts.count)
-            ctx.setLineWidth(tool == .pencil || shape ? InkStroke.width(width, tool: tool, pressure: average) : width)
-            ctx.move(to: CGPoint(x: first.x, y: first.y))
-            if shape {
-                for p in pts.dropFirst() { ctx.addLine(to: CGPoint(x: p.x, y: p.y)) }
-            } else {
-                for i in 1..<(pts.count - 1) { ctx.addQuadCurve(to: mid(pts[i], pts[i + 1]), control: CGPoint(x: pts[i].x, y: pts[i].y)) }
-                ctx.addLine(to: CGPoint(x: pts[pts.count - 1].x, y: pts[pts.count - 1].y))
-            }
-            ctx.strokePath()
+            ctx.fillEllipse(in: CGRect(x: first.x - w / 2, y: first.y - w / 2, width: w, height: w))
+            return
+        }
+        let arrow = tool == .highlighter ? nil : style.arrow
+        let heads = InkOutline.arrowHeads(tool: tool, width: width, points: pts, shape: shapeName, arrow: arrow)
+        var line = pts
+        if let arrow, !heads.isEmpty { line = InkOutline.trimmedForArrows(pts, width: w, arrow: arrow) }
+        if let dash = style.dash { ctx.setLineDash(phase: 0, lengths: InkOutline.dashPattern(dash, width: w).map { CGFloat($0) }) }
+        ctx.setLineWidth(w)
+        ctx.move(to: CGPoint(x: line[0].x, y: line[0].y))
+        if shapeName != nil {
+            for p in line.dropFirst() { ctx.addLine(to: CGPoint(x: p.x, y: p.y)) }
         } else {
-            for i in 0..<(pts.count - 1) {
-                let a = i == 0 ? CGPoint(x: pts[0].x, y: pts[0].y) : mid(pts[i - 1], pts[i])
-                let b = i == pts.count - 2 ? CGPoint(x: pts[i + 1].x, y: pts[i + 1].y) : mid(pts[i], pts[i + 1])
-                ctx.setLineWidth(pointWidth(tool: tool, width: width, points: pts, index: i))
-                ctx.move(to: a)
-                ctx.addQuadCurve(to: b, control: CGPoint(x: pts[i].x, y: pts[i].y))
-                ctx.strokePath()
+            for i in 1..<(line.count - 1) {
+                let to = CGPoint(x: (line[i].x + line[i + 1].x) / 2, y: (line[i].y + line[i + 1].y) / 2)
+                ctx.addQuadCurve(to: to, control: CGPoint(x: line[i].x, y: line[i].y))
             }
+            ctx.addLine(to: CGPoint(x: line[line.count - 1].x, y: line[line.count - 1].y))
         }
-        ctx.restoreGState()
-    }
-
-    /// A pen's width at its i-th point (ink.js `pointWidth`).
-    static func pointWidth(tool: InkTool, width: Double, points pts: [InkPoint], index i: Int) -> Double {
-        let p = pts[i]
-        switch tool {
-        case .fountain:
-            let q = pts[min(pts.count - 1, i + 1)], o = pts[max(0, i - 1)]
-            return InkGeometry.fountainWidth(width, pressure: p.pressure, dx: q.x - o.x, dy: q.y - o.y)
-        case .brush:
-            return InkStroke.width(width, tool: tool, pressure: p.pressure) * InkGeometry.brushTaper(index: i, count: pts.count)
-        default:
-            return InkStroke.width(width, tool: tool, pressure: p.pressure)
+        ctx.strokePath()
+        ctx.setLineDash(phase: 0, lengths: [])
+        for tri in heads where tri.count == 3 {
+            ctx.addLines(between: tri.map { CGPoint(x: $0.x, y: $0.y) })
+            ctx.closePath()
+            ctx.fillPath()
         }
     }
 
+    /// An outline as quadratic curves through its corners' midpoints (ink.js `traceOutline`).
+    static func outlinePath(_ o: [InkPoint]) -> CGPath {
+        let path = CGMutablePath()
+        let n = o.count
+        guard n >= 3 else { return path }
+        path.move(to: CGPoint(x: (o[n - 1].x + o[0].x) / 2, y: (o[n - 1].y + o[0].y) / 2))
+        for i in 0..<n {
+            let b = o[(i + 1) % n]
+            path.addQuadCurve(to: CGPoint(x: (o[i].x + b.x) / 2, y: (o[i].y + b.y) / 2), control: CGPoint(x: o[i].x, y: o[i].y))
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    /// The pencil's grain tile in a colour (`InkOutline.grainTile` as alpha), made once per colour.
+    private static let grainCache = GrainCache()
+    static func grainImage(_ color: String) -> CGImage? { grainCache.image(color) }
+
+    /// Tape: an opaque strip with faint stripes, or (opened here) a faint dashed outline (ink.js `drawTapeElement`).
+    static func drawTape(_ f: InkGeometry.Rect, color: String, peeked: Bool, in ctx: CGContext) {
+        let rect = CGRect(x: f.x, y: f.y, width: f.width, height: f.height)
+        let r = max(0, min(4, f.width / 4, f.height / 4))
+        let path = CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil)
+        ctx.saveGState()
+        defer { ctx.restoreGState() }
+        if peeked {
+            ctx.setFillColor(cgColor(color, alpha: 0.16))
+            ctx.addPath(path)
+            ctx.fillPath()
+            ctx.setStrokeColor(cgColor(color, alpha: 0.7))
+            ctx.setLineWidth(1)
+            ctx.setLineDash(phase: 0, lengths: [4, 3])
+            ctx.addPath(path)
+            ctx.strokePath()
+            return
+        }
+        ctx.setFillColor(cgColor(color))
+        ctx.addPath(path)
+        ctx.fillPath()
+        ctx.addPath(path)
+        ctx.clip()
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.1))
+        let step = 8.0
+        var x = f.x - f.height
+        while x < f.x + f.width {
+            ctx.move(to: CGPoint(x: x, y: f.y))
+            ctx.addLine(to: CGPoint(x: x + step, y: f.y))
+            ctx.addLine(to: CGPoint(x: x + step + f.height, y: f.y + f.height))
+            ctx.addLine(to: CGPoint(x: x + f.height, y: f.y + f.height))
+            ctx.closePath()
+            x += step * 2
+        }
+        ctx.fillPath()
+    }
+
+    /// Tape strips go over everything else on a page.
+    static func drawTapes(_ elements: [InkBox], peeked: Set<String> = [], in ctx: CGContext) {
+        for e in elements where e.kind == .tape { drawTape(e.frame, color: e.color, peeked: peeked.contains(e.id), in: ctx) }
+    }
 
     // MARK: Text boxes and pictures
 
@@ -423,6 +514,10 @@ struct InkOverlay {
     var eraserRadius = 10.0
     /// Laser pointer lines: points, colour, width in screen points, and how faded (1 = solid).
     var lasers: [(points: [InkPoint], color: String, width: Double, alpha: Double)] = []
+    /// Tape being laid.
+    var tape: (frame: InkGeometry.Rect, color: String)?
+    /// A hovering Apple Pencil's tip: where, in the pen's colour and size.
+    var tip: (point: InkPoint, color: String, width: Double)?
 }
 
 extension InkRenderer {
@@ -461,6 +556,18 @@ extension InkRenderer {
             draw(tool: .marker, color: l.color, width: l.width * Double(px) * 1.5, points: l.points, in: ctx)
             ctx.restoreGState()
         }
+        if let t = o.tape { drawTape(t.frame, color: t.color, peeked: false, in: ctx) }
+        if let tip = o.tip {
+            // The pen's tip, its colour and size, with a thin ring so it shows on any paper.
+            let r = max(1.5 * Double(px), tip.width / 2)
+            let dot = CGRect(x: tip.point.x - r, y: tip.point.y - r, width: r * 2, height: r * 2)
+            ctx.setLineDash(phase: 0, lengths: [])
+            ctx.setFillColor(cgColor(tip.color, alpha: 0.75))
+            ctx.fillEllipse(in: dot)
+            ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.9))
+            ctx.setLineWidth(1 * px)
+            ctx.strokeEllipse(in: dot.insetBy(dx: -px, dy: -px))
+        }
         if let e = o.eraser {
             ctx.setLineDash(phase: 0, lengths: [])
             ctx.setLineWidth(1.5 * px)
@@ -468,5 +575,36 @@ extension InkRenderer {
             ctx.strokeEllipse(in: CGRect(x: e.x - o.eraserRadius, y: e.y - o.eraserRadius, width: o.eraserRadius * 2, height: o.eraserRadius * 2))
         }
         ctx.restoreGState()
+    }
+}
+
+/// Grain tiles per colour for pencils, made once (rendering runs on more than one thread).
+final class GrainCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var images: [String: CGImage] = [:]
+
+    func image(_ color: String) -> CGImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = images[color] { return hit }
+        let size = InkOutline.grainSize
+        let (r, g, b) = InkStroke.rgb(color)
+        var bytes = [UInt8](repeating: 0, count: size * size * 4)
+        for (i, a) in InkOutline.grainTile.enumerated() {
+            let alpha = Double(a) / 255
+            // Premultiplied alpha.
+            bytes[i * 4] = UInt8(min(255, (r * alpha * 255).rounded()))
+            bytes[i * 4 + 1] = UInt8(min(255, (g * alpha * 255).rounded()))
+            bytes[i * 4 + 2] = UInt8(min(255, (b * alpha * 255).rounded()))
+            bytes[i * 4 + 3] = a
+        }
+        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(width: size, height: size, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: size * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info, provider: provider, decode: nil,
+                                  shouldInterpolate: false, intent: .defaultIntent) else { return nil }
+        if images.count > 32 { images = [:] }
+        images[color] = image
+        return image
     }
 }

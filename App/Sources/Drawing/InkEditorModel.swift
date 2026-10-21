@@ -16,7 +16,7 @@ struct InkTarget: Identifiable, Hashable, Codable {
 
 /// The tools in the editor's toolbar, like the website's (web/public/draw.js).
 enum InkEditorTool: String, CaseIterable, Identifiable {
-    case pen, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser
+    case pen, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser, tape
     var id: String { rawValue }
 
     var ink: InkTool? { InkTool(rawValue: rawValue) }
@@ -32,6 +32,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .lasso: "Lasso"
         case .text: "Text"
         case .laser: "Laser pointer"
+        case .tape: "Tape"
         }
     }
     var symbol: String {
@@ -46,6 +47,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .lasso: "lasso"
         case .text: "character.textbox"
         case .laser: "cursorarrow.rays"
+        case .tape: "bandage"
         }
     }
     var defaultWidth: Double {
@@ -60,11 +62,13 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         case .lasso: 1
         case .text: 20
         case .laser: 6
+        case .tape: 24
         }
     }
     var defaultColor: String {
         switch self {
         case .laser: "#ff3b30"
+        case .tape: "#f2c94c"
         case .marker: "#0a84ff"
         case .highlighter: "#ffd60a"
         case .fountain: "#1c3d8f"
@@ -72,9 +76,12 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
         }
     }
     /// Pens and text have a colour; pens, text and the eraser a size.
-    var hasColor: Bool { ink != nil || self == .text || self == .laser }
+    var hasColor: Bool { ink != nil || self == .text || self == .laser || self == .tape }
     var hasSize: Bool { hasColor || self == .eraser }
 }
+
+/// What Apple Pencil Pro's haptics mark.
+enum InkHaptic { case snapped, toolChanged }
 
 enum InkEraserMode: String, CaseIterable, Identifiable {
     case stroke, partial, precise
@@ -142,6 +149,28 @@ struct InkClipboard {
 @Observable
 final class InkEditorModel {
     static let colors = ["#1c1c1e", "#8e8e93", "#0a84ff", "#ff3b30", "#34c759", "#ff9500", "#af52de", "#ffd60a"]
+    static let tapeColors = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5", "#b0b0b5"]
+    /// The drawing settings every device follows (`settings.ink`): pen feel, favourites, your colours.
+    private(set) var inkSettings = InkSettings()
+    /// Tape strips opened on this device.
+    private(set) var peeked: Set<String> = []
+    /// Recently used colours (this device).
+    private(set) var recentColors: [String] = UserDefaults.standard.stringArray(forKey: "ink.recentColors") ?? []
+    /// Dashes or dots for a pen (this device).
+    func dash(for t: InkEditorTool) -> String? { _ = styleRevision; return UserDefaults.standard.string(forKey: "ink.dash.\(t.rawValue)") }
+    func setDash(_ dash: String?, for t: InkEditorTool) { UserDefaults.standard.set(dash, forKey: "ink.dash.\(t.rawValue)"); styleRevision += 1 }
+    /// Arrowheads on straight lines: "end", "both" or nil.
+    var arrow: String? {
+        get { _ = styleRevision; return UserDefaults.standard.string(forKey: "ink.arrow") }
+        set { UserDefaults.standard.set(newValue, forKey: "ink.arrow"); styleRevision += 1 }
+    }
+    /// The colour closed shapes are filled with, or nil.
+    var fill: String? {
+        get { _ = styleRevision; return UserDefaults.standard.string(forKey: "ink.fill") }
+        set { UserDefaults.standard.set(newValue, forKey: "ink.fill"); styleRevision += 1 }
+    }
+    /// Haptics on Apple Pencil Pro (snapping a shape, switching tools); set by the iPad canvas.
+    @ObservationIgnored var haptic: ((_ kind: InkHaptic) -> Void)?
     static var clipboard: InkClipboard?
     static let holdToSnap: TimeInterval = 0.55
 
@@ -207,6 +236,7 @@ final class InkEditorModel {
         case lasso(key: String)
         case laser(key: String)
         case drag(key: String, start: InkPoint, corner: Int?, box: InkGeometry.Rect)
+        case tape(key: String, start: InkPoint, end: InkPoint)
     }
     private var gesture: Gesture?
     /// Strokes drawn here that the library hasn't stored yet, and ones erased here it hasn't
@@ -262,6 +292,8 @@ final class InkEditorModel {
             if let selection, tool == .lasso, selection.count > 0 { recolourSelection(newValue); return }
             if !tool.hasColor { tool = .pen }
             UserDefaults.standard.set(newValue, forKey: "ink.color.\(tool.rawValue)")
+            recentColors = Array(([newValue] + recentColors.filter { $0 != newValue }).prefix(8))
+            UserDefaults.standard.set(recentColors, forKey: "ink.recentColors")
             styleRevision += 1
         }
     }
@@ -271,8 +303,71 @@ final class InkEditorModel {
     }
 
     func select(_ t: InkEditorTool) {
-        if t != tool { previousTool = tool }
+        if t != tool { previousTool = tool; haptic?(.toolChanged) }
         tool = t
+    }
+
+    // MARK: Favourites, your colours, pen feel (settings.ink, on every device)
+
+    func reloadSettings() async {
+        guard let library = app?.library else { return }
+        let next = await library.inkSettings()
+        if next != inkSettings { inkSettings = next }
+    }
+
+    /// One tap: the favourite's tool, colour and size.
+    func use(_ f: InkFavourite) {
+        guard let t = InkEditorTool(rawValue: f.tool.rawValue) else { return }
+        UserDefaults.standard.set(f.color, forKey: "ink.color.\(t.rawValue)")
+        UserDefaults.standard.set(f.width, forKey: "ink.width.\(t.rawValue)")
+        styleRevision += 1
+        select(t)
+    }
+
+    func isCurrent(_ f: InkFavourite) -> Bool { tool.rawValue == f.tool.rawValue && color(for: tool) == f.color && width(for: tool) == f.width }
+
+    /// Keeps the pen, colour and size as a favourite (up to 10).
+    func saveFavourite() {
+        guard let ink = tool.ink, let library = app?.library else { return }
+        let f = InkFavourite(tool: ink, color: color(for: tool), width: width(for: tool))
+        let list = Array((inkSettings.favourites.filter { $0 != f } + [f]).suffix(InkSettings.maxFavourites))
+        inkSettings.favourites = list
+        Task { await library.setInkFavourites(list); app?.inkChanged() }
+    }
+
+    func removeFavourite(_ f: InkFavourite) {
+        guard let library = app?.library else { return }
+        let list = inkSettings.favourites.filter { $0 != f }
+        inkSettings.favourites = list
+        Task { await library.setInkFavourites(list); app?.inkChanged() }
+    }
+
+    func addToPalette(_ c: String) {
+        guard let library = app?.library, !inkSettings.palette.contains(c.lowercased()) else { return }
+        let list = Array((inkSettings.palette + [c.lowercased()]).suffix(InkSettings.maxPalette))
+        inkSettings.palette = list
+        Task { await library.setInkPalette(list); app?.inkChanged() }
+    }
+
+    func removeFromPalette(_ c: String) {
+        guard let library = app?.library else { return }
+        let list = inkSettings.palette.filter { $0 != c }
+        inkSettings.palette = list
+        Task { await library.setInkPalette(list); app?.inkChanged() }
+    }
+
+    func penSettings(_ t: InkTool) -> PenSettings { inkSettings.pen(t) }
+
+    func setPenSettings(_ settings: PenSettings, for t: InkTool) {
+        guard let library = app?.library else { return }
+        inkSettings.pens[t] = settings
+        Task { await library.setPenSettings(t, settings); app?.inkChanged() }
+    }
+
+    func setCompactPoints(_ on: Bool) {
+        guard let library = app?.library else { return }
+        inkSettings.compactPoints = on
+        Task { await library.setCompactPoints(on); app?.inkChanged() }
     }
 
     /// Apple Pencil double-tap: the eraser and back, or the previous tool.
@@ -319,6 +414,7 @@ final class InkEditorModel {
     /// Picks up ink and pages from other devices (and our own writes).
     func reloadInk() async {
         guard let library = app?.library else { return }
+        await reloadSettings()
         let sig = await library.inkSignature(target.itemId)
         if isSketch, let item = await library.item(target.itemId) {
             let sig = Self.signature(item)
@@ -369,10 +465,13 @@ final class InkEditorModel {
     func display(_ key: String) -> InkContent {
         var c = content[key] ?? InkContent()
         c.pictures = pictures
+        c.peeked = peeked
         if !erasePreview.isEmpty {
             c.strokes = c.strokes.flatMap { line -> [InkLine] in
                 guard let pieces = erasePreview[line.id] else { return [line] }
-                return pieces.enumerated().map { i, pts in InkLine(id: "\(line.id)#\(i)", tool: line.tool, color: line.color, width: line.width, points: pts, shape: line.shape) }
+                return pieces.enumerated().map { i, pts in
+                    InkLine(id: "\(line.id)#\(i)", tool: line.tool, color: line.color, width: line.width, points: pts, style: InkStrokeStyle(dash: line.style.dash, nib: line.style.nib))
+                }
             }
         }
         if let t = dragTransform, let sel = selection, sel.pageKey == key {
@@ -391,7 +490,19 @@ final class InkEditorModel {
         }
         if case .lasso(let k)? = gesture, k == key { o.lasso = lassoPath }
         if selection?.pageKey == key { o.selection = selectionBox() }
+        if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, color: color(for: .tape)) }
+        if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
         return o
+    }
+
+    /// Where a hovering Apple Pencil is (page, point), to preview the pen's tip and colour there.
+    private(set) var hoverTip: (key: String, point: InkPoint)?
+
+    /// A hovering Pencil moved (nil: it went away). Pens show their tip; the eraser its circle.
+    func pencilHover(_ p: InkPoint?, pageKey key: String?, scale: Double) {
+        if tool == .eraser { hover(p, scale: scale); return }
+        if let p, let key { hoverTip = (key, p) } else if hoverTip == nil { return } else { hoverTip = nil }
+        overlayRevision += 1
     }
 
     // MARK: Pens
@@ -401,7 +512,8 @@ final class InkEditorModel {
     /// Returns true when what's kept differs from the line drawn (a clean shape, or a scratch-out
     /// that deleted what it crossed and isn't kept), so a canvas showing the rough line redraws.
     @discardableResult
-    func addStroke(points: [InkPoint], tool: InkTool, color: String, width: Double, id: String? = nil, pageKey: String? = nil, held: Bool = false) -> Bool {
+    func addStroke(points: [InkPoint], tool: InkTool, color: String, width: Double, id: String? = nil, pageKey: String? = nil, held: Bool = false,
+                   nib: Double? = nil) -> Bool {
         guard !points.isEmpty, let library = app?.library else { return false }
         let key = pageKey ?? currentKey
         if scribbleToErase, tool != .highlighter, !held,
@@ -418,23 +530,102 @@ final class InkEditorModel {
             }
             return true
         }
-        let snapped = shapeMode || held ? InkShapes.recognize(points) : nil
+        // A tap on tape opens or covers it instead of leaving a dot.
+        if let first = points.first, let b = InkGeometry.bounds(points), max(b.width, b.height) * zoom < 4, let strip = tape(at: first, key: key) {
+            togglePeek(strip.id)
+            return true
+        }
+        var snapped = shapeMode || held ? InkShapes.recognize(points) : nil
+        // A highlighter only ever straightens; held still, it does from its start to its end.
+        if tool == .highlighter, snapped != nil, snapped?.shape != .line {
+            snapped = held ? Self.straightLine(points) : nil
+        }
+        if snapped != nil { haptic?(.snapped) }
         let pts = snapped?.points ?? points
         let shape = snapped?.shape.rawValue
+        let editorTool = InkEditorTool(rawValue: tool.rawValue) ?? .pen
+        var style = InkStrokeStyle(dash: dash(for: editorTool), nib: nib)
+        if let shape, tool != .highlighter, shape == "line" || shape == "polyline" { style.arrow = arrow }
+        if let shape, InkStrokeStyle.closedShapes.contains(shape) { style.fill = fill }
         let id = id ?? UUID().uuidString.lowercased()
-        let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape)
+        let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape, style: style)
         content[key, default: InkContent()].strokes.append(line)
         unsavedStrokes[id] = (key, line)
         revision += 1
         record(Action(add: [Ref(id: id, kind: "stroke")]))
         let itemId = target.itemId, layer = target.layer
         Task {
-            await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: tool, color: color, width: width, points: pts, shape: shape)
+            await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: tool, color: color, width: width, points: pts, shape: shape,
+                                    style: style.isEmpty ? nil : style)
             // What's stored is what's shown: no reload (it would decode every stroke again).
             unsavedStrokes[id] = nil
             app?.inkChanged()
         }
         return snapped != nil
+    }
+
+    /// A straight line from the first point to the last.
+    static func straightLine(_ pts: [InkPoint]) -> InkShapes.Result? {
+        guard let a = pts.first, let b = pts.last, hypot(b.x - a.x, b.y - a.y) >= 4 else { return nil }
+        let p = pts.map(\.pressure).reduce(0, +) / Double(pts.count)
+        return InkShapes.Result(shape: .line, points: [InkPoint(x: a.x, y: a.y, pressure: p), InkPoint(x: b.x, y: b.y, pressure: p, t: b.t)])
+    }
+
+    // MARK: Tape
+
+    func tape(at p: InkPoint, key: String) -> InkBox? {
+        (content[key]?.elements ?? []).last { $0.kind == .tape && p.x >= $0.frame.x && p.x <= $0.frame.maxX && p.y >= $0.frame.y && p.y <= $0.frame.maxY }
+    }
+
+    func togglePeek(_ id: String) {
+        if peeked.contains(id) { peeked.remove(id) } else { peeked.insert(id) }
+        revision += 1
+        overlayRevision += 1
+    }
+
+    private func layTape(_ key: String, from a: InkPoint, to b: InkPoint) {
+        guard let library = app?.library else { return }
+        let thick = width(for: .tape)
+        var x = min(a.x, b.x), y = min(a.y, b.y), w = abs(b.x - a.x), h = abs(b.y - a.y)
+        if w < thick { x -= (thick - w) / 2; w = thick }
+        if h < thick { y -= (thick - h) / 2; h = thick }
+        let frame = InkGeometry.Rect(x: x, y: y, width: w, height: h)
+        let itemId = target.itemId, layer = target.layer, color = color(for: .tape)
+        Task {
+            let id = await library.addElement(on: itemId, layer: layer, pageKey: key, kind: .tape, frame: frame, color: color)
+            record(Action(add: [Ref(id: id, kind: "element")]))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
+    /// The tape being laid, to show while dragging.
+    var tapePreview: (key: String, frame: InkGeometry.Rect)? {
+        guard case .tape(let key, let a, let b)? = gesture else { return nil }
+        let thick = width(for: .tape)
+        var x = min(a.x, b.x), y = min(a.y, b.y), w = abs(b.x - a.x), h = abs(b.y - a.y)
+        if w < thick { x -= (thick - w) / 2; w = thick }
+        if h < thick { y -= (thick - h) / 2; h = thick }
+        return (key, InkGeometry.Rect(x: x, y: y, width: w, height: h))
+    }
+
+    // MARK: The page grid
+
+    /// Each page's grid of stroke boxes, rebuilt when the ink changes, so the eraser and lasso test only nearby strokes.
+    @ObservationIgnored private var grids: [String: (revision: Int, grid: InkGrid)] = [:]
+
+    func strokes(near r: InkGeometry.Rect?, key: String) -> [InkLine] {
+        let lines = content[key]?.strokes ?? []
+        guard let r else { return [] }
+        let grid: InkGrid
+        if let hit = grids[key], hit.revision == revision { grid = hit.grid } else {
+            var g = InkGrid()
+            for l in lines { g.add(l.id, l.bounds) }
+            grids[key] = (revision, g)
+            grid = g
+        }
+        let ids = Set(grid.query(r))
+        return lines.filter { ids.contains($0.id) }
     }
 
     /// Strokes PencilKit's own eraser removed (not used while Trove's eraser is on, but kept in step).
@@ -474,6 +665,9 @@ final class InkEditorModel {
             lassoPath = [p]
             gesture = .lasso(key: key)
             overlayRevision += 1
+        case .tape:
+            gesture = .tape(key: key, start: p, end: p)
+            overlayRevision += 1
         case .laser:
             lasers.append(LaserLine(key: key, points: [p], color: color(for: .laser), width: width(for: .laser), ended: nil))
             gesture = .laser(key: key)
@@ -494,6 +688,9 @@ final class InkEditorModel {
             eraseTo(p)
         case .lasso:
             lassoPath.append(p)
+            overlayRevision += 1
+        case .tape(let key, let start, _):
+            gesture = .tape(key: key, start: start, end: p)
             overlayRevision += 1
         case .laser:
             if !lasers.isEmpty { lasers[lasers.count - 1].points.append(p) }
@@ -531,6 +728,14 @@ final class InkEditorModel {
             endLaser()
         case .drag:
             commitDrag()
+        case .tape(let key, let start, let end):
+            overlayRevision += 1
+            // A tap opens or covers the strip under it; a drag lays a new one.
+            if hypot(end.x - start.x, end.y - start.y) * zoom < 4 {
+                if let strip = tape(at: start, key: key) { togglePeek(strip.id) }
+            } else {
+                layTape(key, from: start, to: end)
+            }
         case nil:
             break
         }
@@ -595,7 +800,8 @@ final class InkEditorModel {
         switch gesture {
         case .erase(let key, let last, var removed):
             let path = [last, p]
-            let gone = (content[key]?.strokes ?? []).filter { line in
+            let near = strokes(near: InkGeometry.bounds(path, pad: eraserRadius), key: key)
+            let gone = near.filter { line in
                 (only == nil || only!.contains(line.tool)) && InkGeometry.erase(line.points, along: path, radius: eraserRadius + line.width / 2) != nil
             }.map(\.id)
             if !gone.isEmpty, let library = app?.library {
@@ -612,7 +818,7 @@ final class InkEditorModel {
             gesture = .erase(key: key, last: p, removed: removed)
         case .partial(let key, let last):
             let path = [last, p]
-            for line in content[key]?.strokes ?? [] where only == nil || only!.contains(line.tool) {
+            for line in strokes(near: InkGeometry.bounds(path, pad: eraserRadius), key: key) where only == nil || only!.contains(line.tool) {
                 let current = erasePreview[line.id] ?? [line.points]
                 var changed = false
                 let next = current.flatMap { piece -> [[InkPoint]] in
@@ -654,7 +860,7 @@ final class InkEditorModel {
         lassoPath = []
         guard loop.count >= 3 else { overlayRevision += 1; return }
         let c = content[key] ?? InkContent()
-        let strokes = c.strokes.filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
+        let strokes = self.strokes(near: InkGeometry.bounds(loop), key: key).filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
         let boxes = c.elements.filter { InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
         let picked = InkSelection(pageKey: key, strokes: Set(strokes), elements: Set(boxes))
         selection = picked.count > 0 ? picked : nil
@@ -675,7 +881,7 @@ final class InkEditorModel {
         [InkPoint(x: b.x, y: b.y), InkPoint(x: b.maxX, y: b.y), InkPoint(x: b.maxX, y: b.maxY), InkPoint(x: b.x, y: b.maxY)]
     }
 
-    private static let strokeFields = ["points", "width", "color"], elementFields = ["x", "y", "w", "h", "size", "color", "text"]
+    private static let strokeFields = ["points", "points2", "width", "color"], elementFields = ["x", "y", "w", "h", "size", "color", "text"]
 
     /// Fields the lasso changes, read before and after, so undo can put them back.
     private func snapshot(_ sel: InkSelection) async -> [(ref: Ref, fields: [String: JSONValue])] {
@@ -784,7 +990,7 @@ final class InkEditorModel {
             var ids: [String] = []
             for l in clip.lines {
                 if let id = await library.addStroke(on: itemId, layer: layer, pageKey: key, tool: l.tool, color: l.color, width: l.width,
-                                                    points: l.points.map { t.apply($0) }, shape: l.shape) { ids.append(id) }
+                                                    points: l.points.map { t.apply($0) }, shape: l.shape, style: l.style) { ids.append(id) }
             }
             for b in clip.boxes {
                 ids.append(await library.addElement(on: itemId, layer: layer, pageKey: key, kind: b.kind, frame: t.apply(b.frame), text: b.text,

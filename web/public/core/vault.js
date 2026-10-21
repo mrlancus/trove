@@ -11,7 +11,10 @@ import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
 import { parseHLC } from "./records.js";
 import { LocalStore } from "./localstore.js";
-import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
+import {
+  bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, meanNib, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
+  transformPoint, transformRect, validSize, widthScale,
+} from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
@@ -535,13 +538,21 @@ export class Vault {
     return n;
   }
 
-  /** `page`: a file's page number or a sketch page's id. `createdAt` keeps an erased stroke's pieces in its place. */
-  addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null }) {
+  /**
+   * `page`: a file's page number or a sketch page's id. `createdAt` keeps an erased stroke's pieces
+   * in its place. `style`: optional `fill`, `dash`, `arrow`, `nib` (PROTOCOL.md §10). Points are
+   * written as `points2` once the vault says every device reads them (settings.ink `compactPoints`).
+   */
+  addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null, style = null }) {
     if (!points.length) return null;
     const id = newId();
+    const compact = this.compactPoints();
     const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
-      [InkField.points]: encodePoints(points), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
+      ...pointFields(points, compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
     if (shape) fields[InkField.shape] = shape;
+    if (style) Object.assign(fields, strokeStyle(style));
+    // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
+    if (!compact && typeof fields[InkField.nib] !== "number") { const nib = meanNib(points); if (nib !== null) fields[InkField.nib] = nib; }
     this.set(fields, id, "stroke");
     return id;
   }
@@ -555,7 +566,7 @@ export class Vault {
       if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
       const s = strokeView(r), fields = {};
       if (t) {
-        fields[InkField.points] = encodePoints(s.points.map((p) => transformPoint(t, p)));
+        Object.assign(fields, pointFields(s.points.map((p) => transformPoint(t, p)), this.compactPoints(), r.fields));
         if (widthScale(t) !== 1) fields[InkField.width] = s.width * widthScale(t);
       }
       if (color) fields[InkField.color] = color;
@@ -563,18 +574,41 @@ export class Vault {
     }
   }
 
-  /** The partial eraser: crossed strokes become what's left of them, in the same place (Library.eraseStrokes). */
-  eraseStrokes({ on, layer = "", page, path, radius, only = null }) {
+  /**
+   * The partial eraser: crossed strokes become what's left of them, in the same place
+   * (Library.eraseStrokes). `near` (ids, from the page's grid) limits which strokes are tested.
+   */
+  eraseStrokes({ on, layer = "", page, path, radius, only = null, near = null }) {
     const added = [];
+    const box = bounds(path, radius);
     for (const s of this.strokes(on, layer, page)) {
       if (only && !only.includes(s.tool)) continue;
+      if (near && !near.has(s.id)) continue;
+      const b = strokeBounds(s);
+      if (!b || !box || b.x > box.x + box.w || b.x + b.w < box.x || b.y > box.y + box.h || b.y + b.h < box.y) continue;
       const pieces = erase(s.points, path, radius + s.width / 2);
       if (!pieces) continue;
       this.deleteStrokes([s.id]);
-      for (const piece of pieces) added.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width, points: piece, createdAt: s.createdAt }));
+      // Pieces keep the dashes and nib; a piece of a shape isn't that shape, so no fill or arrows.
+      const style = { dash: s.dash, nib: s.nib };
+      for (const piece of pieces) added.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width, points: piece, createdAt: s.createdAt, style }));
     }
     return added;
   }
+
+  // ---------- drawing settings every device follows (`settings.ink`, PROTOCOL.md §10) ----------
+
+  inkSettings() {
+    const r = this.store.records.get(INK_SETTINGS_ID);
+    return inkSettingsOf(r && r.fields._deleted !== true ? r.fields : {});
+  }
+
+  /** Writes `points2` (4× smaller) instead of `points`: only once every device reads them. */
+  compactPoints() { return this.inkSettings().compactPoints; }
+  setCompactPoints(on) { this.set({ compactPoints: Boolean(on) }, INK_SETTINGS_ID, "setting"); }
+  setPenSettings(tool, settings) { this.set({ [`pen.${tool}`]: penSettingsOf(settings) }, INK_SETTINGS_ID, "setting"); }
+  setInkFavourites(list) { this.set({ favourites: inkSettingsOf({ favourites: list }).favourites }, INK_SETTINGS_ID, "setting"); }
+  setInkPalette(colors) { this.set({ palette: inkSettingsOf({ palette: colors }).palette }, INK_SETTINGS_ID, "setting"); }
 
   /** Copies of strokes and elements (duplicate, paste), moved by `t`. */
   duplicateInk({ strokes = [], elements = [], on, layer = "", page, t = moveBy(20, 20) }) {
@@ -583,7 +617,8 @@ export class Vault {
       const r = this.store.records.get(id);
       if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
       const s = strokeView(r);
-      out.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)), shape: s.shape }));
+      out.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)), shape: s.shape,
+        style: s }));
     }
     for (const id of elements) {
       const e = this.element(id);
@@ -610,6 +645,7 @@ export class Vault {
     const id = newId();
     const fields = { on, layer, page, type, x: frame.x, y: frame.y, w: frame.w, h: frame.h, createdAt: this.nextInkTime(on), device: this.journal.device };
     if (type === "text") Object.assign(fields, { text, size, color });
+    if (type === "tape") fields.color = color;
     if (image) fields.image = image;
     this.set(fields, id, "element");
     if (type === "text") this.refreshSketchText(on);

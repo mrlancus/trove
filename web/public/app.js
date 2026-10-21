@@ -1,6 +1,7 @@
 // Trove for any browser. Vanilla modules, no build step; the relay serves these files.
 import { storage } from "./db.js";
 import { search, smartCollections } from "./core/items.js";
+import { SearchClient, showSnippet } from "./searchclient.js";
 import { appKey, buildClipGraph, clipFacts, filterChoices, filterClips, placeKey } from "./core/clipmap.js";
 import { availableTransforms, clipQueryMatches, KEEP_COUNT_CHOICES, KEEP_DAY_CHOICES, clipSearchText, color, colorFormats, isSensitive, parseClipQuery, TAG_COLORS } from "./core/clips.js";
 import { RelayError, Vault } from "./core/vault.js";
@@ -35,6 +36,7 @@ const blobURLs = new Map();
 const MAX_UPLOAD = 100 * 1024 * 1024;
 const MAX_ZIP = 1024 * 1024 * 1024;
 const MAX_CARDS = 400;
+let searcher = null; // SearchClient: the search Worker
 
 function toast(message) {
   const el = $("#toast");
@@ -194,6 +196,7 @@ function showMain(vault) {
   app.replaceChildren($("#main-view").content.cloneNode(true));
   fillIcons(app);
   vault.onChange(() => { state.dataVersion++; queueRender(); });
+  searcher = new SearchClient(vault, queueRender);
 
   $("#search").addEventListener("input", (e) => { state.query = e.target.value; queueRender(); });
   $("#new-sketch").addEventListener("click", () => {
@@ -570,24 +573,33 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
       renderSketchFolders(folders, items);
     }
   }
+  let snippets = null, clipAnswer = null;
   if (state.query.trim()) {
-    shown = search(shown, state.query, now);
-    title = `${shown.length} result${shown.length === 1 ? "" : "s"}`;
-  }
+    // The search Worker answers in a moment; until then the last answer (or this list) stays.
+    searcher.catchUp(state.dataVersion, items, folders);
+    const answer = searcher.ask(state.query.trim(), `${sel}|${state.dataVersion}`, sel === "all" ? null : () => shown.map((i) => i.id),
+      { clips: !sel.startsWith("f:") && !sel.startsWith("c:") });
+    if (answer) {
+      shown = answer.items;
+      snippets = answer.snippets;
+      clipAnswer = answer.clips;
+      title = `${answer.total} result${answer.total === 1 ? "" : "s"}`;
+    }
+  } else searcher?.idle(state.dataVersion, items, folders);
   if (typeof title === "string") $("#heading").textContent = title; else $("#heading").replaceChildren(title);
   const folderNames = new Map(folders.map((f) => [f.id, f.name]));
   const inFolder = sel.startsWith("f:");
   state.shownIds = shown.slice(0, MAX_CARDS).map((i) => i.id);
   for (const id of state.picked) if (!vault.item(id)) state.picked.delete(id);
   renderBulkBar();
-  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => cachedCard(item, inFolder ? null : folderNames.get(item.folder))));
+  $("#grid").replaceChildren(...shown.slice(0, MAX_CARDS).map((item) => showSnippet(cachedCard(item, inFolder ? null : folderNames.get(item.folder)), snippets?.[item.id], item, h)));
   $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
   $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
   // A clip opened from the search results keeps its fields while you type in them (a sync used to
   // rebuild the results and throw the new name away before it was saved).
   const editingClip = $("#clip-results .clip.open")?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
-  const fromClips = editingClip ? null : state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query) : null;
+  const fromClips = editingClip ? null : state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query, clipAnswer) : null;
   if (!editingClip) $("#clip-results")?.remove();
   if (fromClips) {
     fromClips.id = "clip-results";
@@ -1124,13 +1136,14 @@ function renderTagChips(tools, tags, clips) {
 }
 
 /** Clips matching a search of the library, under the items. */
-function clipResults(query) {
-  const parsed = parseClipQuery(query);
-  const found = state.vault.clips().filter((c) => clipQueryMatches(parsed, c, clipSearchText(c)));
+function clipResults(query, indexed = null) {
+  // Very many clips: the search Worker's index answered; otherwise their text is scanned.
+  const found = indexed ? indexed.list : state.vault.clips().filter((c) => clipQueryMatches(parseClipQuery(query), c, clipSearchText(c)));
+  const total = indexed ? indexed.total : found.length;
   if (!found.length) return null;
   return h("section", { class: "clip-results" },
     h("h2", { class: "side-heading" }, h("button", { type: "button", class: "link-button", onclick: () => { state.selection = "clips"; render(); } },
-      `From your clipboard (${found.length})`)),
+      `From your clipboard (${total})`)),
     h("div", { class: "grid clip-list" }, found.slice(0, 8).map(clipRow)));
 }
 

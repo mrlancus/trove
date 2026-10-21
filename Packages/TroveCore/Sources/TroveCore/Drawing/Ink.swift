@@ -28,9 +28,42 @@ public struct InkPoint: Sendable, Equatable {
     public var pressure: Double
     /// Milliseconds since the stroke started.
     public var t: Double
+    /// The fountain nib's angle here, in radians (Apple Pencil Pro's barrel roll), when known.
+    public var angle: Double?
 
-    public init(x: Double, y: Double, pressure: Double = 0.5, t: Double = 0) {
-        self.x = x; self.y = y; self.pressure = pressure; self.t = t
+    public init(x: Double, y: Double, pressure: Double = 0.5, t: Double = 0, angle: Double? = nil) {
+        self.x = x; self.y = y; self.pressure = pressure; self.t = t; self.angle = angle
+    }
+}
+
+/// How a stroke looks beyond its tool, colour and width (PROTOCOL.md §10): a closed shape's fill,
+/// dashes or dots, arrowheads on a line shape, and the fountain nib's angle for the whole stroke.
+public struct InkStrokeStyle: Sendable, Equatable {
+    public var fill: String?
+    /// "dash" or "dot".
+    public var dash: String?
+    /// "end", "start" or "both".
+    public var arrow: String?
+    /// Radians.
+    public var nib: Double?
+
+    public init(fill: String? = nil, dash: String? = nil, arrow: String? = nil, nib: Double? = nil) {
+        self.fill = fill; self.dash = dash; self.arrow = arrow; self.nib = nib
+    }
+
+    public static let dashes = ["dash", "dot"], arrows = ["end", "start", "both"]
+    public static let closedShapes: Set<String> = ["triangle", "rectangle", "polygon", "circle", "ellipse"]
+
+    public var isEmpty: Bool { fill == nil && dash == nil && arrow == nil && nib == nil }
+
+    /// The fields to store (only those set).
+    public var fields: [String: JSONValue] {
+        var out: [String: JSONValue] = [:]
+        if let fill { out[InkStroke.Field.fill] = .string(fill) }
+        if let dash { out[InkStroke.Field.dash] = .string(dash) }
+        if let arrow { out[InkStroke.Field.arrow] = .string(arrow) }
+        if let nib { out[InkStroke.Field.nib] = .number(nib) }
+        return out
     }
 }
 
@@ -38,6 +71,7 @@ public struct InkStroke: Identifiable, Sendable {
     public enum Field {
         public static let on = "on", layer = "layer", page = "page", tool = "tool", color = "color", width = "width"
         public static let points = "points", createdAt = "createdAt", device = "device", shape = "shape"
+        public static let points2 = "points2", fill = "fill", dash = "dash", arrow = "arrow", nib = "nib"
     }
 
     public let record: Record
@@ -59,8 +93,20 @@ public struct InkStroke: Identifiable, Sendable {
     public var color: String { record[Field.color]?.string ?? "#000000" }
     /// The full width, in page points.
     public var width: Double { record[Field.width]?.number ?? 2 }
-    public var points: [InkPoint] { InkPoints.decode(record[Field.points]?.string ?? "") }
+    /// `points2` (compact) when the stroke has them, else `points`.
+    public var points: [InkPoint] {
+        if let compact = record[Field.points2]?.string, !compact.isEmpty { return InkPoints.decode2(compact) }
+        return InkPoints.decode(record[Field.points]?.string ?? "")
+    }
     public var createdAt: Date { record[Field.createdAt]?.date ?? Date(timeIntervalSince1970: 0) }
+    /// Fill, dashes, arrowheads and nib angle.
+    public var style: InkStrokeStyle {
+        let fill = record[Field.fill]?.string.flatMap { InkSettings.isHex($0) ? $0 : nil }
+        let dash = record[Field.dash]?.string.flatMap { InkStrokeStyle.dashes.contains($0) ? $0 : nil }
+        let arrow = record[Field.arrow]?.string.flatMap { InkStrokeStyle.arrows.contains($0) ? $0 : nil }
+        let nib = record[Field.nib]?.number.flatMap { $0.isFinite ? $0 : nil }
+        return InkStrokeStyle(fill: fill, dash: dash, arrow: arrow, nib: nib)
+    }
 
     /// The width at a point: pressure thins pens and pencils (35 % of `width` at no pressure) and
     /// brushes (15 %). A fountain pen also follows its direction (`InkGeometry.fountainWidth`).
@@ -96,12 +142,144 @@ public enum InkPoints {
     }
 
     public static func decode(_ string: String) -> [InkPoint] {
-        guard let data = Data(base64URL: string) else { return [] }
-        let bytes = [UInt8](data)
-        func f(_ i: Int) -> Double {
-            Double(Float(bitPattern: UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8 | UInt32(bytes[i + 2]) << 16 | UInt32(bytes[i + 3]) << 24))
+        guard let bytes = base64URLBytes(string) else { return [] }
+        let n = bytes.count / 16
+        var out: [InkPoint] = []
+        out.reserveCapacity(n)
+        bytes.withUnsafeBytes { raw in
+            func f(_ i: Int) -> Double { Double(Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: i, as: UInt32.self)))) }
+            for k in 0..<n {
+                let o = k * 16
+                out.append(InkPoint(x: f(o), y: f(o + 4), pressure: f(o + 8), t: f(o + 12)))
+            }
         }
-        return stride(from: 0, to: bytes.count - bytes.count % 16, by: 16).map { InkPoint(x: f($0), y: f($0 + 4), pressure: f($0 + 8), t: f($0 + 12)) }
+        return out
+    }
+
+    /// base64url (or standard base64, padding optional) straight to bytes: much faster than going
+    /// through Foundation for the thousands of strokes a notebook has. Nil when it isn't base64.
+    static func base64URLBytes(_ string: String) -> [UInt8]? {
+        var text = string
+        return text.withUTF8 { src -> [UInt8]? in
+            var end = src.count
+            while end > 0, src[end - 1] == UInt8(ascii: "=") { end -= 1 }
+            if end % 4 == 1 { return nil }
+            var out = [UInt8](repeating: 0, count: end / 4 * 3 + max(0, end % 4 - 1))
+            var ok = true
+            out.withUnsafeMutableBufferPointer { dst in
+                var acc: UInt32 = 0, bits = 0, j = 0
+                for i in 0..<end {
+                    let v = base64Table[Int(src[i])]
+                    if v == 255 { ok = false; return }
+                    acc = acc << 6 | UInt32(v)
+                    bits += 6
+                    if bits >= 8 {
+                        bits -= 8
+                        dst[j] = UInt8(truncatingIfNeeded: acc >> UInt32(bits))
+                        j += 1
+                    }
+                }
+            }
+            return ok ? out : nil
+        }
+    }
+
+    private static let base64Table: [UInt8] = {
+        var t = [UInt8](repeating: 255, count: 256)
+        let chars = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".utf8)
+        for (i, c) in chars.enumerated() { t[Int(c)] = UInt8(i) }
+        t[Int(UInt8(ascii: "-"))] = 62; t[Int(UInt8(ascii: "+"))] = 62
+        t[Int(UInt8(ascii: "_"))] = 63; t[Int(UInt8(ascii: "/"))] = 63
+        return t
+    }()
+
+    /// Positions are kept to 1/20 point (core/ink.js `POINTS2_SCALE`).
+    public static let scale2 = 20.0
+
+    /// The fields that store points: `points2` when the vault writes compact points, else `points`.
+    /// `had` (the record before) empties the other one if it was set.
+    public static func fields(_ points: [InkPoint], compact: Bool, had: Record? = nil) -> [String: JSONValue] {
+        var out: [String: JSONValue] = compact ? [InkStroke.Field.points2: .string(encode2(points))] : [InkStroke.Field.points: .string(encode(points))]
+        if let had {
+            if compact, let old = had[InkStroke.Field.points]?.string, !old.isEmpty { out[InkStroke.Field.points] = .string("") }
+            if !compact, let old = had[InkStroke.Field.points2]?.string, !old.isEmpty { out[InkStroke.Field.points2] = .string("") }
+        }
+        return out
+    }
+
+    private static func roundHalfUp(_ v: Double) -> Int64 { Int64((v + 0.5).rounded(.down)) }
+
+    private static func varint(_ n: Int64, into out: inout [UInt8]) {
+        var v = UInt64(n)
+        while v >= 128 { out.append(UInt8(v % 128) + 128); v /= 128 }
+        out.append(UInt8(v))
+    }
+
+    /// `points2` (PROTOCOL.md §10, core/ink.js `encodePoints2`): version 1, flags (1 = nib angles),
+    /// a varint count, then per point zigzag varint x and y steps in 1/20 points, a pressure byte,
+    /// a varint time step in ms and, with angles, the angle in [0, π) as a byte.
+    public static func encode2(_ points: [InkPoint]) -> String {
+        let angles = points.contains { $0.angle != nil }
+        var out: [UInt8] = [1, angles ? 1 : 0]
+        varint(Int64(points.count), into: &out)
+        var px: Int64 = 0, py: Int64 = 0, pt: Int64 = 0
+        func fin(_ v: Double) -> Double { v.isFinite ? v : 0 }
+        func zigzag(_ n: Int64) -> Int64 { n >= 0 ? 2 * n : -2 * n - 1 }
+        for p in points {
+            let x = roundHalfUp(fin(p.x) * scale2), y = roundHalfUp(fin(p.y) * scale2)
+            let t = max(pt, roundHalfUp(max(0, fin(p.t))))
+            varint(zigzag(x - px), into: &out)
+            varint(zigzag(y - py), into: &out)
+            out.append(UInt8(roundHalfUp(min(1, max(0, fin(p.pressure))) * 255)))
+            varint(t - pt, into: &out)
+            if angles {
+                var a = fin(p.angle ?? InkGeometry.nibAngle).truncatingRemainder(dividingBy: Double.pi)
+                if a < 0 { a += Double.pi }
+                out.append(UInt8(roundHalfUp(a / Double.pi * 256) % 256))
+            }
+            px = x; py = y; pt = t
+        }
+        return Data(out).base64URL
+    }
+
+    public static func decode2(_ string: String) -> [InkPoint] {
+        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 else { return [] }
+        let angles = bytes[1] & 1 == 1
+        var i = 2
+        func varint() -> Int64? {
+            var n: UInt64 = 0, shift: UInt64 = 0
+            while i < bytes.count, shift <= 49 {
+                let b = bytes[i]
+                i += 1
+                n |= UInt64(b & 127) << shift
+                if b < 128 { return Int64(n) }
+                shift += 7
+            }
+            return nil
+        }
+        func unzigzag(_ z: Int64) -> Int64 { z % 2 == 0 ? z / 2 : -(z + 1) / 2 }
+        var out: [InkPoint] = []
+        guard let count = varint() else { return [] }
+        var x: Int64 = 0, y: Int64 = 0, t: Int64 = 0
+        var k: Int64 = 0
+        while k < count {
+            guard let dx = varint(), let dy = varint(), i < bytes.count else { break }
+            x += unzigzag(dx)
+            y += unzigzag(dy)
+            let p = Double(bytes[i]) / 255
+            i += 1
+            guard let dt = varint() else { break }
+            t += dt
+            var point = InkPoint(x: Double(x) / scale2, y: Double(y) / scale2, pressure: p, t: Double(t))
+            if angles {
+                guard i < bytes.count else { break }
+                point.angle = Double(bytes[i]) * Double.pi / 256
+                i += 1
+            }
+            out.append(point)
+            k += 1
+        }
+        return out
     }
 }
 
@@ -314,12 +492,14 @@ extension Library {
         let id = givenId ?? newId()
         // Strokes draw in creation order, so each one gets a later time than the last, even within a millisecond.
         let created = await nextInkTime(on: itemId)
-        await engine.set([
+        let compact = await inkSettings().compactPoints
+        var fields: [String: JSONValue] = [
             InkStroke.Field.on: .string(itemId), InkStroke.Field.layer: .string(layer), InkStroke.Field.page: .number(Double(page)),
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
-            InkStroke.Field.points: .string(InkPoints.encode(points)), InkStroke.Field.createdAt: .number(created),
-            InkStroke.Field.device: .string(await engine.device),
-        ], record: id, kind: "stroke")
+            InkStroke.Field.createdAt: .number(created), InkStroke.Field.device: .string(await engine.device),
+        ]
+        fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
+        await engine.set(fields, record: id, kind: "stroke")
         return id
     }
 

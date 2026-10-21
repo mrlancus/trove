@@ -152,6 +152,11 @@ struct InkPalette: View {
                     .disabled(!editor.canUndo)
                     .accessibilityLabel("Undo")
             }
+            if !editor.inkSettings.favourites.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    InkFavouritesRow(editor: editor) { editor.palette = nil }
+                }
+            }
             if editor.tool.hasColor {
                 HStack(spacing: 5) {
                     ForEach(InkEditorModel.colors.prefix(5), id: \.self) { c in

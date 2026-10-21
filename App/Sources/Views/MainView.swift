@@ -698,13 +698,16 @@ struct FolderPicker: View {
 /// A compact row for the list layout (the iPhone's default).
 struct ItemRow: View {
     let item: Item
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         HStack(spacing: 12) {
             Thumbnail(item: item, square: 52)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.displayTitle).font(.body.weight(.semibold)).lineLimit(2)
-                if let snippet = ItemCard.snippet(item) {
+                if model.searchResults != nil, let found = model.searchSnippets[item.id] {
+                    Text(SearchSnippetText.attributed(found, kind: item.kind)).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                } else if let snippet = ItemCard.snippet(item) {
                     Text(snippet).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
                 HStack(spacing: 5) {

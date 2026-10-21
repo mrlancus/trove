@@ -10,6 +10,7 @@ import { decodeSegment, encodeSegment, HLCClock, RecordStore } from "../public/c
 import { decrypt, encrypt } from "../public/core/trv1.js";
 import { parseSetupCode } from "../public/core/vault.js";
 import { expectedRecords, scenario } from "./scenario.mjs";
+import "./search.test.mjs"; // search core, Worker service and search-cases.json
 
 test("sha256 matches node's", () => {
   for (const s of ["", "abc", "café ☕️", "x".repeat(1000), "a".repeat(55), "a".repeat(56), "a".repeat(64)]) {
@@ -492,6 +493,75 @@ test("sketching geometry matches Fixtures/ink-geometry.json (InkGeometry.swift, 
   for (const c of f.fountain) assert.equal(ink.fountainWidth(10, c.pressure, c.dx, c.dy), c.expect);
   for (const c of f.taper) assert.equal(ink.brushTaper(c.index, c.count), c.expect);
   assert.deepEqual(flat(ink.resample(pts(f.resampled.points), f.resampled.spacing)), f.resampled.expect);
+});
+
+test("outlines, arrowheads, compact points, pen settings, the grid and grain match Fixtures/ink-outline.json (InkOutline.swift)", async () => {
+  const ink = await import("../public/core/ink.js");
+  const { b64uEncode } = await import("../public/core/bytes.js");
+  const f = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-outline.json", import.meta.url), "utf8"));
+  const pts = (a) => a.map(([x, y, p = 0.5, t = 0, a]) => (a === undefined ? { x, y, p, t } : { x, y, p, t, a }));
+  const flat = (a) => a.map((p) => (typeof p.a === "number" ? [p.x, p.y, p.p, p.t, p.a] : [p.x, p.y, p.p, p.t]));
+  const close = (a, b, what) => {
+    assert.equal(a.length, b.length, what);
+    a.forEach((v, i) => (Array.isArray(v) ? close(v, b[i], what) : assert.ok(Math.abs(v - b[i]) < 1e-5, `${what}: ${v} vs ${b[i]}`)));
+  };
+  for (const c of f.outlines) {
+    const got = ink.strokeOutline({ ...c.stroke, points: pts(c.stroke.points) });
+    if (c.expect === null) assert.equal(got, null, c.name); else close(got.map((p) => [p.x, p.y]), c.expect, c.name);
+  }
+  for (const c of f.arrows) close(ink.arrowHeads({ ...c.stroke, points: pts(c.stroke.points) }).map((t) => t.map((p) => [p.x, p.y])), c.expect, c.name);
+  for (const c of f.points2.cases) {
+    assert.equal(ink.encodePoints2(pts(c.points)), c.encoded, c.name);
+    close(flat(ink.decodePoints2(c.encoded)), c.decoded, c.name);
+    // Within half a step of what was drawn: 1/40 point, half a millisecond, 1/510 pressure.
+    ink.decodePoints2(c.encoded).forEach((p, i) => assert.ok(Math.abs(p.x - c.points[i][0]) <= 0.0251 && Math.abs(p.p - c.points[i][2]) <= 0.002, c.name));
+  }
+  close(flat(ink.strokePoints({ points: f.points2.legacy.encoded })), f.points2.legacy.decoded, "legacy points");
+  close(flat(ink.strokePoints({ points: "", points2: f.points2.cases[0].encoded })), f.points2.cases[0].decoded, "points2 wins");
+  for (const c of f.nibs) { const got = ink.meanNib(c.angles.map((a) => ({ x: 0, y: 0, p: 0.5, t: 0, a }))); assert.ok(c.expect === null ? got === null : Math.abs(got - c.expect) < 1e-9); }
+  for (const c of f.settings) assert.deepEqual(ink.inkSettingsOf(c.fields), c.expect);
+  for (const c of f.curves) assert.ok(Math.abs(ink.pressureAfter(c.p, c) - c.expect) < 1e-12);
+  for (const c of f.filters) close(flat(ink.filterPoints(pts(c.raw), c.settings)), c.expect, `filter ${c.settings.smoothing}`);
+  const grid = new ink.InkGrid(f.grid.cell);
+  for (const b of f.grid.boxes) grid.add(b.id, b.rect);
+  for (const id of f.grid.removed) grid.remove(id);
+  for (const q of f.grid.queries) assert.deepEqual(grid.query(q.rect), q.expect);
+  assert.equal(b64uEncode(ink.grainTile()), f.grain.tile);
+});
+
+test("compact points, pen settings, stroke styles and tape in the vault", async () => {
+  const { v: vault } = await testVault();
+  const sketch = vault.addSketch({ paper: "blank" });
+  const line = [{ x: 0, y: 0, p: 0.5, t: 0 }, { x: 100, y: 0, p: 0.5, t: 16 }];
+  const old = vault.addStroke({ on: sketch, page: "0", tool: "pen", color: "#000000", width: 4, points: line, style: { dash: "dot" } });
+  assert.equal(typeof vault.store.records.get(old).fields.points, "string");
+  assert.equal(vault.store.records.get(old).fields.points2, undefined);
+  assert.equal(vault.strokes(sketch, "", "0")[0].dash, "dot");
+  vault.setCompactPoints(true);
+  assert.equal(vault.inkSettings().compactPoints, true);
+  const neu = vault.addStroke({ on: sketch, page: "0", tool: "fountain", color: "#000000", width: 4, points: line.map((p) => ({ ...p, a: 1 })) });
+  assert.equal(vault.store.records.get(neu).fields.points, undefined);
+  assert.ok(vault.store.records.get(neu).fields.points2.length < vault.store.records.get(old).fields.points.length);
+  assert.ok(Math.abs(vault.strokes(sketch, "", "0")[1].points[0].a - 1) < 0.01);
+  // Moving an old stroke rewrites it compactly and empties its old points.
+  vault.transformStrokes([old], { t: { sx: 1, sy: 1, ox: 0, oy: 0, dx: 10, dy: 0 } });
+  assert.equal(vault.store.records.get(old).fields.points, "");
+  assert.equal(vault.strokes(sketch, "", "0")[0].points[0].x, 10);
+  // The partial eraser keeps the dots; only strokes near it are tested.
+  const made = vault.eraseStrokes({ on: sketch, page: "0", path: [{ x: 60, y: -5 }, { x: 60, y: 5 }], radius: 5, near: new Set([old]) });
+  assert.equal(made.length, 2);
+  assert.ok(vault.strokes(sketch, "", "0").filter((s) => made.includes(s.id)).every((s) => s.dash === "dot"));
+  assert.ok(vault.strokes(sketch, "", "0").some((s) => s.id === neu), "the fountain pen wasn't near");
+  vault.setPenSettings("pen", { smoothing: 30, curve: "firm", minWidth: 10 });
+  vault.setInkFavourites([{ tool: "pen", color: "#ff0000", width: 3 }]);
+  vault.setInkPalette(["#123456"]);
+  const s = vault.inkSettings();
+  assert.deepEqual(s.pens.pen, { smoothing: 30, curve: "firm", minWidth: 10 });
+  assert.deepEqual(s.favourites, [{ tool: "pen", color: "#ff0000", width: 3 }]);
+  assert.deepEqual(s.palette, ["#123456"]);
+  const tape = vault.addElement({ on: sketch, page: "0", type: "tape", frame: { x: 0, y: 0, w: 100, h: 20 }, color: "#f2c94c" });
+  assert.equal(vault.element(tape).type, "tape");
+  assert.equal(vault.element(tape).color, "#f2c94c");
 });
 
 test("sketch pages, text boxes, lasso and the partial eraser (Library+InkPages)", async () => {
