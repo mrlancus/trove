@@ -1,0 +1,237 @@
+{
+  "weeks": [
+    {
+      "at": 1792368000000,
+      "year": 2026,
+      "week": 43,
+      "start": 1792368000000,
+      "id": "digest-2026-w43"
+    },
+    {
+      "at": 1792972799000,
+      "year": 2026,
+      "week": 43,
+      "start": 1792368000000,
+      "id": "digest-2026-w43"
+    },
+    {
+      "at": 1609675200000,
+      "year": 2020,
+      "week": 53,
+      "start": 1609113600000,
+      "id": "digest-2020-w53"
+    },
+    {
+      "at": 1609718400000,
+      "year": 2021,
+      "week": 1,
+      "start": 1609718400000,
+      "id": "digest-2021-w01"
+    },
+    {
+      "at": 1735516800000,
+      "year": 2025,
+      "week": 1,
+      "start": 1735516800000,
+      "id": "digest-2025-w01"
+    },
+    {
+      "at": 1767225600000,
+      "year": 2026,
+      "week": 1,
+      "start": 1766966400000,
+      "id": "digest-2026-w01"
+    }
+  ],
+  "items": [
+    {
+      "id": "n1",
+      "kind": "note",
+      "title": "Garden plan",
+      "createdAt": 1792396800000
+    },
+    {
+      "id": "s1",
+      "kind": "sketch",
+      "title": "Bike sketch",
+      "createdAt": 1792836000000
+    },
+    {
+      "id": "l1",
+      "kind": "link",
+      "title": "How to Make Sourdough Bread at Home",
+      "url": "https://www.example.com/sourdough?utm_source=x",
+      "createdAt": 1792486800000
+    },
+    {
+      "id": "l2",
+      "kind": "link",
+      "title": "How to make sourdough bread at home",
+      "url": "https://example.com/sourdough",
+      "createdAt": 1792573200000,
+      "readAt": 1792576800000
+    },
+    {
+      "id": "l3",
+      "kind": "link",
+      "title": "How to make sourdough bread at home",
+      "url": "https://bakery.example.org/recipes/sourdough",
+      "createdAt": 1792659600000
+    },
+    {
+      "id": "l4",
+      "kind": "link",
+      "title": "Rust ownership explained clearly",
+      "url": "https://blog.dev/rust-ownership",
+      "createdAt": 1791190800000
+    },
+    {
+      "id": "l5",
+      "kind": "link",
+      "title": "Rust ownership explained, clearly!",
+      "url": "https://blog.dev/posts/rust-ownership-2",
+      "createdAt": 1791277200000
+    },
+    {
+      "id": "l6",
+      "kind": "link",
+      "title": "Café menus of Paris",
+      "url": "https://paris.example/cafes",
+      "createdAt": 1790758800000
+    },
+    {
+      "id": "l7",
+      "kind": "link",
+      "title": "Cafe menus of Paris",
+      "url": "https://paris.example/cafes-2",
+      "createdAt": 1790845200000,
+      "notDuplicates": [
+        "l6"
+      ]
+    },
+    {
+      "id": "l9",
+      "kind": "link",
+      "title": "Best hiking trails in Wales guide",
+      "url": "https://walks.example/wales",
+      "createdAt": 1782896400000,
+      "readAt": 1782896400000
+    },
+    {
+      "id": "l10",
+      "kind": "link",
+      "title": "Best hiking trails in Wales: full guide",
+      "url": "https://walks.example/wales-full",
+      "createdAt": 1782982800000,
+      "readAt": 1782982800000
+    },
+    {
+      "id": "l8",
+      "kind": "link",
+      "title": "Old unread link",
+      "url": "https://old.example/a",
+      "createdAt": 1785574800000
+    },
+    {
+      "id": "p1",
+      "kind": "pdf",
+      "title": "Tax return",
+      "createdAt": 1792972799000
+    },
+    {
+      "id": "y1",
+      "kind": "note",
+      "title": "Holiday [ideas] | list",
+      "createdAt": 1761048000000
+    },
+    {
+      "id": "y2",
+      "kind": "link",
+      "title": "Conference talk",
+      "url": "https://talks.example/1",
+      "createdAt": 1729512000000,
+      "readAt": 1729598400000
+    },
+    {
+      "id": "digest-2026-w42",
+      "kind": "note",
+      "title": "Week of 12 October 2026",
+      "createdAt": 1792368001000,
+      "digest": {
+        "year": 2026,
+        "week": 42
+      }
+    },
+    {
+      "id": "n2",
+      "kind": "note",
+      "title": "Next week",
+      "createdAt": 1792972800000
+    }
+  ],
+  "digest": {
+    "year": 2026,
+    "week": 43,
+    "expect": {
+      "id": "digest-2026-w43",
+      "title": "Week of 19 October 2026",
+      "body": "You saved 4 things and wrote 2 notes this week.\n\n## Saved\n- [[How to Make Sourdough Bread at Home]] (link, example.com)\n- [[How to make sourdough bread at home]] (link, example.com)\n- [[How to make sourdough bread at home]] (link, bakery.example.org)\n- [[Tax return]] (pdf)\n\n## Written\n- [[Garden plan]]\n- [[Bike sketch]] (sketch)\n\n## Not opened yet\n- [[Café menus of Paris]] (saved 30 September)\n- [[Cafe menus of Paris]] (saved 1 October)\n- [[Rust ownership explained clearly]] (saved 5 October)\n- [[Rust ownership explained, clearly!]] (saved 6 October)\n\n## This week in other years\n- [[Holiday ideas list]] (2025)\n- [[Conference talk]] (2024)",
+      "year": 2026,
+      "week": 43,
+      "counts": {
+        "saved": 4,
+        "written": 2,
+        "unopened": 4,
+        "yearsAgo": 2
+      }
+    }
+  },
+  "quietDigest": {
+    "year": 2026,
+    "week": 30,
+    "expect": {
+      "id": "digest-2026-w30",
+      "title": "Week of 20 July 2026",
+      "body": "A quiet week: nothing new saved or written.",
+      "year": 2026,
+      "week": 30,
+      "counts": {
+        "saved": 0,
+        "written": 0,
+        "unopened": 0,
+        "yearsAgo": 0
+      }
+    }
+  },
+  "onThisDay": {
+    "at": 1792569600000,
+    "expect": [
+      "y1",
+      "y2"
+    ]
+  },
+  "duplicates": [
+    {
+      "reason": "same link",
+      "ids": [
+        "l1",
+        "l2",
+        "l3"
+      ]
+    },
+    {
+      "reason": "same title",
+      "ids": [
+        "l4",
+        "l5"
+      ]
+    },
+    {
+      "reason": "similar title",
+      "ids": [
+        "l9",
+        "l10"
+      ]
+    }
+  ]
+}
