@@ -190,19 +190,26 @@ export class LocalStore {
   async rewrite(all) {
     const ops = [...all]; // a snapshot: the live array keeps growing (and re-sorting) while we write
     const old = [...this.chunks.map((c) => c.n), ...(this.stale ?? [])];
-    this.stale = null;
     this.chunks = [];
-    // Split by size: estimate each op's JSON length once.
-    let start = 0, bytes = 0;
-    for (let i = 0; i < ops.length; i++) {
-      bytes += JSON.stringify(ops[i]).length + 1;
-      if (bytes >= this.chunkBytes / 2 || i === ops.length - 1) {
-        this.chunks.push(await this.writeChunk(ops.slice(start, i + 1)));
-        start = i + 1; bytes = 0;
+    this.stale = old; // until the new index is written, the old chunks are still to delete
+    try {
+      // Split by size: estimate each op's JSON length once.
+      let start = 0, bytes = 0;
+      for (let i = 0; i < ops.length; i++) {
+        bytes += JSON.stringify(ops[i]).length + 1;
+        if (bytes >= this.chunkBytes / 2 || i === ops.length - 1) {
+          this.chunks.push(await this.writeChunk(ops.slice(start, i + 1)));
+          start = i + 1; bytes = 0;
+        }
       }
+      await this.writeIndex();
+    } catch (e) {
+      this.stale = [...old, ...this.chunks.map((c) => c.n)];
+      this.chunks = [];
+      throw e;
     }
-    await this.writeIndex();
-    await this.remove([...old.map(chunkKey), LEGACY_OPS]);
+    this.stale = null;
     this.needsRewrite = false;
+    await this.remove([...old.map(chunkKey), LEGACY_OPS]);
   }
 }

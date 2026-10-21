@@ -774,3 +774,25 @@ test("the local op store is append-only, sealed at rest, and opens old plain dat
   const lost = await new LocalStore(storage).load();
   assert.deepEqual([lost.ops.length, lost.cursor, lost.applied.length], [0, 0, 0]);
 });
+
+test("a failed save leaves the local op store readable and is redone in full", async () => {
+  const { LocalStore } = await import("../public/core/localstore.js");
+  const m = new Map();
+  let failNext = false;
+  const storage = { get: async (k) => m.get(k), set: async (k, v) => { if (failNext && k.startsWith("ops.")) { failNext = false; throw new Error("disk full"); } m.set(k, v); },
+    delete: async (k) => { m.delete(k); }, clear: async () => m.clear() };
+  const op = (s) => ({ d: "WEB", s, h: `17000000000${String(s).padStart(2, "0")}-0000-WEB`, t: "set", r: `r${s}`, k: "item", f: { title: `t${s}` } });
+  const all = [];
+  const local = new LocalStore(storage, { chunkBytes: 400 });
+  for (let s = 1; s <= 30; s++) {
+    all.push(op(s));
+    failNext = s === 12 || s === 20;
+    await local.save({ journal: {}, fresh: [op(s)], all, applied: [], cursor: s }).catch(() => {});
+  }
+  await local.save({ journal: {}, fresh: [], all, applied: [], cursor: 30 });
+  const loaded = await new LocalStore(storage).load();
+  assert.deepEqual(loaded.ops.map((o) => o.s).sort((a, b) => a - b), all.map((o) => o.s));
+  const listed = new Set(m.get("opChunks").chunks.map((c) => `ops.${c.n}`));
+  assert.deepEqual([...m.keys()].filter((k) => k.startsWith("ops.")).sort(), [...listed].sort(), "no orphaned chunks");
+  assert.ok(listed.size > 1, "small chunk limit gives several chunks");
+});
