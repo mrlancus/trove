@@ -88,6 +88,9 @@ public actor SyncEngine {
     /// The checkpoint the store starts from, as written (kept for saving and for the snapshot).
     private var checkpoint: Checkpoint?
     private var checkpointCheckedAt: Double?
+    /// Whether `sync()` may write a checkpoint when one is due (`PowerPolicy.checkpoints`: on the
+    /// charger or with no sketch open; writing one encodes and seals the whole vault).
+    public private(set) var checkpointsAllowed = true
     private let clock: @Sendable () -> Int64
     // Saving a little at a time (`takeSaveDelta`).
     private var unsavedOps: [Op] = []
@@ -329,11 +332,13 @@ public actor SyncEngine {
         }
         if report.pulled > 0 || report.loadedCheckpoint != nil { notify() }
         let nothingUnpushed = journal.pending.isEmpty && unpushed.values.allSatisfy(\.isEmpty)
-        if report.errors.isEmpty, nothingUnpushed { await writeCheckpointIfDue(&report) }
+        if report.errors.isEmpty, nothingUnpushed, checkpointsAllowed { await writeCheckpointIfDue(&report) }
         return report
     }
 
     // MARK: Checkpoints (PROTOCOL.md §3 "Checkpoints")
+
+    public func allowCheckpoints(_ allowed: Bool) { checkpointsAllowed = allowed }
 
     private var checkpointTransports: [any CheckpointTransport] { transports.compactMap { $0 as? any CheckpointTransport } }
 
