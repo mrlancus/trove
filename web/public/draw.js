@@ -13,8 +13,13 @@ import { icon as lineIcon } from "./icons.js";
 import {
   bounds, CLOSED_SHAPES, drawPaper, drawStroke, drawTapeElement, drawTextElement, hits, InkGrid, lassoSelects, lassoSelectsBox, MAX_FAVOURITES, MAX_PALETTE, moveBy,
   PAGE_COLOR_TITLES, PAGE_COLORS, PAGE_SIZES, PAPER_GROUPS, PAPER_TITLES, pageSizeName, PenFilter, pressureAfter, recognizeShape, scribbleTargets, strokeBounds,
-  strokeStyle, TAPE_COLORS, tapeBox, textFont, transformPoint, transformRect, unionRect, widthScale, wrapText,
+  strokeStyle, TAPE_COLORS, tapeBox, textFont, transformPoint, transformRect, unionRect, widthScale, wrapText, withElementTransform, TEXT_FONTS,
 } from "./core/ink.js";
+import {
+  connectable, connectorEnds, elementBounds, elementContains, flipAbout, isSelectionLoop, moveShapeHandle, onArc, onProtractorArc, onRuler, onRulerEdge,
+  PICKER_SHAPES, rotateAbout, rulerEdge, shapeHandles, shapePoints, snapRotation, straightenAngle, transformElement, withGroups,
+} from "./core/inkedit.js";
+import { drawGuides, guideHit, renderSelectionPNG, stickerCanvas } from "./drawedit.js";
 import { PdfDocument } from "./pdfwrite.js";
 
 const COLORS = ["#1c1c1e", "#8e8e93", "#0a84ff", "#ff3b30", "#34c759", "#ff9500", "#af52de", "#ffd60a"];
@@ -31,6 +36,7 @@ const TOOL_INFO = {
   highlighter: { label: "Highlighter", key: "h", width: 22, color: "#ffd60a", icon: "M5 21h8M7 17l2 2 9-9-4-4-9 9 2 2zM14 6l4 4" },
   eraser: { label: "Eraser", key: "e", width: 10, color: "", icon: "M7 20h11M5 15l8-8 6 6-5 5H9l-4-4zM9 11l5 5" },
   lasso: { label: "Lasso", key: "l", width: 0, color: "", icon: "M12 4c5 0 8 2.5 8 5.5S16.5 15 12 15s-8-2.5-8-5.5S7 4 12 4zM6 13c-1 2 0 4 2 5l-1 3" },
+  shape: { label: "Shape: drag to draw a shape, arrow or connector", key: "g", width: 3, color: "#1c1c1e", icon: "M4 4h8v8H4zM17 13a4 4 0 1 0 .01 0M5 20l4-5 4 5H5z" },
   text: { label: "Text", key: "t", width: 20, color: "#1c1c1e", icon: "M5 5h14M12 5v14M9 19h6" },
   laser: { label: "Laser pointer: shows a line that fades, never saved", key: "k", width: 6, color: "#ff3b30", icon: "M5 19l7-7M14 4v3M20 10h-3M18.5 5.5l-2 2M12 12a1.5 1.5 0 1 0 .01 0" },
   tape: { label: "Tape: covers what's under it until tapped", key: "y", width: 24, color: "#f2c94c", icon: "M3 9l15-5 3 9-15 5-3-9zM7 8l2 7M12 6l2 7M17 5l2 7" },
@@ -42,6 +48,20 @@ const LASER_FADE_MS = 1100;
 const SHAPE_ICON = "M4 18L12 5l8 13H4z";
 const PICTURE_ICON = "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01";
 const HOLD_TO_SNAP_MS = 550;
+/** The shape tool's shapes, with an icon each (a connector is a line joined to the shapes at its ends). */
+const SHAPE_KINDS = {
+  line: { label: "Line", icon: "M5 19L19 5" }, arrow: { label: "Arrow", icon: "M5 19L19 5M11 5h8v8" },
+  connector: { label: "Connector: joins two shapes and follows them", icon: "M3 15h6v6H3zM15 3h6v6h-6zM9 18c5 0 6-12 6-12" },
+  rectangle: { label: "Rectangle", icon: "M4 6h16v12H4z" }, ellipse: { label: "Ellipse", icon: "M12 6c5 0 9 2.7 9 6s-4 6-9 6-9-2.7-9-6 4-6 9-6z" },
+  circle: { label: "Circle", icon: "M12 4a8 8 0 1 0 .01 0" }, triangle: { label: "Triangle", icon: "M12 4l9 16H3z" },
+  diamond: { label: "Diamond", icon: "M12 3l9 9-9 9-9-9z" }, star: { label: "Star", icon: "M12 3l2.6 6 6.4.6-4.9 4.2 1.5 6.2L12 16.8 6.4 20l1.5-6.2L3 9.6 9.4 9z" },
+  heart: { label: "Heart", icon: "M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.5A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z" },
+  bubble: { label: "Speech bubble", icon: "M4 5h16v11H10l-5 4v-4H4z" },
+};
+const LASSO_KINDS = { all: "Everything", ink: "Ink", text: "Text", pictures: "Pictures" };
+const TEXT_FONT_TITLES = { sans: "Sans", serif: "Serif", mono: "Mono", rounded: "Rounded" };
+/** A tap's slack, in screen pixels: a pen within this of a ruler's edge draws along it. */
+const GUIDE_SNAP_PX = 14;
 
 function loadPrefs() {
   try { return JSON.parse(localStorage.getItem("trove.ink") ?? "{}"); } catch { return {}; }
@@ -88,7 +108,7 @@ function drawSurface(ctx, vault, itemId, layer, key, { exclude = null, onLoaded 
   for (const e of elements) {
     if (e.type !== "image" || !e.image) continue;
     const ready = pictureBitmap(vault, e.image).ready;
-    if (ready) ctx.drawImage(ready, e.x, e.y, e.w, e.h);
+    if (ready) withElementTransform(ctx, e, () => ctx.drawImage(ready, e.x, e.y, e.w, e.h));
     else pictureBitmap(vault, e.image).then(() => onLoaded?.()).catch(() => {});
   }
   for (const s of strokes ?? vault.strokes(itemId, layer, key)) if (!exclude?.has(s.id) && touches(strokeBounds(s))) drawStroke(ctx, s);
@@ -98,15 +118,15 @@ function drawSurface(ctx, vault, itemId, layer, key, { exclude = null, onLoaded 
 
 /** An element's box as drawn (a text box as tall as its wrapped lines), a little grown for antialiasing. */
 function elementBox(e) {
-  const hgt = e.type === "text" ? textHeight(e) : e.h;
-  return { x: e.x - 2, y: e.y - 2, w: e.w + 4, h: hgt + 4 };
+  const b = elementBounds(e.type === "text" ? { ...e, h: textHeight(e) } : e);
+  return { x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 };
 }
 
 /** Everything drawn on a page, as a box in page points (for the endless canvas). */
 function contentBounds(vault, itemId, layer, key) {
   let box = null;
   for (const s of vault.strokes(itemId, layer, key)) box = unionRect(box, strokeBounds(s));
-  for (const e of vault.elements(itemId, layer, key)) box = unionRect(box, { x: e.x, y: e.y, w: e.w, h: e.h });
+  for (const e of vault.elements(itemId, layer, key)) box = unionRect(box, elementBounds(e));
   return box;
 }
 
@@ -124,7 +144,7 @@ export function sketchPages(item) {
 /** A text box's height as drawn: its wrapped lines. */
 function textHeight(e) {
   const ctx = textHeight.ctx ??= document.createElement("canvas").getContext("2d");
-  ctx.font = textFont(e.size);
+  ctx.font = textFont(e.size, e);
   return Math.max(e.size * 1.25, wrapText(ctx, e.text || " ", e.w).length * e.size * 1.25);
 }
 
@@ -141,10 +161,17 @@ try { inkClipboard = JSON.parse(localStorage.getItem("trove.inkClipboard") ?? "n
  * - `changed()` runs after every edit (to sync); `onClose(edited)` when it closes.
  */
 export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pages: filePages = null, sketch = false, startPage = 0,
-  changed = () => {}, onClose = () => {}, connect = null }) {
-  const extra = { connect };
+  changed = () => {}, onClose = () => {}, connect = null, selectionActions = [], recognizeInk = null }) {
+  // HOOK: `selectionActions` [{label, run(selection)}] add buttons to the lasso's bar (Ask AI, Make
+  // flashcard, …); `selection` has {strokes, elements, page, png()}. `recognizeInk(strokes)` →
+  // Promise<string> turns on "Convert to text" (the website has no handwriting recogniser yet).
+  const extra = { connect, selectionActions: Array.isArray(selectionActions) ? selectionActions : [], recognizeInk };
   const prefs = { tool: "pen", colors: {}, widths: {}, eraser: "stroke", highlighterOnly: false, shapes: false, panel: innerWidth > 900,
-    scribble: false, layout: "vertical", fit: "page", recent: [], dash: {}, arrow: "none", fill: null, ...loadPrefs() };
+    scribble: false, layout: "vertical", fit: "page", recent: [], dash: {}, arrow: "none", fill: null, shapeKind: "rectangle", lassoKinds: "all",
+    circleSelect: false, textStyle: { font: "sans", bold: false, italic: false }, ...loadPrefs() };
+  if (!SHAPE_KINDS[prefs.shapeKind]) prefs.shapeKind = "rectangle";
+  if (!LASSO_KINDS[prefs.lassoKinds]) prefs.lassoKinds = "all";
+  if (!prefs.textStyle || typeof prefs.textStyle !== "object") prefs.textStyle = { font: "sans", bold: false, italic: false };
   if (!Array.isArray(prefs.recent)) prefs.recent = [];
   if (!prefs.dash || typeof prefs.dash !== "object") prefs.dash = {};
   /** Tape strips tapped open here (each device keeps its own). */
@@ -165,7 +192,11 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   let current = null; // the stroke being drawn
   let erasing = null; // one eraser gesture
   let lasso = null; // the loop being drawn
-  let selection = null; // {view, strokes: Set, elements: Set}
+  let selection = null; // {view, strokes: Set, elements: Set, byLoop?}: byLoop when circled with a pen (it can be moved without the lasso)
+  let shaping = null; // a shape being dragged out with the shape tool
+  let guideDrag = null; // the ruler or protractor being moved or turned
+  /** The ruler and protractor (this device only), on one page. */
+  const guides = { view: null, ruler: null, protractor: null };
   let drag = null; // moving or resizing the selection
   let editing = null; // the text box being typed in
   let hover = null; // the eraser's circle under a mouse or pen
@@ -193,6 +224,12 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     onclick: () => { prefs.shapes = !prefs.shapes; savePrefs(prefs); refreshToolbar(); } }, icon(SHAPE_ICON));
   const pictureInput = h("input", { type: "file", accept: "image/*", hidden: true });
   pictureInput.addEventListener("change", () => { const f = pictureInput.files?.[0]; pictureInput.value = ""; if (f) insertPicture(f); });
+  const elementsButton = h("button", { type: "button", class: "ink-tool", title: "Elements: stickers, arrows, checkboxes and what you saved", "aria-label": "Elements",
+    "aria-haspopup": "dialog", onclick: (e) => togglePop(elementsPop, e.currentTarget, () => refreshElementsPop()) }, icon("M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM16 13v6M13 16h6"));
+  const rulerButton = h("button", { type: "button", class: "ink-tool", title: "Ruler: draw along its edges; drag to move, turn with the round knobs", "aria-label": "Ruler",
+    onclick: () => toggleGuide("ruler") }, icon("M3 15L15 3l6 6L9 21zM7 11l2 2M10 8l2 2M13 5l2 2M11 15l-1-1M14 12l-1-1"));
+  const protractorButton = h("button", { type: "button", class: "ink-tool", title: "Protractor: measure angles and draw arcs", "aria-label": "Protractor",
+    onclick: () => toggleGuide("protractor") }, icon("M3 18a9 9 0 0 1 18 0zM12 18l5-7M12 18V9"));
   const pictureButton = h("button", { type: "button", class: "ink-tool", title: "Insert a picture", "aria-label": "Picture", onclick: () => pictureInput.click() },
     icon(PICTURE_ICON));
   const swatchRow = h("div", { class: "ink-swatches" });
@@ -241,28 +278,62 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     h("div", { class: "ink-bar-scroll" },
       sketch ? h("div", { class: "ink-group" }, panelButton) : null,
       h("div", { class: "ink-group" }, undoButton, redoButton, pasteButton),
-      h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput),
+      h("div", { class: "ink-group" }, toolButtons, shapeButton, pictureButton, pictureInput, elementsButton, rulerButton, protractorButton),
       favouritesRow,
       h("div", { class: "ink-group" }, pageButton, connectButton, exportButton, settingsButton),
       h("strong", { class: "ink-title", text: title })),
     h("button", { type: "button", class: "primary ink-done", onclick: close }, "Done"));
   const toolName = h("span", { class: "ink-options-name" });
+  const shapeGroup = h("div", { class: "ink-group ink-shape-group", role: "radiogroup", "aria-label": "Shape" },
+    Object.entries(SHAPE_KINDS).map(([id, k]) => h("button", { type: "button", class: "ink-tool ink-mini", role: "radio", "data-shape": id, title: k.label,
+      "aria-label": k.label.split(":")[0], onclick: () => { prefs.shapeKind = id; savePrefs(prefs); refreshToolbar(); } }, icon(k.icon))));
+  const lassoGroup = h("div", { class: "ink-group ink-lasso-group" }, h("span", { class: "hint", text: "Picks" }),
+    h("div", { class: "ink-seg", role: "radiogroup", "aria-label": "The lasso picks" }, Object.entries(LASSO_KINDS).map(([id, text]) => h("button", { type: "button", role: "radio",
+      "data-kinds": id, onclick: () => { prefs.lassoKinds = id; savePrefs(prefs); refreshToolbar(); } }, text))));
+  const fontSelect = h("select", { class: "folder-select ink-font", "aria-label": "Font" }, Object.entries(TEXT_FONT_TITLES).map(([value, text]) => h("option", { value, text })));
+  fontSelect.addEventListener("change", () => applyTextStyle({ font: fontSelect.value }));
+  const boldButton = h("button", { type: "button", class: "ink-tool ink-mini ink-bold", title: "Bold (⌘B)", "aria-label": "Bold", onmousedown: (e) => e.preventDefault(),
+    onclick: () => applyTextStyle({ bold: !currentTextStyle().bold }) }, h("strong", { text: "B" }));
+  const italicButton = h("button", { type: "button", class: "ink-tool ink-mini ink-italic", title: "Italic (⌘I)", "aria-label": "Italic", onmousedown: (e) => e.preventDefault(),
+    onclick: () => applyTextStyle({ italic: !currentTextStyle().italic }) }, h("em", { text: "I" }));
+  const bulletButton = h("button", { type: "button", class: "ink-tool ink-mini", title: "Bullet list", "aria-label": "Bullet list", onmousedown: (e) => e.preventDefault(),
+    onclick: () => toggleBullets() }, icon("M9 6h11M9 12h11M9 18h11M5 6h.01M5 12h.01M5 18h.01"));
+  const textGroup = h("div", { class: "ink-group ink-text-group" }, fontSelect, boldButton, italicButton, bulletButton);
   const optionsBar = h("div", { class: "ink-options", role: "toolbar", "aria-label": "Tool options" },
     h("div", { class: "ink-bar-scroll" },
       h("div", { class: "ink-group" }, toolName),
       h("div", { class: "ink-group ink-colors" }, swatchRow, custom, hexInput, eyedropper, addPaletteButton),
       h("div", { class: "ink-group ink-size-group" }, sizeDot, size),
       h("div", { class: "ink-group ink-pen-group" }, penButton, favouriteButton),
-      h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly)));
+      h("div", { class: "ink-group ink-eraser-group" }, eraserMode, highlighterOnly),
+      shapeGroup, lassoGroup, textGroup));
   const head = h("div", { class: "ink-head" }, bar, optionsBar);
 
   // The lasso's actions, along the bottom while something is selected.
+  // Turning, flipping and arranging are icons; the rest are words.
+  const selAction = (label, d, run, extraClass = "") => h("button", { type: "button", class: `ink-tool ink-mini${extraClass}`, title: label, "aria-label": label, onclick: run }, icon(d));
+  const groupButton = h("button", { type: "button", class: "secondary small ink-group-button", onclick: () => toggleGroup() }, "Group");
+  const convertButton = extra.recognizeInk ? h("button", { type: "button", class: "secondary small", onclick: () => convertSelection() }, "Convert to text") : null;
+  const copyImageButton = h("button", { type: "button", class: "secondary small", onclick: () => copySelectionImage() }, "Copy as image");
   const selectionBar = h("div", { class: "ink-selbar", hidden: true, role: "toolbar", "aria-label": "Selection" },
     h("span", { class: "ink-selcount" }),
     h("div", { class: "ink-group" }, COLORS.map((c) => h("button", { type: "button", class: "ink-swatch", "aria-label": `Recolour ${c}`, style: `--swatch:${c}`,
       onclick: () => recolourSelection(c) }))),
+    h("div", { class: "ink-group" },
+      selAction("Turn a quarter right", "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7", () => turnSelection(Math.PI / 2)),
+      selAction("Flip left to right", "M12 3v18M9 7L4 17h5zM15 7l5 10h-5z", () => flipSelection("x")),
+      selAction("Flip upside down", "M3 12h18M7 9L17 4v5zM7 15l10 5v-5z", () => flipSelection("y")),
+      selAction("Bring to front", "M8 8h12v12H8zM4 4h12v2M4 4v12h2", () => arrangeSelection(true)),
+      selAction("Send to back", "M4 4h12v12H4zM8 20h12V8h-2", () => arrangeSelection(false)),
+      selAction("Straighten", "M4 18L20 6M4 18h16", () => straightenSelection())),
+    groupButton,
     h("button", { type: "button", class: "secondary small", onclick: () => duplicateSelection() }, "Duplicate"),
     h("button", { type: "button", class: "secondary small", onclick: () => copySelection() }, "Copy"),
+    copyImageButton,
+    h("button", { type: "button", class: "secondary small", onclick: (e) => openSaveElement(e.currentTarget) }, "Save as element"),
+    convertButton,
+    // HOOK: Ask AI, Make flashcard and other actions passed in `selectionActions` go here.
+    extra.selectionActions.map((a) => h("button", { type: "button", class: "secondary small ink-hook-action", onclick: () => runSelectionAction(a) }, String(a.label))),
     h("button", { type: "button", class: "secondary small", onclick: () => { copySelection(); deleteSelection(); } }, "Cut"),
     h("button", { type: "button", class: "secondary small danger", onclick: () => deleteSelection() }, "Delete"),
     h("button", { type: "button", class: "secondary small", "aria-label": "Deselect", onclick: () => clearSelection() }, lineIcon("close")));
@@ -272,6 +343,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const settingsPop = h("div", { class: "ink-pop", role: "dialog", "aria-label": "Settings", hidden: true });
   const zoomPop = h("div", { class: "ink-pop ink-zoom-pop", role: "dialog", "aria-label": "Zoom", hidden: true });
   const penPop = h("div", { class: "ink-pop", role: "dialog", "aria-label": "Pen options", hidden: true });
+  const elementsPop = h("div", { class: "ink-pop ink-elements-pop", role: "dialog", "aria-label": "Elements", hidden: true });
   let openPop = null;
   function togglePop(pop, anchor, fill) {
     if (openPop === pop) { closePops(); return; }
@@ -285,7 +357,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     pop.style.left = `${Math.max(8, Math.min(rr.width - width - 8, r.left - rr.left))}px`;
     if (pop === zoomPop) { pop.style.top = ""; pop.style.bottom = `${rr.bottom - r.top + 8}px`; } else { pop.style.bottom = ""; pop.style.top = `${r.bottom - rr.top + 6}px`; }
   }
-  function closePops() { for (const p of [pagePop, settingsPop, zoomPop, penPop]) p.hidden = true; openPop = null; }
+  function closePops() { for (const p of [pagePop, settingsPop, zoomPop, penPop, elementsPop]) p.hidden = true; openPop = null; }
   const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-head, .ink-zoom-pill")) closePops(); };
   document.addEventListener("pointerdown", onOutside, true);
 
@@ -363,6 +435,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     settingsPop.replaceChildren(
       check("Scribble to erase", "Scratch back and forth right over something to delete it. Off: every line stays.", "scribble"),
       check("Shapes", "Lines and shapes come out clean. Holding the pen still at the end of a line does it either way.", "shapes"),
+      check("Circle to select", "Draw a loop round something and hold the pen still: it's selected instead of drawn.", "circleSelect"),
       h("div", { class: "ink-pop-title", text: "When a drawing opens" }),
       segmented("Zoom when opening", { page: "Whole page", width: "Page width" }, prefs.fit, (v) => { prefs.fit = v; savePrefs(prefs); zoomedByHand = false; fitZoom(); refreshSettingsPop(); }),
       favouritesEditor(),
@@ -413,16 +486,17 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       input.addEventListener("change", () => save({ [key]: Number(input.value) }));
       return h("div", {}, h("div", { class: "ink-pop-row" }, h("span", { text: label }), value), input, h("p", { class: "hint", text: hint }));
     };
-    const parts = [h("div", { class: "ink-pop-title", text: `${TOOL_INFO[penTool].label}: on every device` })];
-    parts.push(slider("Smoothing", "Steadies the line as you write. 0 is exactly where the pen goes.", "smoothing", 100, ""));
-    if (penTool !== "marker" && penTool !== "highlighter") {
+    const shapeTool = tool === "shape", dashKey = shapeTool ? "shape" : penTool;
+    const parts = shapeTool ? [] : [h("div", { class: "ink-pop-title", text: `${TOOL_INFO[penTool].label}: on every device` })];
+    if (!shapeTool) parts.push(slider("Smoothing", "Steadies the line as you write. 0 is exactly where the pen goes.", "smoothing", 100, ""));
+    if (!shapeTool && penTool !== "marker" && penTool !== "highlighter") {
       parts.push(h("div", { class: "ink-pop-row" }, h("span", { text: "Pressure" }),
         segmented("Pressure", { soft: "Soft", normal: "Normal", firm: "Firm" }, feel.curve, (v) => save({ curve: v }))));
       parts.push(slider("Lightest touch", "How thick the lightest touch still writes, as a share of full pressure.", "minWidth", 100, "%"));
     }
     parts.push(h("div", { class: "ink-pop-title", text: "Lines (this device)" }));
-    parts.push(segmented("Line", { solid: "Solid", dash: "Dashes", dot: "Dots" }, prefs.dash[penTool] ?? "solid", (v) => {
-      prefs.dash[penTool] = v === "solid" ? undefined : v; savePrefs(prefs); refreshPenPop();
+    parts.push(segmented("Line", { solid: "Solid", dash: "Dashes", dot: "Dots" }, prefs.dash[dashKey] ?? "solid", (v) => {
+      prefs.dash[dashKey] = v === "solid" ? undefined : v; savePrefs(prefs); refreshPenPop();
     }));
     parts.push(h("div", { class: "ink-pop-row" }, h("span", { text: "Arrows on straight lines" }),
       segmented("Arrows", { none: "None", end: "End", both: "Both ends" }, prefs.arrow ?? "none", (v) => { prefs.arrow = v; savePrefs(prefs); refreshPenPop(); })));
@@ -523,7 +597,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const flipNext = h("button", { type: "button", class: "ink-flip ink-flip-next", "aria-label": "Next page", onclick: () => flipBy(1) }, lineIcon("forward"));
   const pageCount = h("span", { class: "ink-page-count", "aria-live": "polite" });
   stage.append(h("div", { class: "ink-corner" }, zoomPill, pageCount), flipPrev, flipNext);
-  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, head, body, selectionBar, pagePop, settingsPop, zoomPop, penPop);
+  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, head, body, selectionBar, pagePop, settingsPop, zoomPop, penPop, elementsPop);
   document.body.append(root);
   document.body.classList.add("ink-open");
 
@@ -768,7 +842,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       if (!old || old.stamp !== stamp) { dirty(old?.box); dirty(box); grid.add(s.id, box); }
     }
     for (const e of elements) {
-      const stamp = `${hide.has(e.id)}|${peeked.has(e.id)}|${e.type}|${e.x},${e.y},${e.w},${e.h}|${e.size}|${e.color}|${e.text}|${e.image?.id ?? ""}`, old = prev.get(e.id);
+      const stamp = `${hide.has(e.id)}|${peeked.has(e.id)}|${e.type}|${e.x},${e.y},${e.w},${e.h}|${e.size}|${e.color}|${e.text}|${e.image?.id ?? ""}|${e.rotate}|${e.flip}|${e.font}|${e.bold}|${e.italic}`, old = prev.get(e.id);
       const box = elementBox(e);
       next.set(e.id, { stamp, box });
       if (!old || old.stamp !== stamp) { dirty(old?.box); dirty(box); }
@@ -887,22 +961,25 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       ctx.stroke();
       ctx.restore();
     }
+    if (shaping?.view === v && shaping.preview) drawStroke(ctx, shaping.preview);
     if (selection?.view === v) {
       const t = drag?.t ?? null;
       if (t) {
-        // The selection drawn where it's being moved to.
+        // The selection drawn where it's being moved, resized or turned to.
         const els = vault.elements(itemId, layer, v.key).filter((e) => selection.elements.has(e.id));
+        const moved = (e) => ({ ...e, ...transformElement(t, e) });
         for (const e of els) if (e.type === "image" && e.image) {
-          const r = transformRect(t, e), b = pictureBitmap(vault, e.image).ready;
-          if (b) ctx.drawImage(b, r.x, r.y, r.w, r.h);
+          const m = moved(e), b = pictureBitmap(vault, e.image).ready;
+          if (b) withElementTransform(ctx, m, () => ctx.drawImage(b, m.x, m.y, m.w, m.h));
         }
         for (const s of vault.strokes(itemId, layer, v.key)) if (selection.strokes.has(s.id)) {
-          drawStroke(ctx, { ...s, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)) });
+          drawStroke(ctx, { ...s, cache: null, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)) });
         }
-        for (const e of els) if (e.type === "text") drawTextElement(ctx, { ...e, ...transformRect(t, e), size: e.size * widthScale(t) });
-        for (const e of els) if (e.type === "tape") drawTapeElement(ctx, { ...e, ...transformRect(t, e) }, peeked.has(e.id));
+        for (const e of els) if (e.type === "text") drawTextElement(ctx, { ...moved(e), size: e.size * widthScale(t) });
+        for (const e of els) if (e.type === "tape") drawTapeElement(ctx, moved(e), peeked.has(e.id));
       }
-      const box = selectionBox(t);
+      if (drag?.shapeEdit) drawStroke(ctx, drag.shapeEdit);
+      const box = drag?.shapeEdit ? null : selectionBox(t);
       if (box) {
         ctx.save();
         ctx.lineWidth = 1.5 * px;
@@ -917,9 +994,43 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
           ctx.fill();
           ctx.stroke();
         }
+        // The turning handle above the top edge.
+        const [rx, ry] = rotateHandle(box, px);
+        ctx.beginPath();
+        ctx.moveTo(rx, box.y);
+        ctx.lineTo(rx, ry + 7 * px);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(rx, ry, 7 * px, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (drag?.turning) {
+          ctx.fillStyle = "rgba(10, 132, 255, 0.95)";
+          ctx.font = `600 ${12 * px}px system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(`${Math.round((drag.t?.r ?? 0) * 180 / Math.PI)}°`, rx, ry - 14 * px);
+        }
+        ctx.restore();
+      }
+      // A lone shape's own handles: its ends, corners or bend.
+      const handles = drag && !drag.shapeEdit ? [] : selectedShapeHandles(drag?.shapeEdit ?? null);
+      if (handles.length) {
+        ctx.save();
+        ctx.lineWidth = 1.5 * px;
+        ctx.strokeStyle = "rgba(10, 132, 255, 0.95)";
+        ctx.fillStyle = "#fff";
+        handles.forEach((q, i) => {
+          const r = 5 * px;
+          ctx.beginPath();
+          if (i === 2 && (singleShape()?.shape === "line" || singleShape()?.shape === "curve")) ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+          else ctx.rect(q.x - r, q.y - r, 2 * r, 2 * r);
+          ctx.fill();
+          ctx.stroke();
+        });
         ctx.restore();
       }
     }
+    if (guides.view === v) drawGuides(ctx, guides, px);
     if (hover?.view === v && (tool === "eraser")) {
       ctx.beginPath();
       ctx.arc(hover.x, hover.y, eraserRadius(v), 0, Math.PI * 2);
@@ -951,6 +1062,20 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     c.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "pen") { penSeen = true; root.classList.add("pen-seen"); }
       if (e.pointerType === "touch") noteTap(e, "down");
+      // The ruler and protractor: dragging their bodies moves them, their knobs turn them (a pen at an edge draws instead).
+      if (guides.view === v && !guideDrag && !touches.size && !current && !lasso && !drag && !shaping && e.button === 0) {
+        const p = toPage(v, e);
+        const draws = PEN_TOOLS.includes(tool) && !(e.pointerType === "touch" && penSeen) && guideSnap(v, p);
+        const hit = draws ? null : guideHit(guides, p, 1 / cssScale(v));
+        if (hit) {
+          const g = guides[hit.kind];
+          guideDrag = { view: v, pointerId: e.pointerId, kind: hit.kind, turn: hit.turn, start: p, x: g.x, y: g.y, angle: g.angle,
+            grab: Math.atan2(p.y - g.y, p.x - g.x) };
+          capture(c, e);
+          e.preventDefault();
+          return;
+        }
+      }
       if (e.pointerType === "touch" && (penSeen || touches.size > 0 || current?.pointerType === "touch" || lasso?.pointerType === "touch")) {
         // A finger with a pen around, or a second finger: scroll and pinch instead of drawing.
         if (current?.pointerType === "touch") { touches.set(current.pointerId, current.client); cancelStroke(); }
@@ -966,7 +1091,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
         if (e.button === 1) { touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); capture(c, e); startPinch(); e.preventDefault(); }
         return;
       }
-      if (current || erasing || lasso || drag || taping) return;
+      if (current || erasing || lasso || drag || taping || shaping || guideDrag) return;
       e.preventDefault();
       capture(c, e);
       const p = toPage(v, e);
@@ -975,21 +1100,24 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       if (editing) { commitText(); if (tool === "text") return; }
       if (tool === "tape") { taping = { view: v, pointerId: e.pointerId, start: p, end: p, client: { x: e.clientX, y: e.clientY }, moved: false }; return; }
       if (tool === "text") { startText(v, p); return; }
-      if (selection && selection.view === v && tool === "lasso") {
+      if (selection && selection.view === v && (tool === "lasso" || selection.byLoop)) {
         const handle = handleAt(v, p);
         const box = selectionBox();
         if (handle || (box && p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h)) {
           drag = { pointerId: e.pointerId, pointerType: e.pointerType, start: p, handle, box, t: null, client: { x: e.clientX, y: e.clientY } };
           return;
         }
-        if (tool === "lasso") clearSelection();
+        clearSelection();
       }
+      if (selection) clearSelection();
+      if (tool === "shape") { startShape(v, e, p); return; }
       if (tool === "lasso") { lasso = { view: v, pointerId: e.pointerId, pointerType: e.pointerType, points: [p], client: { x: e.clientX, y: e.clientY } }; return; }
       if (tool === "eraser") { startErase(v, e, p); return; }
       const pen = PEN_TOOLS.includes(tool);
       current = { view: v, pointerId: e.pointerId, pointerType: e.pointerType, start: e.timeStamp, points: [], tool, color: colorOf(tool), width: widthOf(tool),
         shape: null, anchor: { x: e.clientX, y: e.clientY }, client: { x: e.clientX, y: e.clientY },
-        dash: pen ? prefs.dash[tool] ?? null : null, nib: null, filter: pen ? new PenFilter(inkSettings.pens[tool]) : null, raw: null, predicted: null };
+        dash: pen ? prefs.dash[tool] ?? null : null, nib: null, filter: pen ? new PenFilter(inkSettings.pens[tool]) : null, raw: null, predicted: null,
+        guide: pen ? guideSnap(v, p) : null };
       addPoint(e);
       armSnap();
       renderLive(v);
@@ -997,6 +1125,14 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     c.addEventListener("pointermove", (e) => {
       if (e.pointerType === "touch") noteTap(e, "move");
       if (touches.has(e.pointerId)) { touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); movePinch(); e.preventDefault(); return; }
+      if (guideDrag?.pointerId === e.pointerId) { moveGuide(toPage(v, e)); return; }
+      if (shaping?.pointerId === e.pointerId) { moveShape(toPage(v, e), e); return; }
+      if (guides.protractor && guides.view === v && e.pointerType !== "touch") {
+        // The protractor reads the angle of wherever the pen or mouse is.
+        const p = toPage(v, e), pr = guides.protractor;
+        const near = Math.hypot(p.x - pr.x, p.y - pr.y) <= (pr.radius ?? 160) * 1.6;
+        if (near || pr.reading) { pr.reading = near ? p : null; scheduleLive(v); }
+      }
       if (erasing?.pointerId === e.pointerId) { for (const ev of coalesced(e)) eraseTo(v, toPage(v, ev)); return; }
       if (lasso?.pointerId === e.pointerId) {
         for (const ev of coalesced(e)) lasso.points.push(toPage(v, ev));
@@ -1025,6 +1161,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const end = (e) => {
       if (e.pointerType === "touch") noteTap(e, "up");
       if (touches.delete(e.pointerId)) { startPinch(); if (!touches.size && swipe.dx) finishSwipe(); return; }
+      if (guideDrag?.pointerId === e.pointerId) { guideDrag = null; return; }
+      if (shaping?.pointerId === e.pointerId) { finishShape(e.type === "pointercancel"); return; }
       if (erasing?.pointerId === e.pointerId) { finishErase(); return; }
       if (lasso?.pointerId === e.pointerId) { finishLasso(); return; }
       if (drag?.pointerId === e.pointerId) { finishDrag(e.type === "pointercancel"); return; }
@@ -1071,7 +1209,23 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       return;
     }
     current.raw = raw;
-    current.points.push(current.filter ? current.filter.add(raw) : raw);
+    current.points.push(alongGuide(current.filter ? current.filter.add(raw) : raw));
+  }
+
+  /** A point moved onto the ruler's edge or the protractor's arc when the stroke started there. */
+  function alongGuide(pt) {
+    const g = current?.guide;
+    if (!g) return pt;
+    return g.kind === "ruler" ? onRulerEdge(guides.ruler, g.edge, pt) : onArc(guides.protractor, pt);
+  }
+
+  /** The guide edge a pen put down at `p` draws along: {kind: "ruler", edge} or {kind: "arc"}, or null. */
+  function guideSnap(v, p) {
+    if (guides.view !== v) return null;
+    const tol = GUIDE_SNAP_PX / cssScale(v);
+    if (guides.ruler) { const edge = rulerEdge(guides.ruler, p, tol); if (edge) return { kind: "ruler", edge }; }
+    if (guides.protractor && onProtractorArc(guides.protractor, p, tol)) return { kind: "arc" };
+    return null;
   }
 
   /** The browser's guess at the next point or two (drawn this frame only), from where the pen is heading. */
@@ -1085,7 +1239,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       const p = rawPoint(current.view, ev);
       // Never further than about 30 screen pixels ahead.
       if (last && Math.hypot(p.x - last.x, p.y - last.y) * cssScale(current.view) > 30) break;
-      out.push({ ...p, p: last?.p ?? p.p });
+      out.push(alongGuide({ ...p, p: last?.p ?? p.p }));
     }
     current.predicted = out.length ? out : null;
   }
@@ -1098,7 +1252,9 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     clearTimeout(armSnap.timer);
     const s = current;
     armSnap.timer = setTimeout(() => {
-      if (current !== s || !s || s.shape || s.points.length < 3 || s.tool === "laser") return;
+      if (current !== s || !s || s.shape || s.points.length < 3 || s.tool === "laser" || s.guide) return;
+      // Circle to select: a loop round something, held still, picks it up instead.
+      if (prefs.circleSelect && s.tool !== "highlighter" && isSelectionLoop(s.points) && selectByLoop(s)) return;
       const shape = s.tool === "highlighter" ? straightLine(s.points) : recognizeShape(s.points);
       if (!shape) return;
       s.points = shape.points;
@@ -1150,14 +1306,14 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
         return;
       }
     }
-    if (!s.shape && prefs.shapes) {
+    if (!s.shape && prefs.shapes && !s.guide) {
       // A highlighter only ever snaps to a straight line.
       const shape = recognizeShape(s.points);
       if (shape && (s.tool !== "highlighter" || shape.shape === "line")) { s.points = shape.points; s.shape = shape.shape; }
     }
     // The pen's lines: dashes on any stroke, arrows on straight lines, fill inside closed shapes.
     const style = { dash: s.dash };
-    if (s.shape && s.tool !== "highlighter" && prefs.arrow && prefs.arrow !== "none" && (s.shape === "line" || s.shape === "polyline")) style.arrow = prefs.arrow;
+    if (s.shape && s.tool !== "highlighter" && prefs.arrow && prefs.arrow !== "none" && (s.shape === "line" || s.shape === "polyline" || s.shape === "curve")) style.arrow = prefs.arrow;
     if (s.shape && prefs.fill && CLOSED_SHAPES.includes(s.shape)) style.fill = prefs.fill;
     const id = vault.addStroke({ on: itemId, layer, page: s.view.key, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape, style });
     record({ add: [[id, "stroke"]] }, [s.view]);
@@ -1170,7 +1326,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
 
   /** The tape strip under a point, the top one first. */
   function tapeAt(v, p) {
-    return vault.elements(itemId, layer, v.key).reverse().find((e) => e.type === "tape" && p.x >= e.x && p.x <= e.x + e.w && p.y >= e.y && p.y <= e.y + e.h) ?? null;
+    return vault.elements(itemId, layer, v.key).reverse().find((e) => e.type === "tape" && elementContains(e, p)) ?? null;
   }
 
   function togglePeek(v, tape) {
@@ -1300,19 +1456,49 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
 
   // ---------- lasso ----------
+  /** What the lasso may pick (the "Picks" choice): strokes, and which elements. */
+  const picksStrokes = () => prefs.lassoKinds === "all" || prefs.lassoKinds === "ink";
+  const picksElement = (e) => prefs.lassoKinds === "all" || (prefs.lassoKinds === "text" ? e.type === "text" : prefs.lassoKinds === "pictures" && e.type !== "text");
+
+  /** Everything on a page as [{id, group}], for growing a selection to whole groups. */
+  const pageMembers = (v) => [...vault.strokes(itemId, layer, v.key), ...vault.elements(itemId, layer, v.key)].map((x) => ({ id: x.id, group: x.group }));
+
+  /** The loop's picks, grown to whole groups; or, for a tap, the top thing under it. */
   function finishLasso() {
     const l = lasso;
     lasso = null;
     const v = l.view;
-    if (l.points.length < 3) { renderLive(v); return; }
-    const strokes = strokesNear(v, bounds(l.points)).filter((s) => lassoSelects(s.points, l.points)).map((s) => s.id);
-    const elements = vault.elements(itemId, layer, v.key).filter((e) => lassoSelectsBox(boxOf(e), l.points)).map((e) => e.id);
-    selection = strokes.length || elements.length ? { view: v, strokes: new Set(strokes), elements: new Set(elements) } : null;
-    refreshSelection();
+    const b = bounds(l.points);
+    if (l.points.length < 3 || Math.max(b.w, b.h) * cssScale(v) < 6) { selectIds(v, pickAt(v, l.points[0])); renderLive(v); return; }
+    const strokes = picksStrokes() ? strokesNear(v, b).filter((s) => lassoSelects(s.points, l.points)).map((s) => s.id) : [];
+    const elements = vault.elements(itemId, layer, v.key).filter((e) => picksElement(e) && lassoSelectsBox(boxOf(e), l.points)).map((e) => e.id);
+    selectIds(v, [...strokes, ...elements]);
     renderLive(v);
   }
 
-  const boxOf = (e) => ({ x: e.x, y: e.y, w: e.w, h: e.type === "text" ? textHeight(e) : e.h });
+  /** The top stroke or element under a point (a tap with the lasso), as ids with its group. */
+  function pickAt(v, p) {
+    const r = 6 / cssScale(v);
+    const el = vault.elements(itemId, layer, v.key).reverse().find((e) => picksElement(e) && elementContains(e, p, e.type === "text" ? textHeight(e) : e.h));
+    const st = picksStrokes() ? strokesNear(v, { x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r }).reverse().find((s) => hits(s, p.x, p.y, r)) : null;
+    const id = el?.type === "text" || el?.type === "tape" ? el.id : st?.id ?? el?.id;
+    return id ? [id] : [];
+  }
+
+  /** Circle to select: the pen's loop picks what's inside it (true), or nothing's there (false, so it draws). */
+  function selectByLoop(s) {
+    const v = s.view;
+    const strokes = strokesNear(v, bounds(s.points)).filter((x) => lassoSelects(x.points, s.points)).map((x) => x.id);
+    const elements = vault.elements(itemId, layer, v.key).filter((e) => lassoSelectsBox(boxOf(e), s.points)).map((e) => e.id);
+    if (!strokes.length && !elements.length) return false;
+    current = null;
+    clearTimeout(armSnap.timer);
+    selectIds(v, [...strokes, ...elements], true);
+    renderLive(v);
+    return true;
+  }
+
+  const boxOf = (e) => elementBounds(e.type === "text" ? { ...e, h: textHeight(e) } : e);
 
   /** The box around the selection (moved by `t` while dragging). */
   function selectionBox(t = null) {
@@ -1326,19 +1512,49 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
 
   const corners = (b) => [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
+  /** The turning handle: above the middle of the top edge. */
+  const rotateHandle = (b, px) => [b.x + b.w / 2, b.y - 26 * px];
 
-  /** The corner handle under a point: its index (0 top-left, clockwise). */
+  /** The selection when it's one clean shape on its own (it shows its own handles). */
+  function singleShape() {
+    if (!selection || selection.strokes.size !== 1 || selection.elements.size) return null;
+    const [id] = selection.strokes;
+    const s = vault.strokes(itemId, layer, selection.view.key).find((x) => x.id === id);
+    return s?.shape ? s : null;
+  }
+  function selectedShapeHandles(edit = null) {
+    const s = singleShape();
+    return s ? shapeHandles(edit ?? s) : [];
+  }
+
+  /** The handle under a point: a shape's own ({shape: i}), the turning one ({rotate}) or a corner ({index}). */
   function handleAt(v, p) {
     const box = selectionBox();
     if (!box) return null;
-    const r = 14 / cssScale(v);
+    const px = 1 / cssScale(v), r = 14 * px;
+    const own = selectedShapeHandles().findIndex((q) => Math.hypot(q.x - p.x, q.y - p.y) <= r);
+    if (own >= 0) return { shape: own };
+    const [rx, ry] = rotateHandle(box, px);
+    if (Math.hypot(rx - p.x, ry - p.y) <= r) return { rotate: true };
     const i = corners(box).findIndex(([x, y]) => Math.hypot(x - p.x, y - p.y) <= r);
     return i < 0 ? null : { index: i };
   }
 
   function moveDrag(v, p) {
     const d = drag;
-    if (d.handle) {
+    if (d.handle?.shape !== undefined) {
+      // Dragging a shape's own handle: an end, a corner, or the middle of a line to bend it.
+      const s = singleShape();
+      if (!s) return;
+      const moved = moveShapeHandle(s, d.handle.shape, p);
+      d.shapeEdit = { ...s, cache: null, shape: moved.shape, points: moved.points, handle: d.handle.shape };
+      d.t = null;
+    } else if (d.handle?.rotate) {
+      const cx = d.box.x + d.box.w / 2, cy = d.box.y + d.box.h / 2;
+      const a = Math.atan2(p.y - cy, p.x - cx) - Math.atan2(d.start.y - cy, d.start.x - cx);
+      d.turning = true;
+      d.t = rotateAbout(snapRotation(a), cx, cy);
+    } else if (d.handle) {
       // Resize from the opposite corner, keeping the shape's proportions.
       const [ox, oy] = corners(d.box)[(d.handle.index + 2) % 4];
       const [cx, cy] = corners(d.box)[d.handle.index];
@@ -1357,25 +1573,166 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     drag = null;
     const v = selection?.view;
     if (!v) return;
-    if (!cancelled && d.t && (d.t.dx || d.t.dy || d.t.sx !== 1)) {
-      const ids = [...selection.strokes], els = [...selection.elements];
-      const before = snapshot(ids, els);
-      vault.transformStrokes(ids, { t: d.t });
-      vault.transformElements(els, d.t);
-      record({ before, after: snapshot(ids, els) }, [v]);
+    if (!cancelled && d.shapeEdit) {
+      const id = d.shapeEdit.id, links = vault.connectorsOf(itemId, layer, v.key, [id]);
+      const before = snapshot([id, ...links], []);
+      vault.setStrokeShape(id, d.shapeEdit.shape, d.shapeEdit.points);
+      vault.rerouteConnectors(links);
+      record({ before, after: snapshot([id, ...links], []) }, [v]);
+    } else if (!cancelled && d.t && (d.t.dx || d.t.dy || d.t.sx !== 1 || d.t.sy !== 1 || d.t.r)) {
+      transformSelection(d.t, false);
     }
     v.dirty = true;
     renderView(v);
   }
 
-  const STROKE_FIELDS = ["points", "points2", "width", "color"], ELEMENT_FIELDS = ["x", "y", "w", "h", "size", "color", "text"];
+  /**
+   * Moves, resizes, turns or flips the selection with one transform (core/ink.js transformPoint),
+   * then brings connectors joined to it back onto what they join. One undo step.
+   */
+  function transformSelection(t, redraw = true) {
+    if (!selection) return;
+    const v = selection.view;
+    const ids = [...selection.strokes], els = [...selection.elements];
+    const picked = [...ids, ...els];
+    const own = vault.strokes(itemId, layer, v.key).filter((s) => selection.strokes.has(s.id) && (s.from || s.to)).map((s) => s.id);
+    const links = [...new Set([...vault.connectorsOf(itemId, layer, v.key, picked), ...own])];
+    const strokesTouched = [...new Set([...ids, ...links])];
+    const before = snapshot(strokesTouched, els);
+    vault.transformStrokes(ids, { t });
+    vault.transformElements(els, t);
+    vault.rerouteConnectors(links);
+    record({ before, after: snapshot(strokesTouched, els) }, [v]);
+    if (redraw) { v.dirty = true; renderView(v); }
+  }
+
+  /** The middle of the selection's box. */
+  function selectionCentre() {
+    const b = selectionBox();
+    return b ? [b.x + b.w / 2, b.y + b.h / 2] : null;
+  }
+  function turnSelection(r) { const c = selectionCentre(); if (c) transformSelection(rotateAbout(r, c[0], c[1])); }
+  function flipSelection(axis) { const c = selectionCentre(); if (c) transformSelection(flipAbout(axis, c[0], c[1])); }
+
+  /** Straighten: turns slanted writing level (or upright) about its middle. */
+  function straightenSelection() {
+    if (!selection) return;
+    const pts = vault.strokes(itemId, layer, selection.view.key).filter((s) => selection.strokes.has(s.id)).flatMap((s) => s.points);
+    const r = straightenAngle(pts);
+    if (Math.abs(r) > 1e-4) turnSelection(r);
+  }
+
+  /** Bring to front (`front`) or send to back, keeping the picked things' own order. */
+  function arrangeSelection(front) {
+    if (!selection) return;
+    const v = selection.view, picked = [...selection.strokes, ...selection.elements];
+    const before = [...snapshotFields([...selection.strokes], "stroke", ["createdAt"]), ...snapshotFields([...selection.elements], "element", ["createdAt"])];
+    vault.reorderInk(picked, front);
+    record({ before, after: [...snapshotFields([...selection.strokes], "stroke", ["createdAt"]), ...snapshotFields([...selection.elements], "element", ["createdAt"])] }, [v]);
+    v.dirty = true;
+    renderView(v);
+  }
+
+  /** The selection's single group, if it's exactly one whole group. */
+  function selectionGroup() {
+    if (!selection) return "";
+    const all = [...vault.strokes(itemId, layer, selection.view.key), ...vault.elements(itemId, layer, selection.view.key)]
+      .filter((x) => selection.strokes.has(x.id) || selection.elements.has(x.id));
+    const groups = new Set(all.map((x) => x.group));
+    return groups.size === 1 && !groups.has("") ? [...groups][0] : "";
+  }
+
+  /** Groups the selection (picked and moved as one from then on), or ungroups it if it's one group. */
+  function toggleGroup() {
+    if (!selection) return;
+    const v = selection.view, strokes = [...selection.strokes], els = [...selection.elements];
+    if (strokes.length + els.length < 2 && !selectionGroup()) return;
+    const before = [...snapshotFields(strokes, "stroke", ["group"]), ...snapshotFields(els, "element", ["group"])];
+    vault.setInkGroup([...strokes, ...els], selectionGroup() ? "" : undefined);
+    record({ before, after: [...snapshotFields(strokes, "stroke", ["group"]), ...snapshotFields(els, "element", ["group"])] }, [v]);
+    refreshSelection();
+  }
+
+  /** Copy as image: the selection as a PNG on the clipboard (or downloaded where the browser can't). */
+  async function copySelectionImage() {
+    const box = selectionBox();
+    if (!box) return;
+    const v = selection.view, keep = { strokes: new Set(selection.strokes), elements: new Set(selection.elements) };
+    const pad = 8, area = { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad };
+    const blob = await renderSelectionPNG(area, Math.min(4, Math.max(2, devicePixelRatio || 1)), (ctx) => drawPicked(ctx, v, keep));
+    if (!blob) return;
+    let copied = false;
+    try {
+      if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); copied = true; }
+    } catch { /* not allowed here */ }
+    if (!copied) {
+      const url = URL.createObjectURL(blob);
+      const a = h("a", { href: url, download: `${(title || "Drawing").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Drawing"} selection.png` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }
+    root.dataset.copiedImage = String(blob.size);
+    copyImageButton.textContent = copied ? "Copied" : "Saved";
+    setTimeout(() => { copyImageButton.textContent = "Copy as image"; }, 1500);
+  }
+
+  /** Draws only the picked strokes and elements of a page, in their usual order. */
+  function drawPicked(ctx, v, keep) {
+    const els = vault.elements(itemId, layer, v.key).filter((e) => keep.elements.has(e.id));
+    for (const e of els) if (e.type === "image" && e.image) {
+      const b = pictureBitmap(vault, e.image).ready;
+      if (b) withElementTransform(ctx, e, () => ctx.drawImage(b, e.x, e.y, e.w, e.h));
+    }
+    for (const s of vault.strokes(itemId, layer, v.key)) if (keep.strokes.has(s.id)) drawStroke(ctx, s);
+    for (const e of els) if (e.type === "text") drawTextElement(ctx, e);
+    for (const e of els) if (e.type === "tape") drawTapeElement(ctx, e, true);
+  }
+
+  /** What hook actions (Ask AI, Make flashcard, …) and Convert to text get about the selection. */
+  function selectionInfo() {
+    const v = selection.view, keep = { strokes: new Set(selection.strokes), elements: new Set(selection.elements) };
+    const box = selectionBox();
+    return {
+      itemId, layer, page: v.key, box,
+      strokes: vault.strokes(itemId, layer, v.key).filter((s) => keep.strokes.has(s.id)),
+      elements: vault.elements(itemId, layer, v.key).filter((e) => keep.elements.has(e.id)),
+      png: () => renderSelectionPNG({ x: box.x - 8, y: box.y - 8, w: box.w + 16, h: box.h + 16 }, 2, (ctx) => drawPicked(ctx, v, keep)),
+    };
+  }
+  async function runSelectionAction(action) {
+    if (!selection) return;
+    try { await action.run(selectionInfo()); } catch (e) { console.warn("selection action failed", e); }
+  }
+  /** Convert to text: the recogniser's words as a text box where the ink was (the ink stays, selected, to delete or keep). */
+  async function convertSelection() {
+    if (!selection || !extra.recognizeInk) return;
+    const info = selectionInfo();
+    let text = "";
+    try { text = String(await extra.recognizeInk(info.strokes, info)).trim(); } catch { text = ""; }
+    if (!text || !info.box) return;
+    const v = selection.view;
+    const size = widthOf("text");
+    const frame = { x: info.box.x, y: info.box.y + info.box.h + 8, w: Math.max(120, info.box.w), h: size * 1.25 };
+    const id = vault.addElement({ on: itemId, layer, page: v.key, type: "text", frame, text, size, color: colorOf("text"), style: prefs.textStyle });
+    record({ add: [[id, "element"]] }, [v]);
+    v.dirty = true;
+    renderView(v);
+  }
+
+  const STROKE_FIELDS = ["points", "points2", "width", "color", "nib", "shape"], ELEMENT_FIELDS = ["x", "y", "w", "h", "size", "color", "text", "rotate", "flip", "font", "bold", "italic"];
   /** The fields a lasso edit changes, so undo can put them back (points it didn't have come back empty). */
   function snapshot(strokeIds, elementIds) {
-    const pick = (id, kind, names) => {
+    return [...snapshotFields(strokeIds, "stroke", STROKE_FIELDS), ...snapshotFields(elementIds, "element", ELEMENT_FIELDS)];
+  }
+  /** [id, kind, fields]: each named field as it is now; one it doesn't have comes back as its off value. */
+  function snapshotFields(ids, kind, names) {
+    const off = { points: "", points2: "", rotate: 0, flip: false, bold: false, italic: false, font: "sans", group: "", nib: null, shape: null };
+    return ids.map((id) => {
       const f = vault.store.records.get(id)?.fields ?? {};
-      return [id, kind, Object.fromEntries(names.filter((n) => n in f || n.startsWith("points")).map((n) => [n, f[n] ?? ""]))];
-    };
-    return [...strokeIds.map((id) => pick(id, "stroke", STROKE_FIELDS)), ...elementIds.map((id) => pick(id, "element", ELEMENT_FIELDS))];
+      return [id, kind, Object.fromEntries(names.filter((n) => n in f || n in off).map((n) => [n, n in f ? f[n] : off[n]]))];
+    });
   }
 
   function recolourSelection(color) {
@@ -1403,10 +1760,13 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     renderLive(v);
   }
 
-  function selectIds(v, ids) {
-    if (tool !== "lasso") setTool("lasso");
-    selection = { view: v, strokes: new Set(ids.filter((id) => !vault.element(id))), elements: new Set(ids.filter((id) => vault.element(id))) };
+  /** Selects ids on a page, with the rest of their groups. `byLoop`: circled with a pen (keeps the pen). */
+  function selectIds(v, ids, byLoop = false) {
+    if (!byLoop && tool !== "lasso") setTool("lasso");
+    const all = withGroups(ids, pageMembers(v));
+    selection = all.length ? { view: v, strokes: new Set(all.filter((id) => !vault.element(id))), elements: new Set(all.filter((id) => vault.element(id))), byLoop } : null;
     refreshSelection();
+    refreshToolbar();
   }
 
   function deleteSelection() {
@@ -1424,26 +1784,28 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const v = selection.view;
     inkClipboard = {
       strokes: vault.strokes(itemId, layer, v.key).filter((s) => selection.strokes.has(s.id))
-        .map((s) => ({ tool: s.tool, color: s.color, width: s.width, shape: s.shape, points: s.points, style: strokeStyle(s) })),
+        .map((s) => ({ tool: s.tool, color: s.color, width: s.width, shape: s.shape, points: s.points, style: strokeStyle(s), group: s.group })),
       elements: vault.elements(itemId, layer, v.key).filter((e) => selection.elements.has(e.id))
-        .map((e) => ({ type: e.type, x: e.x, y: e.y, w: e.w, h: e.h, text: e.text, size: e.size, color: e.color, image: e.image })),
+        .map((e) => ({ type: e.type, x: e.x, y: e.y, w: e.w, h: e.h, text: e.text, size: e.size, color: e.color, image: e.image, rotate: e.rotate, flip: e.flip,
+          font: e.font, bold: e.bold, italic: e.italic, group: e.group })),
     };
     try { localStorage.setItem("trove.inkClipboard", JSON.stringify(inkClipboard)); } catch { /* too big or private mode */ }
     refreshToolbar();
   }
 
-  /** Pastes what the lasso copied onto the page in view, a little down and right. */
+  /** Pastes what the lasso copied onto the page in view, a little down and right (copied groups become new groups). */
   function paste() {
     if (!inkClipboard) return;
     const v = viewByKey(currentKey) ?? views[0];
     if (!v) return;
-    const t = moveBy(20, 20);
+    const t = moveBy(20, 20), groups = new Map();
+    const groupOf = (g) => { if (!g) return ""; if (!groups.has(g)) groups.set(g, crypto.randomUUID().toLowerCase()); return groups.get(g); };
     const ids = [
       ...inkClipboard.strokes.map((s) => vault.addStroke({ on: itemId, layer, page: v.key, tool: s.tool, color: s.color, width: s.width, shape: s.shape,
-        points: s.points.map((p) => transformPoint(t, p)), style: s.style ?? null })),
+        points: s.points.map((p) => transformPoint(t, p)), style: s.style ?? null, group: groupOf(s.group) })),
       ...inkClipboard.elements.map((e) => vault.addElement({ on: itemId, layer, page: v.key, type: e.type, frame: transformRect(t, e), text: e.text, size: e.size,
-        color: e.color, image: e.image })),
-    ];
+        color: e.color, image: e.image, style: { ...e, group: groupOf(e.group) } })),
+    ].filter(Boolean);
     selectIds(v, ids);
     record({ add: ids.map((id) => [id, vault.element(id) ? "element" : "stroke"]) }, [v]);
   }
@@ -1454,6 +1816,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     selection = null;
     drag = null;
     refreshSelection();
+    refreshTextGroup();
     renderView(v);
   }
 
@@ -1462,38 +1825,267 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     if (selection) {
       const n = selection.strokes.size + selection.elements.size;
       selectionBar.querySelector(".ink-selcount").textContent = `${n} selected`;
+      const grouped = Boolean(selectionGroup());
+      groupButton.textContent = grouped ? "Ungroup" : "Group";
+      groupButton.hidden = !grouped && n < 2;
     }
+  }
+
+  // ---------- the shape tool ----------
+  /** Starts dragging out a shape (a connector joins what's under its ends). */
+  function startShape(v, e, p) {
+    const kind = prefs.shapeKind;
+    shaping = { view: v, pointerId: e.pointerId, kind, start: p, end: p, from: kind === "connector" ? connectableAt(v, p) : null, preview: null };
+  }
+
+  /** The closed shape or element under a point that a connector can join. */
+  function connectableAt(v, p) {
+    const el = vault.elements(itemId, layer, v.key).reverse().find((e) => elementContains(e, p, e.type === "text" ? textHeight(e) : e.h));
+    if (el) return el.id;
+    const s = vault.strokes(itemId, layer, v.key).reverse().find((x) => connectable(x) && (() => { const b = bounds(x.points, x.width / 2); return b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; })());
+    return s?.id ?? null;
+  }
+
+  /** The stroke the shape tool would add now: {tool, color, width, shape, points, style, from, to}. */
+  function shapeStroke(sh, square) {
+    let end = sh.end;
+    if (square && !["line", "arrow", "connector"].includes(sh.kind)) {
+      const d = Math.max(Math.abs(end.x - sh.start.x), Math.abs(end.y - sh.start.y));
+      end = { x: sh.start.x + Math.sign(end.x - sh.start.x || 1) * d, y: sh.start.y + Math.sign(end.y - sh.start.y || 1) * d };
+    }
+    const base = { tool: "pen", color: colorOf("shape"), width: widthOf("shape"), dash: prefs.dash.shape ?? null, cache: null };
+    if (sh.kind === "line" || sh.kind === "arrow" || sh.kind === "connector") {
+      const to = sh.kind === "connector" ? connectableAt(sh.view, end) : null;
+      const boxOfId = (id) => (id ? vault.inkBox(id) : null);
+      const [a, b] = sh.kind === "connector" ? connectorEnds(sh.start, end, boxOfId(sh.from), boxOfId(to)) : [sh.start, end];
+      const arrow = sh.kind === "line" ? (prefs.arrow !== "none" ? prefs.arrow : null) : prefs.arrow === "both" ? "both" : "end";
+      return { ...base, shape: "line", points: [{ ...a, p: 0.5, t: 0 }, { ...b, p: 0.5, t: 0 }], arrow, from: sh.from, to };
+    }
+    const points = shapePoints(sh.kind, sh.start, end);
+    return { ...base, shape: sh.kind, points, fill: prefs.fill && CLOSED_SHAPES.includes(sh.kind) ? prefs.fill : null };
+  }
+
+  function moveShape(p, e) {
+    shaping.end = p;
+    shaping.square = e.shiftKey;
+    shaping.preview = shapeStroke(shaping, e.shiftKey);
+    scheduleLive(shaping.view);
+  }
+
+  function finishShape(cancelled) {
+    const sh = shaping;
+    shaping = null;
+    const v = sh.view;
+    const small = Math.hypot(sh.end.x - sh.start.x, sh.end.y - sh.start.y) * cssScale(v) < 6;
+    if (cancelled || small) { renderLive(v); return; }
+    const s = shapeStroke(sh, sh.square);
+    const id = vault.addStroke({ on: itemId, layer, page: v.key, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape,
+      style: { dash: s.dash, arrow: s.arrow, fill: s.fill }, from: s.from ?? "", to: s.to ?? "" });
+    record({ add: [[id, "stroke"]] }, [v]);
+    v.dirty = true;
+    renderView(v);
+  }
+
+  // ---------- ruler and protractor (this device only) ----------
+  function toggleGuide(kind) {
+    if (guides[kind]) {
+      guides[kind] = null;
+    } else {
+      const v = viewByKey(currentKey) ?? views[0];
+      if (!v) return;
+      // Where the page is on screen, so it shows up in view.
+      const sr = scroller.getBoundingClientRect(), er = v.el.getBoundingClientRect();
+      const mid = toPage(v, { clientX: Math.max(er.left, Math.min(er.right, sr.left + sr.width / 2)), clientY: Math.max(er.top, Math.min(er.bottom, sr.top + sr.height / 2)) });
+      if (guides.view && guides.view !== v) { guides.ruler = null; guides.protractor = null; renderLive(guides.view); }
+      guides.view = v;
+      guides[kind] = kind === "ruler" ? { x: mid.x, y: mid.y, angle: -Math.PI / 12 } : { x: mid.x, y: mid.y + 80, angle: 0, reading: null };
+    }
+    if (!guides.ruler && !guides.protractor) { const v = guides.view; guides.view = null; if (v) renderLive(v); }
+    if (guides.view) renderLive(guides.view);
+    refreshToolbar();
+  }
+
+  /** Moving a guide with its body, or turning it about its centre with a knob (snapping to 15° steps). */
+  function moveGuide(p) {
+    const d = guideDrag, g = guides[d.kind];
+    if (!g) return;
+    if (d.turn) {
+      const a = Math.atan2(p.y - d.y, p.x - d.x) - d.grab;
+      g.angle = snapRotation(d.angle + a);
+    } else {
+      g.x = d.x + p.x - d.start.x;
+      g.y = d.y + p.y - d.start.y;
+    }
+    scheduleLive(d.view);
+  }
+
+  // ---------- the elements library ----------
+  /** The library: built-in and saved elements by folder; a tap puts one on the page. `save` shows the form to save the selection. */
+  function refreshElementsPop(save = false) {
+    const list = vault.stickers();
+    const parts = [];
+    if (save && selection) {
+      const folders = [...new Set(list.filter((x) => !x.builtin && x.folder).map((x) => x.folder))].sort();
+      const name = h("input", { type: "text", class: "ink-element-name", "aria-label": "Name", placeholder: "Name", maxlength: "80" });
+      const folder = h("input", { type: "text", class: "ink-element-folder", "aria-label": "Folder", placeholder: "Folder (optional)", maxlength: "80", list: "ink-element-folders" });
+      const save = () => {
+        if (!selection) return;
+        const v = selection.view;
+        vault.addSticker({ name: name.value.trim() || "Element", folder: folder.value.trim(),
+          strokes: vault.strokes(itemId, layer, v.key).filter((s) => selection.strokes.has(s.id)),
+          elements: vault.elements(itemId, layer, v.key).filter((e) => selection.elements.has(e.id)) });
+        changed();
+        refreshElementsPop();
+      };
+      name.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") save(); });
+      folder.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") save(); });
+      parts.push(h("div", { class: "ink-pop-title", text: "Save the selection as an element" }),
+        h("div", { class: "ink-pop-row" }, name, folder, h("datalist", { id: "ink-element-folders" }, folders.map((f) => h("option", { value: f }))),
+          h("button", { type: "button", class: "primary small", onclick: save }, "Save")),
+        h("p", { class: "hint", text: "Saved elements are on every device, in this library." }));
+      requestAnimationFrame(() => name.focus());
+    }
+    const byFolder = new Map();
+    for (const x of list) {
+      const key = x.builtin ? `Trove: ${x.folder}` : x.folder || "Yours";
+      if (!byFolder.has(key)) byFolder.set(key, []);
+      byFolder.get(key).push(x);
+    }
+    const drawPicture = (ctx, e) => { const b = e.image && pictureBitmap(vault, e.image).ready; if (b) withElementTransform(ctx, e, () => ctx.drawImage(b, e.x, e.y, e.w, e.h)); };
+    for (const [folder, items] of byFolder) {
+      parts.push(h("div", { class: "ink-pop-title", text: folder }),
+        h("div", { class: "ink-elements" }, items.map((x) => h("span", { class: "ink-element" },
+          h("button", { type: "button", class: "ink-element-use", title: `Put ${x.name} on the page`, "aria-label": x.name, onclick: () => placeElement(x) },
+            stickerCanvas(x, 56, drawPicture), h("span", { text: x.name })),
+          x.builtin ? null : h("button", { type: "button", class: "ink-chip-x", "aria-label": `Delete ${x.name}`, title: "Delete",
+            onclick: () => { if (confirm(`Delete “${x.name}” from your elements?`)) { vault.deleteSticker(x.id); changed(); refreshElementsPop(); } } }, lineIcon("close"))))));
+    }
+    if (!save) parts.push(h("p", { class: "hint", text: "Select something with the lasso, then Save as element to keep it here." }));
+    elementsPop.replaceChildren(...parts);
+  }
+
+  function openSaveElement(anchor) {
+    if (openPop === elementsPop) closePops();
+    togglePop(elementsPop, anchor, () => refreshElementsPop(true));
+  }
+
+  /** Puts a library element in the middle of what's in view, selected so it can be moved straight away. */
+  function placeElement(sticker) {
+    const v = viewByKey(currentKey) ?? views[0];
+    if (!v) return;
+    const sr = scroller.getBoundingClientRect(), er = v.el.getBoundingClientRect();
+    const at = toPage(v, { clientX: Math.max(er.left, Math.min(er.right, sr.left + sr.width / 2)), clientY: Math.max(er.top, Math.min(er.bottom, sr.top + sr.height / 2)) });
+    const ids = vault.placeSticker(sticker, { on: itemId, layer, page: v.key, at });
+    if (!ids.length) return;
+    closePops();
+    record({ add: ids.map((id) => [id, vault.element(id) ? "element" : "stroke"]) }, [v]);
+    selectIds(v, ids);
+    v.dirty = true;
+    renderView(v);
   }
 
   // ---------- text boxes ----------
   function textAt(v, p) {
-    return vault.elements(itemId, layer, v.key).reverse().find((e) => e.type === "text" && p.x >= e.x && p.x <= e.x + e.w && p.y >= e.y && p.y <= e.y + textHeight(e)) ?? null;
+    return vault.elements(itemId, layer, v.key).reverse().find((e) => e.type === "text" && elementContains(e, p, textHeight(e))) ?? null;
   }
 
-  /** Types in a text box: the one under the point, or a new one there. */
+  /** The text style the options show: the box being typed in, else the selected text box, else the next box's. */
+  function currentTextStyle() {
+    if (editing) return editing.frame;
+    const sel = selectedTextBoxes();
+    return sel.length ? sel[0] : prefs.textStyle;
+  }
+  const selectedTextBoxes = () => (selection ? [...selection.elements].map((id) => vault.element(id)).filter((e) => e?.type === "text") : []);
+
+  function refreshTextGroup() {
+    const show = tool === "text" || Boolean(editing) || selectedTextBoxes().length > 0;
+    textGroup.hidden = !show;
+    if (!show) return;
+    const st = currentTextStyle();
+    fontSelect.value = TEXT_FONTS.includes(st.font) ? st.font : "sans";
+    boldButton.setAttribute("aria-pressed", String(Boolean(st.bold)));
+    italicButton.setAttribute("aria-pressed", String(Boolean(st.italic)));
+  }
+
+  /** Font, bold or italic: on the box being typed in, the selected text boxes, and the next new box. */
+  function applyTextStyle(change) {
+    prefs.textStyle = { ...prefs.textStyle, ...change };
+    savePrefs(prefs);
+    if (editing) {
+      Object.assign(editing.frame, change);
+      editing.place();
+      editing.area.focus();
+    } else if (selectedTextBoxes().length) {
+      const ids = selectedTextBoxes().map((e) => e.id);
+      const before = snapshot([], ids);
+      for (const id of ids) vault.updateElement(id, { style: change });
+      for (const id of ids) { const e = vault.element(id); vault.updateElement(id, { frame: { x: e.x, y: e.y, w: e.w, h: textHeight(e) } }); }
+      record({ before, after: snapshot([], ids) }, [selection.view]);
+    }
+    refreshTextGroup();
+  }
+
+  /** Bullets on the lines the cursor is in (or off, when they all have them). */
+  function toggleBullets() {
+    if (!editing) { if (tool !== "text") setTool("text"); return; }
+    const area = editing.area, text = area.value;
+    const from = text.lastIndexOf("\n", area.selectionStart - 1) + 1;
+    let to = text.indexOf("\n", area.selectionEnd);
+    if (to < 0) to = text.length;
+    const lines = text.slice(from, to).split("\n");
+    const on = !lines.every((l) => l.startsWith("• "));
+    const next = lines.map((l) => (on ? (l.startsWith("• ") ? l : `• ${l}`) : l.replace(/^• /, ""))).join("\n");
+    area.value = text.slice(0, from) + next + text.slice(to);
+    area.selectionStart = area.selectionEnd = from + next.length;
+    editing.place();
+    area.focus();
+  }
+
+  /** Types in a text box: the one under the point, or a new one there (in the font and style chosen). */
   function startText(v, p, existing = textAt(v, p)) {
     const k = cssScale(v);
     const width = existing ? existing.w : v.infinite ? 320 : Math.max(120, Math.min(360, v.spec.width - p.x - 16));
-    const e = existing ?? { x: p.x, y: p.y - widthOf("text") * 0.6, w: width, size: widthOf("text"), color: colorOf("text"), text: "" };
+    const e = existing ? { ...existing } : { x: p.x, y: p.y - widthOf("text") * 0.6, w: width, h: widthOf("text") * 1.25, size: widthOf("text"), color: colorOf("text"), text: "",
+      rotate: 0, font: prefs.textStyle.font, bold: Boolean(prefs.textStyle.bold), italic: Boolean(prefs.textStyle.italic) };
     const area = h("textarea", { class: "ink-textbox", "aria-label": "Text box", spellcheck: "true" });
     area.value = e.text;
     const place = () => {
       const left = v.infinite ? (e.x - v.ox) * k : e.x * k, top = v.infinite ? (e.y - v.oy) * k : e.y * k;
-      area.style.cssText = `left:${left}px;top:${top}px;width:${e.w * k}px;font:${textFont(e.size * k)};line-height:1.25;color:${e.color}`;
+      area.style.cssText = `left:${left}px;top:${top}px;width:${e.w * k}px;font:${textFont(e.size * k, e)};line-height:1.25;color:${e.color}`;
       area.style.height = "auto";
       area.style.height = `${Math.max(e.size * 1.25 * k, area.scrollHeight)}px`;
+      // A turned box is typed in turned, about the same centre it's drawn about.
+      if (e.rotate) { area.style.transformOrigin = `${(e.w * k) / 2}px ${(e.h * k) / 2}px`; area.style.transform = `rotate(${e.rotate}rad)`; }
     };
     area.addEventListener("input", place);
     area.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); commitText(); }
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); commitText(); return; }
+      const mod = ev.metaKey || ev.ctrlKey;
+      if (mod && ev.key.toLowerCase() === "b") { ev.preventDefault(); applyTextStyle({ bold: !e.bold }); }
+      else if (mod && ev.key.toLowerCase() === "i") { ev.preventDefault(); applyTextStyle({ italic: !e.italic }); }
+      else if (ev.key === "Enter" && !ev.shiftKey) {
+        // A bullet line continues the list; an empty bullet ends it.
+        const start = area.value.lastIndexOf("\n", area.selectionStart - 1) + 1, line = area.value.slice(start, area.selectionStart);
+        if (line.startsWith("• ")) {
+          ev.preventDefault();
+          if (line === "• ") { area.setRangeText("", start, area.selectionStart, "end"); }
+          else area.setRangeText("\n• ", area.selectionStart, area.selectionEnd, "end");
+          place();
+        }
+      }
       ev.stopPropagation();
     });
-    area.addEventListener("blur", () => setTimeout(() => { if (editing?.area === area) commitText(); }, 0));
+    // Picking a font or style keeps the box open; anywhere else closes it.
+    area.addEventListener("blur", (ev) => {
+      if (ev.relatedTarget?.closest?.(".ink-options")) return;
+      setTimeout(() => { if (editing?.area === area && !document.activeElement?.closest?.(".ink-options")) commitText(); }, 0);
+    });
     v.el.append(area);
-    editing = { view: v, id: existing?.id ?? null, frame: e, area };
+    editing = { view: v, id: existing?.id ?? null, frame: e, area, place };
     place();
     v.dirty = true;
     renderView(v);
+    refreshTextGroup();
     area.focus();
   }
 
@@ -1504,22 +2096,26 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const text = ed.area.value.replace(/\s+$/, "");
     ed.area.remove();
     const v = ed.view;
+    const style = { font: ed.frame.font, bold: Boolean(ed.frame.bold), italic: Boolean(ed.frame.italic) };
     if (ed.id) {
       const before = snapshot([], [ed.id]);
+      const old = vault.element(ed.id);
+      const restyled = old && (old.font !== style.font || old.bold !== style.bold || old.italic !== style.italic || old.color !== ed.frame.color);
       if (!text) {
         vault.deleteElements([ed.id]);
         record({ remove: [[ed.id, "element"]] }, [v]);
-      } else if (text !== vault.element(ed.id)?.text) {
-        vault.updateElement(ed.id, { text, frame: { ...ed.frame, h: textHeight({ ...ed.frame, text }) } });
+      } else if (text !== old?.text || restyled) {
+        vault.updateElement(ed.id, { text, color: ed.frame.color, style, frame: { ...ed.frame, h: textHeight({ ...ed.frame, text }) } });
         record({ before, after: snapshot([], [ed.id]) }, [v]);
       }
     } else if (text) {
       const frame = { x: ed.frame.x, y: ed.frame.y, w: ed.frame.w, h: textHeight({ ...ed.frame, text }) };
-      const id = vault.addElement({ on: itemId, layer, page: v.key, type: "text", frame, text, size: ed.frame.size, color: ed.frame.color });
+      const id = vault.addElement({ on: itemId, layer, page: v.key, type: "text", frame, text, size: ed.frame.size, color: ed.frame.color, style });
       record({ add: [[id, "element"]] }, [v]);
     }
     v.dirty = true;
     renderView(v);
+    refreshTextGroup();
   }
 
   // ---------- pictures ----------
@@ -1734,12 +2330,20 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   function refreshToolbar() {
     toolButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(Object.keys(TOOL_INFO)[i] === tool)));
     shapeButton.setAttribute("aria-pressed", String(prefs.shapes));
-    const hasColor = PEN_TOOLS.includes(tool) || tool === "text" || tool === "laser" || tool === "tape";
+    const hasColor = PEN_TOOLS.includes(tool) || tool === "text" || tool === "laser" || tool === "tape" || tool === "shape";
     const c = hasColor ? colorOf(tool) : null;
     refreshSwatches(c);
     refreshFavourites();
     if (c) { custom.value = c; if (document.activeElement !== hexInput) hexInput.value = c; }
-    root.querySelector(".ink-pen-group").hidden = !PEN_TOOLS.includes(tool);
+    root.querySelector(".ink-pen-group").hidden = !PEN_TOOLS.includes(tool) && tool !== "shape";
+    favouriteButton.hidden = tool === "shape";
+    shapeGroup.hidden = tool !== "shape";
+    for (const b of shapeGroup.children) b.setAttribute("aria-checked", String(b.dataset.shape === prefs.shapeKind));
+    lassoGroup.hidden = tool !== "lasso";
+    for (const b of lassoGroup.querySelectorAll("[data-kinds]")) b.setAttribute("aria-checked", String(b.dataset.kinds === prefs.lassoKinds));
+    refreshTextGroup();
+    rulerButton.setAttribute("aria-pressed", String(Boolean(guides.ruler)));
+    protractorButton.setAttribute("aria-pressed", String(Boolean(guides.protractor)));
     const sized = hasColor || tool === "eraser";
     root.querySelector(".ink-colors").hidden = !hasColor && !(tool === "lasso" && selection);
     root.querySelector(".ink-size-group").hidden = !sized;
@@ -1905,7 +2509,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
           c2.fillStyle = "#fff";
           c2.fillRect(0, 0, canvas.width, canvas.height);
           c2.drawImage(bitmap, 0, 0);
-          ctx.drawJpeg(await jpegOf(canvas), canvas.width, canvas.height, e.x, e.y, e.w, e.h);
+          const jpeg = await jpegOf(canvas);
+          withElementTransform(ctx, e, () => ctx.drawJpeg(jpeg, canvas.width, canvas.height, e.x, e.y, e.w, e.h));
         }
         for (const s of vault.strokes(itemId, layer, spec.key)) drawStroke(ctx, s);
         for (const e of vault.elements(itemId, layer, spec.key)) if (e.type === "text") drawTextElement(ctx, e);
