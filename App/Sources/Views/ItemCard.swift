@@ -28,7 +28,12 @@ struct ItemCard: View {
                     .font(.headline)
                     .lineLimit(3)
                     .foregroundStyle(.primary)
-                if let snippet {
+                if let found = searchSnippet {
+                    Text(SearchSnippetText.attributed(found, kind: item.kind))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(4)
+                } else if let snippet {
                     Text(snippet)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -50,6 +55,7 @@ struct ItemCard: View {
 
     private var subtitle: String { Self.subtitle(item) }
     private var snippet: String? { Self.snippet(item) }
+    private var searchSnippet: SearchSnippet? { model.searchResults == nil ? nil : model.searchSnippets[item.id] }
 
     static func subtitle(_ item: Item) -> String {
         let place = item.siteName ?? item.url?.host?.replacingOccurrences(of: "www.", with: "") ?? ItemStyle.sourceLabel(item.source)
@@ -208,5 +214,43 @@ private struct ThumbnailFrame: ViewModifier {
         } else {
             content.frame(maxWidth: .infinity).frame(height: height).clipped()
         }
+    }
+}
+
+/// A search result's matching passage with the matched words bold, labelled when it's handwriting
+/// or text found in a file (SearchIndex.snippet).
+enum SearchSnippetText {
+    static func label(_ field: String, kind: ItemKind) -> String? {
+        switch field {
+        case "ink": return "Handwriting"
+        case "sketch": return "On the sketch"
+        case "ocr": return kind == .image ? "In the picture" : "In the file"
+        default: return nil
+        }
+    }
+
+    static func attributed(_ s: SearchSnippet, kind: ItemKind) -> AttributedString {
+        var out = AttributedString()
+        if let label = label(s.field, kind: kind) {
+            var l = AttributedString(label + ": ")
+            l.inlinePresentationIntent = .stronglyEmphasized
+            out += l
+        }
+        let scalars = Array(s.text.unicodeScalars)
+        func piece(_ r: Range<Int>) -> AttributedString {
+            var v = String.UnicodeScalarView()
+            v.append(contentsOf: scalars[r])
+            return AttributedString(String(v))
+        }
+        var at = 0
+        for r in s.ranges where r.lowerBound >= at && r.upperBound <= scalars.count {
+            out += piece(at..<r.lowerBound)
+            var word = piece(r)
+            word.inlinePresentationIntent = .stronglyEmphasized
+            out += word
+            at = r.upperBound
+        }
+        out += piece(at..<scalars.count)
+        return out
     }
 }

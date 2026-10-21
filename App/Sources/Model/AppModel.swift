@@ -98,6 +98,10 @@ final class AppModel {
     var searchResults: [Item]? { didSet { searchVersion += 1 } }
     /// Clips matching the search, shown under the library's results.
     private(set) var clipResults: [Clip] = []
+    /// How many items the search matched in all, and the matching passage of the first results.
+    private(set) var searchTotal = 0
+    private(set) var searchSnippets: [String: SearchSnippet] = [:]
+    @ObservationIgnored private var searchIndexSaved = ""
     /// This device's search index, copied from the library after each change. Searching it on the
     /// main actor answers every keystroke at once, without waiting behind syncing or file loads.
     @ObservationIgnored private var index = SearchIndex()
@@ -159,6 +163,12 @@ final class AppModel {
         let engine = try vault.makeEngine()
         let library = Library(engine: engine)
         self.library = library
+        // The search index from last time: only what changed since gets indexed again.
+        let searchURL = vault.searchIndexURL
+        if let saved = await Task.detached(priority: .userInitiated, operation: { VaultStore.read(SearchIndex.Snapshot.self, from: searchURL) }).value {
+            await library.restoreSearch(saved)
+        }
+        await semantic.useCache(vault.semanticURL)
         let config = vault.config!
         enrichment = EnrichmentService(library: library, deviceId: config.deviceId, relay: vault.relayClient, cloudEnabled: config.cloudAI)
         vault.publishCaptureSettings()
@@ -253,6 +263,8 @@ final class AppModel {
             folders = await library.folders()
             links = Links.graph(items)
             index = await library.searchIndex()
+            index.inked = Set(inkedLayers.keys)
+            saveSearchIndexSoon(libraryStamp)
             if !searchText.isEmpty { searchNow() }
             // Search by meaning catches up in the background; keyword search never waits for it.
             let snapshot = self.items, semantic = self.semantic
@@ -265,6 +277,7 @@ final class AppModel {
         if inkStamp != shownInkStamp {
             shownInkStamp = inkStamp
             inkedLayers = await library.inkedLayers()
+            index.inked = Set(inkedLayers.keys)
             inkRevision += 1
         }
     }
@@ -491,16 +504,40 @@ final class AppModel {
         let text = searchText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { searchResults = nil; clipResults = []; return }
         let query = SearchQuery.parse(text)
-        searchResults = index.search(query).map(\.item)
-        let clipQuery = ClipQuery(text)
-        clipResults = Array(clipboard.clips.lazy.filter { clipQuery.matches($0, haystack: self.clipboard.searchText($0)) }.prefix(8))
+        showResults(index.searchWithTotal(query), query: query)
+        clipResults = clipboard.matches(ClipQuery(text), limit: 8)
         guard query.text.count >= 3 else { return }
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard let self, !Task.isCancelled else { return }
             let scores = await self.semantic.scores(for: query.text)
             guard !Task.isCancelled, !scores.isEmpty, self.searchText.trimmingCharacters(in: .whitespaces) == text else { return }
-            self.searchResults = self.index.search(query, semantic: scores).map(\.item)
+            self.showResults(self.index.searchWithTotal(query, semantic: scores), query: query)
+        }
+    }
+
+    /// Results plus the matching passage (bold words) of the first ones, for the cards and rows.
+    private func showResults(_ found: (hits: [SearchIndex.Hit], total: Int), query: SearchQuery) {
+        searchTotal = found.total
+        var snippets: [String: SearchSnippet] = [:]
+        if query.hasWords {
+            for hit in found.hits.prefix(60) {
+                if let s = index.snippet(for: hit.item.id, query: query) { snippets[hit.item.id] = s }
+            }
+        }
+        searchSnippets = snippets
+        searchResults = found.hits.map(\.item)
+    }
+
+    /// Saves the search index next to the vault snapshot a little after the library changed.
+    private func saveSearchIndexSoon(_ stamp: String) {
+        guard stamp != searchIndexSaved, let library else { return }
+        searchIndexSaved = stamp
+        let url = vault.searchIndexURL
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(5))
+            let snapshot = await library.searchSnapshot()
+            VaultStore.write(snapshot, to: url)
         }
     }
 
