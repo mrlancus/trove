@@ -60,6 +60,9 @@ jobs:
         run: npm test
       - name: Browser extension tests
         run: node --experimental-strip-types --test extensions/browser/test/trv1.test.mjs
+      - name: trove-mcp tests
+        working-directory: mcp
+        run: npm test
       - name: Benchmarks (fails if >20 % slower than web/test/bench-baseline.json)
         working-directory: web
         env:
@@ -115,6 +118,9 @@ jobs:
           exit 1
       - name: Website e2e (relay + Chromium)
         working-directory: web
+        run: npm run test:e2e
+      - name: trove-mcp e2e (relay + the real CLI)
+        working-directory: mcp
         run: npm run test:e2e
       - name: Relay log
         if: failure()
