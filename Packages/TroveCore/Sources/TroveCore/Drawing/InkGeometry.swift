@@ -69,7 +69,7 @@ public enum InkGeometry {
         public var widthScale: Double { (abs(sx) * abs(sy)).squareRoot() }
 
         public func apply(_ p: InkPoint) -> InkPoint {
-            InkPoint(x: ox + (p.x - ox) * sx + dx, y: oy + (p.y - oy) * sy + dy, pressure: p.pressure, t: p.t)
+            InkPoint(x: ox + (p.x - ox) * sx + dx, y: oy + (p.y - oy) * sy + dy, pressure: p.pressure, t: p.t, angle: p.angle)
         }
 
         public func apply(_ r: Rect) -> Rect {
@@ -120,7 +120,7 @@ public enum InkGeometry {
                 for k in 1..<n {
                     let f = Double(k) / Double(n)
                     out.append(InkPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f,
-                                        pressure: a.pressure + (b.pressure - a.pressure) * f, t: a.t + (b.t - a.t) * f))
+                                        pressure: a.pressure + (b.pressure - a.pressure) * f, t: a.t + (b.t - a.t) * f, angle: a.angle))
                 }
             }
             out.append(b)
@@ -145,13 +145,13 @@ public enum InkGeometry {
 
     // MARK: Pens
 
-    /// Fountain pens write like a nib held at 45°: thin along it, broad across it.
+    /// Fountain pens write like a nib held at 45° (or `nib`, radians): thin along it, broad across it.
     public static let nibAngle = Double.pi / 4
 
     /// The width of a fountain pen moving by (dx, dy) at a pressure.
-    public static func fountainWidth(_ width: Double, pressure: Double, dx: Double, dy: Double) -> Double {
+    public static func fountainWidth(_ width: Double, pressure: Double, dx: Double, dy: Double, nib: Double = nibAngle) -> Double {
         let p = min(1, max(0, pressure))
-        let across = dx == 0 && dy == 0 ? 0.5 : abs(sin(atan2(dy, dx) - nibAngle))
+        let across = dx == 0 && dy == 0 ? 0.5 : abs(sin(atan2(dy, dx) - nib))
         return width * (0.25 + 0.75 * across) * (0.6 + 0.4 * p)
     }
 

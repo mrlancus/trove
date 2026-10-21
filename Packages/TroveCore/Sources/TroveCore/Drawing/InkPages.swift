@@ -3,7 +3,8 @@ import Foundation
 /// A text box or a picture placed on a sketch page or on a file (PROTOCOL.md §10): an `element`
 /// record. Pictures draw under the ink and text boxes over it.
 public struct InkElement: Identifiable, Sendable {
-    public enum Kind: String, Sendable { case text, image }
+    /// Tape (`tape`) is a strip that hides what's under it until tapped.
+    public enum Kind: String, Sendable { case text, image, tape }
     public enum Field {
         public static let on = "on", layer = "layer", page = "page", type = "type", x = "x", y = "y", w = "w", h = "h"
         public static let text = "text", size = "size", color = "color", image = "image", createdAt = "createdAt", device = "device"
@@ -42,18 +43,20 @@ extension Library {
     /// eraser replaces it with its pieces; `shape` names a snapped shape.
     @discardableResult
     public func addStroke(id givenId: String? = nil, on itemId: String, layer: String = "", pageKey: String, tool: InkTool, color: String, width: Double,
-                          points: [InkPoint], shape: String? = nil, createdAt: Double? = nil) async -> String? {
+                          points: [InkPoint], shape: String? = nil, createdAt: Double? = nil, style: InkStrokeStyle? = nil) async -> String? {
         guard !points.isEmpty else { return nil }
         let id = givenId ?? newId()
         let created: Double
         if let createdAt { created = createdAt } else { created = await nextInkTime(on: itemId) }
+        let compact = await inkSettings().compactPoints
         var fields: [String: JSONValue] = [
             InkStroke.Field.on: .string(itemId), InkStroke.Field.layer: .string(layer), InkStroke.Field.page: .string(pageKey),
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
-            InkStroke.Field.points: .string(InkPoints.encode(points)), InkStroke.Field.createdAt: .number(created),
-            InkStroke.Field.device: .string(await engine.device),
+            InkStroke.Field.createdAt: .number(created), InkStroke.Field.device: .string(await engine.device),
         ]
+        fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
         if let shape { fields[InkStroke.Field.shape] = .string(shape) }
+        if let style { fields.merge(style.fields) { _, b in b } }
         await engine.set(fields, record: id, kind: "stroke")
         return id
     }
@@ -67,12 +70,13 @@ extension Library {
 
     /// Moves, resizes or recolours strokes (the lasso). Widths scale with the shape.
     public func transformStrokes(_ ids: [String], by transform: InkGeometry.Transform? = nil, color: String? = nil) async {
+        let compact = await inkSettings().compactPoints
         for id in ids {
             guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { continue }
             let stroke = InkStroke(r)
             var fields: [String: JSONValue] = [:]
             if let transform {
-                fields[InkStroke.Field.points] = .string(InkPoints.encode(stroke.points.map(transform.apply)))
+                fields.merge(InkPoints.fields(stroke.points.map(transform.apply), compact: compact, had: r)) { _, b in b }
                 if transform.widthScale != 1 { fields[InkStroke.Field.width] = .number(stroke.width * transform.widthScale) }
             }
             if let color { fields[InkStroke.Field.color] = .string(color) }
@@ -84,20 +88,24 @@ extension Library {
     /// in the same place among the others. Returns the ids of the new pieces.
     @discardableResult
     public func eraseStrokes(on itemId: String, layer: String = "", pageKey: String, along path: [InkPoint], radius: Double,
-                             only tools: Set<InkTool>? = nil) async -> [String] {
+                             only tools: Set<InkTool>? = nil, near: Set<String>? = nil) async -> [String] {
         var added: [String] = []
         for stroke in await strokes(on: itemId, layer: layer, pageKey: pageKey) {
             if let tools, !tools.contains(stroke.tool) { continue }
+            if let near, !near.contains(stroke.id) { continue }
             guard let pieces = InkGeometry.erase(stroke.points, along: path, radius: radius + stroke.width / 2) else { continue }
             await engine.delete(stroke.id)
             for piece in pieces {
                 if let id = await addStroke(on: itemId, layer: layer, pageKey: pageKey, tool: stroke.tool, color: stroke.color,
                                             width: stroke.width, points: piece, shape: nil,
-                                            createdAt: stroke.createdAt.timeIntervalSince1970 * 1000) { added.append(id) }
+                                            createdAt: stroke.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(stroke.style)) { added.append(id) }
             }
         }
         return added
     }
+
+    /// What pieces of an erased stroke keep: dashes and nib (a piece of a shape is no longer that shape, so no fill or arrows).
+    static func pieceStyle(_ s: InkStrokeStyle) -> InkStrokeStyle { InkStrokeStyle(dash: s.dash, nib: s.nib) }
 
     /// Replaces a stroke with pieces of it, drawn in its place (a partial erase the editor already
     /// worked out while showing it). No pieces deletes it. Returns the pieces' ids.
@@ -109,7 +117,7 @@ extension Library {
         var out: [String] = []
         for piece in pieces where piece.count >= 2 {
             if let new = await addStroke(on: s.on, layer: s.layer, pageKey: s.pageKey, tool: s.tool, color: s.color, width: s.width, points: piece,
-                                         createdAt: s.createdAt.timeIntervalSince1970 * 1000) { out.append(new) }
+                                         createdAt: s.createdAt.timeIntervalSince1970 * 1000, style: Self.pieceStyle(s.style)) { out.append(new) }
         }
         return out
     }
@@ -123,7 +131,7 @@ extension Library {
             guard let r = await engine.record(id), r.kind == "stroke", !r.isDeleted else { continue }
             let s = InkStroke(r)
             if let new = await addStroke(on: itemId, layer: layer, pageKey: pageKey, tool: s.tool, color: s.color, width: s.width * transform.widthScale,
-                                         points: s.points.map(transform.apply), shape: s.shape) { out.append(new) }
+                                         points: s.points.map(transform.apply), shape: s.shape, style: s.style) { out.append(new) }
         }
         for id in elementIds {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
@@ -157,6 +165,7 @@ extension Library {
             fields[InkElement.Field.size] = .number(size)
             fields[InkElement.Field.color] = .string(color)
         }
+        if kind == .tape { fields[InkElement.Field.color] = .string(color) }
         if let image { fields[InkElement.Field.image] = image.json }
         await engine.set(fields, record: id, kind: "element")
         if kind == .text { await refreshSketchText(itemId) }
@@ -238,7 +247,11 @@ extension Library {
     public func inkFields(_ id: String, _ names: [String]) async -> [String: JSONValue] {
         guard let r = await engine.record(id) else { return [:] }
         var out: [String: JSONValue] = [:]
-        for name in names { if let v = r[name] { out[name] = v } }
+        for name in names {
+            if let v = r[name] { out[name] = v }
+            // Points not there are put back empty, so undo can't leave newer compact points in front.
+            else if name == InkStroke.Field.points || name == InkStroke.Field.points2 { out[name] = .string("") }
+        }
         return out
     }
 

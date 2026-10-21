@@ -501,7 +501,9 @@ export function resample(pts, spacing) {
     const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / spacing);
     for (let k = 1; k < n; k++) {
       const f = k / n;
-      out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, p: a.p + (b.p - a.p) * f, t: a.t + (b.t - a.t) * f });
+      const q = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, p: a.p + (b.p - a.p) * f, t: a.t + (b.t - a.t) * f };
+      if (typeof a.a === "number") q.a = a.a;
+      out.push(q);
     }
     out.push(b);
   }
