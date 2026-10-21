@@ -31,7 +31,45 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "GoodNotes whiteboards open as a huge blank page; Connections should close what's open and switch Notes/Clipboard; Paste imports show as JSON; open clips on the right")
+## Latest round (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
+- **Why drawing lagged** (found, not guessed): every stroke reloaded the drawing three times, rebuilt
+  the whole PencilKit drawing twice (all tiles redrawn), and each reload scanned every record in the
+  vault (thousands of Paste clips) and decoded every stroke; the whole editor (toolbar too) re-rendered
+  per stroke and per eraser move; 1 s after each pause the whole vault was JSON-encoded on the main
+  thread and pushed 2 s later. Fixes:
+  - `RecordStore` (Swift + web `records.js`) indexes ids by kind and ink by item; `records(kind:)`,
+    `ink(on:)`, `stamp(of:)` are O(that kind). Library/vault ink, clips, folders, items use them.
+  - Editor: no reload after its own writes, strokes decoded once per version (`lineCache`), reload
+    skipped when `inkSignature` is unchanged, `inkChanged` debounced 2 s, style changes on
+    `styleRevision`; canvas/zoom pill/undo buttons are separate views.
+  - iPad: `PencilCanvas.apply` diffs by id + `InkLine.stamp` and keeps unchanged PKStrokes (no rebuild
+    when nothing changed), the tool is set only when it changes, no blurred page shadow per scroll
+    frame, the overlay redraws only when it has something. Mac: finished ink cached as a bitmap,
+    only the pen's tail invalidated. Website: pointer moves drawn once per frame, ink redrawn only
+    when something was erased, stroke views cached per record version.
+  - While an editor is open saves wait 4 s and pushes 8 s; the snapshot is encoded off the main
+    thread (`SnapshotWriter`, never older over newer).
+- **Toolbar** (apps + website): tools on top, the chosen tool's colours, 3 size presets, slider and
+  eraser modes in a second row (tap the chosen tool again to hide it). Squeeze palette is a small
+  two-row card (5 tools + undo, 5 colours + sizes); picking closes it. "Strokes" eraser label.
+- **Clipboard search** (apps): typing narrows the previous results (`ClipQuery.narrows`), clips'
+  folded text kept as bytes and searched with `memmem`. **Section switching**: sidebar counts and the
+  visible list cached per `dataVersion` (they re-filtered the whole library a dozen times per switch).
+- **Connections** (apps) is a two-column split (sidebar + graph); the open item closes, tapped points
+  open in a sheet.
+- **GoodNotes whiteboards missing handwriting**: no whiteboard sample to test against. Checked against
+  the 10 public sample notebooks (all ink read) and made the readers robust: point arrays found
+  wherever the format has them (A(u) or A(f)), nested/grouped strokes split, coordinates to ±1e6,
+  unlisted `notes/` members of one-page boards merged, shape fills drawn. Ink still unreadable is
+  counted and shown ("N strokes couldn't be read"). **Ask the user** whether whiteboards now show
+  their writing; if the note appears, ask for a small test whiteboard (`.goodnotes`).
+- **Editing GoodNotes**: first open in the editor copies ink, shapes and text into Trove strokes/text
+  on the notebook's layer (PROTOCOL.md §10, `editableInk`, fixture-checked in Swift and JS); item field
+  `goodnotesInk`; viewers then draw background + Trove's copy. Website button: "Edit handwriting".
+- Tests: TroveCore 100 (index, GoodNotes layouts, editable ink), web 36 unit + 11 Chromium e2e (new:
+  GoodNotes edit). Website **not deployed** yet this round: deploy when the user says so.
+
+## Round before (user: "GoodNotes whiteboards open as a huge blank page; Connections should close what's open and switch Notes/Clipboard; Paste imports show as JSON; open clips on the right")
 
 - **GoodNotes whiteboards**: an endless canvas with no background (or a huge blank PDF) and the drawing
   far from 0, 0. Both decoders now crop such pages to their content plus a margin (`fitToContent`,
