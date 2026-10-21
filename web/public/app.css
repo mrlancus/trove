@@ -538,6 +538,25 @@ body.ink-open { overflow: hidden; }
 .ink-pen-slider { width: 100%; accent-color: var(--accent); }
 .ink-fill-row .ink-swatch { width: 22px; height: 22px; }
 .sketch-pages.endless { grid-template-columns: 1fr; }
+.ink-selbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.ink-selbar::-webkit-scrollbar { display: none; }
+.ink-selbar > * { flex: none; }
+.ink-selbar button.secondary.small { white-space: nowrap; }
+.ink-selbar .ink-group + .ink-group, .ink-selbar .ink-group + button { margin-left: 2px; }
+.ink-shape-group .ink-tool.ink-mini[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent); }
+.ink-text-group .ink-font { width: auto; }
+.ink-elements-pop { max-width: 420px; }
+.ink-actions-pop button { justify-content: flex-start; text-align: left; }
+.ink-elements { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.ink-element { position: relative; display: grid; }
+.ink-element .ink-chip-x { position: absolute; top: 0; right: 0; background: var(--panel); border-radius: 50%; }
+.ink-element-use { display: grid; justify-items: center; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: #333; cursor: pointer;
+  font-size: 11px; line-height: 1.15; text-align: center; }
+.ink-element-use:hover { border-color: var(--accent); }
+.ink-element-use span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ink-sticker-canvas { width: 56px; height: 56px; }
+.ink-element-name, .ink-element-folder { flex: 1 1 120px; min-width: 0; }
+body.ink-open .dialog-backdrop { z-index: 1100; }
 @media (max-width: 760px) {
   .ink-bar-scroll { gap: 8px; }
   .ink-bar-scroll .ink-group + .ink-group { padding-left: 8px; }

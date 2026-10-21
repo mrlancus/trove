@@ -18,7 +18,8 @@ import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
 import { saveLink, showBridges } from "./bridges.js";
-import { afterSync, initAi, noteAiMenu, showAiSettings, showAsk, showReview, suggestLinksButton } from "./ai.js";
+import { afterSync, initAi, noteAiMenu, runPageAction, showAiSettings, showAsk, showReview, suggestLinksButton } from "./ai.js";
+import { pageAction, PAGE_ACTIONS } from "./aiactions.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
@@ -1682,6 +1683,22 @@ function sketchSection(item) {
     grid);
 }
 
+/**
+ * The drawing editor's lasso actions that use the relay's cloud AI (hidden while it's off): Ask AI
+ * (summarise, explain, solve, make flashcards) on a picture of the selection, and Convert to text.
+ */
+function inkAiHooks(vault, from) {
+  const choices = PAGE_ACTIONS.filter((a) => a.id !== "transcribe")
+    .map((a) => ({ label: a.label, run: async (sel) => runPageAction(vault, aiCtx, a.id, await sel.png(), { from: from() }) }));
+  return {
+    actionsClass: "ai-only",
+    selectionActions: [{ label: "Ask AI", choices }],
+    recognizeInk: async (strokes, sel) => {
+      try { return (await pageAction(vault, "transcribe", await sel.png())).text ?? ""; } catch (e) { toast(`Couldn't read the handwriting: ${e.message}`); return ""; }
+    },
+  };
+}
+
 /** Opens a sketch in the drawing editor. */
 function openSketch(id, page = 0, after = null) {
   const vault = state.vault;
@@ -1690,6 +1707,7 @@ function openSketch(id, page = 0, after = null) {
   openInkEditor({
     vault, itemId: id, title: item.displayTitle, sketch: true, startPage: page,
     connect: () => connectDialog(vault.item(id)),
+    ...inkAiHooks(vault, () => vault.item(id)),
     changed: () => syncSoon(4000),
     onClose: async (edited) => {
       if (edited) {
@@ -1726,6 +1744,7 @@ async function markUp(item, att) {
   } catch (e) { toast(`Couldn't open ${att.name}: ${e.message}`); return; }
   openInkEditor({
     vault, itemId: item.id, layer: att.id, title: att.name, pages,
+    ...inkAiHooks(vault, () => vault.item(item.id)),
     changed: () => syncSoon(4000),
     onClose: () => { panelCache.sig = null; syncSoon(500); renderDetail(true); },
   });

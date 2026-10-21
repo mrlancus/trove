@@ -1,8 +1,10 @@
 // The drawing editor: sketches and ink on PDFs and images (PROTOCOL.md §10, core/ink.js).
 // - Pens (pen, ballpoint, pencil, fountain pen, brush, marker, highlighter), an eraser (whole strokes or
-//   partial, optionally highlighter only), the lasso (move, resize, recolour, duplicate, copy,
-//   delete), shapes (a shape mode, and holding the pen still at the end of a line snaps it), text
-//   boxes and pictures.
+//   partial, optionally highlighter only), the lasso (move, resize, turn, flip, front/back, group,
+//   straighten, recolour, duplicate, copy, copy as image, save as element, delete; picks
+//   everything, ink, text or pictures), shapes (a shape mode, holding the pen still at the end of a
+//   line snaps it, and the shape tool's picker with handles and connectors), the ruler and
+//   protractor, text boxes (font, bold, italic, bullets), pictures and the elements library.
 // - Sketches have a page panel (add, duplicate, reorder, delete, paper and colour per page) or one
 //   endless canvas. Export to PDF.
 // - Apple Pencil (or any pen) draws and fingers scroll and pinch; without a pen, one finger draws
@@ -162,11 +164,13 @@ try { inkClipboard = JSON.parse(localStorage.getItem("trove.inkClipboard") ?? "n
  * - `changed()` runs after every edit (to sync); `onClose(edited)` when it closes.
  */
 export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pages: filePages = null, sketch = false, startPage = 0,
-  changed = () => {}, onClose = () => {}, connect = null, selectionActions = [], recognizeInk = null }) {
-  // HOOK: `selectionActions` [{label, run(selection)}] add buttons to the lasso's bar (Ask AI, Make
-  // flashcard, …); `selection` has {strokes, elements, page, png()}. `recognizeInk(strokes)` →
-  // Promise<string> turns on "Convert to text" (the website has no handwriting recogniser yet).
-  const extra = { connect, selectionActions: Array.isArray(selectionActions) ? selectionActions : [], recognizeInk };
+  changed = () => {}, onClose = () => {}, connect = null, selectionActions = [], recognizeInk = null, actionsClass = "" }) {
+  // `selectionActions` [{label, run(selection)} or {label, choices: [{label, run}]}] add buttons to
+  // the lasso's bar (Ask AI and its choices); `selection` has {strokes, elements, page, box, png()}.
+  // `recognizeInk(strokes, selection)` → Promise<string> turns on "Convert to text" (the website has
+  // no recogniser of its own: app.js passes the relay's cloud AI). `actionsClass` is added to those
+  // buttons (app.js: "ai-only", so they hide while cloud AI is off).
+  const extra = { connect, selectionActions: Array.isArray(selectionActions) ? selectionActions : [], recognizeInk, actionsClass: String(actionsClass || "") };
   const prefs = { tool: "pen", colors: {}, widths: {}, eraser: "stroke", highlighterOnly: false, shapes: false, panel: innerWidth > 900,
     scribble: false, layout: "vertical", fit: "page", recent: [], dash: {}, arrow: "none", fill: null, shapeKind: "rectangle", lassoKinds: "all",
     textStyle: { font: "sans", bold: false, italic: false }, ...loadPrefs() };
@@ -193,7 +197,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   let current = null; // the stroke being drawn
   let erasing = null; // one eraser gesture
   let lasso = null; // the loop being drawn
-  let selection = null; // {view, strokes: Set, elements: Set, byLoop?}: byLoop when circled with a pen (it can be moved without the lasso)
+  let selection = null; // {view, strokes: Set, elements: Set}
   let shaping = null; // a shape being dragged out with the shape tool
   let guideDrag = null; // the ruler or protractor being moved or turned
   /** The ruler and protractor (this device only), on one page. */
@@ -314,7 +318,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   // Turning, flipping and arranging are icons; the rest are words.
   const selAction = (label, d, run, extraClass = "") => h("button", { type: "button", class: `ink-tool ink-mini${extraClass}`, title: label, "aria-label": label, onclick: run }, icon(d));
   const groupButton = h("button", { type: "button", class: "secondary small ink-group-button", onclick: () => toggleGroup() }, "Group");
-  const convertButton = extra.recognizeInk ? h("button", { type: "button", class: "secondary small", onclick: () => convertSelection() }, "Convert to text") : null;
+  const hookClass = extra.actionsClass ? ` ${extra.actionsClass}` : "";
+  const convertButton = extra.recognizeInk ? h("button", { type: "button", class: `secondary small${hookClass}`, onclick: () => convertSelection() }, "Convert to text") : null;
   const copyImageButton = h("button", { type: "button", class: "secondary small", onclick: () => copySelectionImage() }, "Copy as image");
   const selectionBar = h("div", { class: "ink-selbar", hidden: true, role: "toolbar", "aria-label": "Selection" },
     h("span", { class: "ink-selcount" }),
@@ -333,8 +338,9 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     copyImageButton,
     h("button", { type: "button", class: "secondary small", onclick: (e) => openSaveElement(e.currentTarget) }, "Save as element"),
     convertButton,
-    // HOOK: Ask AI, Make flashcard and other actions passed in `selectionActions` go here.
-    extra.selectionActions.map((a) => h("button", { type: "button", class: "secondary small ink-hook-action", onclick: () => runSelectionAction(a) }, String(a.label))),
+    // Ask AI (and anything else passed in `selectionActions`).
+    extra.selectionActions.map((a) => h("button", { type: "button", class: `secondary small ink-hook-action${hookClass}`, "aria-haspopup": a.choices ? "menu" : null,
+      onclick: (e) => (a.choices ? togglePop(actionsPop, e.currentTarget, () => fillActionsPop(a)) : runSelectionAction(a)) }, String(a.label))),
     h("button", { type: "button", class: "secondary small", onclick: () => { copySelection(); deleteSelection(); } }, "Cut"),
     h("button", { type: "button", class: "secondary small danger", onclick: () => deleteSelection() }, "Delete"),
     h("button", { type: "button", class: "secondary small", "aria-label": "Deselect", onclick: () => clearSelection() }, lineIcon("close")));
@@ -345,6 +351,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const zoomPop = h("div", { class: "ink-pop ink-zoom-pop", role: "dialog", "aria-label": "Zoom", hidden: true });
   const penPop = h("div", { class: "ink-pop", role: "dialog", "aria-label": "Pen options", hidden: true });
   const elementsPop = h("div", { class: "ink-pop ink-elements-pop", role: "dialog", "aria-label": "Elements", hidden: true });
+  // A hook action's choices (Ask AI: summarise, explain…), opening upwards from the selection's bar.
+  const actionsPop = h("div", { class: "ink-pop ink-actions-pop", role: "menu", "aria-label": "Actions", hidden: true, "data-up": "true" });
   let openPop = null;
   function togglePop(pop, anchor, fill) {
     if (openPop === pop) { closePops(); return; }
@@ -356,10 +364,10 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const width = Math.min(340, rr.width - 16);
     pop.style.width = `${width}px`;
     pop.style.left = `${Math.max(8, Math.min(rr.width - width - 8, r.left - rr.left))}px`;
-    if (pop === zoomPop) { pop.style.top = ""; pop.style.bottom = `${rr.bottom - r.top + 8}px`; } else { pop.style.bottom = ""; pop.style.top = `${r.bottom - rr.top + 6}px`; }
+    if (pop === zoomPop || pop.dataset.up) { pop.style.top = ""; pop.style.bottom = `${rr.bottom - r.top + 8}px`; } else { pop.style.bottom = ""; pop.style.top = `${r.bottom - rr.top + 6}px`; }
   }
-  function closePops() { for (const p of [pagePop, settingsPop, zoomPop, penPop, elementsPop]) p.hidden = true; openPop = null; }
-  const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-head, .ink-zoom-pill")) closePops(); };
+  function closePops() { for (const p of [pagePop, settingsPop, zoomPop, penPop, elementsPop, actionsPop]) p.hidden = true; openPop = null; }
+  const onOutside = (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest?.(".ink-head, .ink-zoom-pill, .ink-selbar")) closePops(); };
   document.addEventListener("pointerdown", onOutside, true);
 
   const segmented = (label, options, value, onPick) => h("div", { class: "ink-seg", role: "radiogroup", "aria-label": label },
@@ -597,7 +605,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const flipNext = h("button", { type: "button", class: "ink-flip ink-flip-next", "aria-label": "Next page", onclick: () => flipBy(1) }, lineIcon("forward"));
   const pageCount = h("span", { class: "ink-page-count", "aria-live": "polite" });
   stage.append(h("div", { class: "ink-corner" }, zoomPill, pageCount), flipPrev, flipNext);
-  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, head, body, selectionBar, pagePop, settingsPop, zoomPop, penPop, elementsPop);
+  const root = h("div", { class: "ink-editor", role: "dialog", "aria-label": `Drawing: ${title}` }, head, body, selectionBar, pagePop, settingsPop, zoomPop, penPop, elementsPop, actionsPop);
   document.body.append(root);
   document.body.classList.add("ink-open");
 
@@ -1100,7 +1108,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       if (editing) { commitText(); if (tool === "text") return; }
       if (tool === "tape") { taping = { view: v, pointerId: e.pointerId, start: p, end: p, client: { x: e.clientX, y: e.clientY }, moved: false }; return; }
       if (tool === "text") { startText(v, p); return; }
-      if (selection && selection.view === v && (tool === "lasso" || selection.byLoop)) {
+      if (selection && selection.view === v && tool === "lasso") {
         const handle = handleAt(v, p);
         const box = selectionBox();
         if (handle || (box && p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h)) {
@@ -1213,10 +1221,11 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
 
   /** A point moved onto the ruler's edge or the protractor's arc when the stroke started there. */
-  function alongGuide(pt) {
-    const g = current?.guide;
+  const alongGuide = (pt) => onGuide(current?.guide, pt);
+  function onGuide(g, pt) {
     if (!g) return pt;
-    return g.kind === "ruler" ? onRulerEdge(guides.ruler, g.edge, pt) : onArc(guides.protractor, pt);
+    if (g.kind === "ruler") return guides.ruler ? onRulerEdge(guides.ruler, g.edge, pt) : pt;
+    return guides.protractor ? onArc(guides.protractor, pt) : pt;
   }
 
   /** The guide edge a pen put down at `p` draws along: {kind: "ruler", edge} or {kind: "arc"}, or null. */
@@ -1284,7 +1293,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     current = null;
     if (!s.points.length) return;
     s.predicted = null;
-    if (!s.shape && s.filter && s.raw) { const end = s.filter.end(s.raw); if (end) s.points.push(end); }
+    if (!s.shape && s.filter && s.raw) { const end = s.filter.end(s.raw); if (end) s.points.push(onGuide(s.guide, end)); }
     // A tap on tape (any pen) opens or covers it again instead of leaving a dot.
     const tapped = s.tool !== "laser" && isTap(s) ? tapeAt(s.view, s.points[0]) : null;
     if (tapped) { togglePeek(s.view, tapped); renderLive(s.view); return; }
@@ -1509,7 +1518,8 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
   function selectedShapeHandles(edit = null) {
     const s = singleShape();
-    return s ? shapeHandles(edit ?? s) : [];
+    // A connector follows what it joins, so it has no handles of its own.
+    return s && !s.from && !s.to ? shapeHandles(edit ?? s) : [];
   }
 
   /** The handle under a point: a shape's own ({shape: i}), the turning one ({rotate}) or a corner ({index}). */
@@ -1686,6 +1696,11 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       png: () => renderSelectionPNG({ x: box.x - 8, y: box.y - 8, w: box.w + 16, h: box.h + 16 }, 2, (ctx) => drawPicked(ctx, v, keep)),
     };
   }
+  /** The choices of a hook action (Ask AI) as a menu. */
+  function fillActionsPop(action) {
+    actionsPop.replaceChildren(h("div", { class: "ink-pop-title", text: String(action.label) }),
+      ...action.choices.map((c) => h("button", { type: "button", class: "secondary small", role: "menuitem", onclick: () => { closePops(); runSelectionAction(c); } }, String(c.label))));
+  }
   async function runSelectionAction(action) {
     if (!selection) return;
     try { await action.run(selectionInfo()); } catch (e) { console.warn("selection action failed", e); }
@@ -1745,11 +1760,11 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     renderLive(v);
   }
 
-  /** Selects ids on a page, with the rest of their groups. `byLoop`: circled with a pen (keeps the pen). */
-  function selectIds(v, ids, byLoop = false) {
-    if (!byLoop && tool !== "lasso") setTool("lasso");
+  /** Selects ids on a page, with the rest of their groups (switching to the lasso). */
+  function selectIds(v, ids) {
+    if (tool !== "lasso") setTool("lasso");
     const all = withGroups(ids, pageMembers(v));
-    selection = all.length ? { view: v, strokes: new Set(all.filter((id) => !vault.element(id))), elements: new Set(all.filter((id) => vault.element(id))), byLoop } : null;
+    selection = all.length ? { view: v, strokes: new Set(all.filter((id) => !vault.element(id))), elements: new Set(all.filter((id) => vault.element(id))) } : null;
     refreshSelection();
     refreshToolbar();
   }

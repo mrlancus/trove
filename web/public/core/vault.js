@@ -614,6 +614,13 @@ export class Vault {
     }
   }
 
+  /** A clean shape's new outline after one of its handles was dragged (a bent line becomes a `curve`, a moved rectangle corner a `polygon`). */
+  setStrokeShape(id, shape, points) {
+    const r = this.store.records.get(id);
+    if (!r || r.kind !== "stroke" || r.fields._deleted === true || !points.length) return;
+    this.set({ ...pointFields(points, this.compactPoints(), r.fields), [InkField.shape]: shape }, id, "stroke");
+  }
+
   /**
    * The partial eraser: crossed strokes become what's left of them, in the same place
    * (Library.eraseStrokes). `near` (ids, from the page's grid) limits which strokes are tested.
