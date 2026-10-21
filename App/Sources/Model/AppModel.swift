@@ -139,9 +139,9 @@ final class AppModel {
     /// after you pause, others' strokes pulled on a live ping or every couple of minutes).
     var sketchCovers: Bool {
         #if os(iOS)
-        drawingOpen > 0
+        return drawingOpen > 0
         #else
-        false
+        return false
         #endif
     }
     /// Something waited for the sketch to close.
