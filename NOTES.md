@@ -156,7 +156,7 @@ user says "publish" (`cd server && npx wrangler deploy`).
     - Tests: web unit + `test/editing.e2e.mjs` (Chromium: shapes, connector following a moved
       shape, bent line, turn/front/group, copy as image, text font/bold, lasso by type, ruler line,
       save and place elements, all checked on a second device); Swift `InkEditingTests` (fixture +
-      library edits). **The app code was written without Xcode**: see CI for compile errors.
+      library edits). The apps build on CI for macOS and iOS (run on `wip/editing` at 3372a66, no errors); not yet run on a device.
     - **Check on the iPad** (Air M3 + Pencil Pro): the lasso's knob and handles with the Pencil;
       Shape tool drags; PencilKit's ruler appears from the ruler button and lines snap to it; the
       protractor moves with a finger while the Pencil draws, and arcs drawn on it snap; the text
