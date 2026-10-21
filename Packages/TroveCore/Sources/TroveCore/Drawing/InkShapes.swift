@@ -12,6 +12,7 @@ public enum InkShapes {
     public struct Result: Sendable {
         public var shape: Shape
         public var points: [InkPoint]
+        public init(shape: Shape, points: [InkPoint]) { self.shape = shape; self.points = points }
     }
 
     /// Smaller than this (page points across) is a dot or a tick, not a shape.
