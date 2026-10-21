@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { envelopePrefix, randomId, randomToken, seal, sealedLength, sealStream, sha256Hex, b64uDecode, b64uEncode, type InboxHeader } from "./crypto";
 import { handleDav } from "./webdav";
-import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
+import { aiAction, aiAsk, aiConfigured, aiEmbed, aiEnrich, aiTranscribe, DEFAULT_MONTHLY_TOKENS, modelOf } from "./ai";
 import { checkPrice, type Price } from "./price";
 import { publishedPage } from "./publish";
 import { Bridges, FETCH_BUDGET } from "./bridges";
@@ -15,6 +15,8 @@ export interface Env {
   EMAIL_VAULT_ID: string;
   /** "false" closes POST /v1/vaults once your own vault exists, so nobody else can use this relay. */
   ALLOW_NEW_VAULTS?: string;
+  /** Monthly allowance of Claude tokens (input + output) per vault; unset means DEFAULT_MONTHLY_TOKENS. */
+  AI_MONTHLY_LIMIT?: string;
   /** Optional secret that encrypts bridge tokens (Telegram bot, GitHub) at rest (PROTOCOL.md §4 "Bridges"). */
   BRIDGE_KEY?: string;
 }
@@ -22,6 +24,9 @@ export interface Env {
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
 
 const MAX_SEGMENT_BYTES = 1024 * 1024;
+/** Checkpoints (PROTOCOL.md §3): the newest few per vault, up to just under the Workers request limit. */
+const MAX_CHECKPOINT_BYTES = 95 * 1024 * 1024;
+const CHECKPOINTS_KEPT = 3;
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 const RECOVERY_TTL_MS = 5 * 60 * 1000;
 const MAX_OPEN_RECOVERIES = 10;
@@ -70,6 +75,7 @@ export class VaultObject extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS watches(id TEXT PRIMARY KEY, url TEXT, item_id TEXT, created_at INTEGER, checked_at INTEGER DEFAULT 0,
         error TEXT, price REAL, currency TEXT, lowest REAL, history TEXT DEFAULT '[]', dropped_at INTEGER);
       CREATE TABLE IF NOT EXISTS published(slug TEXT PRIMARY KEY, title TEXT, markdown TEXT, updated_at INTEGER);
+      CREATE TABLE IF NOT EXISTS checkpoints(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, device TEXT, size INTEGER, created_at INTEGER);
     `);
     this.bridges = new Bridges({
       sql: this.sql, storage: ctx.storage, vaultId: () => this.vaultId, fetcher: () => this.fetchPage, tokenKey: env.BRIDGE_KEY,
@@ -262,6 +268,11 @@ export class VaultObject extends DurableObject<Env> {
         if (a && b && c && method === "PUT") return this.putSegment(request, deviceId, a, Number(b), Number(c));
         if (a && b && c && method === "GET") return this.getSegment(a, Number(b), Number(c));
         break;
+      case "checkpoints":
+        if (!a && method === "GET") return this.listCheckpoints();
+        if (a && !b && method === "PUT") return this.putCheckpoint(request, deviceId, a);
+        if (a && !b && method === "GET") return this.getCheckpoint(a);
+        break;
       case "blobs":
         if (a && method === "PUT") return this.putBlob(request, a);
         if (a && method === "GET") return this.getBlob(a);
@@ -295,16 +306,61 @@ export class VaultObject extends DurableObject<Env> {
         }
         break;
       case "ai": {
+        if (a === "status" && method === "GET") return json(this.aiStatus());
         if (method !== "POST") break;
-        if (this.meta("aiEnabled") !== "true") return error(403, "AI is disabled for this vault");
-        if (a === "enrich") return json(await aiEnrich(this.env, await request.json()));
-        if (a === "ask") return json(await aiAsk(this.env, await request.json()));
+        if (this.meta("aiEnabled") !== "true") { await request.arrayBuffer().catch(() => null); return error(403, "AI is disabled for this vault"); }
+        if (a === "enrich" || a === "ask" || a === "action") {
+          const status = this.aiStatus();
+          if (status.used >= status.limit) {
+            await request.arrayBuffer().catch(() => null);
+            return json({ error: `This month's cloud AI allowance is used up. It starts again on ${status.resetsAt.slice(0, 10)}.`, ...status }, 429);
+          }
+          const body = await request.json().catch(() => null);
+          if (!body || typeof body !== "object") return error(400, "a JSON body is required");
+          try {
+            const result = a === "enrich" ? await aiEnrich(this.env, body) : a === "ask" ? await aiAsk(this.env, body as never) : await aiAction(this.env, body);
+            this.addAiUsage(result.tokens);
+            return json({ ...result, usage: this.aiStatus() });
+          } catch (e) {
+            if (e instanceof HttpError && e.tokens) this.addAiUsage(e.tokens);
+            throw e;
+          }
+        }
         if (a === "transcribe") return json(await aiTranscribe(this.env, new Uint8Array(await request.arrayBuffer())));
         if (a === "embed") return json(await aiEmbed(this.env, await request.json()));
         break;
       }
     }
     return error(404, "not found");
+  }
+
+  // ---------- AI allowance (ROADMAP §4 A1) ----------
+
+  /** Claude use this calendar month (UTC), in tokens as the API reported them, against AI_MONTHLY_LIMIT. */
+  aiStatus() {
+    const now = new Date();
+    const month = now.toISOString().slice(0, 7);
+    const limit = Math.max(0, Math.floor(Number(this.env.AI_MONTHLY_LIMIT ?? "") || DEFAULT_MONTHLY_TOKENS));
+    const resetsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+    const vaultEnabled = this.meta("aiEnabled") === "true";
+    const configured = aiConfigured(this.env);
+    return {
+      enabled: vaultEnabled && configured,
+      vaultEnabled,
+      configured,
+      model: modelOf(this.env),
+      month,
+      used: Number(this.meta(`aiUsed:${month}`) ?? 0),
+      limit,
+      unit: "tokens",
+      resetsAt,
+    };
+  }
+
+  private addAiUsage(tokens: number) {
+    if (!(tokens > 0)) return;
+    const key = `aiUsed:${new Date().toISOString().slice(0, 7)}`;
+    this.setMeta(key, String(Number(this.meta(key) ?? 0) + Math.round(tokens)));
   }
 
   // ---------- journal segments ----------
@@ -349,9 +405,45 @@ export class VaultObject extends DurableObject<Env> {
     return new Response(row.body, { headers: { "content-type": "application/octet-stream" } });
   }
 
+  // ---------- checkpoints (PROTOCOL.md §3 "Checkpoints"): opaque TRV1 blobs in R2 ----------
+
+  private async putCheckpoint(request: Request, device: string, id: string) {
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) return error(400, "bad checkpoint id");
+    if (this.sql.exec("SELECT 1 FROM checkpoints WHERE id = ?", id).toArray()[0]) return json({ id }, 200);
+    const length = Number(request.headers.get("content-length"));
+    if (!request.body || !Number.isFinite(length) || length <= 0) return error(411, "content-length required");
+    if (length > MAX_CHECKPOINT_BYTES) return error(413, "checkpoint too large");
+    await this.env.BLOBS.put(this.r2Key("c", id), fixedLength(request.body, length));
+    this.sql.exec("INSERT INTO checkpoints(id, device, size, created_at) VALUES(?, ?, ?, ?)", id, device, length, Date.now());
+    // Only the newest few are kept: each one holds everything before it.
+    const old = this.sql
+      .exec<{ id: string }>("SELECT id FROM checkpoints ORDER BY seq DESC LIMIT -1 OFFSET ?", CHECKPOINTS_KEPT)
+      .toArray();
+    for (const row of old) {
+      await this.env.BLOBS.delete(this.r2Key("c", row.id));
+      this.sql.exec("DELETE FROM checkpoints WHERE id = ?", row.id);
+    }
+    return json({ id }, 201);
+  }
+
+  private listCheckpoints() {
+    const checkpoints = this.sql
+      .exec<{ id: string; device: string; size: number; created_at: number }>("SELECT id, device, size, created_at FROM checkpoints ORDER BY seq DESC")
+      .toArray()
+      .map((r) => ({ id: r.id, device: r.device, size: r.size, createdAt: r.created_at }));
+    return json({ checkpoints });
+  }
+
+  private async getCheckpoint(id: string) {
+    if (!this.sql.exec("SELECT 1 FROM checkpoints WHERE id = ?", id).toArray()[0]) return error(404, "no such checkpoint");
+    const obj = await this.env.BLOBS.get(this.r2Key("c", id));
+    if (!obj) return error(404, "no such checkpoint");
+    return new Response(obj.body, { headers: { "content-type": "application/octet-stream", "content-length": String(obj.size) } });
+  }
+
   // ---------- blobs ----------
 
-  private r2Key(kind: "b" | "i", id: string) {
+  private r2Key(kind: "b" | "i" | "c", id: string) {
     return `v/${this.vaultId}/${kind}/${id}`;
   }
 
@@ -653,7 +745,8 @@ function fixedLength(body: ReadableStream<Uint8Array>, length: number): Readable
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  /** `tokens`: what a failed Claude call still cost, so the monthly allowance counts it. */
+  constructor(public status: number, message: string, public tokens = 0) {
     super(message);
   }
 }

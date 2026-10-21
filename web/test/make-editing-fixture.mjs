@@ -4,7 +4,7 @@
 import { writeFileSync } from "node:fs";
 import { transformAngle, transformPoint, transformRect } from "../public/core/ink.js";
 import {
-  boxExit, builtInStickers, connectorEnds, curvePoints, elementBounds, elementContains, isSelectionLoop, moveShapeHandle, onArc, onProtractorArc, onRuler,
+  boxExit, builtInStickers, connectorEnds, curvePoints, elementBounds, elementContains, moveShapeHandle, onArc, onProtractorArc, onRuler,
   onRulerEdge, PICKER_SHAPES, placeSticker, protractorDegrees, rulerEdge, shapeHandles, shapePoints, snapRotation, stickerFields, stickerView, straightenAngle,
   toolDegrees, transformElement, withGroups,
 } from "../public/core/inkedit.js";
@@ -79,14 +79,6 @@ const tools = {
   snaps: [0, 0.03, 0.26, 0.3, -1.57, 1.6, 3.14159, -3.1].map((r) => ({ r, expect: snapRotation(r) })),
 };
 
-const ring = (cx, cy, r, n, close) => Array.from({ length: n + 1 }, (_, i) => P(cx + r * Math.cos((i / n) * 2 * Math.PI * close), cy + r * Math.sin((i / n) * 2 * Math.PI * close), 0.5, i * 16));
-const loops = [
-  { name: "circle", points: flat(ring(100, 100, 60, 40, 1)) },
-  { name: "open arc", points: flat(ring(100, 100, 60, 40, 0.6)) },
-  { name: "tiny", points: flat(ring(100, 100, 8, 20, 1)) },
-  { name: "line", points: flat([P(0, 0), P(10, 0), P(20, 0), P(30, 0), P(40, 0), P(50, 0), P(60, 0), P(70, 0), P(80, 0)]) },
-].map((c) => ({ ...c, expect: isSelectionLoop(c.points.map(([x, y, p, t]) => P(x, y, p, t))) }));
-
 const slant = (a) => Array.from({ length: 20 }, (_, i) => P(i * 10 * Math.cos(a) + (i % 3), i * 10 * Math.sin(a) + ((i * 7) % 5) - 2));
 const straighten = [0.2, -0.3, 1.4, 0, 0.785].map((a) => ({ points: flat(slant(a)), expect: straightenAngle(slant(a)) }));
 straighten.push({ points: flat([P(5, 5)]), expect: 0 });
@@ -120,5 +112,5 @@ const stickers = {
 stickers.bad.expect = (() => { const v = stickerView("bad", stickers.bad.fields); return { ...v, strokes: v.strokes.map((s) => ({ ...s, points: flat(s.points) })) }; })();
 
 const out = new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-editing.json", import.meta.url);
-writeFileSync(out, `${JSON.stringify({ transforms, elements, boxes, shapes, curve, handles, connectors, tools, loops, straighten, groups, stickers }, null, 1)}\n`);
+writeFileSync(out, `${JSON.stringify({ transforms, elements, boxes, shapes, curve, handles, connectors, tools, straighten, groups, stickers }, null, 1)}\n`);
 console.log(`${transforms.length} transforms, ${elements.length} elements, ${shapes.length} shapes, ${handles.length} handle sets, ${stickers.builtins.length} built-in stickers`);

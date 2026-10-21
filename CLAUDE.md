@@ -3,6 +3,11 @@
 Trove is a "save anything" second brain plus notes app for Mac, iPhone and iPad. It syncs through
 the user's iCloud Drive, with an optional Cloudflare relay, and it's end-to-end encrypted. Start
 every session by reading **NOTES.md** (status, what's next, manual steps). Specs:
+**The product is the Mac, iPhone and iPad apps** (the user's words: "the main thing of this is the app
+for mac and ios/ipados; the website is not primary and is there just because we can have it"). Build
+and polish features for the apps first; the website gets them only where it's cheap. Prefer Apple's
+on-device frameworks (Foundation Models, Vision, NaturalLanguage, PencilKit, Speech) over web or
+cloud equivalents.
 - `docs/RESEARCH.md`: product spec and constraints
 - `docs/PROTOCOL.md`: the byte-level contract shared by Swift, the Worker and the extension
 - `docs/ARCHITECTURE.md`: code map
@@ -41,6 +46,7 @@ cd web && npm run test:e2e                             # needs `npx wrangler dev
 - Never put vault secret keys anywhere but the main app's Keychain. Extensions get the public key only (`SharedConfig.Capture`).
   The one exception is the web app, which the user adds on purpose and can revoke. It keeps only
   non-extractable WebCrypto keys in IndexedDB, never raw key bytes (PROTOCOL.md §7). The user has no
-  Apple Silicon Mac, so the web app is their main client for now.
+  Apple Silicon Mac, so the apps are built and checked on GitHub Actions (NOTES.md); that doesn't
+  make the website the main product.
 - Commit after each working step and push to `main`. Keep NOTES.md current (what's done, next steps, manual steps for the user) so a fresh session can say "read NOTES.md and continue".
 - Ask the user before decisions that are theirs (name, design direction, anything that costs money).

@@ -1,6 +1,6 @@
 // Editing ink faster (ROADMAP S3, PROTOCOL.md §10 "Editing"): turning and flipping elements,
 // shapes from the shape picker with handles you can drag, connectors that follow the shapes they
-// join, the ruler and protractor, circle-to-select, straightening and the elements library
+// join, the ruler and protractor, straightening and the elements library
 // (`sticker` records). A port of InkEditing.swift / InkStickers.swift; both check
 // Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-editing.json (made by web/test/make-editing-fixture.mjs).
 import { bounds, CLOSED_SHAPES, pointFields, strokePoints, transformPoint } from "./ink.js";
@@ -276,16 +276,7 @@ export function protractorDegrees(pro, p) {
   return Math.max(0, Math.min(180, d));
 }
 
-// ---------- circle to select, straighten ----------
-
-/** A pen loop that can become a lasso: closed (ends within 20 % of its size) and at least 24 points each way. */
-export function isSelectionLoop(points) {
-  if (points.length < 8) return false;
-  const b = bounds(points);
-  if (b.w < 24 || b.h < 24) return false;
-  const diag = Math.hypot(b.w, b.h), first = points[0], last = points.at(-1);
-  return Math.hypot(last.x - first.x, last.y - first.y) <= 0.2 * diag;
-}
+// ---------- straighten ----------
 
 /**
  * The turn (radians) that levels ink written on a slant: the main direction of the points (their

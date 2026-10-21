@@ -72,6 +72,29 @@ public struct RelayClient: Sendable {
         public var model: String?
     }
 
+    /// The relay's cloud AI state and this month's use (PROTOCOL.md §4 "AI").
+    public struct AIStatus: Codable, Sendable, Equatable {
+        /// The vault's switch is on and the relay has a key: show cloud AI features.
+        public var enabled: Bool
+        public var vaultEnabled: Bool
+        public var configured: Bool
+        public var model: String
+        public var used: Int
+        public var limit: Int
+        public var resetsAt: String?
+    }
+
+    /// The result of a note or page action (PROTOCOL.md §4 "AI").
+    public struct ActionResult: Codable, Sendable, Equatable {
+        public struct Card: Codable, Sendable, Equatable {
+            public var front: String
+            public var back: String
+        }
+        public var text: String
+        public var cards: [Card]
+        public var model: String?
+    }
+
     /// A price-drop watch (PROTOCOL.md §5). Times are Unix milliseconds.
     public struct Watch: Codable, Sendable, Equatable, Identifiable {
         public struct Point: Codable, Sendable, Equatable { public var at: Double; public var price: Double }
@@ -210,6 +233,25 @@ public struct RelayClient: Sendable {
 
     public func getBlob(_ id: String) async throws -> Data { try await raw("GET", vaultPath("blobs/\(id)")) }
 
+    // MARK: Checkpoints (PROTOCOL.md §3 "Checkpoints")
+
+    /// The relay's checkpoints, newest first; empty from a relay that doesn't know them.
+    public func checkpoints() async throws -> [CheckpointInfo] {
+        struct L: Decodable { var checkpoints: [CheckpointInfo] }
+        do {
+            let list: L = try await json("GET", vaultPath("checkpoints"))
+            return list.checkpoints
+        } catch TransportError.notFound {
+            return []
+        }
+    }
+
+    public func getCheckpoint(_ id: String) async throws -> Data { try await raw("GET", vaultPath("checkpoints/\(id)")) }
+
+    public func putCheckpoint(_ id: String, data: Data) async throws {
+        _ = try await raw("PUT", vaultPath("checkpoints/\(id)"), body: data, expect: [200, 201])
+    }
+
     // MARK: Inbox
 
     /// Upload an already-sealed envelope (an inbox token is enough).
@@ -240,6 +282,23 @@ public struct RelayClient: Sendable {
 
     public func ask(_ question: String, sources: [(id: String, text: String)]) async throws -> Answer {
         try await json("POST", vaultPath("ai/ask"), body: ["question": question, "sources": sources.map { ["id": $0.id, "text": $0.text] }])
+    }
+
+    public func aiStatus() async throws -> AIStatus {
+        try await json("GET", vaultPath("ai/status"))
+    }
+
+    /// A text action: continue, shorter, clearer, grammar, bullets, translate (with `language`),
+    /// summarise, explain or flashcards.
+    public func action(_ action: String, text: String, language: String? = nil) async throws -> ActionResult {
+        var body: [String: Any] = ["action": action, "text": text]
+        if let language { body["language"] = language }
+        return try await json("POST", vaultPath("ai/action"), body: body)
+    }
+
+    /// A picture action on a page or selection (PNG/JPEG): transcribe, summarise, explain, solve or flashcards.
+    public func action(_ action: String, image: Data, mediaType: String = "image/png") async throws -> ActionResult {
+        try await json("POST", vaultPath("ai/action"), body: ["action": action, "image": image.base64EncodedString(), "mediaType": mediaType])
     }
 
     public func transcribe(audio: Data) async throws -> String {
@@ -377,7 +436,7 @@ public struct RelayClient: Sendable {
 }
 
 /// The relay as a `SyncTransport`. Remembers how far through the relay's segment list it has read.
-public final class RelayTransport: SyncTransport, @unchecked Sendable {
+public final class RelayTransport: SyncTransport, CheckpointTransport, @unchecked Sendable {
     public let client: RelayClient
     public var name: String { "relay" }
     private let lock = NSLock()
@@ -416,6 +475,20 @@ public final class RelayTransport: SyncTransport, @unchecked Sendable {
         }
         if let value { saveCursor(value) }
     }
+
+    /// Starts from a checkpoint's relay cursor (a new device that loaded one): never goes back.
+    public func advanceCursor(to value: Int) {
+        let saved: Int? = lock.withLock {
+            guard value > cursor else { return nil }
+            cursor = value
+            return cursor
+        }
+        if let saved { saveCursor(saved) }
+    }
+
+    public func listCheckpoints() async throws -> [CheckpointInfo] { try await client.checkpoints() }
+    public func fetchCheckpoint(_ id: String) async throws -> Data { try await client.getCheckpoint(id) }
+    public func pushCheckpoint(_ id: String, data: Data) async throws { try await client.putCheckpoint(id, data: data) }
 
     public func fetchSegment(_ ref: SegmentRef) async throws -> Data { try await client.getSegment(ref) }
     public func pushSegment(_ ref: SegmentRef, data: Data) async throws { try await client.putSegment(ref, data: data) }

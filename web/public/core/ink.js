@@ -9,7 +9,9 @@ export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", 
 export const CLOSED_SHAPES = ["triangle", "rectangle", "polygon", "circle", "ellipse", "diamond", "star", "heart", "bubble"];
 export const DASHES = ["dash", "dot"];
 export const ARROWS = ["end", "start", "both"];
-export const TOOLS = ["pen", "pencil", "marker", "highlighter", "fountain", "brush"];
+/** Pen tools. `ballpoint` keeps one thickness; its points are stored at pressure 1, so a client that
+ * doesn't know it (and draws it as a `pen`) draws it full and even (PROTOCOL.md §10). */
+export const TOOLS = ["pen", "ballpoint", "pencil", "marker", "highlighter", "fountain", "brush"];
 export const PAPERS = ["blank", "lined", "narrow", "wide", "margin", "grid", "smallgrid", "graph", "dotted", "smalldots", "isometric",
   "cornell", "todo", "planner", "storyboard", "music", "calligraphy"];
 export const PAPER_TITLES = {
@@ -49,7 +51,9 @@ export function pageSizeName(size) {
 export const SKETCH_SIZE = [768, 1024];
 
 export const toolOpacity = (tool) => ({ pencil: 0.85, highlighter: 0.35 })[tool] ?? 1;
-export const usesPressure = (tool) => tool !== "marker" && tool !== "highlighter";
+export const usesPressure = (tool) => tool !== "marker" && tool !== "highlighter" && tool !== "ballpoint";
+/** The points as stored (InkTool.stored): a ballpoint's at pressure 1, the rest as drawn. */
+export const storedPoints = (tool, points) => (tool === "ballpoint" ? points.map((p) => ({ ...p, p: 1 })) : points);
 
 /** The width at a point (InkStroke.width): pens and pencils 35–100 % with pressure, brushes 15–100 %,
  * fountain pens 60–100 % (and their direction: `fountainWidth`). */
@@ -999,8 +1003,14 @@ export function meanNib(points) {
 
 // ----- compact points (`points2`, PROTOCOL.md §10) -----
 
-/** Positions are kept to 1/20 point, times to a millisecond, pressure to 1/255 and a nib angle to π/256. */
-export const POINTS2_SCALE = 20;
+/**
+ * Positions are kept to 1/256 point: at the deepest zoom (10×) on a 3× screen a point is 30 pixels,
+ * so a position is never more than 0.06 of a pixel off, whatever the zoom or size it was drawn at.
+ * Pressure and the nib angle are kept to 1/4096 (of 1 and of π), times to a millisecond.
+ */
+export const POINTS2_SCALE = 256, POINTS2_LEVELS = 4096;
+/** Version 1 (still read): 1/20 point, pressure and angle as one byte each. */
+export const POINTS2_V1_SCALE = 20;
 const roundHalfUp = (v) => Math.floor(v + 0.5);
 
 function pushVarint(out, n) {
@@ -1009,41 +1019,55 @@ function pushVarint(out, n) {
 }
 const zigzag = (n) => (n >= 0 ? 2 * n : -2 * n - 1);
 const unzigzag = (z) => (z % 2 === 0 ? z / 2 : -(z + 1) / 2);
+/** A nib angle in [0, π) as a whole number of π/4096 steps, 0…4095. */
+const angleLevel = (a) => {
+  let v = a % Math.PI;
+  if (v < 0) v += Math.PI;
+  return roundHalfUp((v / Math.PI) * POINTS2_LEVELS) % POINTS2_LEVELS;
+};
 
 /**
- * Points as `points2`: byte 1 (the version), a flags byte (1: each point has a nib angle), the
- * count as a varint, then per point x and y as zigzag varint steps from the last point in 1/20
- * points, pressure as one byte (0–255), the time step in ms as a varint and, with angles, the angle
- * in [0, π) as one byte (× 256/π). In base64url. About 5 bytes a point instead of 16.
+ * Points as `points2` (version 2): byte 2, a flags byte (1: each point has a nib angle), the count
+ * as a varint, then per point zigzag varint steps from the last point: x and y in 1/256 points,
+ * pressure in 1/4096, the time in ms (a plain varint, never negative) and, with angles, the angle in
+ * π/4096 taken the short way round (−2048…2047). In base64url. About 6 bytes a point instead of 16.
  */
 export function encodePoints2(points) {
   const angles = points.some((p) => typeof p.a === "number");
-  const out = [1, angles ? 1 : 0];
+  const out = [2, angles ? 1 : 0];
   pushVarint(out, points.length);
-  let px = 0, py = 0, pt = 0;
+  let px = 0, py = 0, pp = 0, pt = 0, pa = 0;
   const fin = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  // Far past any page; keeps the steps exact.
+  const place = (v) => roundHalfUp(Math.min(1e9, Math.max(-1e9, fin(v))) * POINTS2_SCALE);
   for (const p of points) {
-    const x = roundHalfUp(fin(p.x) * POINTS2_SCALE), y = roundHalfUp(fin(p.y) * POINTS2_SCALE);
+    const x = place(p.x), y = place(p.y);
+    const pr = roundHalfUp(Math.min(1, Math.max(0, fin(p.p))) * POINTS2_LEVELS);
     const t = Math.max(pt, roundHalfUp(Math.max(0, fin(p.t))));
     pushVarint(out, zigzag(x - px));
     pushVarint(out, zigzag(y - py));
-    out.push(roundHalfUp(Math.min(1, Math.max(0, fin(p.p))) * 255));
+    pushVarint(out, zigzag(pr - pp));
     pushVarint(out, t - pt);
     if (angles) {
-      let a = (typeof p.a === "number" ? fin(p.a) : NIB_ANGLE) % Math.PI;
-      if (a < 0) a += Math.PI;
-      out.push(roundHalfUp((a / Math.PI) * 256) % 256);
+      const a = angleLevel(typeof p.a === "number" ? fin(p.a) : NIB_ANGLE);
+      let d = (a - pa) % POINTS2_LEVELS;
+      if (d >= POINTS2_LEVELS / 2) d -= POINTS2_LEVELS;
+      else if (d < -POINTS2_LEVELS / 2) d += POINTS2_LEVELS;
+      pushVarint(out, zigzag(d));
+      pa = a;
     }
-    px = x; py = y; pt = t;
+    px = x; py = y; pp = pr; pt = t;
   }
   return b64uEncode(new Uint8Array(out));
 }
 
+/** Reads `points2` version 2, and version 1 (1/20 point, one byte each for pressure and angle). */
 export function decodePoints2(text) {
   let bytes;
   try { bytes = b64uDecode(text ?? ""); } catch { return []; }
-  if (bytes.length < 3 || bytes[0] !== 1) return [];
-  const angles = (bytes[1] & 1) === 1;
+  if (bytes.length < 3 || (bytes[0] !== 1 && bytes[0] !== 2)) return [];
+  const v1 = bytes[0] === 1, angles = (bytes[1] & 1) === 1;
+  const scale = v1 ? POINTS2_V1_SCALE : POINTS2_SCALE;
   let i = 2;
   const varint = () => {
     let n = 0, mul = 1;
@@ -1055,18 +1079,24 @@ export function decodePoints2(text) {
       mul *= 128;
     }
   };
+  const byte = () => { if (i >= bytes.length) throw new Error("short"); return bytes[i++]; };
   const out = [];
   try {
     const count = varint();
-    let x = 0, y = 0, t = 0;
+    let x = 0, y = 0, p = 0, t = 0, a = 0;
     for (let k = 0; k < count; k++) {
       x += unzigzag(varint());
       y += unzigzag(varint());
-      if (i >= bytes.length) break;
-      const p = bytes[i++] / 255;
+      p = v1 ? byte() : p + unzigzag(varint());
       t += varint();
-      const pt = { x: x / POINTS2_SCALE, y: y / POINTS2_SCALE, p, t };
-      if (angles) { if (i >= bytes.length) break; pt.a = (bytes[i++] * Math.PI) / 256; }
+      const pt = { x: x / scale, y: y / scale, p: Math.min(1, Math.max(0, v1 ? p / 255 : p / POINTS2_LEVELS)), t };
+      if (angles) {
+        if (v1) pt.a = (byte() * Math.PI) / 256;
+        else {
+          a = (((a + unzigzag(varint())) % POINTS2_LEVELS) + POINTS2_LEVELS) % POINTS2_LEVELS;
+          pt.a = (a * Math.PI) / POINTS2_LEVELS;
+        }
+      }
       out.push(pt);
     }
   } catch { /* cut short: what was read */ }

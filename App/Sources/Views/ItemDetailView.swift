@@ -108,6 +108,9 @@ struct ItemDetailView: View {
             HStack {
                 Text(item.kind == .note ? "Note" : "Your notes").font(.headline)
                 Spacer()
+                if item.kind == .note && model.noteAIAvailable {
+                    NoteAIMenu(item: item, text: $body_)
+                }
                 Button { flush(); showHistory = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
                     .buttonStyle(.borderless)
                     .help("Earlier versions of this text")

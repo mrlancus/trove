@@ -24,9 +24,9 @@ function readJSON(path) {
   try { return JSON.parse(readFileSync(path, "utf8")); } catch { return undefined; }
 }
 
-// What LocalStore (web/public/core/localstore.js) keeps: the journal, applied ids, cursor, the
+// What LocalStore (web/public/core/localstore.js) keeps: the journal, applied ids, cursor, the checkpoint ("base"), the
 // chunk index and owner, and the op chunks themselves ("ops.<n>"; "ops" is the pre-chunk layout).
-const isStateKey = (key) => ["journal", "ops", "applied", "cursor", "opChunks", "localOwner"].includes(key) || /^ops\.\d+$/.test(key);
+const isStateKey = (key) => ["journal", "ops", "applied", "cursor", "opChunks", "localOwner", "base"].includes(key) || /^ops\.\d+$/.test(key);
 
 /**
  * The storage interface Vault expects ({get, set, clear}), backed by two files. Keys are kept as raw

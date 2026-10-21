@@ -112,6 +112,10 @@ final class AppModel {
     var sync = SyncStatus()
     var enriching = false
     var toast: String?
+    /// The relay's cloud AI state and this month's use (AppModel+AI.swift); nil without a relay.
+    var cloudAIStatus: RelayClient.AIStatus?
+    /// Last week's digest was checked this launch (AppModel+AI.swift).
+    var digestChecked = false
     var showCapture = false
     /// The drawing editor, when it's open.
     var inkTarget: InkTarget?
@@ -121,7 +125,27 @@ final class AppModel {
     private(set) var inkedLayers: [String: Set<String>] = [:]
     /// How many drawing editors are open. While one is, saving and pushing wait longer between
     /// strokes (each save writes the whole vault, each push uses the radio: both cost battery).
-    @ObservationIgnored var drawingOpen = 0
+    @ObservationIgnored var drawingOpen = 0 {
+        didSet {
+            guard oldValue > 0, drawingOpen == 0, sketchDeferred else { return }
+            sketchDeferred = false
+            Task { await catchUpAfterSketch() }
+        }
+    }
+    /// On iPhone and iPad a sketch fills the screen. While one is open, work nobody can see waits
+    /// until it closes (it heated the iPad and used the battery while drawing): the library lists,
+    /// search by meaning, Spotlight, the widget, the clipboard, enrichment (text recognition, AI), the
+    /// inbox and price watches. The sketch's ink is still saved and synced (pushed a few seconds
+    /// after you pause, others' strokes pulled on a live ping or every couple of minutes).
+    var sketchCovers: Bool {
+        #if os(iOS)
+        return drawingOpen > 0
+        #else
+        return false
+        #endif
+    }
+    /// Something waited for the sketch to close.
+    @ObservationIgnored private var sketchDeferred = false
     @ObservationIgnored private var inkChangeTask: Task<Void, Never>?
     var config: VaultConfig? { vault.config }
 
@@ -263,9 +287,11 @@ final class AppModel {
 
     func reload() async {
         guard let library else { return }
-        await clipboard.reload()
+        let covered = sketchCovers
+        if covered { sketchDeferred = true } else { await clipboard.reload() }
         let libraryStamp = await library.stamp(of: ["item", "collection", "folder"])
-        if libraryStamp != shownLibraryStamp {
+        // Behind an open sketch the lists, search index, Spotlight and widget catch up when it closes.
+        if libraryStamp != shownLibraryStamp, !covered {
             shownLibraryStamp = libraryStamp
             items = await library.items()
             collections = await library.collections()
@@ -285,10 +311,22 @@ final class AppModel {
         let inkStamp = await library.stamp(of: ["stroke", "element"])
         if inkStamp != shownInkStamp {
             shownInkStamp = inkStamp
-            inkedLayers = await library.inkedLayers()
-            index.inked = Set(inkedLayers.keys)
+            // Which items have ink reads every stroke in the vault: behind an open sketch, once it closes.
+            if !covered {
+                inkedLayers = await library.inkedLayers()
+                index.inked = Set(inkedLayers.keys)
+            }
             inkRevision += 1
         }
+    }
+
+    /// The sketch closed: what waited for it (see `sketchCovers`), with a full sync.
+    private func catchUpAfterSketch() async {
+        guard let library, !sketchCovers else { return }
+        inkedLayers = await library.inkedLayers()
+        index.inked = Set(inkedLayers.keys)
+        inkRevision += 1
+        await syncNow()
     }
 
     // MARK: Drawing
@@ -297,6 +335,8 @@ final class AppModel {
     /// Strokes come many a second, so the redraw waits for a pause unless `now`.
     func inkChanged(now: Bool = false) {
         inkChangeTask?.cancel()
+        // The open sketch shows its own ink; nothing else is on screen to redraw.
+        if sketchCovers { sketchDeferred = true; return }
         inkChangeTask = Task { [weak self] in
             if !now {
                 try? await Task.sleep(for: .seconds(2))
@@ -567,7 +607,9 @@ final class AppModel {
     private func syncRound() async -> Double {
         await syncNow()
         let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        return syncBackoff.next(changed: lastSyncChanged, lowPower: lowPower)
+        let wait = syncBackoff.next(changed: lastSyncChanged, lowPower: lowPower)
+        // While drawing, others' strokes come with a live ping; polling waits longer.
+        return sketchCovers ? max(wait, 120) : wait
     }
 
     /// Pulls and pushes. A request that arrives mid-sync (say a live ping because the website just
@@ -581,10 +623,13 @@ final class AppModel {
         var changed = false
         repeat {
             syncAgain = false
-            await importLocalInbox()
+            // Behind an open sketch only the vault syncs (its strokes go out, others' come in); the
+            // inbox and price watches wait for it to close.
+            let light = sketchCovers
+            if light { sketchDeferred = true } else { await importLocalInbox() }
             let report = await library.sync()
             if report.pulled > 0 || report.pushed > 0 { changed = true }
-            if let client = vault.relayClient, let keys = vault.keys {
+            if !light, let client = vault.relayClient, let keys = vault.keys {
                 let inbox = await InboxSync.run(client: client, keys: keys, library: library)
                 if !inbox.imported.isEmpty { changed = true }
                 if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
@@ -600,7 +645,10 @@ final class AppModel {
         lastSyncChanged = changed
         Perf.end("Sync", signpost)
         sync.syncing = false
+        // Text recognition, meaning vectors, AI and the Mac's mirror: once the sketch closes.
+        if sketchCovers { sketchDeferred = true; return }
         await enrichSoon()
+        await afterSyncAI()
         await mirrorIfOwner()
     }
 
@@ -729,10 +777,10 @@ final class AppModel {
     func saveNow() {
         guard let library else { return }
         let url = vault.snapshotURL
-        // Encoding the whole vault takes a while with a big history: off the main thread.
+        let database = vault.database
+        // Only what changed since the last save is written (SQLite), off the main thread.
         Task.detached(priority: .utility) {
-            let snapshot = await library.engine.snapshot()
-            await SnapshotWriter.shared.write(snapshot, to: url)
+            await SnapshotWriter.shared.save(library.engine, database: database, legacyURL: url)
         }
     }
 
@@ -749,7 +797,11 @@ final class AppModel {
 
     var aiStatus: String {
         if OnDeviceAI.isAvailable { return "Apple Intelligence on this device" }
-        if vault.config?.cloudAI == true, vault.relayClient != nil { return "Cloud AI (opt-in) via your relay" }
+        if vault.config?.cloudAI == true, vault.relayClient != nil {
+            guard let s = cloudAIStatus else { return "Cloud AI (opt-in) via your relay" }
+            if !s.configured { return "Cloud AI is on here, but your relay has no Anthropic key yet" }
+            return "Cloud AI (opt-in) via your relay: \(s.used) of \(s.limit) tokens used this month"
+        }
         return "Basic (text recognition, dates, places, search by meaning). Smart summaries come from your iPad."
     }
 

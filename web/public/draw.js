@@ -1,5 +1,5 @@
 // The drawing editor: sketches and ink on PDFs and images (PROTOCOL.md §10, core/ink.js).
-// - Pens (pen, pencil, fountain pen, brush, marker, highlighter), an eraser (whole strokes or
+// - Pens (pen, ballpoint, pencil, fountain pen, brush, marker, highlighter), an eraser (whole strokes or
 //   partial, optionally highlighter only), the lasso (move, resize, recolour, duplicate, copy,
 //   delete), shapes (a shape mode, and holding the pen still at the end of a line snaps it), text
 //   boxes and pictures.
@@ -16,19 +16,20 @@ import {
   strokeStyle, TAPE_COLORS, tapeBox, textFont, transformPoint, transformRect, unionRect, widthScale, wrapText, withElementTransform, TEXT_FONTS,
 } from "./core/ink.js";
 import {
-  connectable, connectorEnds, elementBounds, elementContains, flipAbout, isSelectionLoop, moveShapeHandle, onArc, onProtractorArc, onRuler, onRulerEdge,
+  connectable, connectorEnds, elementBounds, elementContains, flipAbout, moveShapeHandle, onArc, onProtractorArc, onRuler, onRulerEdge,
   PICKER_SHAPES, rotateAbout, rulerEdge, shapeHandles, shapePoints, snapRotation, straightenAngle, transformElement, withGroups,
 } from "./core/inkedit.js";
 import { drawGuides, guideHit, renderSelectionPNG, stickerCanvas } from "./drawedit.js";
 import { PdfDocument } from "./pdfwrite.js";
 
 const COLORS = ["#1c1c1e", "#8e8e93", "#0a84ff", "#ff3b30", "#34c759", "#ff9500", "#af52de", "#ffd60a"];
-const PEN_TOOLS = ["pen", "pencil", "fountain", "brush", "marker", "highlighter"];
+const PEN_TOOLS = ["pen", "ballpoint", "pencil", "fountain", "brush", "marker", "highlighter"];
 const RECENT_COLOURS = 8;
 /** Finished ink is drawn into tiles this many device pixels square, cached per zoom step (√2 apart). */
 const TILE = 512, MAX_TILES = 96;
 const TOOL_INFO = {
   pen: { label: "Pen", key: "p", width: 2.5, color: "#1c1c1e", icon: "M4 20l4-1 10-10-3-3L5 16l-1 4zM14 5l3 3" },
+  ballpoint: { label: "Ballpoint: one even thickness", key: "o", width: 2, color: "#1c1c1e", icon: "M5 19l2-6 9-9 2 2-9 9-6 2 2-2zM14 6l2 2" },
   pencil: { label: "Pencil", key: "n", width: 2, color: "#1c1c1e", icon: "M4 20l2-5 9-9 3 3-9 9-5 2zM15 6l3 3M6 15l3 3" },
   fountain: { label: "Fountain pen", key: "f", width: 4, color: "#1c3d8f", icon: "M12 3l5 7-5 11-5-11 5-7zM12 10v4" },
   brush: { label: "Brush pen", key: "b", width: 8, color: "#1c1c1e", icon: "M15 4l5 5-8 8c-2 2-5 3-8 3 0-3 1-6 3-8l8-8zM12 7l5 5" },
@@ -168,7 +169,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   const extra = { connect, selectionActions: Array.isArray(selectionActions) ? selectionActions : [], recognizeInk };
   const prefs = { tool: "pen", colors: {}, widths: {}, eraser: "stroke", highlighterOnly: false, shapes: false, panel: innerWidth > 900,
     scribble: false, layout: "vertical", fit: "page", recent: [], dash: {}, arrow: "none", fill: null, shapeKind: "rectangle", lassoKinds: "all",
-    circleSelect: false, textStyle: { font: "sans", bold: false, italic: false }, ...loadPrefs() };
+    textStyle: { font: "sans", bold: false, italic: false }, ...loadPrefs() };
   if (!SHAPE_KINDS[prefs.shapeKind]) prefs.shapeKind = "rectangle";
   if (!LASSO_KINDS[prefs.lassoKinds]) prefs.lassoKinds = "all";
   if (!prefs.textStyle || typeof prefs.textStyle !== "object") prefs.textStyle = { font: "sans", bold: false, italic: false };
@@ -435,7 +436,6 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     settingsPop.replaceChildren(
       check("Scribble to erase", "Scratch back and forth right over something to delete it. Off: every line stays.", "scribble"),
       check("Shapes", "Lines and shapes come out clean. Holding the pen still at the end of a line does it either way.", "shapes"),
-      check("Circle to select", "Draw a loop round something and hold the pen still: it's selected instead of drawn.", "circleSelect"),
       h("div", { class: "ink-pop-title", text: "When a drawing opens" }),
       segmented("Zoom when opening", { page: "Whole page", width: "Page width" }, prefs.fit, (v) => { prefs.fit = v; savePrefs(prefs); zoomedByHand = false; fitZoom(); refreshSettingsPop(); }),
       favouritesEditor(),
@@ -489,7 +489,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const shapeTool = tool === "shape", dashKey = shapeTool ? "shape" : penTool;
     const parts = shapeTool ? [] : [h("div", { class: "ink-pop-title", text: `${TOOL_INFO[penTool].label}: on every device` })];
     if (!shapeTool) parts.push(slider("Smoothing", "Steadies the line as you write. 0 is exactly where the pen goes.", "smoothing", 100, ""));
-    if (!shapeTool && penTool !== "marker" && penTool !== "highlighter") {
+    if (!shapeTool && penTool !== "marker" && penTool !== "highlighter" && penTool !== "ballpoint") {
       parts.push(h("div", { class: "ink-pop-row" }, h("span", { text: "Pressure" }),
         segmented("Pressure", { soft: "Soft", normal: "Normal", firm: "Firm" }, feel.curve, (v) => save({ curve: v }))));
       parts.push(slider("Lightest touch", "How thick the lightest touch still writes, as a share of full pressure.", "minWidth", 100, "%"));
@@ -1253,8 +1253,6 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const s = current;
     armSnap.timer = setTimeout(() => {
       if (current !== s || !s || s.shape || s.points.length < 3 || s.tool === "laser" || s.guide) return;
-      // Circle to select: a loop round something, held still, picks it up instead.
-      if (prefs.circleSelect && s.tool !== "highlighter" && isSelectionLoop(s.points) && selectByLoop(s)) return;
       const shape = s.tool === "highlighter" ? straightLine(s.points) : recognizeShape(s.points);
       if (!shape) return;
       s.points = shape.points;
@@ -1483,19 +1481,6 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const st = picksStrokes() ? strokesNear(v, { x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r }).reverse().find((s) => hits(s, p.x, p.y, r)) : null;
     const id = el?.type === "text" || el?.type === "tape" ? el.id : st?.id ?? el?.id;
     return id ? [id] : [];
-  }
-
-  /** Circle to select: the pen's loop picks what's inside it (true), or nothing's there (false, so it draws). */
-  function selectByLoop(s) {
-    const v = s.view;
-    const strokes = strokesNear(v, bounds(s.points)).filter((x) => lassoSelects(x.points, s.points)).map((x) => x.id);
-    const elements = vault.elements(itemId, layer, v.key).filter((e) => lassoSelectsBox(boxOf(e), s.points)).map((e) => e.id);
-    if (!strokes.length && !elements.length) return false;
-    current = null;
-    clearTimeout(armSnap.timer);
-    selectIds(v, [...strokes, ...elements], true);
-    renderLive(v);
-    return true;
   }
 
   const boxOf = (e) => elementBounds(e.type === "text" ? { ...e, h: textHeight(e) } : e);

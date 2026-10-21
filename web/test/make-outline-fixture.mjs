@@ -51,9 +51,29 @@ const points2Cases = [
   { name: "negative and far", points: [[-12.34, 5.67, 0, 0], [1e5, -2e4, 1, 3.4], [-1e5, 2e4, 0.25, 1000.6]] },
   { name: "nib angles", points: angled },
   { name: "one point", points: [[3.025, 4.975, 0.5, 0]] },
+  { name: "angles wrap past π", points: [[0, 0, 0.5, 0, 3.13], [0.01, 0.003, 0.5002, 4, 0.01], [0.02, 0.006, 1, 8, 3.1415926], [0.03, 0.009, 0, 12, -0.2]] },
 ].map((c) => {
   const encoded = encodePoints2(pts(c.points));
   return { ...c, encoded, decoded: flat(decodePoints2(encoded)) };
+});
+// Version 1 (1/20 point, byte pressure and angle), which readers still take: the old encoder.
+function encodeV1(points) {
+  const out = [1, points.some((p) => typeof p.a === "number") ? 1 : 0];
+  const push = (n) => { while (n >= 128) { out.push((n % 128) + 128); n = Math.floor(n / 128); } out.push(n); };
+  const zz = (n) => (n >= 0 ? 2 * n : -2 * n - 1), r = (v) => Math.floor(v + 0.5);
+  push(points.length);
+  let px = 0, py = 0, pt = 0;
+  for (const p of points) {
+    const x = r(p.x * 20), y = r(p.y * 20), t = Math.max(pt, r(p.t));
+    push(zz(x - px)); push(zz(y - py)); out.push(r(p.p * 255)); push(t - pt);
+    if (out[1]) out.push(r((((p.a % Math.PI) + Math.PI) % Math.PI) / Math.PI * 256) % 256);
+    px = x; py = y; pt = t;
+  }
+  return b64uEncode(new Uint8Array(out));
+}
+const v1Cases = [{ name: "v1 wave", points: wave }, { name: "v1 nib angles", points: angled }].map((c) => {
+  const encoded = encodeV1(pts(c.points));
+  return { name: c.name, encoded, decoded: flat(decodePoints2(encoded)) };
 });
 const legacy = encodePoints(pts(wave.slice(0, 5)));
 
@@ -89,7 +109,7 @@ const queries = [
 const tile = grainTile();
 const fixture = {
   outlines: outlineCases, arrows: arrowCases,
-  points2: { cases: points2Cases, legacy: { encoded: legacy, decoded: flat(decodePoints(legacy)) } },
+  points2: { cases: points2Cases, v1: v1Cases, legacy: { encoded: legacy, decoded: flat(decodePoints(legacy)) } },
   nibs: [[0.2, 0.3, 0.4], [3.0, 0.1], [1.5707963], []].map((angles) => ({ angles, expect: meanNib(angles.map((x) => ({ x: 0, y: 0, p: 0.5, t: 0, a: x }))) })),
   settings: settingsCases, curves, filters: filterCases,
   grid: { cell: 256, boxes: boxes.map(([id, rect]) => ({ id, rect })), removed: ["f"], queries },

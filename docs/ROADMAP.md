@@ -7,9 +7,10 @@ Cloudflare and "the connection thing" (linking Trove to other services) should w
 
 How to read it:
 - Every item has a size: **S** (one session), **M** (2–3 sessions), **L** (a round of several sessions).
-- **Web first** means build it on the website first (the user's main client while there's no Apple
-  Silicon Mac), then port it to the apps. Shared logic goes in TroveCore and `web/public/core` together,
-  with a shared fixture, as usual.
+- **Apps first** (decided by the user after this was written: the Mac, iPhone and iPad apps are the
+  product, the website is secondary). Where an item below says "web first", build it in the apps first
+  and bring it to the website only if it's cheap. Shared logic still goes in TroveCore and
+  `web/public/core` together, with a shared fixture.
 - 🔒 marks anything that touches the protocol or encryption. Those change PROTOCOL.md, both cores and
   the fixtures in the same commit.
 - ❓ marks a decision that's the user's to make (collected at the end).
@@ -99,7 +100,7 @@ strokes themselves, and that's where the feel is lost.
   colour, bold/italic, bullet lists.
 - **Elements library**: save any selection as a reusable element (sticker), with folders, synced like
   other records. Ships with a small set (arrows, checkboxes, dividers, planner stickers). 🔒 new kind.
-- **Scribble-to-erase** stays opt-in; add **circle-to-select** (draw a loop and hold → lasso).
+- **Scribble-to-erase** stays opt-in. (Circle-to-select was dropped: the user doesn't want it.)
 
 ### S4. Notebooks, not just sketches **L**
 GoodNotes is organised around notebooks; Trove's sketches are cards. Keep the card (it's what makes
@@ -172,7 +173,7 @@ search and connections work), and give sketches a notebook face:
 ### S8. Drawing data that stays small 🔒 **M**
 - Points are float32 × 4 in base64url: about 21 bytes per point, so a long stroke is several KB and a
   full notebook is megabytes of ops to download, decrypt, keep in memory and save.
-- New points format `points2`: x/y as varint deltas at 1/20 pt, pressure as one byte, time deltas as
+- New points format `points2` (now version 2 at 1/256 pt, so it never shows at 10× zoom): x/y as varint deltas at 1/20 pt, pressure as one byte, time deltas as
   varints. About 4–5 bytes per point, 4× smaller, no visible change. Readers accept both; writers
   switch once every client reads it. Fixture-checked in Swift and JS.
 - **Page checkpoints**: a page whose strokes haven't changed for a while can be folded into one

@@ -38,7 +38,16 @@ Turn this on per vault in Trove → Settings → Intelligence.
 ```bash
 npx wrangler secret put ANTHROPIC_API_KEY   # from console.anthropic.com (billed separately from Claude Pro)
 ```
-- **Model:** `CLAUDE_MODEL` in `wrangler.jsonc` is `claude-haiku-5-5` (pennies a month). See `../docs/RESEARCH.md` §3 for costs.
+- **Model:** `CLAUDE_MODEL` in `wrangler.jsonc` is `claude-haiku-5-5` (pennies a month), and that's
+  the recommended default: it's quick and costs $0.10 per million tokens in, $0.50 out. If it's
+  unset the relay also uses `claude-haiku-5-5`. See `../docs/RESEARCH.md` §3 for costs.
+- **Monthly cap:** each vault gets `AI_MONTHLY_LIMIT` tokens a month (input + output, counted from
+  the API's own usage numbers; default 1,000,000, which is about $0.10 to $0.50 on Haiku). Past it,
+  AI answers "used up until the 1st" (429) without calling Claude. To change it, add
+  `"AI_MONTHLY_LIMIT": "2000000"` to `vars` in `wrangler.jsonc` and deploy. Trove shows the running
+  total under **AI** on the website (and `GET /v1/vaults/:v/ai/status`).
+- Until the key is set, nothing is sent anywhere and nothing costs money: the apps and website hide
+  cloud AI features. Content sent for AI is never stored by the relay.
 
 ### Optional: email-in (needs a domain on Cloudflare)
 1. In the Cloudflare dashboard, go to **Email → Email Routing** and enable it for your domain.
@@ -55,7 +64,7 @@ Notebooks then arrive in Trove, and the handwriting gets OCR'd so you can search
 
 ## Develop / test
 ```bash
-npm test                    # 34 tests on the real Workers runtime (no network, no cost)
+npm test                    # 55 tests on the real Workers runtime (no network, no cost)
 npx tsc --noEmit
 npx wrangler dev --local --config wrangler.test.jsonc   # local relay on :8787
 # Swift client end-to-end against it:

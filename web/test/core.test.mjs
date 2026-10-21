@@ -513,9 +513,20 @@ test("outlines, arrowheads, compact points, pen settings, the grid and grain mat
   for (const c of f.points2.cases) {
     assert.equal(ink.encodePoints2(pts(c.points)), c.encoded, c.name);
     close(flat(ink.decodePoints2(c.encoded)), c.decoded, c.name);
-    // Within half a step of what was drawn: 1/40 point, half a millisecond, 1/510 pressure.
-    ink.decodePoints2(c.encoded).forEach((p, i) => assert.ok(Math.abs(p.x - c.points[i][0]) <= 0.0251 && Math.abs(p.p - c.points[i][2]) <= 0.002, c.name));
+    // Within half a step of what was drawn: 1/512 point (0.06 px at 10× zoom on a 3× screen),
+    // 1/8192 pressure, π/8192 nib angle (either way round).
+    ink.decodePoints2(c.encoded).forEach((p, i) => {
+      const [x, y, pr, , a] = c.points[i];
+      assert.ok(Math.abs(p.x - x) <= 1 / 512 + 1e-9 && Math.abs(p.y - y) <= 1 / 512 + 1e-9, `${c.name} position`);
+      assert.ok(Math.abs(p.p - pr) <= 1 / 8192 + 1e-9, `${c.name} pressure`);
+      if (a !== undefined) {
+        const d = Math.abs((((p.a - a) % Math.PI) + Math.PI) % Math.PI);
+        assert.ok(Math.min(d, Math.PI - d) <= Math.PI / 8192 + 1e-9, `${c.name} angle`);
+      }
+    });
   }
+  for (const c of f.points2.v1) close(flat(ink.decodePoints2(c.encoded)), c.decoded, c.name);
+  assert.ok(f.points2.v1[0].decoded.length === 40 && Math.abs(f.points2.v1[0].decoded[3][0] - f.points2.cases[0].points[3][0]) <= 0.0251, "v1 still reads");
   close(flat(ink.strokePoints({ points: f.points2.legacy.encoded })), f.points2.legacy.decoded, "legacy points");
   close(flat(ink.strokePoints({ points: "", points2: f.points2.cases[0].encoded })), f.points2.cases[0].decoded, "points2 wins");
   for (const c of f.nibs) { const got = ink.meanNib(c.angles.map((a) => ({ x: 0, y: 0, p: 0.5, t: 0, a }))); assert.ok(c.expect === null ? got === null : Math.abs(got - c.expect) < 1e-9); }
@@ -529,7 +540,7 @@ test("outlines, arrowheads, compact points, pen settings, the grid and grain mat
   assert.equal(b64uEncode(ink.grainTile()), f.grain.tile);
 });
 
-test("turning, flipping, shapes, handles, connectors, ruler, loops and the elements library match Fixtures/ink-editing.json (InkEditing.swift)", async () => {
+test("turning, flipping, shapes, handles, connectors, ruler, straightening and the elements library match Fixtures/ink-editing.json (InkEditing.swift)", async () => {
   const ink = await import("../public/core/ink.js");
   const ed = await import("../public/core/inkedit.js");
   const f = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-editing.json", import.meta.url), "utf8"));
@@ -566,7 +577,6 @@ test("turning, flipping, shapes, handles, connectors, ruler, loops and the eleme
   }
   for (const c of t.degrees) assert.equal(ed.toolDegrees(c.angle), c.expect);
   for (const c of t.snaps) assert.equal(ed.snapRotation(c.r), c.expect);
-  for (const c of f.loops) assert.equal(ed.isSelectionLoop(pts(c.points)), c.expect, c.name);
   for (const c of f.straighten) assert.equal(ed.straightenAngle(pts(c.points)), c.expect);
   for (const c of f.groups.cases) assert.deepEqual(ed.withGroups(c.ids, f.groups.all).sort(), c.expect);
   const st = f.stickers;
@@ -754,6 +764,29 @@ test("drawing: packed points, widths and strokes in the vault match Ink.swift", 
   vault.setSketch(sketch, { pages: 3 });
   assert.equal(vault.item(sketch).sketchPages, 3);
   assert.deepEqual([...vault.inkedLayers().get("pdf-item")], ["blob1"]);
+});
+
+test("drawing: the ballpoint keeps one thickness, stored at pressure 1 (InkSafetyTests.ballpointKeepsOneThickness)", async () => {
+  const ink = await import("../public/core/ink.js");
+  assert.ok(ink.TOOLS.includes("ballpoint") && !ink.usesPressure("ballpoint") && ink.toolOpacity("ballpoint") === 1);
+  for (const p of [0, 0.3, 1]) assert.equal(ink.widthAt(3, "ballpoint", p), 3);
+  const points = [{ x: 0, y: 0, p: 0.1, t: 0 }, { x: 30, y: 4, p: 0.9, t: 16 }, { x: 60, y: 0, p: 0.4, t: 32 }];
+  const { v: vault } = await testVault();
+  const sketch = vault.addSketch({});
+  vault.addStroke({ on: sketch, page: "0", tool: "ballpoint", color: "#1c1c1e", width: 3, points });
+  vault.setCompactPoints(true);
+  vault.addStroke({ on: sketch, page: "0", tool: "ballpoint", color: "#1c1c1e", width: 3, points });
+  vault.addStroke({ on: sketch, page: "0", tool: "pen", color: "#1c1c1e", width: 3, points });
+  const stored = vault.strokes(sketch);
+  assert.deepEqual(stored.map((s) => s.tool), ["ballpoint", "ballpoint", "pen"]);
+  for (const s of stored.slice(0, 2)) {
+    assert.ok(s.points.every((p) => p.p === 1));
+    // Drawn as one even line; a client that doesn't know it draws a pen at full width all along.
+    assert.equal(ink.strokeOutline(s), null);
+    assert.ok(s.points.every((p) => ink.widthAt(3, "pen", p.p) === 3));
+  }
+  assert.notDeepEqual(stored[2].points.map((p) => p.p), [1, 1, 1]);
+  assert.equal(ink.strokeView({ id: "f", fields: { tool: "gelpen" } }).tool, "pen");
 });
 
 test("how much clipboard history to keep is a synced setting (ClipTests.howMuchToKeepIsASyncedSetting)", async () => {

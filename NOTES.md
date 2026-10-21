@@ -24,7 +24,10 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 
 ## The user's setup (important)
 - **No Apple Silicon Mac.** The user's Mac is Intel, and current Xcode needs M1 or later. So:
-  - **The website is the main client for now:** https://trove-relay.lancus.workers.dev. It can create the vault, sync, import the inbox and add devices.
+  - **The apps are the product; the website is secondary** (the user: "the main thing of this is the
+    app for mac and ios/ipados, the website is not primary and is there just cus we can have it").
+    Apps first, Apple frameworks first; website only where cheap. The website
+    (https://trove-relay.lancus.workers.dev) is still handy for creating the vault and adding devices.
   - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
     1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
@@ -59,9 +62,9 @@ user says "publish" (`cd server && npx wrangler deploy`).
     TroveCore (`search-cases.json` fixture shared with JS), `search-index.json` snapshot, Float32/vDSP
     meaning vectors with a disk cache, rank fusion, `ClipIndex` from 20,000 clips. Bench: 50k items +
     50k clips, median 3.9 ms, p90 20 ms per keystroke (roadmap target 5 ms for 1–2 letters not yet met).
-    **Ask the user:** website search by meaning needs the CSP to allow `cdn.jsdelivr.net` and
-    `huggingface.co` (third-party script in the worker that sees vault text), or wait until the model
-    is self-hosted. Plumbing is built; the loader is blocked by `script-src 'self'`.
+    Website search by meaning (an in-browser model from jsDelivr/Hugging Face): **dropped for now**,
+    since the apps are the product and already search by meaning with Apple's on-device NLEmbedding.
+    The loader stays blocked by `script-src 'self'`; don't open the CSP for it.
   - **Drawing feel + pens** (ROADMAP S1, S2, S8; PROTOCOL.md §10): strokes drawn as one filled outline
     (`strokeOutline` / `InkOutline`, fixture `ink-outline.json`); website pen layer desynchronized +
     predicted points (input-to-paint 13 ms median in headless Chromium), 512 px tiles per zoom step and
@@ -69,13 +72,32 @@ user says "publish" (`cd server && npx wrangler deploy`).
     pressure curve, min width) synced in `settings.ink`; up to 10 favourite pens; pencil grain;
     dashes/dots, arrowheads, shape fill; highlighter straightens when held; your/recent colours, hex,
     eyedropper (website); tape (`type: "tape"`). Pencil Pro (written, untested): hover preview, barrel
-    roll as nib, haptics. Compact `points2` (~4× smaller) is written only after "Smaller drawings" is
+    roll as nib, haptics. Compact `points2` (~2.5× smaller; version 2 keeps positions to 1/256 pt so
+    the rounding never shows even at 10× zoom on a 3× screen; version 1 at 1/20 pt still reads) is written only after "Smaller drawings" is
     turned on (vault flag `settings.ink.compactPoints`): **tell the user to turn it on only once every
     device runs this build** (older builds would see empty strokes). Swift point decoding ~6× faster.
     Not done: OffscreenCanvas in a Worker, Mac CGLayer tiles, page checkpoints (S8 says design first).
     On iPad PencilKit draws the ink, so pen settings, dashes/fill/arrows/grain show as plain strokes.
     **Ask the user:** should tape's open/closed state sync? Should iPad draw styled strokes in Trove's
     overlay instead of PencilKit? **iPad checks:** hover dot (doubled with PencilKit's?), barrel roll, haptics.
+  - **AI** (ROADMAP A1–A3; PROTOCOL.md §4 AI, §11): relay counts tokens per vault per UTC month
+    (`AI_MONTHLY_LIMIT`, default 1M, friendly 429 over it), `GET ai/status`, `POST ai/action` (text and
+    picture actions); default model is the cheapest Haiku. Website: Ask Trove with citations and "Save
+    as note", AI menu on notes, flashcards (note tagged `flashcards`), Settings → AI usage, Suggest
+    links (no AI), Look back (weekly digest `digest-YYYY-wNN`, on this day, possible duplicates). Apps:
+    note AI menu (Foundation Models on iPad, else cloud), weekly digest, overnight enrichment drains the
+    queue. **Cloud AI stays off** until the user decides ❓3; then `npx wrangler secret put
+    ANTHROPIC_API_KEY`, deploy, switch on under AI. Hook for drawing: `runPageAction` in `ai.js`
+    (not yet wired into the lasso). Apps lack Ask-with-citations, Look back and Suggest links.
+    **Ask the user:** is 1M tokens/month right? Digest weeks in UTC or local time?
+  - **Sync scaling** (ROADMAP §3.1, S8; PROTOCOL.md §3 Checkpoints, §4, §7): encrypted checkpoints
+    ("TRC1", DEFLATE, TRV1 with the segment key) of all records + text ops + covered op ranges; a new
+    device starts from the newest one and skips the segments in it. Written after a clean sync once
+    5,000 ops have piled up and the newest is a day old. Relay `PUT/GET /checkpoints/:id`, R2, newest 3
+    kept; iCloud `.sync/<device>/checkpoints/`. Older relays answer 404 and devices replay as before;
+    segments are never deleted. Apps: local copy in SQLite (`vault.sqlite`, `LocalDatabase` in
+    TroveCore; `state.json` migrates once). CI installs `libsqlite3-dev`. **Needs a relay deploy**
+    for checkpoints to go live. Open: prune old segments once every device reads checkpoints?
   - **Clip renaming fixed.** Apps: the clip form saved only with the Save button at its bottom, so
     Return, swiping the sheet away or picking another clip lost the name, and on iPhone/iPad the
     row's four buttons all fired at once (Cancel too). Now Return saves the name, closing saves
@@ -83,11 +105,42 @@ user says "publish" (`cd server && npx wrangler deploy`).
     search's "From your clipboard" was rebuilt by a sync while typing (Safari then drops the
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
-- **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
-  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): AI (A1–A3;
-  cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
-- **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
-  audio (S5–S7), then the rest of the roadmap.
+- **Sketch fixes from the iPad** (user: lasso crash, Pencil taps not registering, ballpoint, shade
+  around pages, battery/heat). Written on Linux; **check on the iPad**:
+  - **Lasso crash**: a lasso drag replaced PencilKit's whole drawing on every pointer move (and the
+    paper view redrew each time). Now the selection is lifted off the drawing when a drag starts and
+    drawn in the overlay while it moves (`display(_:lifted:)`, `dragPreview`), so a drag rebuilds the
+    drawing twice, not 120 times a second. Also: strokes PencilKit "reports" while the lasso/eraser is
+    in hand are ignored (they were echoes that got added as duplicates), canvas strokes are matched
+    by what the canvas holds (several ids per look-alike signature), no `Int()` of NaN/huge numbers
+    (signature, page keys, eraser resampling, outlines), non-finite or degenerate lasso transforms are
+    never stored (`Transform.isUsable`), lasso writes run one after another.
+  - **Pencil taps**: plain buttons only answered where their label had pixels (a Pencil tap is a
+    point): tools, colours, sizes, favourites, palette, page rows now take the whole frame
+    (`inkTapArea`). Gesture settings are set only when they change (each lasso move reset them). A
+    short tap with the lasso selects the text box/picture/tape or strokes under it; corner handles 20 pt.
+  - **Ballpoint** (before the pencil, apps + website; PROTOCOL.md §10): even width, stored at
+    pressure 1 so older apps (which draw unknown tools as a pen) draw it right. iPad: PencilKit
+    monoline (like the marker; the tool in hand tells them apart).
+  - **Around the pages**: iPad/iPhone light grey, near black in dark mode (Mac and website already had it).
+  - **Battery**: while a sketch is open on iPhone/iPad (`AppModel.sketchCovers`) only the vault syncs
+    (poll ≥ 2 min, live pings still pull); lists, search by meaning, Spotlight, widget, clipboard,
+    which-items-have-ink scan, inbox, price watches, enrichment and AI wait until it closes. Editor:
+    paper drawn ¼ screen past the edges and redrawn only when scrolling leaves it (was every frame),
+    no Trove hover tip under pens (PencilKit shows its own; ours redrew the overlay per hover move),
+    stroke stamps rounded to 1/20 pt (a reload no longer rebuilds the PencilKit drawing), page panel
+    redraws only the current page, inked-file previews wait behind the editor. `strokes(on:)` sorts
+    on precomputed times (3,000 strokes: 84 → 32 ms debug, `InkSafetyTests`).
+- **Not started (lost):** editing (S3) and PDFs (S5) workers were started but left no commits or
+  `wip/*` branch before the container restarted; start them fresh. (Back up worker commits to `wip/*`
+  branches on GitHub so a lost container doesn't lose them.)
+- **Published** (the user allowed it): `BRIDGE_KEY` set, relay + website deployed (version
+  3f05d8e6, at 2f8bc9c). Against production: relay e2e 5/5 and the browser test that creates a
+  vault pass; "set up with a code… live updates" failed once (it passes locally; likely live-update
+  timing over the network). Not re-run: the session's permission rules block more test vaults on
+  production. Check it next time a run against production is allowed.
+- **Next**: notebooks (S4; design direction ❓8 still open), wire AI into the lasso, handwriting and
+  audio (S6, S7), then the rest of the roadmap (§7).
 
 ## Round before (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
 - **Why drawing lagged** (found, not guessed): every stroke reloaded the drawing three times, rebuilt

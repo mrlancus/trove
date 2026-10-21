@@ -5,19 +5,27 @@ import Foundation
 /// sketch item's own pages, or on top of a file (a PDF page or an image), which never changes.
 /// web/public/core/ink.js is the same code for the website; both check Fixtures/ink-cases.json.
 public enum InkTool: String, Codable, CaseIterable, Sendable {
-    case pen, pencil, marker, highlighter, fountain, brush
+    /// `ballpoint`: one even thickness however hard it's pressed. Its points are stored at pressure
+    /// 1, so a Trove that doesn't know it (and draws it as a `pen`) still draws it full and even.
+    case pen, ballpoint, pencil, marker, highlighter, fountain, brush
 
     /// How see-through the ink is.
     public var opacity: Double {
         switch self {
-        case .pen, .marker, .fountain, .brush: 1
+        case .pen, .ballpoint, .marker, .fountain, .brush: 1
         case .pencil: 0.85
         case .highlighter: 0.35
         }
     }
 
-    /// Pens, pencils, fountain pens and brushes get thinner when pressed lightly; markers and highlighters don't.
-    public var usesPressure: Bool { self != .marker && self != .highlighter }
+    /// Pens, pencils, fountain pens and brushes get thinner when pressed lightly; ballpoints, markers and highlighters don't.
+    public var usesPressure: Bool { self != .marker && self != .highlighter && self != .ballpoint }
+
+    /// The points as stored: a ballpoint's at pressure 1 (see above), the rest as drawn.
+    public func stored(_ points: [InkPoint]) -> [InkPoint] {
+        guard self == .ballpoint else { return points }
+        return points.map { var p = $0; p.pressure = 1; return p }
+    }
 }
 
 public struct InkPoint: Sendable, Equatable {
@@ -83,7 +91,7 @@ public struct InkStroke: Identifiable, Sendable {
     /// "" for a sketch's own pages, or the attachment id of the file it's drawn on.
     public var layer: String { record[Field.layer]?.string ?? "" }
     /// 0-based page of a file (PDF page, or 0 for an image).
-    public var page: Int { Int(record[Field.page]?.number ?? Double(record[Field.page]?.string ?? "") ?? 0) }
+    public var page: Int { InkPage.int(record[Field.page]?.number ?? Double(record[Field.page]?.string ?? "") ?? 0) ?? 0 }
     /// The page as a sketch knows it: its id in `pageList` (a number n is the page "n").
     public var pageKey: String { InkPage.key(record[Field.page]) }
     /// The clean shape this stroke was snapped to, if any.
@@ -116,7 +124,7 @@ public struct InkStroke: Identifiable, Sendable {
         case .pen, .pencil: return width * (0.35 + 0.65 * p)
         case .brush: return width * (0.15 + 0.85 * p)
         case .fountain: return width * (0.6 + 0.4 * p)
-        case .marker, .highlighter: return width
+        case .ballpoint, .marker, .highlighter: return width
         }
     }
 
@@ -193,8 +201,12 @@ public enum InkPoints {
         return t
     }()
 
-    /// Positions are kept to 1/20 point (core/ink.js `POINTS2_SCALE`).
-    public static let scale2 = 20.0
+    /// Positions are kept to 1/256 point (core/ink.js `POINTS2_SCALE`): at the deepest zoom (10×) on
+    /// a 3× screen a point is 30 pixels, so a position is never more than 0.06 of a pixel off,
+    /// whatever the zoom or size it was drawn at. Pressure and nib angle are kept to 1/4096.
+    public static let scale2 = 256.0, levels2: Int64 = 4096
+    /// Version 1 (still read): 1/20 point, one byte each for pressure and angle.
+    public static let scale2v1 = 20.0
 
     /// The fields that store points: `points2` when the vault writes compact points, else `points`.
     /// `had` (the record before) empties the other one if it was set.
@@ -215,36 +227,51 @@ public enum InkPoints {
         out.append(UInt8(v))
     }
 
-    /// `points2` (PROTOCOL.md §10, core/ink.js `encodePoints2`): version 1, flags (1 = nib angles),
-    /// a varint count, then per point zigzag varint x and y steps in 1/20 points, a pressure byte,
-    /// a varint time step in ms and, with angles, the angle in [0, π) as a byte.
+    /// A nib angle in [0, π) as a whole number of π/4096 steps, 0…4095.
+    private static func angleLevel(_ a: Double) -> Int64 {
+        var v = a.truncatingRemainder(dividingBy: Double.pi)
+        if v < 0 { v += Double.pi }
+        return roundHalfUp(v / Double.pi * Double(levels2)) % levels2
+    }
+
+    /// `points2` version 2 (PROTOCOL.md §10, core/ink.js `encodePoints2`): byte 2, flags (1 = nib
+    /// angles), a varint count, then per point zigzag varint steps: x and y in 1/256 points,
+    /// pressure in 1/4096, the time in ms (plain varint) and, with angles, the angle in π/4096 the
+    /// short way round.
     public static func encode2(_ points: [InkPoint]) -> String {
         let angles = points.contains { $0.angle != nil }
-        var out: [UInt8] = [1, angles ? 1 : 0]
+        var out: [UInt8] = [2, angles ? 1 : 0]
         varint(Int64(points.count), into: &out)
-        var px: Int64 = 0, py: Int64 = 0, pt: Int64 = 0
+        var px: Int64 = 0, py: Int64 = 0, pp: Int64 = 0, pt: Int64 = 0, pa: Int64 = 0
         func fin(_ v: Double) -> Double { v.isFinite ? v : 0 }
+        // Far past any page; keeps the steps inside Int64.
+        func place(_ v: Double) -> Int64 { roundHalfUp(min(1e9, max(-1e9, fin(v))) * scale2) }
         func zigzag(_ n: Int64) -> Int64 { n >= 0 ? 2 * n : -2 * n - 1 }
         for p in points {
-            let x = roundHalfUp(fin(p.x) * scale2), y = roundHalfUp(fin(p.y) * scale2)
+            let x = place(p.x), y = place(p.y)
+            let pr = roundHalfUp(min(1, max(0, fin(p.pressure))) * Double(levels2))
             let t = max(pt, roundHalfUp(max(0, fin(p.t))))
             varint(zigzag(x - px), into: &out)
             varint(zigzag(y - py), into: &out)
-            out.append(UInt8(roundHalfUp(min(1, max(0, fin(p.pressure))) * 255)))
+            varint(zigzag(pr - pp), into: &out)
             varint(t - pt, into: &out)
             if angles {
-                var a = fin(p.angle ?? InkGeometry.nibAngle).truncatingRemainder(dividingBy: Double.pi)
-                if a < 0 { a += Double.pi }
-                out.append(UInt8(roundHalfUp(a / Double.pi * 256) % 256))
+                let a = angleLevel(fin(p.angle ?? InkGeometry.nibAngle))
+                var d = (a - pa) % levels2
+                if d >= levels2 / 2 { d -= levels2 } else if d < -levels2 / 2 { d += levels2 }
+                varint(zigzag(d), into: &out)
+                pa = a
             }
-            px = x; py = y; pt = t
+            px = x; py = y; pp = pr; pt = t
         }
         return Data(out).base64URL
     }
 
+    /// Reads `points2` version 2, and version 1 (1/20 point, one byte each for pressure and angle).
     public static func decode2(_ string: String) -> [InkPoint] {
-        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 else { return [] }
-        let angles = bytes[1] & 1 == 1
+        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 || bytes[0] == 2 else { return [] }
+        let v1 = bytes[0] == 1, angles = bytes[1] & 1 == 1
+        let scale = v1 ? scale2v1 : scale2
         var i = 2
         func varint() -> Int64? {
             var n: UInt64 = 0, shift: UInt64 = 0
@@ -257,24 +284,34 @@ public enum InkPoints {
             }
             return nil
         }
+        func byte() -> Int64? {
+            guard i < bytes.count else { return nil }
+            i += 1
+            return Int64(bytes[i - 1])
+        }
         func unzigzag(_ z: Int64) -> Int64 { z % 2 == 0 ? z / 2 : -(z + 1) / 2 }
         var out: [InkPoint] = []
         guard let count = varint() else { return [] }
-        var x: Int64 = 0, y: Int64 = 0, t: Int64 = 0
+        var x: Int64 = 0, y: Int64 = 0, p: Int64 = 0, t: Int64 = 0, a: Int64 = 0
         var k: Int64 = 0
         while k < count {
-            guard let dx = varint(), let dy = varint(), i < bytes.count else { break }
+            guard let dx = varint(), let dy = varint() else { break }
             x += unzigzag(dx)
             y += unzigzag(dy)
-            let p = Double(bytes[i]) / 255
-            i += 1
+            if v1 { guard let b = byte() else { break }; p = b } else { guard let dp = varint() else { break }; p += unzigzag(dp) }
             guard let dt = varint() else { break }
             t += dt
-            var point = InkPoint(x: Double(x) / scale2, y: Double(y) / scale2, pressure: p, t: Double(t))
+            let pressure = min(1, max(0, v1 ? Double(p) / 255 : Double(p) / Double(levels2)))
+            var point = InkPoint(x: Double(x) / scale, y: Double(y) / scale, pressure: pressure, t: Double(t))
             if angles {
-                guard i < bytes.count else { break }
-                point.angle = Double(bytes[i]) * Double.pi / 256
-                i += 1
+                if v1 {
+                    guard let b = byte() else { break }
+                    point.angle = Double(b) * Double.pi / 256
+                } else {
+                    guard let da = varint() else { break }
+                    a = ((a + unzigzag(da)) % levels2 + levels2) % levels2
+                    point.angle = Double(a) * Double.pi / Double(levels2)
+                }
             }
             out.append(point)
             k += 1
@@ -415,8 +452,14 @@ public struct InkPage: Equatable, Sendable, Identifiable {
     /// A stroke's or element's `page` field as a page id: numbers are the old page indexes.
     public static func key(_ value: JSONValue?) -> String {
         if let s = value?.string { return s }
-        if let n = value?.number { return String(Int(n)) }
+        if let n = value?.number { return int(n).map(String.init) ?? "0" }
         return "0"
+    }
+
+    /// A number as an Int, truncated, or nil when it isn't one an Int can hold (NaN, ±∞, huge):
+    /// `Int(_:)` would stop the app on those.
+    public static func int(_ n: Double) -> Int? {
+        n.isFinite && abs(n) < 9e15 ? Int(n) : nil
     }
 
     /// Colours offered for pages.
@@ -445,7 +488,8 @@ extension Item {
     public var sketchPageList: [InkPage] {
         let list = record[SketchField.pageList]?.array?.compactMap(InkPage.init(json:)) ?? []
         if !list.isEmpty { return list }
-        return (0..<max(1, Int(record[SketchField.pages]?.number ?? 1))).map { InkPage(id: String($0)) }
+        let count = record[SketchField.pages]?.number.flatMap(InkPage.int) ?? 1
+        return (0..<min(1000, max(1, count))).map { InkPage(id: String($0)) }
     }
     /// One endless page instead of pages.
     public var isInfiniteCanvas: Bool { record[SketchField.canvas]?.string == "infinite" }
@@ -469,9 +513,20 @@ extension Library {
     /// Strokes on an item (a sketch, or `layer` = the file's attachment id), oldest first, which is
     /// the order they're drawn in.
     public func strokes(on itemId: String, layer: String = "", page: Int? = nil) async -> [InkStroke] {
-        await engine.ink(on: itemId).filter { $0.kind == "stroke" }.map(InkStroke.init)
+        let strokes = await engine.ink(on: itemId).filter { $0.kind == "stroke" }.map(InkStroke.init)
             .filter { $0.layer == layer && (page == nil || $0.page == page) }
-            .sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }
+        return Self.drawOrder(strokes, createdAt: { $0.record[InkStroke.Field.createdAt]?.number ?? 0 })
+    }
+
+    /// Oldest first, ties by id. Each record's time is read once (reading it in every comparison
+    /// made a page's reload several times slower).
+    static func drawOrder<T: Identifiable>(_ list: [T], createdAt: (T) -> Double) -> [T] where T.ID == String {
+        let keyed: [(key: Double, value: T)] = list.map { (key: createdAt($0), value: $0) }
+        let sorted = keyed.sorted { (a: (key: Double, value: T), b: (key: Double, value: T)) -> Bool in
+            if a.key != b.key { return a.key < b.key }
+            return a.value.id < b.value.id
+        }
+        return sorted.map { $0.value }
     }
 
     /// Every item that has ink on it, and on which layers.
@@ -498,7 +553,7 @@ extension Library {
             InkStroke.Field.tool: .string(tool.rawValue), InkStroke.Field.color: .string(color), InkStroke.Field.width: .number(width),
             InkStroke.Field.createdAt: .number(created), InkStroke.Field.device: .string(await engine.device),
         ]
-        fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
+        fields.merge(InkPoints.fields(tool.stored(points), compact: compact)) { _, b in b }
         await engine.set(fields, record: id, kind: "stroke")
         return id
     }

@@ -97,11 +97,47 @@ A segment is an immutable batch of consecutive ops from one device:
 - **File name:** `<firstSeq zero-padded to 12>-<lastSeq zero-padded to 12>.trv`.
 - **Limit:** 512 KiB of plaintext per segment.
 
+### Checkpoints
+A checkpoint is the materialised state of a set of ops, so a new device (or a website login) loads
+one file instead of replaying every op since the vault began (`core/checkpoint.js`,
+`Checkpoint.swift`, both checked against `Fixtures/checkpoint-cases.json`).
+
+- **Plaintext:** `"TRC1"`, a format byte (`0`: UTF-8 JSON follows; `1`: a u32 of the JSON's length,
+  then the JSON as raw DEFLATE, RFC 1951), then the JSON:
+  ```json
+  { "v": 1, "frontier": "<highest hlc covered>", "cursor": 1234, "device": "<writer>", "createdAt": 1760000000000,
+    "covers": { "<deviceId>": [[1, 500], [502, 610]] },
+    "records": [ { "id": "…", "k": "item", "ks": "<hlc of the last op that set the kind>",
+                   "c": "<first hlc>", "u": "<last hlc>", "g": [["<hlc>", { "title": "…" }], …] } ],
+    "texts": [ <every covered "text" op, verbatim> ] }
+  ```
+  `covers` lists exactly the ops inside (per device, merged sequence ranges). Each record's fields are
+  grouped by the HLC of the op that set them (`g`); `ks` is absent when no op named a kind. `cursor`
+  is the relay cursor up to which every relay segment is covered (`null` when written without a relay).
+- **Encrypted:** TRV1 mode 1 with the segment key (§1), like a segment. The relay and iCloud only
+  ever see ciphertext. Vaults made with encryption off don't use checkpoints.
+- **Loading** (same result as a full replay): start from the records (texts empty), then apply every
+  op in HLC order that isn't covered, plus the checkpoint's text ops. An op that isn't covered but is
+  older than what a field holds (a device that was offline) doesn't overwrite it: a `set` field or the
+  kind changes only if the op's `h` ≥ that field's HLC in `g` (or `ks`). `createdHLC` is the lowest
+  HLC seen. Text fields replay all their text ops in order, so merges and conflicts come out the same.
+  Covered ops that arrive again are ignored, and a whole segment inside `covers` needn't be fetched.
+- **Writing:** only with nothing unpushed (a pending op could still be renumbered). A device writes
+  one after a clean sync when at least 5,000 ops have piled up since its last checkpoint and the
+  newest one is a day old, then uses it as its own local base too. A checkpoint is only taken over the
+  one in use when it covers everything that one covers.
+- **Where:** the relay (§4, newest three kept) and iCloud
+  (`.sync/<deviceId>/checkpoints/<id>.trc`, the writer's newest two). A device starts from one only
+  when it has nothing yet (cursor 0, no local copy). Devices that bridge iCloud and the relay always
+  fetch every segment (so they can copy them across), but still write checkpoints. Segments are never
+  pruned yet: older apps that don't read checkpoints still replay from the start.
+
 ### iCloud Drive vault layout
 ```
 Trove/
   vault.json                 public info: { "v":1, "vaultId", "vaultPublicKey" (b64u), "createdAt", "encrypted": true }
   .sync/<deviceId>/<first>-<last>.trv      journals; ONLY that device writes in its own folder
+  .sync/<deviceId>/checkpoints/<id>.trc    that device's checkpoints (TRV1, see "Checkpoints")
   .blobs/<aa>/<blobId>.trv   attachments (blobId prefix folders); written once, never modified
   Notes/…                    readable Markdown mirror (written only by the "mirror owner" device, the Mac)
 ```
@@ -131,6 +167,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/segments/:device/:first/:last` | device | → TRV1 bytes |
 | `PUT /vaults/:v/blobs/:blobId` | device | TRV1 bytes → `201` (or `200` if it already exists) |
 | `GET /vaults/:v/blobs/:blobId` | device | → TRV1 bytes |
+| `PUT /vaults/:v/checkpoints/:id` | device | TRV1 checkpoint (§3), `id` 8–64 of `[A-Za-z0-9_-]`, up to 95 MB → `201 {id}` (`200` if that id exists). Stored in R2; only the newest 3 are kept |
+| `GET /vaults/:v/checkpoints` | device | → `{checkpoints:[{id, device, size, createdAt}]}`, newest first |
+| `GET /vaults/:v/checkpoints/:id` | device | → TRV1 bytes |
 | `POST /vaults/:v/inbox` | inbox or device | TRV1 **sealed** bytes, plus header `X-Trove-Source: web\|ios\|other` → `{id, cursor}` |
 | `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
 | `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
@@ -145,6 +184,8 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /p/:v/:slug` | none | the published page as HTML (§6) |
 | `POST /vaults/:v/ai/enrich` | device | `{text, url?, title?}` → `{title, summary, tags[], kind?}` (Claude) |
 | `POST /vaults/:v/ai/ask` | device | `{question, sources:[{id,text}]}` → `{answer, citations:[id]}` (Claude) |
+| `POST /vaults/:v/ai/action` | device | `{action, text}` or `{action, image (base64), mediaType}` (+ `language` for translate) → `{action, text, cards:[{front,back}]}` (Claude; below) |
+| `GET /vaults/:v/ai/status` | device | → `{enabled, vaultEnabled, configured, model, month, used, limit, unit:"tokens", resetsAt}` |
 | `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
 | `GET/POST /vaults/:v/bridges`, `GET/PUT/DELETE /vaults/:v/bridges/:id`, `POST …/:id/run`, `POST …/:id/regenerate` | device | Bridges (below) |
@@ -165,7 +206,21 @@ iCloud-only vault keeps the journal id it already writes under `.sync/<deviceId>
 
 AI routes return `403` unless the vault has AI enabled (`PUT /vaults/:v/settings {aiEnabled:true}`).
 The Anthropic key is a Worker secret (`ANTHROPIC_API_KEY`). Content sent to AI routes is plaintext
-by necessity, and the apps label those items "processed in cloud".
+by necessity, and the apps label those items "processed in cloud". The relay never stores it.
+
+Claude routes (`enrich`, `ask`, `action`) also return `tokens` (what the call cost: input + output +
+cache tokens, from the API's usage numbers) and `usage` (the status object). They count against a
+monthly allowance per vault, the Worker var `AI_MONTHLY_LIMIT` in tokens (default 1,000,000; the
+month is the UTC calendar month). Once `used >= limit` they answer `429 {error, ...status}` without
+calling Claude, until `resetsAt`. A refused or cut-off answer still counts what it cost. `enabled`
+in the status is `vaultEnabled && configured` (a key is set); clients hide AI features when it's false.
+
+`action` (ROADMAP §4 A2) takes text actions `continue`, `shorter`, `clearer`, `grammar`, `bullets`,
+`translate`, `summarise`, `explain`, `flashcards` and picture actions (a rendered page or lasso
+selection) `transcribe`, `summarise`, `explain`, `solve`, `flashcards`. `cards` is empty except for
+`flashcards`. Limits, refused with `413` (never cut): question 2,000 characters, 30 sources, text
+20,000 characters, picture 5,000,000 base64 characters (PNG, JPEG or WebP, else `415`), `language`
+40 letters.
 
 ### Inbox plaintext (inside the sealed TRV1)
 ```
@@ -323,6 +378,12 @@ revoked the same way.
   `localOwner` holds the id of the copy that last opened the storage; an older copy (another tab)
   stops writing. This keeps vault content out of plain IndexedDB files; it does not protect against
   someone with the whole browser profile, since the key is stored there too.
+  **Checkpoint:** a copy that starts from a checkpoint (§3 "Checkpoints"), or wrote one, keeps it
+  under `base` as `{v: 1, id, cursor, data: b64u of the TRV1 checkpoint as the relay has it}` (already
+  encrypted with the segment key, so not sealed again), and its op chunks hold only the ops it
+  doesn't cover. `base` is written before the chunks are rewritten, so a crash leaves at worst
+  covered ops in old chunks, which are ignored. A `base` that can't be opened makes the copy open
+  empty with cursor 0, as above.
 - **Same results everywhere:** `web/test` and `WebInteropTests.swift` check journals written by
   each side materialise to identical records on the other.
 - **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to
@@ -493,7 +554,7 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `on` | the item id the ink belongs to |
 | `layer` | `""` for a sketch's own pages; the attachment id of a file (PDF or image) drawn on |
 | `page` | a file's 0-based page (a PDF page, or 0 for an image); on a sketch, the page's id (a string; a number n means the page `"n"`) |
-| `tool` | `pen`, `pencil`, `marker`, `highlighter`, `fountain` or `brush` |
+| `tool` | `pen`, `ballpoint`, `pencil`, `marker`, `highlighter`, `fountain` or `brush`. Readers draw a tool they don't know as `pen` |
 | `shape` | optional: the clean shape it was snapped to (`line`, `polyline`, `triangle`, `rectangle`, `polygon`, `circle`, `ellipse`) or drawn with the shape picker (also `curve`, `diamond`, `star`, `heart`, `bubble`); drawn as straight segments at even width (readers that don't know a name still do that) |
 | `color` | `"#rrggbb"` |
 | `width` | full width in page points |
@@ -508,13 +569,20 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
 | `device` | device id |
 
-- **Compact points (`points2`)**: base64url of bytes: `1` (the version; readers give up on any
-  other), a flags byte (bit 0: every point has a nib angle), the point count as a varint (7 bits a
-  byte, low first, high bit = more), then per point: x and y as zigzag varints (n ≥ 0 → 2n, else
-  −2n − 1) of the step from the previous point in 1/20 page points (`floor(v × 20 + 0.5)`, so steps
-  of the rounded values never drift), the pressure as one byte (`floor(p × 255 + 0.5)`), the time
-  step in whole ms as a varint (never negative) and, with angles, the angle in [0, π) as one byte
-  (`floor(a / π × 256 + 0.5) mod 256`). About 5 bytes a point against `points`' 21 (base64 of 16).
+- **Compact points (`points2`)**: base64url of bytes: the version (`2`; readers also take `1`,
+  below, and give up on any other), a flags byte (bit 0: every point has a nib angle), the point
+  count as a varint (7 bits a byte, low first, high bit = more), then per point, each as a zigzag
+  varint (n ≥ 0 → 2n, else −2n − 1) of the step from the previous point's rounded value (so steps
+  never drift): x and y in 1/256 page points (`floor(v × 256 + 0.5)`, with v clamped to ±1e9), the
+  pressure in 1/4096 (`floor(p × 4096 + 0.5)`, p clamped to 0…1), then the time step in whole ms
+  as a plain varint (never negative) and, with angles, the angle in π/4096 steps
+  (`floor(a mod π / π × 4096 + 0.5) mod 4096`), stepped the short way round (−2048…2047; the sum
+  is taken mod 4096). 1/256 point is the resolution so it never shows: at the deepest zoom (10×)
+  on a 3× screen a point is 30 pixels, so a position is at most 0.06 of a pixel off, whatever the
+  zoom or pen size it was drawn at. About 6–8 bytes a point against `points`' 21 (base64 of 16).
+  **Version 1** (written before; still read): positions in 1/20 point, pressure as one byte
+  (`floor(p × 255 + 0.5)`, not a step) between the y step and the time step, and the angle as one
+  byte (`floor(a / π × 256 + 0.5) mod 256`, not a step).
   `encodePoints2`/`InkPoints.encode2`, checked against `Fixtures/ink-outline.json`.
   **Who writes it**: apps released before it can't read it (they'd see an empty stroke, and moving
   one there would wipe it), so writers keep writing `points` until the vault's `settings.ink`
@@ -527,7 +595,8 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   (`inkSettingsOf` / `InkSettings`, fixture-checked): `pen.<tool>` = `{smoothing 0–100, curve
   "soft" | "normal" | "firm", minWidth 0–100}` per pen; `favourites` = up to 10 `{tool, color,
   width}`; `palette` = up to 24 `"#rrggbb"`; `compactPoints` (above). Out-of-range values are
-  clamped, bad entries dropped. Recent colours and the line options (dashes, arrows, fill) stay on
+  clamped, bad entries dropped (a favourite with a tool the reader doesn't know, such as a
+  `ballpoint` on an older app, is skipped there, and dropped if that device saves its favourites). Recent colours and the line options (dashes, arrows, fill) stay on
   the device.
 - **Pen settings apply while drawing**, so a stroke stores what was shown and every device draws
   it the same: pressure becomes `m + (1 − m) · c(p)` (m = minWidth / 100; c(p) = p^0.6 soft, p
@@ -540,7 +609,10 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 - **Look**: pen and pencil widths follow pressure (`width × (0.35 + 0.65 × pressure)`), brushes
   `width × (0.15 + 0.85 × pressure)` tapering over their first and last 15 % of points, and fountain
   pens `width × (0.25 + 0.75 × |sin(direction − 45°)|) × (0.6 + 0.4 × pressure)`, where the
-  direction runs from the previous to the next point. Markers and highlighters are even. Opacity:
+  direction runs from the previous to the next point. Ballpoints, markers and highlighters are
+  even. **Ballpoint** (added after the first release): its points are written with pressure 1
+  (`InkTool.stored` / `storedPoints`, in `addStroke`), so an older reader, which draws an unknown
+  tool as a `pen`, draws it at its full width all along, as it should look. Opacity:
   pencil 0.85, highlighter 0.35 (blended under the ink), others 1. The fountain pen's 45° is the
   stroke's `nib` (or a point's own angle) when set.
 - **Outlines**: pens, pencils, fountain pens and brushes are drawn as one filled outline each
@@ -550,7 +622,7 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   its width above (at least 0.3); the outline runs down the left side (half the width along the
   normal of the averaged neighbouring directions), round the end in a half circle of 8 steps, back
   along the right side and round the start; a turn of more than 90° gets an arc on both sides. It's
-  filled (non-zero) with quadratic curves through the midpoints of its corners. Markers,
+  filled (non-zero) with quadratic curves through the midpoints of its corners. Ballpoints, markers,
   highlighters, shapes and `dash` strokes are one even line with round caps and joins at the
   width (pressure tools: at their average pressure). Arrowheads are triangles 4 × width + 6 long
   and 0.9 × that wide at the base; the line stops 2 × width + 3 short of the tip.
@@ -608,9 +680,6 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   (every point moved onto it, pressure kept). A protractor (radius 160) is the half circle above its
   base line; a pen put down on the arc draws along it. Both show their angle (0–180°,
   counter-clockwise from level).
-- **Circle to select** (opt-in, this device): a pen loop (closed within 20 % of its diagonal, at
-  least 24 points each way, 8 points or more) held still, with something inside it, becomes a lasso
-  selection instead of ink.
 - **Straighten** turns the selection about its centre by `straightenAngle`: minus the angle of its
   points' main direction (principal axis) from the nearest of level or upright.
 - **Shapes**: `InkShapes.swift` / `recognizeShape` in ink.js. Open drawings: a line if no point is
@@ -687,3 +756,41 @@ comes with built-in elements (ids `builtin.*`, not records, the same on every de
 / `InkStickers.builtIns`): arrows (one-way, two-way, curved), checkboxes (empty, ticked), dividers
 (solid, dotted), a star, a heart and planner tags (Important, To do, Done, Due). All of this is
 checked against `Fixtures/ink-editing.json`. Apps that don't know `sticker` records ignore them.
+
+## 11. Looking back and AI results
+
+All optional item fields; readers that don't know them ignore them, and nothing old changes.
+
+**Weekly digest.** A note (`kind: "note"`) with the id `digest-<ISO year>-w<2-digit ISO week>`, for
+example `digest-2026-w43`, so every device that makes it writes the same item (fields merge as usual).
+Weeks are ISO 8601 weeks in UTC (Monday 00:00 UTC to the next Monday). Extra fields:
+`digest: {year, week}`, `tags: ["digest"]`, `needsEnrichment: false`. Title `Week of <d> <Month> <yyyy>`
+(the Monday). The body is Markdown built only from the vault (Digest.swift = `web/public/core/digest.js`,
+checked by `Fixtures/digest-cases.json`): a count line ("You saved N things and wrote N notes this
+week." or "A quiet week: nothing new saved or written."), then, when not empty, `## Saved` (items that
+aren't notes or sketches, created that week, oldest first, `- [[Title]] (kind, host)`), `## Written`
+(notes and sketches), `## Not opened yet` (links unread, saved in the 4 weeks before, at most 10,
+`(saved <d> <Month>)`) and `## This week in other years` (same ISO week number, earlier years, newest
+first, at most 10, `(yyyy)`). Lists stop at 25 with `- and N more`. Titles in `[[ ]]` have `[ ] | #` and
+newlines replaced by spaces. Digests are never listed in digests. With cloud AI on, a device may add
+`## In short` (a summary paragraph) after the count line, ending `_Processed in the cloud (model)._`.
+Once a week, the first device to open after a sync writes **last** week's digest if no record with
+that id exists (a deleted digest isn't made again) and the week had anything saved or written.
+"Make this week's digest" remakes the current week's on demand.
+
+**On this day**: items created on today's month and day (UTC) in earlier years, newest first.
+
+**Possible duplicates**: among items that aren't notes or sketches, groups joined when two have the
+same `dedupeKey` (URL with tracking parameters removed, no scheme, `www.` or trailing `/`): reason
+`same link`; the same title words (folded, lowercased, one-letter words and `a an and the of to in on
+for with is at by from how what why` removed, 4 or more words): `same title`; or the same host and at
+least 3 title words each, sharing 80% (Jaccard) of them: `similar title`. A group's reason is the
+strongest of its joins. `notDuplicates: [id]` on either item stops that pair being joined ("Not
+duplicates"). Groups are listed newest first; ids in a group oldest first.
+
+**AI results.** Items made by AI carry `ai: {where: "cloud" | "device", model}` and say so in the body
+("processed in the cloud"). An Ask Trove answer is a note titled with the question, tagged
+`ask-trove`, whose body ends with `Sources:` and `- [[Title]]` lines, and which is connected (`links`)
+to the cited items. **Flashcards** are a note tagged `flashcards` with `flashcards: [{front, back}]`
+(for a study view) and the same cards in the body as `**Q:** front` / `**A:** back` pairs, connected to
+the note or sketch they came from.

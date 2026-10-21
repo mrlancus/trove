@@ -9,13 +9,19 @@ import { decrypt, encrypt, isTRV1, parseEnvelope, unseal } from "./trv1.js";
 import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
-import { parseHLC } from "./records.js";
+import { coversRange, parseHLC } from "./records.js";
 import { LocalStore } from "./localstore.js";
 import {
   bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, meanNib, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
-  TEXT_FONTS, transformAngle, transformPoint, transformRect, validSize, widthScale,
+  storedPoints, TEXT_FONTS, transformAngle, transformPoint, transformRect, validSize, widthScale,
 } from "./ink.js";
 import { builtInStickers, connectorEnds, elementBounds, placeSticker, STICKER_KIND, stickerFields, stickerView, transformElement } from "./inkedit.js";
+import { lastCoveredSeq, makeCheckpoint, MAX_CHECKPOINT_BYTES, openCheckpoint, parseCheckpoint, sealCheckpoint } from "./checkpoint.js";
+
+/** Write a checkpoint once this many ops have piled up since the last one (PROTOCOL.md §3 "Checkpoints")… */
+export const CHECKPOINT_AFTER_OPS = 5000;
+/** …and the newest on the relay is at least this old, so devices don't all write one at once. */
+export const CHECKPOINT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
@@ -87,6 +93,7 @@ export class Vault {
     this.journal = new Journal(journalState, pending, this.now);
     this.local = options.local ?? new LocalStore(storage);
     this.store = new RecordStore();
+    if (options.base) this.store.useBase(options.base); // the checkpoint this copy starts from
     this.store.apply(ops);
     this.store.unsaved = []; // ops not yet in the local op store (LocalStore saves only these)
     this.store.apply(pending); // edits saved before the full op cache caught up
@@ -205,19 +212,33 @@ export class Vault {
     await local.claim();
     const saved = await local.load();
     const journal = saved.journal ?? { state: { device: config.deviceId }, pending: [] };
-    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local });
-    if (local.needsRewrite) await vault.save(); // data from before chunked, sealed storage
+    let base = null, dropBase = false;
+    if (saved.base) {
+      try {
+        base = parseCheckpoint(await openCheckpoint(b64uDecode(saved.base.data), keys.segment));
+        base.id = saved.base.id;
+      } catch {
+        // Unreadable: start again from nothing (the relay has everything; unsent edits are in the journal).
+        Object.assign(saved, { ops: [], applied: [], cursor: 0 });
+        dropBase = true;
+      }
+    }
+    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local, base });
+    if (dropBase) vault.newBase = null;
+    if (local.needsRewrite || dropBase) await vault.save(); // data from before chunked, sealed storage
     return vault;
   }
 
-  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor. */
+  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor (and a new checkpoint). */
   async save() {
     const fresh = this.store.unsaved ?? [];
     this.store.unsaved = [];
     const store = this.store;
+    const base = this.newBase;
+    this.newBase = undefined;
     await this.local.save({
       journal: { state: { ...this.journal.state }, pending: [...this.journal.pending] },
-      fresh, all: () => store.ops, applied: [...this.applied], cursor: this.cursor,
+      fresh, all: () => store.opsAfterBase, applied: [...this.applied], cursor: this.cursor, base,
     });
   }
 
@@ -562,7 +583,7 @@ export class Vault {
     const id = newId();
     const compact = this.compactPoints();
     const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
-      ...pointFields(points, compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
+      ...pointFields(storedPoints(tool, points), compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
     if (shape) fields[InkField.shape] = shape;
     if (group) fields[InkField.group] = group;
     if (from) fields[InkField.from] = from;
@@ -1215,13 +1236,17 @@ export class Vault {
   /** Pull everyone's new segments, then push ours. */
   async sync() {
     const report = { pulled: 0, pushed: 0, errors: [] };
+    // A copy that has pulled nothing yet starts from the newest checkpoint instead of every op.
+    if (this.cursor === 0 && !this.store.base) await this.loadCheckpoint(report);
     // Pull.
     let after = this.cursor, more = true, ok = true;
     while (more) {
       const page = await this.api("GET", `segments?after=${after}&limit=500`);
       for (const s of page.segments) {
         const key = `${s.device}/${s.first}`;
-        if (!this.applied.has(key)) {
+        // Already inside the checkpoint: no need to download it.
+        const inBase = this.store.base && coversRange(this.store.base.covers, s.device, s.first, s.last);
+        if (!inBase && !this.applied.has(key)) {
           try {
             const ops = await this.decodeOps(await this.api("GET", `segments/${s.device}/${s.first}/${s.last}`, { raw: true }), s.device);
             if (s.device === this.journal.device) this.makeRoomAfter(s.last);
@@ -1262,7 +1287,89 @@ export class Vault {
     }
     report.imported = imported.length;
     if (report.pulled || imported.length) this.changed();
+    if (ok && !report.errors.length && !this.journal.pending.length) await this.maybeWriteCheckpoint(report);
     return report;
+  }
+
+  // ---------- checkpoints (PROTOCOL.md §3 "Checkpoints", §4) ----------
+
+  /** The relay's checkpoints, newest first; [] when it has none or doesn't know them (an older relay). */
+  async checkpoints() {
+    try {
+      return (await this.api("GET", "checkpoints")).checkpoints ?? [];
+    } catch (e) {
+      if (e instanceof RelayError && (e.status === 404 || e.status === 405)) return [];
+      throw e;
+    }
+  }
+
+  /** Starts this copy from the newest checkpoint it can read. A failure just means pulling every op. */
+  async loadCheckpoint(report) {
+    if (!this.config.encrypted) return false;
+    let list;
+    try { list = await this.checkpoints(); } catch (e) { report.errors.push(`checkpoints: ${e.message}`); return false; }
+    for (const entry of list.slice(0, 2)) {
+      try {
+        const data = await this.api("GET", `checkpoints/${entry.id}`, { raw: true });
+        const base = parseCheckpoint(await openCheckpoint(data, this.keys.segment));
+        base.id = entry.id;
+        this.adoptCheckpoint(base, data);
+        report.checkpoint = entry.id;
+        return true;
+      } catch (e) {
+        report.errors.push(`checkpoint ${entry.id}: ${e.message}`);
+      }
+    }
+    return false;
+  }
+
+  /** Uses a checkpoint as this copy's base: the store starts from it, and it's saved locally in place of the ops it covers. */
+  adoptCheckpoint(base, data) {
+    if (!this.store.useBase(base)) return false;
+    for (const op of base.texts) this.journal.observe(op.h);
+    if (base.frontier) this.journal.observe(base.frontier);
+    // Our own journal is in it (this browser lost its copy): new edits number after it.
+    const mine = lastCoveredSeq(base, this.journal.device);
+    if (mine) this.makeRoomAfter(mine);
+    if (typeof base.cursor === "number" && base.cursor > this.cursor) this.cursor = base.cursor;
+    this.newBase = { v: 1, id: base.id, cursor: base.cursor, data: b64uEncode(data) };
+    this.changed();
+    return true;
+  }
+
+  /**
+   * Writes a checkpoint when enough ops have piled up since the last one and the newest on the relay
+   * is a day old, then uses it locally too (the local copy shrinks to it plus text history).
+   */
+  async maybeWriteCheckpoint(report, { force = false } = {}) {
+    if (!this.config.encrypted || this.checkpointsUnsupported) return false;
+    const since = this.store.ops.length - (this.store.base?.texts.length ?? 0);
+    if (!force && since < CHECKPOINT_AFTER_OPS) return false;
+    if (!force && this.now() - (this.checkpointCheckedAt ?? 0) < 60 * 60 * 1000) return false;
+    this.checkpointCheckedAt = this.now();
+    try {
+      const list = await this.checkpoints();
+      if (!force && list[0] && this.now() - list[0].createdAt < CHECKPOINT_MIN_AGE_MS) return false;
+      const id = newId();
+      const cp = makeCheckpoint(this.store, { cursor: this.cursor, device: this.journal.device, createdAt: this.now() });
+      const data = await sealCheckpoint(cp, this.keys.segment);
+      if (data.length > MAX_CHECKPOINT_BYTES) return false;
+      try {
+        await this.api("PUT", `checkpoints/${id}`, { body: data, expect: [200, 201] });
+      } catch (e) {
+        if (e instanceof RelayError && (e.status === 404 || e.status === 405)) { this.checkpointsUnsupported = true; return false; }
+        throw e;
+      }
+      const base = parseCheckpoint(cp);
+      base.id = id;
+      this.adoptCheckpoint(base, data);
+      await this.save();
+      report.wroteCheckpoint = id;
+      return true;
+    } catch (e) {
+      report.errors.push(`checkpoint: ${e.message}`);
+      return false;
+    }
   }
 
   async importInbox(report) {
@@ -1380,9 +1487,11 @@ export class Vault {
       return;
     }
     const pendingIds = new Set(this.journal.pending.map((op) => `${op.d}:${op.s}`));
-    const kept = this.store.ops.filter((op) => !pendingIds.has(`${op.d}:${op.s}`));
+    const kept = this.store.opsAfterBase.filter((op) => !pendingIds.has(`${op.d}:${op.s}`));
+    const base = this.store.base;
     this.journal.renumberFrom(last + 1);
     this.store = new RecordStore();
+    if (base) this.store.useBase(base);
     this.store.apply([...kept, ...this.journal.pending]);
     this.store.unsaved = [];
     this.local.needsRewrite = true; // op ids changed: the local op store is written again whole

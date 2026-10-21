@@ -20,13 +20,21 @@ import Testing
     static func numbers(_ v: JSONValue?) -> [[Double]] { (v?.array ?? []).map { $0.array?.compactMap(\.number) ?? [] } }
 
     static func close(_ got: [InkPoint], _ want: [[Double]], tolerance: Double = 1e-5) -> Bool {
-        got.count == want.count && zip(got, want).allSatisfy { p, w in abs(p.x - w[0]) < tolerance && abs(p.y - w[1]) < tolerance }
+        guard got.count == want.count else { return false }
+        for (p, w) in zip(got, want) where abs(p.x - w[0]) >= tolerance || abs(p.y - w[1]) >= tolerance { return false }
+        return true
     }
 
     static func flat(_ p: InkPoint) -> [Double] { p.angle.map { [p.x, p.y, p.pressure, p.t, $0] } ?? [p.x, p.y, p.pressure, p.t] }
 
     static func same(_ got: [InkPoint], _ want: [[Double]]) -> Bool {
-        got.count == want.count && zip(got.map(flat), want).allSatisfy { a, b in a.count == b.count && zip(a, b).allSatisfy { abs($0 - $1) < 1e-6 } }
+        guard got.count == want.count else { return false }
+        for (p, b) in zip(got, want) {
+            let a: [Double] = flat(p)
+            guard a.count == b.count else { return false }
+            for (x, y) in zip(a, b) where abs(x - y) >= 1e-6 { return false }
+        }
+        return true
     }
 
     @Test func outlinesAndArrowheadsMatchTheWebsite() throws {
@@ -64,6 +72,11 @@ import Testing
             #expect(InkPoints.encode2(Self.points(o["points"])) == encoded, "\(o["name"]?.string ?? "")")
             #expect(Self.same(InkPoints.decode2(encoded), Self.numbers(o["decoded"])), "\(o["name"]?.string ?? "")")
         }
+        for c in p2["v1"]?.array ?? [] {
+            let o = c.object ?? [:]
+            #expect(Self.same(InkPoints.decode2(o["encoded"]?.string ?? ""), Self.numbers(o["decoded"])), "\(o["name"]?.string ?? "")")
+        }
+        #expect(InkPoints.encode2([InkPoint(x: 1e300, y: -.infinity, pressure: 2, t: 0)]) == InkPoints.encode2([InkPoint(x: 1e9, y: 0, pressure: 1, t: 0)]))
         let legacy = p2["legacy"]?.object ?? [:]
         #expect(Self.same(InkPoints.decode(legacy["encoded"]?.string ?? ""), Self.numbers(legacy["decoded"])))
         // A stroke with both reads its compact points.
@@ -158,11 +171,16 @@ import Testing
         let neu = await lib.addStroke(on: sketch, pageKey: "0", tool: .fountain, color: "#000000", width: 4,
                                       points: line.map { InkPoint(x: $0.x, y: $0.y, pressure: $0.pressure, t: $0.t, angle: 1) })
         let compact = await lib.engine.record(neu ?? "")
-        #expect(compact?["points"] == nil && (compact?["points2"]?.string?.count ?? 99) < (r?["points"]?.string?.count ?? 0))
-        #expect(abs((compact.map { InkStroke($0).points.first?.angle ?? 0 } ?? 0) - 1) < 0.01)
+        let compactSize: Int = compact?["points2"]?.string?.count ?? 99, fullSize: Int = r?["points"]?.string?.count ?? 0
+        #expect(compact?["points"] == nil)
+        #expect(compactSize < fullSize)
+        let angle: Double = compact.flatMap { InkStroke($0).points.first?.angle } ?? 0
+        #expect(abs(angle - 1) < 0.01)
         await lib.transformStrokes([old ?? ""], by: .move(10, 0))
         r = await lib.engine.record(old ?? "")
-        #expect(r?["points"]?.string == "" && r.map { InkStroke($0).points.first?.x } == 10)
+        let movedX: Double? = r.flatMap { InkStroke($0).points.first?.x }
+        #expect(r?["points"]?.string == "")
+        #expect(movedX == 10)
         let pieces = await lib.eraseStrokes(on: sketch, pageKey: "0", along: [InkPoint(x: 60, y: -5), InkPoint(x: 60, y: 5)], radius: 5, near: [old ?? ""])
         #expect(pieces.count == 2)
         let strokes = await lib.strokes(on: sketch, pageKey: "0")

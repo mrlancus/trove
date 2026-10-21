@@ -33,31 +33,82 @@ public struct RecordStore: Sendable {
     private var newestByKind: [String: String] = [:]
     /// Ink (strokes and elements) by the item it's on.
     private var inkByItem: [String: Set<String>] = [:]
+    /// The checkpoint this store starts from, if any (PROTOCOL.md §3 "Checkpoints").
+    public private(set) var base: Checkpoint.Base?
 
     public init() {}
 
     public var opCount: Int { ops.count }
     public var allOps: [Op] { ops }
+    /// The newest HLC applied (the checkpoint's frontier at least).
+    public var frontier: String { lastApplied }
 
-    /// Adds ops (duplicates ignored). Applies incrementally when they're all newer than what's
-    /// been applied, otherwise rebuilds from scratch in HLC order.
-    public mutating func apply(_ incoming: [Op]) {
-        let fresh = incoming.filter { opIds.insert($0.id).inserted }
-        guard !fresh.isEmpty else { return }
+    /// Adds ops (duplicates and ops the checkpoint holds are ignored). Applies incrementally when
+    /// they're all newer than what's been applied, otherwise rebuilds in HLC order. Returns the ops
+    /// that were new.
+    @discardableResult
+    public mutating func apply(_ incoming: [Op]) -> [Op] {
+        var fresh: [Op] = []
+        for op in incoming where !isCovered(op) && opIds.insert(op.id).inserted { fresh.append(op) }
+        guard !fresh.isEmpty else { return [] }
         let sortedFresh = fresh.sorted(by: Self.order)
         ops.append(contentsOf: sortedFresh)
         if let first = sortedFresh.first, first.hlc > lastApplied {
             for op in sortedFresh { applyOne(op) }
         } else {
-            ops.sort(by: Self.order)
-            records = [:]
-            history = [:]
-            byKind = [:]
-            newestByKind = [:]
-            inkByItem = [:]
-            lastApplied = ""
-            for op in ops { applyOne(op) }
+            rebuild()
         }
+        return sortedFresh
+    }
+
+    /// Materialises again: the checkpoint's records (if any), then every op in order.
+    private mutating func rebuild() {
+        ops.sort(by: Self.order)
+        records = [:]
+        history = [:]
+        byKind = [:]
+        newestByKind = [:]
+        inkByItem = [:]
+        lastApplied = ""
+        if base != nil { applyBase() }
+        for op in ops { applyOne(op) }
+    }
+
+    // MARK: Checkpoints
+
+    /// The checkpoint this store starts from already holds this op.
+    public func isCovered(_ op: Op) -> Bool {
+        guard let base else { return false }
+        return Checkpoint.covers(base.covers, device: op.device, first: op.seq, last: op.seq)
+    }
+
+    /// Starts from a checkpoint: its records stand in for every op it covers, its text ops are kept
+    /// (text merges replay them), and ops it doesn't cover stay. Returns false (and changes nothing)
+    /// for one that doesn't cover the checkpoint already in use.
+    @discardableResult
+    public mutating func useBase(_ newBase: Checkpoint.Base) -> Bool {
+        if let base, !Checkpoint.coversAll(newBase.covers, base.covers) { return false }
+        let kept = ops.filter { !Checkpoint.covers(newBase.covers, device: $0.device, first: $0.seq, last: $0.seq) }
+        base = newBase
+        ops = newBase.texts + kept
+        opIds = Set(ops.map(\.id))
+        rebuild()
+        return true
+    }
+
+    /// Ops the checkpoint doesn't hold: what a local copy keeps besides it.
+    public var opsAfterBase: [Op] { base == nil ? ops : ops.filter { !isCovered($0) } }
+
+    private mutating func applyBase() {
+        guard let base else { return }
+        for b in base.records {
+            let record = Record(id: b.id, kind: b.kind, fields: b.fields, createdHLC: b.created, updatedHLC: b.updated)
+            byKind[record.kind, default: []].insert(b.id)
+            if (newestByKind[record.kind] ?? "") < b.updated { newestByKind[record.kind] = b.updated }
+            if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string { inkByItem[on, default: []].insert(b.id) }
+            records[b.id] = record
+        }
+        lastApplied = max(lastApplied, base.frontier)
     }
 
     public var visible: [Record] { records.values.filter { !$0.isDeleted } }
@@ -97,16 +148,25 @@ public struct RecordStore: Sendable {
         lastApplied = max(lastApplied, op.hlc)
         var record = records[op.record] ?? Record(id: op.record, kind: op.recordKind ?? "item", createdHLC: op.hlc, updatedHLC: op.hlc)
         let oldKind = records[op.record]?.kind
-        if let kind = op.recordKind { record.kind = kind }
+        // An op older than what the checkpoint holds for a field (from a device that was offline) loses to it.
+        let stamps = base?.stamps[op.record]
+        if let kind = op.recordKind {
+            let kindStamp = stamps?.kind ?? ""
+            if kindStamp.isEmpty || op.hlc >= kindStamp { record.kind = kind }
+        }
         if oldKind != record.kind {
             if let oldKind { byKind[oldKind]?.remove(op.record) }
             byKind[record.kind, default: []].insert(op.record)
         }
         if (newestByKind[record.kind] ?? "") < op.hlc { newestByKind[record.kind] = op.hlc }
         record.updatedHLC = max(record.updatedHLC, op.hlc)
+        record.createdHLC = min(record.createdHLC, op.hlc)
         switch op.type {
         case .set:
-            for (key, value) in op.fields ?? [:] { record.fields[key] = value }
+            for (key, value) in op.fields ?? [:] {
+                if let stamp = stamps?.fields[key], op.hlc < stamp { continue }
+                record.fields[key] = value
+            }
         case .text:
             guard let edit = op.text else { break }
             let key = "\(op.record)\u{1F}\(edit.field)"

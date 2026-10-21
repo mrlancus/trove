@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Works with any folder. On Apple platforms the app wraps calls in NSFileCoordinator and asks
 /// iCloud to download placeholders (see `FolderTransport.coordinate`).
-public struct FolderTransport: SyncTransport {
+public struct FolderTransport: SyncTransport, CheckpointTransport {
     public let root: URL
     /// Unique per transport (the engine tracks push state by name).
     public let name: String
@@ -114,6 +114,57 @@ public struct FolderTransport: SyncTransport {
 
     public func fetchBlob(_ id: String) async throws -> Data {
         try read(blobURL(id))
+    }
+
+    // MARK: Checkpoints: .sync/<device>/checkpoints/<id>.trc, written by that device only
+
+    /// How many of its own checkpoints a device keeps in the folder.
+    static let checkpointsKept = 2
+
+    func checkpointDir(_ device: String) -> URL {
+        syncDir.appendingPathComponent(device, isDirectory: true).appendingPathComponent("checkpoints", isDirectory: true)
+    }
+
+    public func listCheckpoints() async throws -> [CheckpointInfo] {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: syncDir.path) else { return [] }
+        var out: [CheckpointInfo] = []
+        for device in try fm.contentsOfDirectory(atPath: syncDir.path) where !device.hasPrefix(".") {
+            let dir = checkpointDir(device)
+            for file in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
+                let name = file.hasPrefix(".") && file.hasSuffix(".icloud") ? String(file.dropFirst().dropLast(7)) : file
+                guard name.hasSuffix(".trc") else { continue }
+                let url = dir.appendingPathComponent(file)
+                let attrs = try? fm.attributesOfItem(atPath: url.path)
+                let date = (attrs?[.modificationDate] as? Date) ?? Date(timeIntervalSince1970: 0)
+                let size = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+                out.append(CheckpointInfo(id: "\(device)/\(name.dropLast(4))", device: device, size: size, createdAt: (date.timeIntervalSince1970 * 1000).rounded()))
+            }
+        }
+        return out.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// `id` is "<device>/<name>" as listed.
+    public func fetchCheckpoint(_ id: String) async throws -> Data {
+        let parts = id.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { throw TransportError.notFound }
+        return try read(checkpointDir(parts[0]).appendingPathComponent("\(parts[1]).trc"))
+    }
+
+    /// Writes into this device's own folder (`id` is "<device>/<name>") and removes its older ones.
+    public func pushCheckpoint(_ id: String, data: Data) async throws {
+        let parts = id.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { throw TransportError.notFound }
+        let dir = checkpointDir(parts[0])
+        let url = dir.appendingPathComponent("\(parts[1]).trc")
+        if FileManager.default.fileExists(atPath: url.path) { return }
+        try writeOnce(url, data)
+        let mine = try await listCheckpoints().filter { $0.device == parts[0] }
+        for old in mine.dropFirst(Self.checkpointsKept) {
+            let name = old.id.split(separator: "/", maxSplits: 1).last.map(String.init) ?? ""
+            let file = dir.appendingPathComponent("\(name).trc")
+            try? coordinate(file, true) { try FileManager.default.removeItem(at: $0) }
+        }
     }
 
     // MARK: Helpers

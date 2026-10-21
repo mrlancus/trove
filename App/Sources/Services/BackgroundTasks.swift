@@ -26,7 +26,7 @@ enum BackgroundTasks {
             nonisolated(unsafe) let task = bgTask
             let work = Task { @MainActor in
                 await model.syncNow()
-                await model.enrichSoon()
+                await model.enrichOvernight()
                 await model.syncNow()
                 task.setTaskCompleted(success: true)
             }

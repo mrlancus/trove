@@ -16,13 +16,14 @@ struct InkTarget: Identifiable, Hashable, Codable {
 
 /// The tools in the editor's toolbar, like the website's (web/public/draw.js).
 enum InkEditorTool: String, CaseIterable, Identifiable {
-    case pen, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser, tape
+    case pen, ballpoint, pencil, fountain, brush, marker, highlighter, eraser, lasso, text, laser, tape
     var id: String { rawValue }
 
     var ink: InkTool? { InkTool(rawValue: rawValue) }
     var label: String {
         switch self {
         case .pen: "Pen"
+        case .ballpoint: "Ballpoint"
         case .pencil: "Pencil"
         case .fountain: "Fountain pen"
         case .brush: "Brush pen"
@@ -38,6 +39,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .pen: "pencil.tip"
+        case .ballpoint: "pencil.line"
         case .pencil: "pencil"
         case .fountain: "signature"
         case .brush: "paintbrush"
@@ -53,6 +55,7 @@ enum InkEditorTool: String, CaseIterable, Identifiable {
     var defaultWidth: Double {
         switch self {
         case .pen: 2.5
+        case .ballpoint: 2
         case .pencil: 2
         case .fountain: 4
         case .brush: 8
@@ -207,7 +210,16 @@ final class InkEditorModel {
     /// Bumped when a tool's colour or size changes (they're kept in UserDefaults, which isn't observed).
     private(set) var styleRevision = 0
 
-    var selection: InkSelection? { didSet { overlayRevision += 1 } }
+    var selection: InkSelection? {
+        didSet {
+            overlayRevision += 1
+            // A selection dropped mid-drag puts what was lifted back on the page.
+            if dragTransform != nil { revision += 1 }
+        }
+    }
+    /// The lasso's move or resize while it's being dragged. The selection is lifted off its page
+    /// meanwhile (`display(_:lifted:)` leaves it out, `dragPreview(_:)` has it), so each move redraws
+    /// only what's moving: `revision` changes when the drag starts and ends, `overlayRevision` as it moves.
     private(set) var dragTransform: InkGeometry.Transform?
     private(set) var lassoPath: [InkPoint] = []
     private(set) var eraserAt: InkPoint?
@@ -249,6 +261,9 @@ final class InkEditorModel {
     @ObservationIgnored private var inkSig = ""
     /// Decoded strokes by id and version: a reload decodes only what changed.
     @ObservationIgnored private var lineCache: [String: (hlc: String, line: InkLine)] = [:]
+    /// The lasso's writes, one after another: a second drag starting before the first is stored
+    /// would otherwise read (for undo) and reload positions half-way between the two.
+    @ObservationIgnored private var lassoWrites: Task<Void, Never>?
 
     init(target: InkTarget, app: AppModel) {
         self.target = target
@@ -462,7 +477,9 @@ final class InkEditorModel {
     }
 
     /// What to draw on a page: its ink with the lasso's move and the eraser's cuts shown as they happen.
-    func display(_ key: String) -> InkContent {
+    /// `lifted`: without what the lasso is dragging (a canvas draws that from `dragPreview(_:)` over the
+    /// rest, so a drag doesn't redraw, or on iPad rebuild, the whole page on every move).
+    func display(_ key: String, lifted: Bool = false) -> InkContent {
         var c = content[key] ?? InkContent()
         c.pictures = pictures
         c.peeked = peeked
@@ -475,10 +492,31 @@ final class InkEditorModel {
             }
         }
         if let t = dragTransform, let sel = selection, sel.pageKey == key {
-            c.strokes = c.strokes.map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
-            c.elements = c.elements.map { sel.elements.contains($0.id) ? $0.transformed(t) : $0 }
+            if lifted {
+                c.strokes.removeAll { sel.strokes.contains($0.id) }
+                c.elements.removeAll { sel.elements.contains($0.id) }
+            } else {
+                c.strokes = c.strokes.map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
+                c.elements = c.elements.map { sel.elements.contains($0.id) ? $0.transformed(t) : $0 }
+            }
         }
         return c
+    }
+
+    /// What the lasso is dragging on a page, where it is now (nil when nothing is being dragged there).
+    func dragPreview(_ key: String) -> InkContent? {
+        guard let t = dragTransform, let sel = selection, sel.pageKey == key, let c = content[key] else { return nil }
+        var out = InkContent()
+        out.strokes = c.strokes.filter { sel.strokes.contains($0.id) }.map { $0.transformed(t) }
+        out.elements = c.elements.filter { sel.elements.contains($0.id) }.map { $0.transformed(t) }
+        out.pictures = pictures
+        out.peeked = peeked
+        return out
+    }
+
+    /// Whether a page has text boxes or tape (drawn over the ink, so the overlay has something to show).
+    func hasBoxesOver(_ key: String) -> Bool {
+        (content[key]?.elements ?? []).contains { $0.kind == .text || $0.kind == .tape }
     }
 
     /// The lasso, selection and eraser over a page.
@@ -654,7 +692,7 @@ final class InkEditorModel {
             if let box = textBox(at: p, key: key) { beginText(box, key: key) } else { newText(at: p, key: key) }
         case .lasso:
             if let sel = selection, sel.pageKey == key, let box = selectionBox() {
-                let r = 14 / s
+                let r = 20 / s
                 let corner = corners(box).firstIndex { hypot($0.x - p.x, $0.y - p.y) <= r }
                 if corner != nil || (p.x >= box.x && p.x <= box.maxX && p.y >= box.y && p.y <= box.maxY) {
                     gesture = .drag(key: key, start: p, corner: corner, box: box)
@@ -663,6 +701,7 @@ final class InkEditorModel {
             }
             selection = nil
             lassoPath = [p]
+            lassoTap = p
             gesture = .lasso(key: key)
             overlayRevision += 1
         case .tape:
@@ -696,16 +735,22 @@ final class InkEditorModel {
             if !lasers.isEmpty { lasers[lasers.count - 1].points.append(p) }
             overlayRevision += 1
         case .drag(_, let start, let corner, let box):
-            if let corner {
-                // Resize from the opposite corner, keeping the proportions.
+            let t: InkGeometry.Transform
+            if let corner, (0..<4).contains(corner) {
+                // Resize from the opposite corner, keeping the proportions (from 5 % to 50×).
                 let c = corners(box), o = c[(corner + 2) % 4], h = c[corner]
-                let sx = (p.x - o.x) / (h.x - o.x == 0 ? 1 : h.x - o.x), sy = (p.y - o.y) / (h.y - o.y == 0 ? 1 : h.y - o.y)
-                let k = max(0.05, (sx + sy) / 2)
-                dragTransform = InkGeometry.Transform(sx: k, sy: k, ox: o.x, oy: o.y)
+                let sx = (p.x - o.x) / (abs(h.x - o.x) < 1e-6 ? 1 : h.x - o.x), sy = (p.y - o.y) / (abs(h.y - o.y) < 1e-6 ? 1 : h.y - o.y)
+                let k = (sx + sy) / 2
+                t = InkGeometry.Transform(sx: k.isFinite ? min(50, max(0.05, k)) : 1, sy: k.isFinite ? min(50, max(0.05, k)) : 1, ox: o.x, oy: o.y)
             } else {
-                dragTransform = .move(p.x - start.x, p.y - start.y)
+                t = .move(p.x - start.x, p.y - start.y)
             }
-            revision += 1
+            // A point that isn't a real number (a glitch) leaves the selection where it was.
+            guard t.isUsable else { return }
+            // Lifting the selection off the page redraws the page once; after that only the overlay moves.
+            if dragTransform == nil { revision += 1 }
+            dragTransform = t
+            overlayRevision += 1
         case nil:
             break
         }
@@ -723,7 +768,7 @@ final class InkEditorModel {
             eraserAt = nil
             commitPartialErase()
         case .lasso(let key):
-            finishLasso(key)
+            if !finishLasso(key) { tapSelect(lassoTap, key: key) }
         case .laser:
             endLaser()
         case .drag:
@@ -855,15 +900,40 @@ final class InkEditorModel {
         }
     }
 
-    private func finishLasso(_ key: String) {
+    /// Picks what the loop goes round. False when it was a tap, not a loop (too short to go round anything).
+    @discardableResult
+    private func finishLasso(_ key: String) -> Bool {
         let loop = lassoPath
         lassoPath = []
-        guard loop.count >= 3 else { overlayRevision += 1; return }
+        let extent = InkGeometry.bounds(loop).map { max($0.width, $0.height) * max(0.05, zoom) } ?? 0
+        guard loop.count >= 3, extent >= 8 else { overlayRevision += 1; return false }
         let c = content[key] ?? InkContent()
         let strokes = self.strokes(near: InkGeometry.bounds(loop), key: key).filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
         let boxes = c.elements.filter { InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
         let picked = InkSelection(pageKey: key, strokes: Set(strokes), elements: Set(boxes))
         selection = picked.count > 0 ? picked : nil
+        return true
+    }
+
+    /// Where the lasso's last loop started (a tap there picks what's under it).
+    @ObservationIgnored private var lassoTap: InkPoint?
+
+    /// A tap with the lasso (a short Pencil tap or a click) picks the text box, picture or tape under
+    /// it, else the strokes it touches (within 8 screen points).
+    private func tapSelect(_ p: InkPoint?, key: String) {
+        guard let p else { return }
+        let c = content[key] ?? InkContent()
+        if let box = c.elements.last(where: { b in
+            let f = b.drawnFrame
+            return p.x >= f.x && p.x <= f.maxX && p.y >= f.y && p.y <= f.maxY
+        }) {
+            selection = InkSelection(pageKey: key, strokes: [], elements: [box.id])
+            return
+        }
+        let r = 8 / max(0.05, zoom)
+        let hit = strokes(near: InkGeometry.Rect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r), key: key)
+            .filter { InkGeometry.hits($0.points, width: $0.width, x: p.x, y: p.y, radius: r) }.map(\.id)
+        if !hit.isEmpty { selection = InkSelection(pageKey: key, strokes: Set(hit), elements: []) }
     }
 
     /// The box around the selection, moved by the drag in progress.
@@ -893,13 +963,20 @@ final class InkEditorModel {
     }
 
     private func commitDrag() {
-        guard let t = dragTransform, let sel = selection, let library = app?.library else { dragTransform = nil; revision += 1; return }
+        guard let t = dragTransform, t.isUsable, t != InkGeometry.Transform(), let sel = selection, let library = app?.library else {
+            if dragTransform != nil { dragTransform = nil; revision += 1 }
+            return
+        }
         // Show it where it landed straight away.
         content[sel.pageKey]?.strokes = (content[sel.pageKey]?.strokes ?? []).map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
         content[sel.pageKey]?.elements = (content[sel.pageKey]?.elements ?? []).map { sel.elements.contains($0.id) ? $0.transformed(t) : $0 }
+        for (id, s) in unsavedStrokes where sel.strokes.contains(id) { unsavedStrokes[id] = (s.key, s.line.transformed(t)) }
         dragTransform = nil
         revision += 1
-        Task {
+        // After the lasso's previous write: its undo snapshot and reload then see this move's start, not half of it.
+        let previous = lassoWrites
+        lassoWrites = Task {
+            await previous?.value
             let before = await snapshot(sel)
             await library.transformStrokes(Array(sel.strokes), by: t)
             await library.transformElements(Array(sel.elements), by: t)
