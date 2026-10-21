@@ -184,8 +184,11 @@ public enum InkOutline {
         var out = [UInt8](repeating: 0, count: grainSize * grainSize)
         for y in 0..<grainSize {
             for x in 0..<grainSize {
-                let n1 = grainHash(x, y, 1), n2 = grainHash(x >> 1, y >> 1, 2)
-                out[y * grainSize + x] = UInt8(150 + (6 * n1 + 4 * n2) * 105 / 2550)
+                let n1: Int = grainHash(x, y, 1), n2: Int = grainHash(x >> 1, y >> 1, 2)
+                // Split up: as one expression it's too slow for the compiler to type-check.
+                let mix: Int = 6 * n1 + 4 * n2
+                let level: Int = 150 + mix * 105 / 2550
+                out[y * grainSize + x] = UInt8(level)
             }
         }
         return out
