@@ -2,6 +2,8 @@
 // append-only chunks, so a save writes only the ops that are new since the last one; small chunks are
 // merged as they pile up. Everything here is sealed with a non-extractable AES-GCM key made for this
 // browser. Works over any {get, set, clear, delete?} store: IndexedDB in the browser, a Map in tests.
+// A store that can't hold a CryptoKey and is private already (trove-mcp's owner-only files) sets
+// `plainAtRest = true`, and values are kept as they are.
 import { fromUtf8, utf8 } from "./bytes.js";
 
 const INDEX = "opChunks";
@@ -40,6 +42,7 @@ export class LocalStore {
   }
 
   async seal(slot, value) {
+    if (this.storage.plainAtRest) return value;
     const json = JSON.stringify(value);
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: utf8.encode(`trove/local/${slot}`) }, await this.key(), utf8.encode(json));

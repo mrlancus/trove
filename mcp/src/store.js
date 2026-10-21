@@ -24,7 +24,9 @@ function readJSON(path) {
   try { return JSON.parse(readFileSync(path, "utf8")); } catch { return undefined; }
 }
 
-const STATE_KEYS = new Set(["journal", "ops", "applied", "cursor"]);
+// What LocalStore (web/public/core/localstore.js) keeps: the journal, applied ids, cursor, the
+// chunk index and owner, and the op chunks themselves ("ops.<n>"; "ops" is the pre-chunk layout).
+const isStateKey = (key) => ["journal", "ops", "applied", "cursor", "opChunks", "localOwner"].includes(key) || /^ops\.\d+$/.test(key);
 
 /**
  * The storage interface Vault expects ({get, set, clear}), backed by two files. Keys are kept as raw
@@ -39,6 +41,9 @@ export class FileStorage {
     this.state = readJSON(this.statePath) ?? {};
     this.keys = null;
   }
+
+  /** The folder is owner-only and LocalStore's at-rest key would have to sit next to it: keep values as they are. */
+  get plainAtRest() { return true; }
 
   get exists() { return Boolean(this.device?.config && this.device?.rawKeys); }
 
@@ -71,10 +76,13 @@ export class FileStorage {
       writePrivate(this.devicePath, JSON.stringify(this.device, null, 2));
       return;
     }
-    if (!STATE_KEYS.has(key)) return;
-    this.state[key] = structuredClone(value);
+    if (!isStateKey(key)) return;
+    if (value === undefined) delete this.state[key];
+    else this.state[key] = structuredClone(value);
     writePrivate(this.statePath, JSON.stringify(this.state));
   }
+
+  async delete(key) { return this.set(key, undefined); }
 
   async clear() {
     this.device = undefined;
