@@ -50,9 +50,12 @@ struct InkLine: Sendable, Identifiable {
     }
     var bounds: InkGeometry.Rect? { InkOutline.bounds(points, width: width, arrow: style.arrow) }
     /// Changes when how the line looks does (for a canvas deciding what to redraw).
+    /// Positions count to 1/20 point, so a stroke read back from storage (float32 or compact points)
+    /// stamps the same as the one just drawn, and the iPad canvas doesn't replace its drawing for it.
     var stamp: String {
         let a = points.first, b = points.last
-        return "\(color)|\(width)|\(tool.rawValue)|\(style.fill ?? "")\(style.dash ?? "")\(style.arrow ?? "")|\(points.count)|\(a?.x ?? 0),\(a?.y ?? 0)|\(b?.x ?? 0),\(b?.y ?? 0)"
+        func q(_ v: Double?) -> Int { guard let v, v.isFinite else { return 0 }; return Int((max(-1e12, min(1e12, v)) * 20).rounded()) }
+        return "\(color)|\(width)|\(tool.rawValue)|\(style.fill ?? "")\(style.dash ?? "")\(style.arrow ?? "")|\(points.count)|\(q(a?.x)),\(q(a?.y))|\(q(b?.x)),\(q(b?.y))"
     }
 }
 

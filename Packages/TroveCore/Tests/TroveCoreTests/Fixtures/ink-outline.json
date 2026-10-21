@@ -6233,6 +6233,11 @@
       "curve": "normal",
       "minWidth": 0
      },
+     "ballpoint": {
+      "smoothing": 0,
+      "curve": "normal",
+      "minWidth": 0
+     },
      "pencil": {
       "smoothing": 0,
       "curve": "normal",
@@ -6366,6 +6371,11 @@
       "smoothing": 40,
       "curve": "soft",
       "minWidth": 20
+     },
+     "ballpoint": {
+      "smoothing": 0,
+      "curve": "normal",
+      "minWidth": 0
      },
      "pencil": {
       "smoothing": 0,

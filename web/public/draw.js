@@ -1,5 +1,5 @@
 // The drawing editor: sketches and ink on PDFs and images (PROTOCOL.md §10, core/ink.js).
-// - Pens (pen, pencil, fountain pen, brush, marker, highlighter), an eraser (whole strokes or
+// - Pens (pen, ballpoint, pencil, fountain pen, brush, marker, highlighter), an eraser (whole strokes or
 //   partial, optionally highlighter only), the lasso (move, resize, recolour, duplicate, copy,
 //   delete), shapes (a shape mode, and holding the pen still at the end of a line snaps it), text
 //   boxes and pictures.
@@ -18,12 +18,13 @@ import {
 import { PdfDocument } from "./pdfwrite.js";
 
 const COLORS = ["#1c1c1e", "#8e8e93", "#0a84ff", "#ff3b30", "#34c759", "#ff9500", "#af52de", "#ffd60a"];
-const PEN_TOOLS = ["pen", "pencil", "fountain", "brush", "marker", "highlighter"];
+const PEN_TOOLS = ["pen", "ballpoint", "pencil", "fountain", "brush", "marker", "highlighter"];
 const RECENT_COLOURS = 8;
 /** Finished ink is drawn into tiles this many device pixels square, cached per zoom step (√2 apart). */
 const TILE = 512, MAX_TILES = 96;
 const TOOL_INFO = {
   pen: { label: "Pen", key: "p", width: 2.5, color: "#1c1c1e", icon: "M4 20l4-1 10-10-3-3L5 16l-1 4zM14 5l3 3" },
+  ballpoint: { label: "Ballpoint: one even thickness", key: "o", width: 2, color: "#1c1c1e", icon: "M5 19l2-6 9-9 2 2-9 9-6 2 2-2zM14 6l2 2" },
   pencil: { label: "Pencil", key: "n", width: 2, color: "#1c1c1e", icon: "M4 20l2-5 9-9 3 3-9 9-5 2zM15 6l3 3M6 15l3 3" },
   fountain: { label: "Fountain pen", key: "f", width: 4, color: "#1c3d8f", icon: "M12 3l5 7-5 11-5-11 5-7zM12 10v4" },
   brush: { label: "Brush pen", key: "b", width: 8, color: "#1c1c1e", icon: "M15 4l5 5-8 8c-2 2-5 3-8 3 0-3 1-6 3-8l8-8zM12 7l5 5" },
@@ -415,7 +416,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     };
     const parts = [h("div", { class: "ink-pop-title", text: `${TOOL_INFO[penTool].label}: on every device` })];
     parts.push(slider("Smoothing", "Steadies the line as you write. 0 is exactly where the pen goes.", "smoothing", 100, ""));
-    if (penTool !== "marker" && penTool !== "highlighter") {
+    if (penTool !== "marker" && penTool !== "highlighter" && penTool !== "ballpoint") {
       parts.push(h("div", { class: "ink-pop-row" }, h("span", { text: "Pressure" }),
         segmented("Pressure", { soft: "Soft", normal: "Normal", firm: "Firm" }, feel.curve, (v) => save({ curve: v }))));
       parts.push(slider("Lightest touch", "How thick the lightest touch still writes, as a share of full pressure.", "minWidth", 100, "%"));

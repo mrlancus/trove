@@ -9,7 +9,9 @@ export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", 
 export const CLOSED_SHAPES = ["triangle", "rectangle", "polygon", "circle", "ellipse"];
 export const DASHES = ["dash", "dot"];
 export const ARROWS = ["end", "start", "both"];
-export const TOOLS = ["pen", "pencil", "marker", "highlighter", "fountain", "brush"];
+/** Pen tools. `ballpoint` keeps one thickness; its points are stored at pressure 1, so a client that
+ * doesn't know it (and draws it as a `pen`) draws it full and even (PROTOCOL.md §10). */
+export const TOOLS = ["pen", "ballpoint", "pencil", "marker", "highlighter", "fountain", "brush"];
 export const PAPERS = ["blank", "lined", "narrow", "wide", "margin", "grid", "smallgrid", "graph", "dotted", "smalldots", "isometric",
   "cornell", "todo", "planner", "storyboard", "music", "calligraphy"];
 export const PAPER_TITLES = {
@@ -49,7 +51,9 @@ export function pageSizeName(size) {
 export const SKETCH_SIZE = [768, 1024];
 
 export const toolOpacity = (tool) => ({ pencil: 0.85, highlighter: 0.35 })[tool] ?? 1;
-export const usesPressure = (tool) => tool !== "marker" && tool !== "highlighter";
+export const usesPressure = (tool) => tool !== "marker" && tool !== "highlighter" && tool !== "ballpoint";
+/** The points as stored (InkTool.stored): a ballpoint's at pressure 1, the rest as drawn. */
+export const storedPoints = (tool, points) => (tool === "ballpoint" ? points.map((p) => ({ ...p, p: 1 })) : points);
 
 /** The width at a point (InkStroke.width): pens and pencils 35–100 % with pressure, brushes 15–100 %,
  * fountain pens 60–100 % (and their direction: `fountainWidth`). */

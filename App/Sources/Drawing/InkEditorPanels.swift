@@ -35,6 +35,7 @@ struct InkPageSettings: View {
                                                 .foregroundStyle(editor.paper == paper ? Color.accentColor : .secondary)
                                         }
                                         .frame(width: 66)
+                                        .inkTapArea()
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(paper.title)
@@ -50,6 +51,7 @@ struct InkPageSettings: View {
                             Button { apply(color: c == "#ffffff" ? "" : c) } label: {
                                 Circle().fill(Color(inkHex: c)).frame(width: 28, height: 28)
                                     .overlay(Circle().strokeBorder(on ? Color.accentColor : .gray.opacity(0.4), lineWidth: on ? 2.5 : 1))
+                                    .inkTapArea()
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(InkPage.colorTitles[c] ?? c)
@@ -130,8 +132,8 @@ struct PaperThumb: View {
 /// size, undo and redo.
 struct InkPalette: View {
     let editor: InkEditorModel
-    static let width: CGFloat = 228
-    private static let tools: [InkEditorTool] = [.pen, .pencil, .highlighter, .eraser, .lasso]
+    static let width: CGFloat = 272
+    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .highlighter, .eraser, .lasso]
 
     /// Small and quick, like Apple Pencil's own palette: a row of tools, a row of colours and sizes.
     /// Picking a tool or colour closes it.
@@ -143,11 +145,12 @@ struct InkPalette: View {
                         Image(systemName: t.symbol).font(.body).frame(width: 34, height: 32)
                             .foregroundStyle(editor.tool == t ? Color.accentColor : Color.primary)
                             .background(editor.tool == t ? Color.accentColor.opacity(0.18) : .clear, in: Circle())
+                            .inkTapArea()
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(t.label)
                 }
-                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body).frame(width: 34, height: 32) }
+                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body).frame(width: 34, height: 32).inkTapArea() }
                     .buttonStyle(.plain)
                     .disabled(!editor.canUndo)
                     .accessibilityLabel("Undo")
@@ -164,6 +167,7 @@ struct InkPalette: View {
                             Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20)
                                 .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.35), lineWidth: editor.color == c ? 2 : 1).padding(-2))
                                 .frame(width: 26, height: 26)
+                                .inkTapArea()
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Colour \(c)")

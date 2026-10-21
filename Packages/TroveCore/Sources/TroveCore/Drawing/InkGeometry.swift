@@ -68,6 +68,13 @@ public enum InkGeometry {
         /// What a stroke's width is multiplied by.
         public var widthScale: Double { (abs(sx) * abs(sy)).squareRoot() }
 
+        /// Real numbers, a scale that neither flattens (under 1/1000) nor blows up (over 10,000) and
+        /// a move under a million points: anything else is a glitch, not something to store or draw.
+        public var isUsable: Bool {
+            [sx, sy, ox, oy, dx, dy].allSatisfy(\.isFinite) && abs(sx) >= 1e-3 && abs(sy) >= 1e-3 && abs(sx) <= 1e4 && abs(sy) <= 1e4
+                && abs(dx) < 1e6 && abs(dy) < 1e6
+        }
+
         public func apply(_ p: InkPoint) -> InkPoint {
             InkPoint(x: ox + (p.x - ox) * sx + dx, y: oy + (p.y - oy) * sy + dy, pressure: p.pressure, t: p.t, angle: p.angle)
         }
@@ -115,7 +122,9 @@ public enum InkGeometry {
         var out = [points[0]]
         for i in 1..<points.count {
             let a = points[i - 1], b = points[i]
-            let n = Int((hypot(b.x - a.x, b.y - a.y) / spacing).rounded(.up))
+            // A point that isn't a real number adds nothing (Int(_:) would stop the app); a huge gap at most 100,000.
+            let steps = (hypot(b.x - a.x, b.y - a.y) / spacing).rounded(.up)
+            let n = steps.isFinite ? Int(min(100_000, steps)) : 1
             if n > 1 {
                 for k in 1..<n {
                     let f = Double(k) / Double(n)

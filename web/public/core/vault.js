@@ -13,7 +13,7 @@ import { coversRange, parseHLC } from "./records.js";
 import { LocalStore } from "./localstore.js";
 import {
   bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, meanNib, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
-  transformPoint, transformRect, validSize, widthScale,
+  storedPoints, transformPoint, transformRect, validSize, widthScale,
 } from "./ink.js";
 import { lastCoveredSeq, makeCheckpoint, MAX_CHECKPOINT_BYTES, openCheckpoint, parseCheckpoint, sealCheckpoint } from "./checkpoint.js";
 
@@ -569,7 +569,7 @@ export class Vault {
     const id = newId();
     const compact = this.compactPoints();
     const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
-      ...pointFields(points, compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
+      ...pointFields(storedPoints(tool, points), compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
     if (shape) fields[InkField.shape] = shape;
     if (style) Object.assign(fields, strokeStyle(style));
     // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.

@@ -31,14 +31,23 @@ struct PencilCanvas: UIViewRepresentable {
     let color: String
     let width: Double
     let zoomRequest: InkZoomRequest?
+    /// Dark mode: the canvas around the pages is a darker shade (it's light grey otherwise).
+    var dark = false
 
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
+
+    /// The canvas around the pages: a shade apart from the white paper, light grey or (dark mode) near black.
+    /// Fixed colours, since the canvas itself stays in light mode to keep ink colours true.
+    static func outside(dark: Bool) -> UIColor {
+        if dark { return UIColor(red: 28 / 255.0, green: 28 / 255.0, blue: 30 / 255.0, alpha: 1) } // #1c1c1e
+        return UIColor(red: 217 / 255.0, green: 217 / 255.0, blue: 222 / 255.0, alpha: 1) // #d9d9de
+    }
 
     func makeUIView(context: Context) -> TroveCanvasView {
         let canvas = TroveCanvasView()
         let c = context.coordinator
         canvas.delegate = c
-        canvas.backgroundColor = UIColor.systemGray5
+        canvas.backgroundColor = Self.outside(dark: dark)
         canvas.isOpaque = true
         canvas.overrideUserInterfaceStyle = .light // keep ink colours true on white paper
         canvas.drawingPolicy = UIDevice.current.userInterfaceIdiom == .pad ? .default : .anyInput
@@ -107,6 +116,8 @@ struct PencilCanvas: UIViewRepresentable {
         c.editor = editor
         c.updating = true
         defer { c.updating = false }
+        let outside = Self.outside(dark: dark)
+        if canvas.backgroundColor != outside { canvas.backgroundColor = outside }
         c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)
         c.apply(version: revision, to: canvas)
         if overlayRevision != c.shownOverlay { c.shownOverlay = overlayRevision; c.overlayView.setNeedsDisplay() }
@@ -114,15 +125,20 @@ struct PencilCanvas: UIViewRepresentable {
         // Setting PencilKit's tool resets its state: only when it really changes.
         let toolKey = "\(tool.rawValue)|\(color)|\(width)"
         if let ink = tool.ink, toolKey != c.shownTool { c.shownTool = toolKey; canvas.tool = Self.pkTool(ink, color: color, width: width) }
-        canvas.drawingGestureRecognizer.isEnabled = pen
-        c.toolGesture?.isEnabled = !pen
+        // Only what changes is set: this runs on every stroke and lasso move, and setting a gesture's
+        // touch types or turning it on again while a touch is in flight can drop that touch (a Pencil
+        // tap or drag that "didn't register").
+        if canvas.drawingGestureRecognizer.isEnabled != pen { canvas.drawingGestureRecognizer.isEnabled = pen }
+        if let tools = c.toolGesture, tools.isEnabled == pen { tools.isEnabled = !pen }
         // Where a finger draws (iPhone), it also works the lasso and eraser; two fingers scroll.
         let fingers = canvas.drawingPolicy == .anyInput || !UIPencilInteraction.prefersPencilOnlyDrawing
-        c.toolGesture?.allowedTouchTypes = fingers
+        let types = fingers
             ? [NSNumber(value: UITouch.TouchType.pencil.rawValue), NSNumber(value: UITouch.TouchType.direct.rawValue)]
             : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
-        canvas.panGestureRecognizer.minimumNumberOfTouches = !pen && fingers ? 2 : 1
-        for s in c.swipes { s.numberOfTouchesRequired = fingers ? 2 : 1 }
+        if let tools = c.toolGesture, tools.allowedTouchTypes != types { tools.allowedTouchTypes = types }
+        let scrollTouches = !pen && fingers ? 2 : 1
+        if canvas.panGestureRecognizer.minimumNumberOfTouches != scrollTouches { canvas.panGestureRecognizer.minimumNumberOfTouches = scrollTouches }
+        for s in c.swipes where s.numberOfTouchesRequired != (fingers ? 2 : 1) { s.numberOfTouchesRequired = fingers ? 2 : 1 }
         if let zoomRequest, zoomRequest.id != c.handledZoom {
             c.handledZoom = zoomRequest.id
             c.zoom(zoomRequest.kind, in: canvas)
@@ -131,15 +147,34 @@ struct PencilCanvas: UIViewRepresentable {
     }
 
     static func pkTool(_ tool: InkTool, color: String, width: Double) -> PKTool {
-        let type: PKInk.InkType = switch tool {
+        PKInkingTool(inkType(tool), color: uiColor(color), width: width)
+    }
+
+    /// PencilKit's ink for each pen. The ballpoint and the marker are both even (monoline): a new
+    /// stroke's tool is the one in hand when it's drawn (`inkTool(for:current:)`), so each comes back as itself.
+    nonisolated static func inkType(_ tool: InkTool) -> PKInk.InkType {
+        switch tool {
         case .pen: .pen
+        case .ballpoint: .monoline
         case .pencil: .pencil
         case .marker: .monoline
         case .highlighter: .marker
         case .fountain: .fountainPen
         case .brush: .watercolor
         }
-        return PKInkingTool(type, color: uiColor(color), width: width)
+    }
+
+    /// The pen a PencilKit stroke was drawn with: the one in hand if its ink matches, else by its ink.
+    nonisolated static func inkTool(for type: PKInk.InkType, current: InkTool?) -> InkTool {
+        if let current, inkType(current) == type { return current }
+        switch type {
+        case .pencil: return .pencil
+        case .marker: return .highlighter
+        case .monoline: return .marker
+        case .fountainPen: return .fountain
+        case .watercolor: return .brush
+        default: return .pen
+        }
     }
 
     // MARK: Converting strokes
@@ -158,33 +193,19 @@ struct PencilCanvas: UIViewRepresentable {
 
     /// A Trove stroke as PencilKit's, moved to its page's spot on the canvas. Nil for one with no points.
     static func pkStroke(_ s: InkLine, offset: CGPoint) -> PKStroke? {
-        let inkType: PKInk.InkType = switch s.tool {
-        case .pen: .pen
-        case .pencil: .pencil
-        case .marker: .monoline
-        case .highlighter: .marker
-        case .fountain: .fountainPen
-        case .brush: .watercolor
-        }
+        let type = Self.inkType(s.tool)
         let points = s.points.compactMap { p -> PKStrokePoint? in
             guard p.x.isFinite, p.y.isFinite else { return nil }
-            let w = max(0.1, s.shape != nil ? s.width : InkStroke.width(s.width, tool: s.tool, pressure: p.pressure))
+            let w = min(4000, max(0.1, s.shape != nil ? s.width : InkStroke.width(s.width, tool: s.tool, pressure: p.pressure)))
             return PKStrokePoint(location: CGPoint(x: p.x + offset.x, y: p.y + offset.y), timeOffset: max(0, p.t / 1000), size: CGSize(width: w, height: w),
                                  opacity: 1, force: max(0, p.pressure * 2), azimuth: 0, altitude: .pi / 2)
         }
         guard !points.isEmpty else { return nil }
-        return PKStroke(ink: PKInk(inkType, color: uiColor(s.color)), path: PKStrokePath(controlPoints: points, creationDate: Date()))
+        return PKStroke(ink: PKInk(type, color: uiColor(s.color)), path: PKStrokePath(controlPoints: points, creationDate: Date()))
     }
 
-    static func convert(_ s: PKStroke, offset: CGPoint) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
-        let tool: InkTool = switch s.ink.inkType {
-        case .pencil: .pencil
-        case .marker: .highlighter
-        case .monoline: .marker
-        case .fountainPen: .fountain
-        case .watercolor: .brush
-        default: .pen
-        }
+    static func convert(_ s: PKStroke, offset: CGPoint, current: InkTool? = nil) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
+        let tool = Self.inkTool(for: s.ink.inkType, current: current)
         let raw = Array(s.path)
         let sizes = raw.map { Double(max($0.size.width, $0.size.height)) }
         let width = tool.usesPressure ? max(sizes.max() ?? 2, 0.5) : max(sizes.reduce(0, +) / Double(max(1, sizes.count)), 0.5)
@@ -201,7 +222,9 @@ struct PencilCanvas: UIViewRepresentable {
         // Without copying the path: this runs for every stroke on each update.
         let path = s.path, n = path.count
         let first = n > 0 ? path[0].location : .zero, last = n > 0 ? path[n - 1].location : .zero
-        return "\(n)-\(Int(first.x * 10)),\(Int(first.y * 10))-\(Int(last.x * 10)),\(Int(last.y * 10))"
+        // Int(_:) stops the app on NaN, ±∞ or a huge number: those count as 0.
+        func q(_ v: CGFloat) -> Int { v.isFinite ? Int(max(-1e12, min(1e12, v * 10))) : 0 }
+        return "\(n)-\(q(first.x)),\(q(first.y))-\(q(last.x)),\(q(last.y))"
     }
 
     // MARK: Coordinator
@@ -241,8 +264,16 @@ struct PencilCanvas: UIViewRepresentable {
         private var zoomedByHand = false
         /// The page index this canvas last showed as current (so a jump from the page list scrolls there).
         private var shownCurrent = -1
-        /// Signature → Trove stroke id for what's on the canvas.
-        private var ids: [String: String] = [:]
+        /// Signature → Trove stroke ids for what's on the canvas, in canvas order (two strokes can look
+        /// the same, say pasted twice in one place: each keeps its own id).
+        private var ids: [String: [String]] = [:]
+        /// When PencilKit's pen last lifted: strokes it reports as new are only taken while a pen is in
+        /// hand or just after (anything else is the canvas echoing a drawing set from the model).
+        private var penLifted = Date.distantPast
+        /// The zoom the paper was last drawn at (it's drawn past the screen's edges and kept while scrolling).
+        private var paperZoom: CGFloat = 0
+        /// The pictures the paper was last drawn with (where each is).
+        private var shownPictures = ""
         private var shownVersion = -1
         private var applying = false
         private var drawing = false
@@ -306,6 +337,7 @@ struct PencilCanvas: UIViewRepresentable {
                 shownVersion = -1
                 bitmaps = bitmaps.filter { k, _ in pages.contains { $0.key == k } }
                 if previous.isEmpty || isEndless != wasEndless { fittedWidth = 0 }
+                paperZoom = 0
                 resize(canvas)
                 if turned {
                     UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
@@ -386,14 +418,23 @@ struct PencilCanvas: UIViewRepresentable {
             follow(canvas)
         }
 
-        /// The paper and overlay cover what's on screen.
+        /// The paper and overlay cover what's on screen. The paper is drawn a quarter of a screen past
+        /// each edge and redrawn only when scrolling leaves that or the zoom changes (it used to redraw
+        /// on every scroll frame, a big part of the battery a sketch used).
         private func follow(_ canvas: UIScrollView) {
             let visible = canvas.bounds
-            for v in [paperView, overlayView] {
-                v.frame = visible
-                v.zoom = canvas.zoomScale
+            if canvas.zoomScale != paperZoom {
+                // Zooming: just the screen, redrawn each frame of the pinch.
+                paperZoom = canvas.zoomScale
+                paperView.zoom = canvas.zoomScale
+                paperView.frame = visible
+                paperView.setNeedsDisplay()
+            } else if !paperView.frame.contains(visible) {
+                paperView.frame = visible.insetBy(dx: -visible.width / 4, dy: -visible.height / 4)
+                paperView.setNeedsDisplay()
             }
-            paperView.setNeedsDisplay()
+            overlayView.frame = visible
+            overlayView.zoom = canvas.zoomScale
             // The overlay is usually empty (no text boxes, lasso or eraser): then it needn't redraw.
             let z0 = max(0.01, canvas.zoomScale)
             let area = InkGeometry.Rect(x: visible.minX / z0, y: visible.minY / z0, width: visible.width / z0, height: visible.height / z0)
@@ -456,7 +497,8 @@ struct PencilCanvas: UIViewRepresentable {
                         InkRenderer.drawImage(image, in: CGRect(x: 0, y: 0, width: slot.spec.width, height: slot.spec.height), ctx: ctx)
                     }
                 }
-                let c = editor.display(slot.spec.key)
+                // Pictures the lasso is dragging are drawn over the ink while they move (`drawOver`).
+                let c = editor.display(slot.spec.key, lifted: true)
                 InkRenderer.drawPictures(c.elements, pictures: c.pictures, in: ctx)
                 ctx.restoreGState()
             }
@@ -466,7 +508,7 @@ struct PencilCanvas: UIViewRepresentable {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
                 return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
-                    || editor.display(slot.spec.key).elements.contains { $0.kind == .text || $0.kind == .tape }
+                    || editor.hasBoxesOver(slot.spec.key)
             }
         }
 
@@ -476,10 +518,13 @@ struct PencilCanvas: UIViewRepresentable {
                 let o = slot.offset
                 ctx.saveGState()
                 ctx.translateBy(x: o.x, y: o.y)
-                let shown = editor.display(slot.spec.key)
+                let shown = editor.display(slot.spec.key, lifted: true)
                 InkRenderer.drawTexts(shown.elements, in: ctx)
                 // Tape covers the ink (PencilKit's, underneath this view) too.
                 InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
+                // What the lasso is dragging: lifted off PencilKit's drawing while it moves, so a move
+                // redraws just this instead of replacing the whole drawing on every frame.
+                if let moving = editor.dragPreview(slot.spec.key) { InkRenderer.drawContent(moving, in: ctx) }
                 InkRenderer.drawOverlay(editor.overlay(slot.spec.key), scale: scale, in: ctx)
                 ctx.restoreGState()
             }
@@ -516,22 +561,37 @@ struct PencilCanvas: UIViewRepresentable {
         func apply(version: Int, to canvas: PKCanvasView) {
             guard version != shownVersion else { return }
             if drawing { pending = true; return }
-            paperView.setNeedsDisplay()
             var want: [(id: String, stamp: String, line: InkLine, offset: CGPoint)] = []
+            var wanted: Set<String> = []
+            var pictures = ""
             for slot in slots {
-                for line in editor.display(slot.spec.key).strokes where !line.points.isEmpty { want.append((line.id, line.stamp, line, slot.offset)) }
+                // What the lasso is dragging is left out while it moves (the overlay draws it).
+                let shown = editor.display(slot.spec.key, lifted: true)
+                for line in shown.strokes where !line.points.isEmpty && wanted.insert(line.id).inserted {
+                    want.append((line.id, line.stamp, line, slot.offset))
+                }
+                for e in shown.elements where e.kind == .image {
+                    let ready = e.image.map { shown.pictures[$0.id] != nil } ?? false
+                    pictures += "\(e.id)@\(e.frame.x),\(e.frame.y),\(e.frame.width),\(e.frame.height)\(ready ? "" : "?");"
+                }
             }
-            let modelIds = Set(want.map(\.id))
+            // The paper (with pictures, under the ink) redraws only when a picture came, went or moved.
+            if pictures != shownPictures { shownPictures = pictures; paperView.setNeedsDisplay() }
+            let modelIds = wanted
             let current = canvas.drawing.strokes
             var onCanvas: [String: PKStroke] = [:]
             var order: [String] = []
-            var kept: [PKStroke] = []
+            var kept: [(stroke: PKStroke, id: String)] = []
+            var seen: [String: Int] = [:]
             for s in current {
                 let sig = PencilCanvas.signature(s)
-                guard let id = ids[sig] else { continue }
-                if modelIds.contains(id) { onCanvas[id] = s; order.append(id) }
+                let k = seen[sig, default: 0]
+                seen[sig] = k + 1
+                guard let list = ids[sig], k < list.count else { continue }
+                let id = list[k]
+                if modelIds.contains(id), onCanvas[id] == nil { onCanvas[id] = s; order.append(id) }
                 // Just drawn and still on its way to the model: keep it.
-                else if handingOver.contains(id) { kept.append(s) }
+                else if handingOver.contains(id) { kept.append((s, id)) }
             }
             func unchanged(_ w: (id: String, stamp: String, line: InkLine, offset: CGPoint)) -> Bool {
                 guard onCanvas[w.id] != nil, !stale.contains(w.id) else { return false }
@@ -545,21 +605,24 @@ struct PencilCanvas: UIViewRepresentable {
             }
             applying = true
             var pk: [PKStroke] = []
-            var map: [String: String] = [:]
+            var pkIds: [String] = []
             var stamps: [String: String] = [:]
             for w in want {
                 let stroke = unchanged(w) ? onCanvas[w.id] : PencilCanvas.pkStroke(w.line, offset: w.offset)
                 guard let stroke else { continue }
                 pk.append(stroke)
-                map[PencilCanvas.signature(stroke)] = w.id
+                pkIds.append(w.id)
                 stamps[w.id] = w.stamp
             }
-            for s in kept {
-                let sig = PencilCanvas.signature(s)
-                pk.append(s)
-                if let id = ids[sig] { map[sig] = id }
+            for k in kept {
+                pk.append(k.stroke)
+                pkIds.append(k.id)
             }
             canvas.drawing = PKDrawing(strokes: pk)
+            // Matched by what the canvas now holds (not what was handed to it), so a stroke PencilKit
+            // stores slightly differently is still known and never taken for a new one.
+            var map: [String: [String]] = [:]
+            for (s, id) in zip(canvas.drawing.strokes, pkIds) { map[PencilCanvas.signature(s), default: []].append(id) }
             ids = map
             shownStamps = stamps
             stale = []
@@ -571,6 +634,7 @@ struct PencilCanvas: UIViewRepresentable {
 
         func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
             drawing = false
+            penLifted = Date()
             guard pending else { return }
             pending = false
             // After PencilKit has reported the new stroke (it does so before or after this call).
@@ -586,16 +650,27 @@ struct PencilCanvas: UIViewRepresentable {
         /// changes are applied from the model, so this only ever adds.
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             guard !applying, !slots.isEmpty else { return }
+            // Only PencilKit's pen adds strokes. With the lasso or eraser in hand, a stroke the canvas
+            // doesn't know is an echo of a drawing set from the model: adding it would duplicate it (and
+            // each copy would be added again, until the app ran out of memory).
+            guard drawing || editor.tool.ink != nil || Date().timeIntervalSince(penLifted) < 2 else { return }
             var added: [PKStroke] = []
-            for s in canvasView.drawing.strokes where ids[PencilCanvas.signature(s)] == nil { added.append(s) }
+            var seen: [String: Int] = [:]
+            for s in canvasView.drawing.strokes {
+                let sig = PencilCanvas.signature(s)
+                let k = seen[sig, default: 0]
+                seen[sig] = k + 1
+                if k >= (ids[sig]?.count ?? 0) { added.append(s) }
+            }
             guard !added.isEmpty else { return }
+            let inHand = editor.tool.ink
             // Trove's copies, made now; saved a moment later, once the hold watcher has seen the pen lift.
             var strokes: [(signature: String, id: String, key: String, ink: (tool: InkTool, color: String, width: Double, points: [InkPoint]))] = []
             for s in added {
                 guard let start = Array(s.path).first?.location.applying(s.transform), let slot = slot(at: start) else { continue }
-                strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, PencilCanvas.convert(s, offset: slot.offset)))
+                strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, PencilCanvas.convert(s, offset: slot.offset, current: inHand)))
             }
-            for s in strokes { ids[s.signature] = s.id; handingOver.insert(s.id) }
+            for s in strokes { ids[s.signature, default: []].append(s.id); handingOver.insert(s.id) }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let held = self.holdWatcher?.takeHeld() ?? false
@@ -654,8 +729,11 @@ struct PencilCanvas: UIViewRepresentable {
         @objc func undoTap() { editor.undo() }
 
         /// A hovering Pencil: its point on the page under it (nil when it leaves or touches down).
+        /// Pens: PencilKit shows its own preview of the ink under a hovering Pencil, so Trove's tip
+        /// isn't drawn too (that redrew the whole overlay, text boxes and all, on every hover move).
         @objc func hovered(_ g: UIHoverGestureRecognizer) {
             guard let canvas = g.view as? UIScrollView else { return }
+            guard editor.tool.ink == nil else { editor.pencilHover(nil, pageKey: nil, scale: canvas.zoomScale); return }
             var near = true
             if #available(iOS 16.1, *) { near = g.zOffset < 1 }
             switch g.state {
@@ -668,7 +746,7 @@ struct PencilCanvas: UIViewRepresentable {
             default:
                 editor.pencilHover(nil, pageKey: nil, scale: canvas.zoomScale)
             }
-            overlayView.setNeedsDisplay()
+            // The overlay redraws when the model says something changed (`overlayRevision`).
         }
         @objc func redoTap() { editor.redo() }
 

@@ -105,6 +105,32 @@ user says "publish" (`cd server && npx wrangler deploy`).
     search's "From your clipboard" was rebuilt by a sync while typing (Safari then drops the
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
+- **Sketch fixes from the iPad** (user: lasso crash, Pencil taps not registering, ballpoint, shade
+  around pages, battery/heat). Written on Linux; **check on the iPad**:
+  - **Lasso crash**: a lasso drag replaced PencilKit's whole drawing on every pointer move (and the
+    paper view redrew each time). Now the selection is lifted off the drawing when a drag starts and
+    drawn in the overlay while it moves (`display(_:lifted:)`, `dragPreview`), so a drag rebuilds the
+    drawing twice, not 120 times a second. Also: strokes PencilKit "reports" while the lasso/eraser is
+    in hand are ignored (they were echoes that got added as duplicates), canvas strokes are matched
+    by what the canvas holds (several ids per look-alike signature), no `Int()` of NaN/huge numbers
+    (signature, page keys, eraser resampling, outlines), non-finite or degenerate lasso transforms are
+    never stored (`Transform.isUsable`), lasso writes run one after another.
+  - **Pencil taps**: plain buttons only answered where their label had pixels (a Pencil tap is a
+    point): tools, colours, sizes, favourites, palette, page rows now take the whole frame
+    (`inkTapArea`). Gesture settings are set only when they change (each lasso move reset them). A
+    short tap with the lasso selects the text box/picture/tape or strokes under it; corner handles 20 pt.
+  - **Ballpoint** (before the pencil, apps + website; PROTOCOL.md §10): even width, stored at
+    pressure 1 so older apps (which draw unknown tools as a pen) draw it right. iPad: PencilKit
+    monoline (like the marker; the tool in hand tells them apart).
+  - **Around the pages**: iPad/iPhone light grey, near black in dark mode (Mac and website already had it).
+  - **Battery**: while a sketch is open on iPhone/iPad (`AppModel.sketchCovers`) only the vault syncs
+    (poll ≥ 2 min, live pings still pull); lists, search by meaning, Spotlight, widget, clipboard,
+    which-items-have-ink scan, inbox, price watches, enrichment and AI wait until it closes. Editor:
+    paper drawn ¼ screen past the edges and redrawn only when scrolling leaves it (was every frame),
+    no Trove hover tip under pens (PencilKit shows its own; ours redrew the overlay per hover move),
+    stroke stamps rounded to 1/20 pt (a reload no longer rebuilds the PencilKit drawing), page panel
+    redraws only the current page, inked-file previews wait behind the editor. `strokes(on:)` sorts
+    on precomputed times (3,000 strokes: 84 → 32 ms debug, `InkSafetyTests`).
 - **Not started (lost):** editing (S3) and PDFs (S5) workers were started but left no commits or
   `wip/*` branch before the container restarted; start them fresh. (Back up worker commits to `wip/*`
   branches on GitHub so a lost container doesn't lose them.)

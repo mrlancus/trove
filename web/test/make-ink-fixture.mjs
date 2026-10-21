@@ -63,7 +63,7 @@ const lassoCases = {
 };
 
 const widths = [];
-for (const tool of ["pen", "pencil", "marker", "highlighter", "fountain", "brush"]) for (const p of [0, 0.5, 1]) widths.push({ tool, width: 6, pressure: p, expect: widthAt(6, tool, p) });
+for (const tool of ["pen", "ballpoint", "pencil", "marker", "highlighter", "fountain", "brush"]) for (const p of [0, 0.5, 1]) widths.push({ tool, width: 6, pressure: p, expect: widthAt(6, tool, p) });
 const fountain = [[1, 1], [1, -1], [0, 1], [-3, 0], [0, 0]].map(([dx, dy]) => ({ dx, dy, pressure: 0.7, expect: fountainWidth(10, 0.7, dx, dy) }));
 const taper = [[0, 20], [1, 20], [10, 20], [19, 20], [0, 2], [3, 10]].map(([i, n]) => ({ index: i, count: n, expect: brushTaper(i, n) }));
 const resampled = { points: [[0, 0, 0, 0], [10, 0, 1, 100]], spacing: 3, expect: resample([{ x: 0, y: 0, p: 0, t: 0 }, { x: 10, y: 0, p: 1, t: 100 }], 3).map((p) => [p.x, p.y, p.p, p.t]) };

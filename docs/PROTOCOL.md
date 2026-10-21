@@ -554,7 +554,7 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `on` | the item id the ink belongs to |
 | `layer` | `""` for a sketch's own pages; the attachment id of a file (PDF or image) drawn on |
 | `page` | a file's 0-based page (a PDF page, or 0 for an image); on a sketch, the page's id (a string; a number n means the page `"n"`) |
-| `tool` | `pen`, `pencil`, `marker`, `highlighter`, `fountain` or `brush` |
+| `tool` | `pen`, `ballpoint`, `pencil`, `marker`, `highlighter`, `fountain` or `brush`. Readers draw a tool they don't know as `pen` |
 | `shape` | optional: the clean shape it was snapped to (`line`, `polyline`, `triangle`, `rectangle`, `polygon`, `circle`, `ellipse`); drawn as straight segments at even width |
 | `color` | `"#rrggbb"` |
 | `width` | full width in page points |
@@ -593,7 +593,8 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   (`inkSettingsOf` / `InkSettings`, fixture-checked): `pen.<tool>` = `{smoothing 0–100, curve
   "soft" | "normal" | "firm", minWidth 0–100}` per pen; `favourites` = up to 10 `{tool, color,
   width}`; `palette` = up to 24 `"#rrggbb"`; `compactPoints` (above). Out-of-range values are
-  clamped, bad entries dropped. Recent colours and the line options (dashes, arrows, fill) stay on
+  clamped, bad entries dropped (a favourite with a tool the reader doesn't know, such as a
+  `ballpoint` on an older app, is skipped there, and dropped if that device saves its favourites). Recent colours and the line options (dashes, arrows, fill) stay on
   the device.
 - **Pen settings apply while drawing**, so a stroke stores what was shown and every device draws
   it the same: pressure becomes `m + (1 − m) · c(p)` (m = minWidth / 100; c(p) = p^0.6 soft, p
@@ -606,7 +607,10 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 - **Look**: pen and pencil widths follow pressure (`width × (0.35 + 0.65 × pressure)`), brushes
   `width × (0.15 + 0.85 × pressure)` tapering over their first and last 15 % of points, and fountain
   pens `width × (0.25 + 0.75 × |sin(direction − 45°)|) × (0.6 + 0.4 × pressure)`, where the
-  direction runs from the previous to the next point. Markers and highlighters are even. Opacity:
+  direction runs from the previous to the next point. Ballpoints, markers and highlighters are
+  even. **Ballpoint** (added after the first release): its points are written with pressure 1
+  (`InkTool.stored` / `storedPoints`, in `addStroke`), so an older reader, which draws an unknown
+  tool as a `pen`, draws it at its full width all along, as it should look. Opacity:
   pencil 0.85, highlighter 0.35 (blended under the ink), others 1. The fountain pen's 45° is the
   stroke's `nib` (or a point's own angle) when set.
 - **Outlines**: pens, pencils, fountain pens and brushes are drawn as one filled outline each
@@ -616,7 +620,7 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   its width above (at least 0.3); the outline runs down the left side (half the width along the
   normal of the averaged neighbouring directions), round the end in a half circle of 8 steps, back
   along the right side and round the start; a turn of more than 90° gets an arc on both sides. It's
-  filled (non-zero) with quadratic curves through the midpoints of its corners. Markers,
+  filled (non-zero) with quadratic curves through the midpoints of its corners. Ballpoints, markers,
   highlighters, shapes and `dash` strokes are one even line with round caps and joins at the
   width (pressure tools: at their average pressure). Arrowheads are triangles 4 × width + 6 long
   and 0.9 × that wide at the base; the line stops 2 × width + 3 short of the tip.
