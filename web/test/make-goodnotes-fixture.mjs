@@ -105,7 +105,29 @@ const page1 = delimited(
   element(S(4)), stroke(S(4), pencil, { rgba: [1, 0.6, 0, 1] }),
   element(S(5), true), stroke(S(5), pen),
   fLen(7, shapeLine), fLen(7, shapeEllipse), textBox, image);
-const page2 = delimited(element(S(20)), stroke(S(20), pen));
+// Newer layouts: a format with an extra word in front, ink far out on a whiteboard, doubles (A(f)).
+const gn6Extra = tpl("vuuA(v)A(u)A(u)A(v)", (w) => {
+  w.u16(2); w.u32(word(3)); w.u32(7);
+  w.u32(2); w.u16(0); w.u16(1);
+  w.u32(3); for (const v of [30000, -25000, 0.9]) w.u32(word(v));
+  w.u32(6); for (const v of [30020, -24990, 1, 30040, -24970, 1.1]) w.u32(word(v));
+  w.u32(0);
+});
+const gn6Doubles = tpl("vA(v)A(f)A(f)", (w) => {
+  w.u16(2);
+  w.u32(2); w.u16(0); w.u16(1);
+  w.u32(3); for (const v of [200, 220, 0.5]) w.f64(v);
+  w.u32(6); for (const v of [210, 230, 0.6, 230, 250, 0.7]) w.f64(v);
+});
+// Grouped ink: two strokes nested in one field, as moved-together ink on whiteboards comes.
+const strokeMsg = (sid, image, rgba) => msg(fLen(1, sid), fLen(2, lz4(image)), fInt(3, 1), fLen(4, colour(...rgba)));
+const group = fLen(7, msg(fLen(1, S(29)), fLen(5, strokeMsg(S(21), pen, [0, 0.6, 0, 1])), fLen(5, strokeMsg(S(22), gn6, [0.6, 0, 0.6, 1]))));
+// A filled ellipse: the fill (field 9, alpha 0.25) and its outline.
+const fillOf = fLen(9, msg(fLen(1, S(25)), fLen(4, msg(fLen(4, msg(fLen(1, xy(300, 300)), fLen(2, xy(40, 20)), fFloat(3, 0))))), fLen(5, S(26)), fLen(7, colour(1, 0, 0, 0.25))));
+const outline = fLen(7, msg(fLen(1, S(26)), fLen(4, colour(1, 0, 0, 1)), fLen(9, msg(fLen(4, msg(fLen(1, xy(300, 300)), fLen(2, xy(40, 20)), fFloat(3, 0))), fFloat(15, 2)))));
+const page2 = delimited(element(S(20)), stroke(S(20), pen),
+  element(S(23)), stroke(S(23), gn6Extra), element(S(24)), stroke(S(24), gn6Doubles, { rgba: [0, 0, 1, 1] }),
+  group, fillOf, outline);
 const page3 = delimited(element(S(30)), stroke(S(30), pen));
 
 const files = {
@@ -160,9 +182,9 @@ const expected = {
   // A compressed LZ4 block with a back-reference: "abc" then copy 9 bytes from 3 back.
   lz4: { frame: Buffer.from(cat(te.encode("bv41"), Uint8Array.of(12, 0, 0, 0, 6, 0, 0, 0), Uint8Array.of(0x35, 97, 98, 99, 3, 0), te.encode("bv4$"))).toString("base64"), text: "abcabcabcabc" },
   pages: decoded.pages.map((p) => ({
-    id: p.id, width: r2(p.width), height: r2(p.height), background: p.background,
+    id: p.id, width: r2(p.width), height: r2(p.height), background: p.background, unread: p.unread,
     layers: p.layers.map((l) => l.kind === "ink"
-      ? { kind: "ink", rgb: l.rgb.map(r2), alpha: r2(l.alpha), width: r2(l.width), shape: !!l.shape, pencil: !!l.pencil, runs: l.runs.map((run) => run.map((pt) => pt.map(r2))) }
+      ? { kind: "ink", rgb: l.rgb.map(r2), alpha: r2(l.alpha), width: r2(l.width), shape: !!l.shape, pencil: !!l.pencil, fill: !!l.fill, runs: l.runs.map((run) => run.map((pt) => pt.map(r2))) }
       : l.kind === "text" ? { kind: "text", x: r2(l.x), y: r2(l.y), w: r2(l.w), h: r2(l.h), runs: l.runs.map((t) => ({ ...t, size: r2(t.size), rgb: t.rgb.map(r2) })) }
       : { kind: "image", attachment: l.attachment, x: r2(l.x), y: r2(l.y), w: r2(l.w), h: r2(l.h) }),
   })),

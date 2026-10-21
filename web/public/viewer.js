@@ -123,9 +123,13 @@ export function notebookViewer(notebook, { onExpand } = {}) {
   };
   const pages = h("div", { class: "pdf-pages notebook-pages" });
   const count = notebook.pages.length;
+  const unread = notebook.pages.reduce((n, p) => n + (p.unread ?? 0), 0);
   const setZoom = (z) => { zoom = Math.min(4, Math.max(0.5, z)); pages.style.setProperty("--zoom", zoom); for (const p of pages.children) p.dataset.rendered = ""; observeAll(); };
   const bar = h("div", { class: "viewer-bar" },
-    h("span", { class: "saved", text: `GoodNotes notebook · ${count} page${count === 1 ? "" : "s"}` }), h("span", { class: "spacer" }),
+    h("span", { class: "saved", text: `GoodNotes notebook · ${count} page${count === 1 ? "" : "s"}` }),
+    unread ? h("span", { class: "saved", title: "Trove couldn't read some of this notebook's ink. Send the notebook (or a copy with one such stroke) to get it fixed.",
+      text: ` · ${unread} stroke${unread === 1 ? "" : "s"} couldn't be read` }) : null,
+    h("span", { class: "spacer" }),
     h("button", { type: "button", class: "secondary small", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.25) }, "−"),
     h("button", { type: "button", class: "secondary small", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.25) }, "+"),
     onExpand ? h("button", { type: "button", class: "secondary small", onclick: onExpand }, "⤢ Wide") : null);
@@ -158,7 +162,13 @@ export function notebookViewer(notebook, { onExpand } = {}) {
     else if (bg?.mime.startsWith("image/")) { try { ctx.drawImage(await bitmapFor(page.background.attachment), 0, 0, canvas.width, canvas.height); } catch { /* no background */ } }
     const k = px * GN_SCALE;
     for (const layer of page.layers) {
-      if (layer.kind === "ink") {
+      if (layer.kind === "ink" && layer.fill) {
+        ctx.save();
+        ctx.fillStyle = `rgb(${layer.rgb.map((c) => Math.round(c * 255)).join(",")})`;
+        ctx.globalAlpha = layer.alpha;
+        for (const run of layer.runs) ctx.fill(new Path2D(runPath(run, k, true) + "Z"));
+        ctx.restore();
+      } else if (layer.kind === "ink") {
         ctx.save();
         ctx.strokeStyle = `rgb(${layer.rgb.map((c) => Math.round(c * 255)).join(",")})`;
         ctx.globalAlpha = strokeOpacity(layer);

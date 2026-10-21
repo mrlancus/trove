@@ -11,12 +11,12 @@ import Testing
         struct Run: Decodable { var text: String; var size: Double; var rgb: [Double]; var bold: Bool; var italic: Bool }
         struct Layer: Decodable {
             var kind: String
-            var rgb: [Double]?, alpha: Double?, width: Double?, shape: Bool?, pencil: Bool?
+            var rgb: [Double]?, alpha: Double?, width: Double?, shape: Bool?, pencil: Bool?, fill: Bool?
             var runs: [[[Double]]]?
             var x: Double?, y: Double?, w: Double?, h: Double?, attachment: String?
             var textRuns: [Run]?
 
-            enum CodingKeys: String, CodingKey { case kind, rgb, alpha, width, shape, pencil, runs, x, y, w, h, attachment }
+            enum CodingKeys: String, CodingKey { case kind, rgb, alpha, width, shape, pencil, fill, runs, x, y, w, h, attachment }
             init(from decoder: Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 kind = try c.decode(String.self, forKey: .kind)
@@ -25,13 +25,14 @@ import Testing
                 width = try c.decodeIfPresent(Double.self, forKey: .width)
                 shape = try c.decodeIfPresent(Bool.self, forKey: .shape)
                 pencil = try c.decodeIfPresent(Bool.self, forKey: .pencil)
+                fill = try c.decodeIfPresent(Bool.self, forKey: .fill)
                 x = try c.decodeIfPresent(Double.self, forKey: .x); y = try c.decodeIfPresent(Double.self, forKey: .y)
                 w = try c.decodeIfPresent(Double.self, forKey: .w); h = try c.decodeIfPresent(Double.self, forKey: .h)
                 attachment = try c.decodeIfPresent(String.self, forKey: .attachment)
                 if kind == "text" { textRuns = try c.decode([Run].self, forKey: .runs) } else { runs = try c.decodeIfPresent([[[Double]]].self, forKey: .runs) }
             }
         }
-        struct Page: Decodable { var id: String; var width: Double; var height: Double; var background: GoodNotesInk.Background?; var layers: [Layer] }
+        struct Page: Decodable { var id: String; var width: Double; var height: Double; var background: GoodNotesInk.Background?; var unread: Int; var layers: [Layer] }
         var lz4: LZ4
         var pages: [Page]
     }
@@ -53,12 +54,13 @@ import Testing
             #expect(close(page.width, want.width) && close(page.height, want.height))
             #expect(page.background == want.background)
             #expect(page.layers.count == want.layers.count)
+            #expect(page.unread == want.unread)
             for (layer, w) in zip(page.layers, want.layers) {
                 switch layer {
                 case .ink(let s):
                     #expect(w.kind == "ink")
                     #expect(zip(s.rgb, w.rgb ?? []).allSatisfy { close($0, $1) } && close(s.alpha, w.alpha ?? -1) && close(s.width, w.width ?? -1))
-                    #expect(s.isShape == w.shape && s.isPencil == w.pencil)
+                    #expect(s.isShape == w.shape && s.isPencil == w.pencil && s.isFill == (w.fill ?? false))
                     let runs = w.runs ?? []
                     #expect(s.runs.count == runs.count)
                     for (run, wantRun) in zip(s.runs, runs) {

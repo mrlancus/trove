@@ -39,10 +39,18 @@ A zip:
   - `…A(S(uuuuu))A(S(uuuuuuuuuuu))…` (pencil): start (x, y, ·, ·, r), segments
     (·, x1, y1, ·, ·, r1, x2, y2, ·, ·, r2).
   - `vA(v)A(u)A(u)…` / `vuA(v)A(u)A(u)…` (GoodNotes 6): first point (x, y, r[, 0]), then (x, y, r)
-    triples with (0, 0, r) markers between curve segments.
+    triples with (0, 0, r) markers between curve segments. The two arrays are the first two plain
+    number arrays in the format wherever they sit (`A(u)` float bits or `A(f)` doubles), since other
+    versions put more fields in front.
+  - Grouped ink (whiteboards, things moved together): one field can nest several strokes, each
+    starting `\n$<uuid>` with its own LZ4 before the next; each is read on its own, and a stroke's
+    trailer is read up to the first bytes that aren't a field.
+  - Coordinates up to ±1,000,000 are kept (whiteboards are endless).
   - Alpha below 0.95 is a highlighter (drawn with multiply).
 - **Shapes**: field 7 → {1 uuid, 4 colour, 9 geometry {1|2 path, 3 rectangle, 4 ellipse, 15 width}},
   move in 14 or 6. Path items: 3 = quadratic (control, end), 4 = cubic, otherwise a line point.
+- **Shape fills**: field 9 → {1 uuid, 2 bounds, 4 geometry (as above), 5 the shape it fills, 7 colour
+  (usually translucent)}: drawn filled under the outline, skipped when either is erased.
 - **Text boxes**: field 21 → {20.1 position, 32 {1.2 LZ4 rich text, 2 size, 5.1.40 font size,
   10 inset}}. The rich text is a message of runs {1 text, 2 style {30 font name, 3 colour, 40 size,
   50 italic}}.
@@ -50,6 +58,9 @@ A zip:
   the next one.
 - Coordinates are at 132 dpi; multiply by 72/132 for PDF points. Page size comes from the
   background PDF.
+- Ink whose LZ4 holds a TPL image with points that none of the layouts above read is counted per
+  page (`unread`) and shown in the viewers ("N strokes couldn't be read"), so a new layout is noticed.
+- A one-page notebook (a whiteboard) also takes the records of `notes/` members the index doesn't list.
 
 Not drawn yet: sticky notes, lasso-rotated items, audio recordings, pencil texture.
 

@@ -28,28 +28,37 @@ function varint(b, pos) {
   throw new Error("varint too long");
 }
 
-/** One message: [{n, wt, v}] where v is a number (varint / fixed bits) or bytes. Throws if malformed. */
-export function decodeMessage(b) {
+/**
+ * One message: [{n, wt, v}] where v is a number (varint / fixed bits) or bytes. Throws if malformed,
+ * unless `lenient`: then the fields read before the bad bytes (a stroke's trailer cut from a group).
+ */
+export function decodeMessage(b, lenient = false) {
   const fields = [];
   let pos = 0;
   while (pos < b.length) {
-    let key;
-    [key, pos] = varint(b, pos);
-    const n = Math.floor(key / 8), wt = key % 8;
-    if (n === 0) throw new Error("field 0");
-    let v;
-    if (wt === 0) [v, pos] = varint(b, pos);
-    else if (wt === 1) { if (pos + 8 > b.length) throw new Error("truncated"); v = b.subarray(pos, pos + 8); pos += 8; }
-    else if (wt === 5) { if (pos + 4 > b.length) throw new Error("truncated"); v = new DataView(b.buffer, b.byteOffset + pos, 4).getUint32(0, true); pos += 4; }
-    else if (wt === 2) {
-      let len;
-      [len, pos] = varint(b, pos);
-      if (pos + len > b.length) throw new Error("truncated");
-      v = b.subarray(pos, pos + len); pos += len;
-    } else throw new Error("unsupported wire type");
-    fields.push({ n, wt, v });
+    try { pos = readField(b, pos, fields); } catch (e) { if (lenient) return fields; throw e; }
   }
   return fields;
+}
+
+/** Reads one field at `pos` into `fields`; returns the position after it. */
+function readField(b, pos, fields) {
+  let key;
+  [key, pos] = varint(b, pos);
+  const n = Math.floor(key / 8), wt = key % 8;
+  if (n === 0) throw new Error("field 0");
+  let v;
+  if (wt === 0) [v, pos] = varint(b, pos);
+  else if (wt === 1) { if (pos + 8 > b.length) throw new Error("truncated"); v = b.subarray(pos, pos + 8); pos += 8; }
+  else if (wt === 5) { if (pos + 4 > b.length) throw new Error("truncated"); v = new DataView(b.buffer, b.byteOffset + pos, 4).getUint32(0, true); pos += 4; }
+  else if (wt === 2) {
+    let len;
+    [len, pos] = varint(b, pos);
+    if (pos + len > b.length) throw new Error("truncated");
+    v = b.subarray(pos, pos + len); pos += len;
+  } else throw new Error("unsupported wire type");
+  fields.push({ n, wt, v });
+  return pos;
 }
 
 export function tryMessage(b) {
@@ -196,7 +205,8 @@ export function decodeTPL(b) {
 
 // ---------- strokes ----------
 
-const okCoord = (v) => Number.isFinite(v) && Math.abs(v) <= 20000;
+// Whiteboards are endless: ink can sit far from 0, 0.
+const okCoord = (v) => Number.isFinite(v) && Math.abs(v) <= 1e6;
 const okRadius = (r) => Number.isFinite(r) && r >= 0.001 && r <= 100;
 
 /** Point runs [[x, y, r]…] from a stroke's TPL values, and its nominal width. */
@@ -229,18 +239,24 @@ export function strokePoints({ format, values }) {
   } else {
     // GoodNotes 6: flat word arrays after the flags. The first holds the start point (x, y, r[, 0]),
     // the second the rest as (x, y, r), with (0, 0, r) markers between curve segments, skipped.
-    const at = format.startsWith("vu") ? 3 : 2;
-    const triples = (list, max = Infinity) => {
-      const out = [];
+    // The first two plain number arrays (A(u) float bits, or A(f) doubles) wherever they are: newer
+    // GoodNotes versions add fields in front.
+    const nodes = parseFormat(format);
+    const arrays = nodes.flatMap((node, i) => (typeof node !== "string" && node.kind === "A" && node.children.length === 1 && "uf".includes(node.children[0]) ? [i] : []));
+    const at = arrays[0] ?? (format.startsWith("vu") ? 3 : 2);
+    const next = arrays[1] ?? at + 1;
+    const conv = (i) => (nodes[i]?.children?.[0] === "f" ? (x) => x : f32);
+    const triples = (index, max = Infinity) => {
+      const out = [], list = values[index], num = conv(index);
       if (!Array.isArray(list) || typeof list[0] !== "number") return out;
       for (let i = 0; i + 2 < list.length && out.length < max; i += 3) {
-        const x = f32(list[i]), y = f32(list[i + 1]), r = f32(list[i + 2]);
+        const x = num(list[i]), y = num(list[i + 1]), r = num(list[i + 2]);
         if (Math.abs(x) < 10 && Math.abs(y) < 10) continue;
         out.push([x, y, r]);
       }
       return out;
     };
-    for (const [x, y, r] of [...triples(values[at], 1), ...triples(values[at + 1])]) add(x, y, r);
+    for (const [x, y, r] of [...triples(at, 1), ...triples(next)]) add(x, y, r);
   }
   cut();
   return { runs, width: nominal };
@@ -248,7 +264,7 @@ export function strokePoints({ format, values }) {
 
 /** Colour, opacity and move offset from the protobuf after the ink. */
 function trailerStyle(b) {
-  const msg = tryMessage(b) ?? [];
+  const msg = b?.length ? decodeMessage(b, true) : [];
   const colour = tryMessage(get(msg, 4));
   const channel = (n, fallback) => { const v = fixedFloat(colour, n); return v == null || !Number.isFinite(v) ? fallback : Math.min(1, Math.max(0, v)); };
   const offset = tryMessage(get(msg, 6));
@@ -280,6 +296,28 @@ export function parseStroke(v) {
 }
 
 const BV41 = [0x62, 0x76, 0x34, 0x31];
+
+const isUUIDAt = (b, i) => {
+  if (i + 36 > b.length) return false;
+  for (let k = 0; k < 36; k++) {
+    const c = b[i + k];
+    if (k === 8 || k === 13 || k === 18 || k === 23) { if (c !== 0x2d) return false; }
+    else if (!((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66))) return false;
+  }
+  return true;
+};
+
+/**
+ * The stroke payloads in a field. Usually the field is one stroke; grouped ink (whiteboards, things
+ * moved together) nests several, each starting `\n$<uuid>` with its own LZ4 before the next.
+ */
+export function strokeParts(v) {
+  const heads = [];
+  for (let i = 0; i + 38 <= v.length; i++) if (v[i] === 0x0a && v[i + 1] === 0x24 && isUUIDAt(v, i + 2)) heads.push(i);
+  const good = heads.filter((p, k) => indexOf(v.subarray(p, heads[k + 1] ?? v.length), BV41) >= 0);
+  if (good.length < 2) return [v];
+  return good.map((p, k) => v.subarray(p, good[k + 1] ?? v.length));
+}
 function indexOf(b, pat) {
   outer: for (let i = 0; i <= b.length - pat.length; i++) {
     for (let k = 0; k < pat.length; k++) if (b[i + k] !== pat[k]) continue outer;
@@ -335,6 +373,46 @@ export function parseShape(rec) {
   const outer = tryMessage(get(rec, 7));
   const geo = tryMessage(get(outer, 9));
   if (!geo) return null;
+  const pts = geometryPoints(geo);
+  if (pts.length < 2) return null;
+  const [dx, dy] = moveOf(outer, rec);
+  const width = fixedFloat(geo, 15) ?? 1;
+  const style = trailerStyle(new Uint8Array(0));
+  const colour = tryMessage(get(outer, 4));
+  if (colour) {
+    style.rgb = [1, 2, 3].map((n) => Math.min(1, Math.max(0, fixedFloat(colour, n) ?? 0)));
+    style.alpha = fixedFloat(colour, 4) ?? 1;
+  }
+  return { id: uuidField(outer, 1), rgb: style.rgb, alpha: style.alpha, width, shape: true, runs: [pts.map(([x, y]) => [x + dx, y + dy, width / 2])] };
+}
+
+/**
+ * A shape's fill (field 9 → {1: id, 4: geometry, 5: the shape it fills, 7: colour}), drawn under
+ * its outline: a stroke-like {fill: true} with one closed run.
+ */
+export function parseFill(rec) {
+  const outer = tryMessage(get(rec, 9));
+  const geo = tryMessage(get(outer, 4));
+  const colour = tryMessage(get(outer, 7));
+  if (!geo || !colour) return null;
+  const pts = geometryPoints(geo);
+  if (pts.length < 3) return null;
+  const [dx, dy] = moveOf(outer, rec);
+  const rgb = [1, 2, 3].map((n) => Math.min(1, Math.max(0, fixedFloat(colour, n) ?? 0)));
+  return { id: uuidField(outer, 1), of: uuidField(outer, 5), rgb, alpha: Math.min(1, Math.max(0, fixedFloat(colour, 4) ?? 1)), width: 0, shape: true, fill: true,
+    runs: [pts.map(([x, y]) => [x + dx, y + dy, 0])] };
+}
+
+function moveOf(...msgs) {
+  for (const m of msgs) {
+    const off = tryMessage(get(m, 14)) ?? tryMessage(get(m, 6));
+    if (off && (fixedFloat(off, 1) || fixedFloat(off, 2))) return [fixedFloat(off, 1) ?? 0, fixedFloat(off, 2) ?? 0];
+  }
+  return [0, 0];
+}
+
+/** A geometry message's outline: a path (1 or 2), a rectangle (3) or an ellipse (4). */
+function geometryPoints(geo) {
   let pts = [];
   const container = tryMessage(get(geo, 1) ?? get(geo, 2));
   if (container) pts = pathPoints(container);
@@ -352,20 +430,7 @@ export function parseShape(rec) {
       if (c && sz) { const [l, t, r, b] = [c[0] - sz[0] / 2, c[1] - sz[1] / 2, c[0] + sz[0] / 2, c[1] + sz[1] / 2]; pts = [[l, t], [r, t], [r, b], [l, b], [l, t]]; }
     }
   }
-  if (pts.length < 2) return null;
-  let dx = 0, dy = 0;
-  for (const m of [outer, rec]) {
-    const off = tryMessage(get(m, 14)) ?? tryMessage(get(m, 6));
-    if (off && (fixedFloat(off, 1) || fixedFloat(off, 2))) { dx = fixedFloat(off, 1) ?? 0; dy = fixedFloat(off, 2) ?? 0; break; }
-  }
-  const width = fixedFloat(geo, 15) ?? 1;
-  const style = trailerStyle(new Uint8Array(0));
-  const colour = tryMessage(get(outer, 4));
-  if (colour) {
-    style.rgb = [1, 2, 3].map((n) => Math.min(1, Math.max(0, fixedFloat(colour, n) ?? 0)));
-    style.alpha = fixedFloat(colour, 4) ?? 1;
-  }
-  return { id: uuidField(outer, 1), rgb: style.rgb, alpha: style.alpha, width, shape: true, runs: [pts.map(([x, y]) => [x + dx, y + dy, width / 2])] };
+  return pts;
 }
 
 // ---------- typed text boxes ----------
@@ -423,13 +488,21 @@ export function pageContent(recs, attachmentIds) {
     if (id && get(r, 3) === 1) erased.add(id);
   }
   const strokes = [], images = [], texts = [], layers = [], seen = new Set();
+  let unread = 0;
   const take = (v) => {
     if (indexOf(v, BV41) < 0) return;
-    const s = parseStroke(v);
-    if (!s || (s.id && (seen.has(s.id) || erased.has(s.id)))) return;
-    if (s.id) seen.add(s.id);
-    strokes.push(s);
-    layers.push({ kind: "ink", ...s });
+    for (const part of strokeParts(v)) {
+      const s = parseStroke(part);
+      if (!s) {
+        // Not a stroke we can read (text boxes hold LZ4 too, but never a TPL image).
+        if (looksLikeInk(part)) unread++;
+        continue;
+      }
+      if (s.id && (seen.has(s.id) || erased.has(s.id))) continue;
+      if (s.id) seen.add(s.id);
+      strokes.push(s);
+      layers.push({ kind: "ink", ...s });
+    }
   };
   recs.forEach((r, i) => {
     for (const f of r) if (f.v instanceof Uint8Array) take(f.v);
@@ -442,13 +515,25 @@ export function pageContent(recs, attachmentIds) {
     if (text && !(text.id && erased.has(text.id))) { texts.push(text); layers.push({ kind: "text", ...text }); }
     const shape = text ? null : parseShape(r);
     if (shape && !(shape.id && erased.has(shape.id))) { strokes.push(shape); layers.push({ kind: "ink", ...shape }); }
+    const fill = text || shape ? null : parseFill(r);
+    if (fill && !(fill.id && erased.has(fill.id)) && !(fill.of && erased.has(fill.of))) { strokes.push(fill); layers.push({ kind: "ink", ...fill }); }
     const att = uuidField(r, 7) ?? uuidField(r, 4);
     if (att && attachmentIds.has(att) && get(r, 3) !== 1) {
       const box = imageBox(r) ?? (recs[i + 1] ? imageBox(recs[i + 1]) : null);
       if (box) { images.push({ attachment: att, ...box }); layers.push({ kind: "image", attachment: att, ...box }); }
     }
   });
-  return { strokes, images, texts, layers };
+  return { strokes, images, texts, layers, unread };
+}
+
+/** Whether a payload's LZ4 holds a TPL image with points in it (ink), whatever its layout. A shape's is empty. */
+function looksLikeInk(v) {
+  const start = indexOf(v, BV41);
+  if (start < 0) return false;
+  try {
+    const bytes = appleLZ4(v.subarray(start)).bytes;
+    return bytes[0] === 0x74 && decodeTPL(bytes).values.some((x) => Array.isArray(x) && x.length > 1);
+  } catch { return true; }
 }
 
 /** An image's frame: {x, y, w, h} (crop applied), from a nested {2: {1: {x, y}, 2: {w, h}}, 3: crop}. */
@@ -547,10 +632,20 @@ export async function readNotebook(bytes) {
       return ka ? -1 : kb ? 1 : pos.get(a.id) - pos.get(b.id);
     });
   }
+  // A whiteboard is one page, and its ink can be spread over more members than the index lists.
+  const extra = [];
+  if (list.length === 1) {
+    const listed = new Set(list.map((p) => p.path));
+    for (const e of zip.entries) {
+      if (!e.path.startsWith("notes/") || e.isDirectory || listed.has(e.path) || deleted.has(pageKey(e.path.slice(6)))) continue;
+      extra.push(e.path);
+    }
+  }
   const pdfs = [...attachments.values()].filter((a) => a.mime === "application/pdf").sort((a, b) => b.bytes.length - a.bytes.length);
   const pages = [], sizes = new Map();
   for (const [index, p] of list.entries()) {
-    const recs = records(await data(p.path));
+    let recs = records(await data(p.path));
+    if (index === 0) for (const path of extra) recs = recs.concat(records(await data(path)));
     let background = null;
     const directAtt = direct.get(pageKey(p.id));
     const template = templates.get(pageTemplate.get(pageKey(p.id)));

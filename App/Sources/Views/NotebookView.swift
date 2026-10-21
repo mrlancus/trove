@@ -43,6 +43,12 @@ struct NotebookView: View {
             HStack {
                 Label("GoodNotes notebook · \(notebook.pages.count) page\(notebook.pages.count == 1 ? "" : "s")", systemImage: "pencil.and.scribble")
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                let unread = notebook.pages.reduce(0) { $0 + $1.unread }
+                if unread > 0 {
+                    Text("· \(unread) stroke\(unread == 1 ? "" : "s") couldn't be read")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .help("Trove couldn't read some of this notebook's ink. Send the notebook (or a copy with one such stroke) to get it fixed.")
+                }
                 Spacer()
                 Button { reading = 0 } label: { Label("Read", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .buttonStyle(.bordered).controlSize(.small)
@@ -221,6 +227,16 @@ enum NotebookRenderer {
 
     static func draw(_ stroke: GoodNotesInk.Stroke, in ctx: CGContext) {
         ctx.saveGState()
+        if stroke.isFill {
+            ctx.setFillColor(color(stroke.rgb, stroke.alpha))
+            for run in stroke.runs {
+                ctx.addPath(path(run, straight: true))
+                ctx.closePath()
+                ctx.fillPath()
+            }
+            ctx.restoreGState()
+            return
+        }
         ctx.setStrokeColor(color(stroke.rgb, stroke.opacity))
         ctx.setLineWidth(stroke.lineWidth)
         ctx.setLineCap(.round)

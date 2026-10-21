@@ -40,6 +40,8 @@ public enum GoodNotesInk {
         public var background: Background?
         /// Everything on the page in drawing order.
         public var layers: [Layer]
+        /// Ink found on the page that couldn't be read (a layout not known yet).
+        public var unread = 0
 
         public var strokes: [Stroke] { layers.compactMap { if case .ink(let s) = $0 { s } else { nil } } }
         public var texts: [TextBox] { layers.compactMap { if case .text(let t) = $0 { t } else { nil } } }
@@ -67,6 +69,8 @@ public enum GoodNotesInk {
         public var runs: [[Point]]
         public var isShape = false
         public var isPencil = false
+        /// A shape's fill (one closed run), drawn with `alpha`.
+        public var isFill = false
 
         public var isHighlighter: Bool { alpha < 0.95 }
         /// GoodNotes' pencil is grainy and light.
@@ -175,6 +179,13 @@ public enum GoodNotesInk {
                 return a.offset < b.offset
             }.map(\.element)
         }
+        // A whiteboard is one page, and its ink can be spread over more members than the index lists.
+        var extra: [String] = []
+        if list.count == 1 {
+            let listed = Set(list.map(\.path))
+            extra = zip.entries.filter { $0.path.hasPrefix("notes/") && !$0.isDirectory && !listed.contains($0.path) && !deleted.contains(pageKey(String($0.path.dropFirst(6)))) }
+                .map(\.path)
+        }
         let pdfs = order.enumerated().filter { attachments[$0.element]?.mime == "application/pdf" }
             .sorted { a, b in
                 let sa = attachments[a.element]!.data.count, sb = attachments[b.element]!.data.count
@@ -184,7 +195,8 @@ public enum GoodNotesInk {
         var pages: [Page] = []
         var sizes: [String: (width: Double, height: Double)?] = [:]
         for (index, p) in list.enumerated() {
-            let recs = records(member(p.path) ?? [])
+            var recs = records(member(p.path) ?? [])
+            if index == 0 { for path in extra { recs += records(member(path) ?? []) } }
             var background: Background?
             if let att = direct[pageKey(p.id)] {
                 background = Background(attachment: att, page: 1)
@@ -198,8 +210,8 @@ public enum GoodNotesInk {
                 if sizes[id] == nil { sizes[id] = .some(pdfSize(bg.data)) }
                 if let s = sizes[id] ?? nil { size = s }
             }
-            var page = Page(id: p.id, width: size.width, height: size.height, background: background,
-                            layers: content(recs, attachmentIds: Set(attachments.keys)))
+            let found = content(recs, attachmentIds: Set(attachments.keys))
+            var page = Page(id: p.id, width: size.width, height: size.height, background: background, layers: found.layers, unread: found.unread)
             if background == nil || max(page.width, page.height) > oversized { page = fitToContent(page) }
             pages.append(page)
         }
@@ -252,14 +264,22 @@ public enum GoodNotesInk {
 
     /// Strokes, shapes, text boxes and images on one page, in drawing order. Erased things (field
     /// 3 = 1 on their element) are skipped.
-    static func content(_ recs: [Message], attachmentIds: Set<String>) -> [Layer] {
+    static func content(_ recs: [Message], attachmentIds: Set<String>) -> (layers: [Layer], unread: Int) {
         var erased: Set<String> = [], seen: Set<String> = []
         for r in recs where r.varint(3) == 1 { if let id = r.uuid(1) { erased.insert(id) } }
         var layers: [Layer] = []
+        var unread = 0
         func take(_ v: ArraySlice<UInt8>) {
-            guard find(bv41, in: v) != nil, let s = stroke(v) else { return }
-            if let id = s.id { guard !seen.contains(id), !erased.contains(id) else { return }; seen.insert(id) }
-            layers.append(.ink(s))
+            guard find(bv41, in: v) != nil else { return }
+            for part in strokeParts(v) {
+                guard let s = stroke(part) else {
+                    // Not a stroke we can read (text boxes hold LZ4 too, but never a TPL image).
+                    if looksLikeInk(part) { unread += 1 }
+                    continue
+                }
+                if let id = s.id { guard !seen.contains(id), !erased.contains(id) else { continue }; seen.insert(id) }
+                layers.append(.ink(s))
+            }
         }
         for (i, r) in recs.enumerated() {
             for f in r { if let b = f.bytes { take(b) } }
@@ -268,13 +288,52 @@ public enum GoodNotesInk {
             }
             let text = textBox(r)
             if let text, !(text.id.map { erased.contains($0) } ?? false) { layers.append(.text(text)) }
-            if text == nil, let shape = shape(r), !(shape.id.map { erased.contains($0) } ?? false) { layers.append(.ink(shape)) }
+            let outline = text == nil ? shape(r) : nil
+            if let outline, !(outline.id.map { erased.contains($0) } ?? false) { layers.append(.ink(outline)) }
+            if text == nil, outline == nil, let f = fill(r), !(f.stroke.id.map { erased.contains($0) } ?? false), !(f.of.map { erased.contains($0) } ?? false) {
+                layers.append(.ink(f.stroke))
+            }
             if let att = r.uuid(7) ?? r.uuid(4), attachmentIds.contains(att), r.varint(3) != 1,
                let box = imageBox(r) ?? (i + 1 < recs.count ? imageBox(recs[i + 1]) : nil) {
                 layers.append(.image(Picture(attachment: att, x: box.x, y: box.y, w: box.w, h: box.h)))
             }
         }
-        return layers
+        return (layers, unread)
+    }
+
+    /// The stroke payloads in a field. Usually the field is one stroke; grouped ink (whiteboards,
+    /// things moved together) nests several, each starting `\n$<uuid>` with its own LZ4 before the next.
+    static func strokeParts(_ v: ArraySlice<UInt8>) -> [ArraySlice<UInt8>] {
+        var heads: [Int] = []
+        var i = v.startIndex
+        while i + 38 <= v.endIndex {
+            if v[i] == 0x0A, v[i + 1] == 0x24, isUUIDBytes(v, at: i + 2) { heads.append(i) }
+            i += 1
+        }
+        let good = heads.enumerated().filter { k, p in
+            let next = k + 1 < heads.count ? heads[k + 1] : v.endIndex
+            return find(bv41, in: v[p..<next]) != nil
+        }.map(\.element)
+        guard good.count >= 2 else { return [v] }
+        return good.enumerated().map { k, p in v[p..<(k + 1 < good.count ? good[k + 1] : v.endIndex)] }
+    }
+
+    static func isUUIDBytes(_ b: ArraySlice<UInt8>, at i: Int) -> Bool {
+        guard i + 36 <= b.endIndex else { return false }
+        for k in 0..<36 {
+            let c = b[i + k]
+            if k == 8 || k == 13 || k == 18 || k == 23 { if c != 0x2D { return false } }
+            else if !((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66)) { return false }
+        }
+        return true
+    }
+
+    /// Whether a payload's LZ4 holds a TPL image with points in it (ink). A shape's is empty.
+    static func looksLikeInk(_ v: ArraySlice<UInt8>) -> Bool {
+        guard let start = find(bv41, in: v) else { return false }
+        guard let unpacked = try? appleLZ4(v[start...]) else { return true }
+        guard unpacked.0.first == 0x74, let tpl = try? decodeTPL(unpacked.0) else { return false }
+        return tpl.values.contains { ($0.list?.count ?? 0) > 1 }
     }
 
     // MARK: - Strokes
@@ -308,7 +367,8 @@ public enum GoodNotesInk {
         let nominal = w >= 0.05 && w <= 100 ? w : 1
         var runs: [[Point]] = [], run: [Point] = []
         func add(_ x: Double, _ y: Double, _ r: Double) {
-            guard x.isFinite, y.isFinite, abs(x) <= 20000, abs(y) <= 20000 else { return }
+            // Whiteboards are endless: ink can sit far from 0, 0.
+            guard x.isFinite, y.isFinite, abs(x) <= 1_000_000, abs(y) <= 1_000_000 else { return }
             if let last = run.last, hypot(x - last.x, y - last.y) < 1e-3 { return }
             run.append(Point(x: x, y: y, r: r.isFinite && r >= 0.001 && r <= 100 ? r : nominal / 2))
         }
@@ -337,20 +397,34 @@ public enum GoodNotesInk {
         } else {
             // GoodNotes 6: flat word arrays after the flags. The first holds the start point
             // (x, y, r[, 0]), the second the rest as (x, y, r), with (0, 0, r) markers, skipped.
-            let first = format.hasPrefix("vu") ? 3 : 2
-            func triples(_ v: TPLValue?, max: Int = .max) -> [Point] {
-                guard let list = v?.list, list.first?.number != nil else { return [] }
-                let n = list.compactMap(\.number)
+            // The first two plain number arrays (A(u) float bits, or A(f) doubles) wherever they are:
+            // newer GoodNotes versions add fields in front.
+            let nodes = (try? parseFormat(format)) ?? []
+            let arrays = nodes.enumerated().compactMap { i, node -> Int? in
+                if case .array(let c) = node, c.count == 1, case .scalar(let ch) = c[0], ch == "u" || ch == "f" { return i }
+                return nil
+            }
+            let first = arrays.first ?? (format.hasPrefix("vu") ? 3 : 2)
+            let second = arrays.count > 1 ? arrays[1] : first + 1
+            func triples(_ index: Int, max: Int = .max) -> [Point] {
+                guard let list = at(index)?.list, !list.isEmpty else { return [] }
+                let n: [Double] = list.compactMap { v in
+                    switch v {
+                    case .num(let w): d(w)
+                    case .double(let x): x
+                    default: nil
+                    }
+                }
                 var out: [Point] = []
                 var i = 0
                 while i + 2 < n.count, out.count < max {
-                    let x = d(n[i]), y = d(n[i + 1])
-                    if !(abs(x) < 10 && abs(y) < 10) { out.append(Point(x: x, y: y, r: d(n[i + 2]))) }
+                    let x = n[i], y = n[i + 1]
+                    if !(abs(x) < 10 && abs(y) < 10) { out.append(Point(x: x, y: y, r: n[i + 2])) }
                     i += 3
                 }
                 return out
             }
-            for p in triples(at(first), max: 1) + triples(at(first + 1)) { add(p.x, p.y, p.r) }
+            for p in triples(first, max: 1) + triples(second) { add(p.x, p.y, p.r) }
         }
         cut()
         return (runs, nominal)
@@ -360,7 +434,7 @@ public enum GoodNotesInk {
 
     /// Colour, opacity and move offset from the protobuf after the ink.
     static func trailerStyle(_ b: ArraySlice<UInt8>) -> Style {
-        let msg = (try? decodeMessage(b)) ?? []
+        let msg = decodeMessage(b, lenient: true)
         var style = Style()
         if let colour = msg.message(4) {
             func channel(_ n: Int, _ fallback: Double) -> Double {
@@ -420,6 +494,44 @@ public enum GoodNotesInk {
     /// A shape record (field 7 → {4: colour, 9: geometry, 14/6: move}).
     static func shape(_ rec: Message) -> Stroke? {
         guard let outer = rec.message(7), let geo = outer.message(9) else { return nil }
+        let pts = geometryPoints(geo)
+        guard pts.count >= 2 else { return nil }
+        let (dx, dy) = moveOf(outer, rec)
+        let width = geo.float(15) ?? 1
+        var rgb = [0.0, 0, 0], alpha = 1.0
+        if let colour = outer.message(4) {
+            rgb = [1, 2, 3].map { min(1, max(0, colour.float($0) ?? 0)) }
+            alpha = colour.float(4) ?? 1
+        }
+        return Stroke(id: outer.uuid(1), rgb: rgb, alpha: alpha, width: width,
+                      runs: [pts.map { Point(x: $0.0 + dx, y: $0.1 + dy, r: width / 2) }], isShape: true)
+    }
+
+    /// A shape's fill (field 9 → {1: id, 4: geometry, 5: the shape it fills, 7: colour}), drawn
+    /// under its outline as one closed run.
+    static func fill(_ rec: Message) -> (stroke: Stroke, of: String?)? {
+        guard let outer = rec.message(9), let geo = outer.message(4), let colour = outer.message(7) else { return nil }
+        let pts = geometryPoints(geo)
+        guard pts.count >= 3 else { return nil }
+        let (dx, dy) = moveOf(outer, rec)
+        let rgb = [1, 2, 3].map { min(1, max(0, colour.float($0) ?? 0)) }
+        let alpha = min(1, max(0, colour.float(4) ?? 1))
+        let s = Stroke(id: outer.uuid(1), rgb: rgb, alpha: alpha, width: 0, runs: [pts.map { Point(x: $0.0 + dx, y: $0.1 + dy, r: 0) }],
+                       isShape: true, isFill: true)
+        return (s, outer.uuid(5))
+    }
+
+    static func moveOf(_ msgs: Message...) -> (Double, Double) {
+        for m in msgs {
+            if let off = m.message(14) ?? m.message(6), (off.float(1) ?? 0) != 0 || (off.float(2) ?? 0) != 0 {
+                return (off.float(1) ?? 0, off.float(2) ?? 0)
+            }
+        }
+        return (0, 0)
+    }
+
+    /// A geometry message's outline: a path (1 or 2), a rectangle (3) or an ellipse (4).
+    static func geometryPoints(_ geo: Message) -> [(Double, Double)] {
         var pts: [(Double, Double)] = []
         if let container = geo.message(1) ?? geo.message(2) { pts = pathPoints(container) }
         if pts.count < 2 {
@@ -437,22 +549,7 @@ public enum GoodNotesInk {
                 pts = [(l, t), (r, t), (r, b), (l, b), (l, t)]
             }
         }
-        guard pts.count >= 2 else { return nil }
-        var dx = 0.0, dy = 0.0
-        for m in [outer, rec] {
-            if let off = m.message(14) ?? m.message(6), (off.float(1) ?? 0) != 0 || (off.float(2) ?? 0) != 0 {
-                dx = off.float(1) ?? 0; dy = off.float(2) ?? 0
-                break
-            }
-        }
-        let width = geo.float(15) ?? 1
-        var rgb = [0.0, 0, 0], alpha = 1.0
-        if let colour = outer.message(4) {
-            rgb = [1, 2, 3].map { min(1, max(0, colour.float($0) ?? 0)) }
-            alpha = colour.float(4) ?? 1
-        }
-        return Stroke(id: outer.uuid(1), rgb: rgb, alpha: alpha, width: width,
-                      runs: [pts.map { Point(x: $0.0 + dx, y: $0.1 + dy, r: width / 2) }], isShape: true)
+        return pts
     }
 
     // MARK: - Text boxes and images
@@ -534,8 +631,21 @@ public enum GoodNotesInk {
         throw Failure.notANotebook
     }
 
+    /// The fields read before any bad bytes (a stroke's trailer cut from a group).
+    static func decodeMessage(_ b: ArraySlice<UInt8>, lenient: Bool) -> Message {
+        var fields: Message = []
+        try? decodeFields(b, into: &fields)
+        return fields
+    }
+
     static func decodeMessage(_ b: ArraySlice<UInt8>) throws -> Message {
         var fields: Message = []
+        try decodeFields(b, into: &fields)
+        return fields
+    }
+
+    /// Reads fields into `fields`, which keeps what was read when it throws.
+    static func decodeFields(_ b: ArraySlice<UInt8>, into fields: inout Message) throws {
         var pos = b.startIndex
         while pos < b.endIndex {
             let key = try varint(b, &pos)
@@ -557,7 +667,6 @@ public enum GoodNotesInk {
             default: throw Failure.notANotebook
             }
         }
-        return fields
     }
 
     /// A member's records. GoodNotes writes length-prefixed records; some members are one message
