@@ -59,8 +59,8 @@ user says "publish" (`cd server && npx wrangler deploy`).
     search's "From your clipboard" was rebuilt by a sync while typing (Safari then drops the
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
-- **In progress** (the earlier session's workers were lost when its container was reclaimed, so
-  they were started again): search (Q1, Q2, Q4, §3.5), drawing feel + pens (S1, S2), AI (A1–A3;
+- **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
+  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): search (Q1, Q2, Q4, §3.5), drawing feel + pens (S1, S2), AI (A1–A3;
   cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
 - **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
   audio (S5–S7), then the rest of the roadmap.
