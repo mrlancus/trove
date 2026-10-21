@@ -11,7 +11,7 @@ import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
 import { parseHLC } from "./records.js";
 import {
-  bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
+  bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, meanNib, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
   transformPoint, transformRect, validSize, widthScale,
 } from "./ink.js";
 
@@ -534,10 +534,13 @@ export class Vault {
   addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null, style = null }) {
     if (!points.length) return null;
     const id = newId();
+    const compact = this.compactPoints();
     const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
-      ...pointFields(points, this.compactPoints()), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
+      ...pointFields(points, compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
     if (shape) fields[InkField.shape] = shape;
     if (style) Object.assign(fields, strokeStyle(style));
+    // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
+    if (!compact && typeof fields[InkField.nib] !== "number") { const nib = meanNib(points); if (nib !== null) fields[InkField.nib] = nib; }
     this.set(fields, id, "stroke");
     return id;
   }

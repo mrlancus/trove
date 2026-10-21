@@ -517,6 +517,7 @@ test("outlines, arrowheads, compact points, pen settings, the grid and grain mat
   }
   close(flat(ink.strokePoints({ points: f.points2.legacy.encoded })), f.points2.legacy.decoded, "legacy points");
   close(flat(ink.strokePoints({ points: "", points2: f.points2.cases[0].encoded })), f.points2.cases[0].decoded, "points2 wins");
+  for (const c of f.nibs) { const got = ink.meanNib(c.angles.map((a) => ({ x: 0, y: 0, p: 0.5, t: 0, a }))); assert.ok(c.expect === null ? got === null : Math.abs(got - c.expect) < 1e-9); }
   for (const c of f.settings) assert.deepEqual(ink.inkSettingsOf(c.fields), c.expect);
   for (const c of f.curves) assert.ok(Math.abs(ink.pressureAfter(c.p, c) - c.expect) < 1e-12);
   for (const c of f.filters) close(flat(ink.filterPoints(pts(c.raw), c.settings)), c.expect, `filter ${c.settings.smoothing}`);

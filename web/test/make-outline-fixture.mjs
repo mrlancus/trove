@@ -4,7 +4,7 @@
 import { writeFileSync } from "node:fs";
 import { b64uEncode } from "../public/core/bytes.js";
 import {
-  arrowHeads, decodePoints, decodePoints2, encodePoints, encodePoints2, filterPoints, grainTile, InkGrid, inkSettingsOf, pressureAfter, strokeOutline,
+  arrowHeads, decodePoints, meanNib, decodePoints2, encodePoints, encodePoints2, filterPoints, grainTile, InkGrid, inkSettingsOf, pressureAfter, strokeOutline,
 } from "../public/core/ink.js";
 
 let seed = 7;
@@ -90,6 +90,7 @@ const tile = grainTile();
 const fixture = {
   outlines: outlineCases, arrows: arrowCases,
   points2: { cases: points2Cases, legacy: { encoded: legacy, decoded: flat(decodePoints(legacy)) } },
+  nibs: [[0.2, 0.3, 0.4], [3.0, 0.1], [1.5707963], []].map((angles) => ({ angles, expect: meanNib(angles.map((x) => ({ x: 0, y: 0, p: 0.5, t: 0, a: x }))) })),
   settings: settingsCases, curves, filters: filterCases,
   grid: { cell: 256, boxes: boxes.map(([id, rect]) => ({ id, rect })), removed: ["f"], queries },
   grain: { size: 64, tile: b64uEncode(tile), sum: tile.reduce((n, v) => n + v, 0) },

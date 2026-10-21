@@ -154,6 +154,15 @@ public enum InkOutline {
         InkGeometry.bounds(points, pad: width / 2 + (arrow != nil ? 2 * width + 6 : 0) + 1)
     }
 
+    /// The average nib angle of points that have one (a nib turned by π looks the same), in [0, π) (ink.js `meanNib`).
+    public static func meanNib(_ points: [InkPoint]) -> Double? {
+        var sx = 0.0, sy = 0.0, n = 0
+        for p in points { if let a = p.angle, a.isFinite { sx += cos(2 * a); sy += sin(2 * a); n += 1 } }
+        guard n > 0 else { return nil }
+        let a = atan2(sy, sx) / 2
+        return a < 0 ? a + Double.pi : a
+    }
+
     // MARK: Pencil grain
 
     public static let grainSize = 64, grainTexel = 0.5

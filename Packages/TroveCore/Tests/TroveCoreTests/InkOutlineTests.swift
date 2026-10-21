@@ -72,6 +72,11 @@ import Testing
                             createdHLC: "0", updatedHLC: "0")
         #expect(Self.same(InkStroke(record).points, Self.numbers(first["decoded"])))
         #expect(InkPoints.decode2("") == [] && InkPoints.decode2("AAAA") == [])
+        for c in f["nibs"]?.array ?? [] {
+            let o = c.object ?? [:]
+            let got = InkOutline.meanNib((o["angles"]?.array ?? []).compactMap(\.number).map { InkPoint(x: 0, y: 0, angle: $0) })
+            if let want = o["expect"]?.number { #expect(abs((got ?? -9) - want) < 1e-9) } else { #expect(got == nil) }
+        }
     }
 
     @Test func penSettingsMatchTheWebsite() throws {

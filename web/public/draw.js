@@ -1157,7 +1157,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     }
     // The pen's lines: dashes on any stroke, arrows on straight lines, fill inside closed shapes.
     const style = { dash: s.dash };
-    if (s.shape && prefs.arrow && prefs.arrow !== "none" && (s.shape === "line" || s.shape === "polyline")) style.arrow = prefs.arrow;
+    if (s.shape && s.tool !== "highlighter" && prefs.arrow && prefs.arrow !== "none" && (s.shape === "line" || s.shape === "polyline")) style.arrow = prefs.arrow;
     if (s.shape && prefs.fill && CLOSED_SHAPES.includes(s.shape)) style.fill = prefs.fill;
     const id = vault.addStroke({ on: itemId, layer, page: s.view.key, tool: s.tool, color: s.color, width: s.width, points: s.points, shape: s.shape, style });
     record({ add: [[id, "stroke"]] }, [s.view]);

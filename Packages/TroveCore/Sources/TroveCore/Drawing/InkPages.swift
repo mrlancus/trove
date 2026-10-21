@@ -57,6 +57,8 @@ extension Library {
         fields.merge(InkPoints.fields(points, compact: compact)) { _, b in b }
         if let shape { fields[InkStroke.Field.shape] = .string(shape) }
         if let style { fields.merge(style.fields) { _, b in b } }
+        // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
+        if !compact, fields[InkStroke.Field.nib] == nil, let nib = InkOutline.meanNib(points) { fields[InkStroke.Field.nib] = .number(nib) }
         await engine.set(fields, record: id, kind: "stroke")
         return id
     }

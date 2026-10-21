@@ -934,6 +934,15 @@ function trimForArrows(s, w) {
   return pts;
 }
 
+/** The average nib angle of points that have one (a nib turned by π looks the same), in [0, π); null if none do. */
+export function meanNib(points) {
+  let sx = 0, sy = 0, n = 0;
+  for (const p of points) if (typeof p.a === "number" && Number.isFinite(p.a)) { sx += Math.cos(2 * p.a); sy += Math.sin(2 * p.a); n++; }
+  if (!n) return null;
+  const a = Math.atan2(sy, sx) / 2;
+  return a < 0 ? a + Math.PI : a;
+}
+
 // ----- compact points (`points2`, PROTOCOL.md §10) -----
 
 /** Positions are kept to 1/20 point, times to a millisecond, pressure to 1/255 and a nib angle to π/256. */
