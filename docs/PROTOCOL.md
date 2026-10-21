@@ -147,6 +147,9 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `POST /vaults/:v/ai/ask` | device | `{question, sources:[{id,text}]}` → `{answer, citations:[id]}` (Claude) |
 | `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
+| `GET/POST /vaults/:v/bridges`, `GET/PUT/DELETE /vaults/:v/bridges/:id`, `POST …/:id/run`, `POST …/:id/regenerate` | device | Bridges (below) |
+| `POST /hook/:v/:secret` | the secret in the path | a bridge's incoming address: webhook "add" URL or Telegram bot (below) |
+| `POST /vaults/:v/preview` | device | `{url}` → `{url, title, description, image, site, icon}` link preview (below) |
 | `GET /health` | none | `{ok:true, version}` |
 
 **Recovery** (no token): `POST /vaults/:v/recovery` → `201 {challengeId, box}`, where `box` is 32 random bytes
@@ -167,16 +170,95 @@ by necessity, and the apps label those items "processed in cloud".
 ### Inbox plaintext (inside the sealed TRV1)
 ```
 u32 headerLength | header JSON (UTF-8) | body bytes
-header = { "v":1, "source":"email|webdav|web|ios", "receivedAt": ISO8601,
+header = { "v":1, "source":"email|webdav|web|ios|other|rss|github|telegram|webhook", "receivedAt": ISO8601,
            "name"?: "file.pdf", "mime"?: "application/pdf", "url"?: "…", "title"?: "…",
-           "groupId"?: "…" (links an email to its attachments), "meta"?: {…} }
+           "groupId"?: "…" (links an email to its attachments),
+           "folder"?: ["Feeds", "Tech Daily"] (bridges: folder path hint), "tags"?: ["github", "cli"] (bridges),
+           "meta"?: {…} }
 ```
+Readers ignore fields they don't know, so older apps import bridge entries as plain links, notes and
+files (without the folder and tags).
 
 ### WebDAV (for GoodNotes Auto Backup)
 - **Address:** `https://<worker>/dav/`. Basic auth: username = vaultId, password = an inbox token.
 - **Supported:** `OPTIONS`, `PROPFIND` (depth 0/1), `MKCOL`, `PUT`, `HEAD`, `DELETE`, `MOVE`, `LOCK`/`UNLOCK` (fake locks).
 - **How uploads are handled:** a `PUT` is sealed straight into the inbox, with `davPath` recorded. The server keeps only path, size and etag, so `PROPFIND` can list what was uploaded. A newer upload of the same path supersedes the older one on import.
 - **Privacy caveat:** notebook *file names* are visible to the server. The contents are not.
+
+### Bridges
+Bridges connect outside services to Trove **one way, into the inbox**. The relay fetches or receives
+something public (a feed, GitHub stars, a Telegram message, a webhook post), seals it with the vault's
+public key like email-in does, and devices import it as usual. The relay never reads the vault; it
+keeps only each bridge's settings, its status and the ids it has already sent.
+
+**API** (device token):
+
+| Method & path | Body → Response |
+|---|---|
+| `GET /vaults/:v/bridges` | → `{bridges:[Bridge], kinds:["webhook","rss","github","telegram"]}` |
+| `POST /vaults/:v/bridges` | `{kind, enabled?, settings, token?}` → `201 Bridge` |
+| `GET /vaults/:v/bridges/:id` | → `Bridge` |
+| `PUT /vaults/:v/bridges/:id` | `{enabled?, settings?, token?}` (GitHub only: `token: ""` removes it) → `Bridge` |
+| `DELETE /vaults/:v/bridges/:id` | → `204` (a Telegram bot's webhook is removed too) |
+| `POST /vaults/:v/bridges/:id/run` | run a feed or GitHub bridge now (at most every 2 minutes, else `429`) → `Bridge` |
+| `POST /vaults/:v/bridges/:id/regenerate` | a new incoming address for a webhook or Telegram bridge; the old one stops working → `Bridge` |
+
+`Bridge` = `{id, kind, enabled, settings, hasToken, createdAt, status:{lastRunAt, nextRunAt, lastError,
+lastErrorAt, itemsAdded, lastAddedAt}}` (times are Unix ms or `null`), plus `hookURL` (webhook),
+`title` (rss: the feed's own title) and `telegram:{bot, linked, linkURL}` (telegram). Tokens are
+write-only: no response contains them. At most 40 bridges per vault.
+
+| kind | settings | What it adds |
+|---|---|---|
+| `webhook` | `{name, folder, tags[]}` | Each `POST hookURL` (see below) |
+| `rss` | `{url, name, folder (default "Feeds")}` | New posts of an RSS 0.9x/1.0/2.0 or Atom feed as links, into `folder/<feed name>`. The first run adds the newest 5, later runs every new post (at most 25 a run). Checked every 2 hours with `If-None-Match`/`If-Modified-Since` |
+| `github` | `{username, stars (true), releases (false), folder (default "GitHub")}`, optional `token` | Public stars as links into `GitHub/Stars` with the description, language and topics as the note and `github` + topics + language as tags (the first runs page back through older stars). With `releases`, new releases of the user's own public repos into `GitHub/Releases`. Checked every 6 hours |
+| `telegram` | `{folder, tags[]}`, required `token` (from BotFather) | Messages to the bot from the linked chat: text as notes, the first link as a link (the message as its note), photos (largest size) and files up to 20 MB as attachments |
+
+**Incoming: `POST /hook/:vaultId/:secret`.** `secret` is `thk_` + 43 base64url characters and is the
+only credential, like an inbox token (`regenerate` replaces it).
+- *Webhook*: a JSON object, a form (`application/x-www-form-urlencoded` or `multipart/form-data`) or
+  plain text. Fields: `url`, `text`, `title`, `tags` (array or comma/space separated), `folder`
+  ("A/B"), `file` (multipart, 20 MB at most). A body that is just a link is saved as that link.
+  `201 {ok, added}`; `400` with nothing to save, `403` when the bridge is off, `404` for an unknown
+  secret, `429` after 120 posts in an hour.
+- *Telegram*: the relay calls `setWebhook` with this address and `secret_token` = the secret, and
+  checks the `X-Telegram-Bot-Api-Secret-Token` header. Until a chat is linked, only the message
+  `/start <linkCode>` (sent by opening `telegram.linkURL`) is accepted; it links that chat, and
+  messages from any other chat are ignored. The bot answers "Saved to Trove." Telegram always gets
+  `200` (it retries anything else); problems are recorded in `status.lastError`.
+
+**Inbox entries from bridges** use `source` `rss`, `github`, `telegram` or `webhook` and
+`meta.bridge` = the bridge id (`meta` also carries `feed`, `repo`, `chat`… for display). Bodies are
+plain text (`mime: "text/plain"`) for links and notes. Importers (`Library.importInbox`,
+`Vault.importEnvelope`, checked by `Fixtures/inbox-bridges.json`):
+- they treat these like `other` (item `source` `share`) and store `origin.bridge` = the entry's source;
+- `folder` (an array, or a string split on `/`; empty parts dropped, at most 5 deep) files a *new* item
+  there with `folderAuto: false`, so enrichment won't move it; an existing item (the same link saved
+  before) keeps its folder;
+- `tags` (lowercased, `#` dropped, no repeats) are added to the item's tags, new or existing.
+
+**Running.** Feed and GitHub bridges run on the vault's Durable Object alarm (shared with price
+watches) at most 9 outside fetches per run, so a run plus price checks stays under the free plan's 50
+subrequests. A failing bridge backs off (2×, 4×, … its interval, at most a day) and shows the error;
+a success clears it. Turning a bridge back on, or changing its feed or user, runs it within seconds
+(a changed feed or user starts over).
+
+**Tokens** (Telegram bot, optional GitHub token) are stored by the relay because it must use them while
+devices sleep. They are encrypted at rest with AES-256-GCM under a key from the Worker secret
+`BRIDGE_KEY` (HKDF-SHA256, salt = vault id, info `trove/v1/bridge-token`) when that secret is set, and
+otherwise kept in the Durable Object's storage, which Cloudflare encrypts at rest. A GitHub token should
+be a fine-grained, read-only token with no repository access (public data only); without one the
+relay uses GitHub's anonymous limit (60 requests an hour, shared).
+
+**Link previews.** `POST /vaults/:v/preview {url}` fetches a page for a device (browsers can't fetch
+other sites) and returns `{url (after redirects), title, description, image, site, icon}` from Open
+Graph, Twitter and plain HTML tags (any may be `null`). The relay sees that URL, nothing else. It
+refuses non-http(s) URLs, user:password URLs, ports other than 80/443/8080/8443, `localhost`,
+single-label and `.local`/`.internal`/`.lan`/`.home.arpa` names, IP literals in private, loopback,
+link-local, CGNAT and multicast ranges, and IPv6 literals (`400`), re-checks every redirect (at most
+4), stops after 8 seconds and reads at most 512 KB. 240 previews an hour per vault (`429`). Feeds are
+fetched under the same rules.
 
 ## 5. Price-drop watches (opt-in per item)
 A device turns on "Track price drops" for a product item by sending `PUT /vaults/:v/watches/:id`

@@ -50,6 +50,13 @@ export default {
       return stub(env, vaultId!).fetch(new Request(`https://vault/public/${slug}`));
     }
 
+    // Bridges' incoming addresses (webhook "add" URL, Telegram bot): the secret in the path is the auth.
+    if (parts[0] === "hook" && parts.length === 3) {
+      const [, vaultId, secret] = parts;
+      if (!VAULT_ID.test(vaultId!)) return error(404, "not found");
+      return forward(env, vaultId!, request, `/hook/${secret}`);
+    }
+
     if (parts[0] === "dav") {
       // Basic auth username is the vault id.
       const auth = request.headers.get("authorization") ?? "";

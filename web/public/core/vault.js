@@ -75,7 +75,7 @@ export class Vault {
   }
 
   /** Joins the vault with a setup code and saves everything this browser needs. */
-  static async join(storage, setupCode, { origin, deviceName = "Web browser", ...options } = {}) {
+  static async join(storage, setupCode, { origin, deviceName = "Web browser", deviceKind = "web", ...options } = {}) {
     const payload = parseSetupCode(setupCode);
     const relayVaultId = payload.relayVaultId ?? payload.vaultId;
     const base = origin ?? payload.relayURL;
@@ -85,7 +85,7 @@ export class Vault {
     const res = await doFetch(`${base}/v1/vaults/${relayVaultId}/devices`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pairingCode: payload.pairingCode, deviceName, deviceKind: "web", deviceId: proposed }),
+      body: JSON.stringify({ pairingCode: payload.pairingCode, deviceName, deviceKind, deviceId: proposed }),
     });
     if (res.status === 403 || res.status === 404) throw new Error("That setup code has expired or was already used. Make a new one in the app.");
     if (!res.ok) throw new Error(`The relay said ${res.status}: ${await res.text()}`);
@@ -394,13 +394,13 @@ export class Vault {
   }
 
   /** Adds a link (the apps fetch its title and preview when they next enrich). */
-  addLink(url, { title = "", note = "", source = "web", id: givenId } = {}) {
+  addLink(url, { title = "", note = "", source = "web", id: givenId, folder = [] } = {}) {
     const cleaned = cleanURL(url);
     const key = dedupeKey(cleaned.toString());
     const existing = this.items().find((i) => i.url && dedupeKey(i.url.toString()) === key);
     if (existing) { this.noteSource(source, existing); return { id: existing.id, isNew: false }; }
     const id = givenId ?? newId();
-    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source }) }, id, "item");
+    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source, importPath: folder }) }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
   }
@@ -1149,15 +1149,50 @@ export class Vault {
       return this.addFile(body, attachment.name, attachment.mime, { source: "email", id: newItemId });
     }
     const source = h.source === "web" ? "web" : "share";
+    const folder = inboxFolder(h), tags = inboxTags(h);
     if (h.url) {
       const note = h.mime?.startsWith("text/") ? text() : "";
-      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source, id: newItemId });
+      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source, id: newItemId, folder });
       const item = this.item(id);
       if (!isNew && note && item) this.setBody(id, item.body ? `${item.body}\n\n${note}` : note);
-      return id;
+      return this.applyInboxHints(id, isNew, h, folder, tags);
     }
-    if (h.mime && !h.mime.startsWith("text/")) return this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title, id: newItemId });
-    return this.addNote({ title: h.title ?? "", body: text(), source, id: newItemId });
+    if (h.mime && !h.mime.startsWith("text/")) {
+      return this.applyInboxHints(await this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title, id: newItemId, folder }), true, h, folder, tags);
+    }
+    return this.applyInboxHints(this.addNote({ title: h.title ?? "", body: text(), source, id: newItemId, folder }), true, h, folder, tags);
+  }
+
+  /**
+   * Bridges' hints (PROTOCOL.md §4 "Bridges"): an item filed into the folder the entry asked for stays
+   * there (not moved by later enrichment), gets the entry's tags, and remembers which bridge sent it.
+   */
+  applyInboxHints(id, isNew, h, folder, tags) {
+    const item = this.item(id);
+    if (!item) return id;
+    const fields = {};
+    if (isNew && folder.length) fields[Field.folderAuto] = false;
+    if (isNew && BRIDGE_SOURCES.has(h.source)) fields[Field.origin] = { ...(item.record.fields.origin ?? {}), bridge: h.source };
+    const merged = [...new Set([...item.tags, ...tags])].sort();
+    if (merged.length !== item.tags.length) fields[Field.tags] = merged;
+    if (Object.keys(fields).length) this.update(id, fields);
+    return id;
+  }
+
+  /** Asks the relay for a link's title, description, picture and site, and fills in what the item lacks. */
+  async fillLinkPreview(id) {
+    const item = this.item(id);
+    if (!item?.url) return null;
+    const p = await this.api("POST", "preview", { body: { url: item.url.toString() } });
+    const now = this.item(id);
+    if (!now) return p;
+    const fields = {};
+    if (!now.title && p.title) fields[Field.title] = p.title;
+    if (!now.summary && p.description) fields[Field.summary] = p.description;
+    if (!now.siteName && p.site) fields[Field.siteName] = p.site;
+    if (!now.imageURL && p.image) fields[Field.imageURL] = p.image;
+    if (Object.keys(fields).length) this.update(id, fields);
+    return p;
   }
 
   /** Our own journal on the relay already reaches `last` (another tab, or lost local state): move pending ops past it. */
@@ -1210,6 +1245,21 @@ export class Vault {
   }
 }
 
+
+/** Inbox entries from bridges (PROTOCOL.md §4 "Bridges"). */
+export const BRIDGE_SOURCES = new Set(["rss", "github", "telegram", "webhook"]);
+
+/** The folder path an inbox entry asks for (`folder`: an array, or "A/B"), at most 5 deep. */
+export function inboxFolder(h) {
+  const raw = Array.isArray(h.folder) ? h.folder : typeof h.folder === "string" ? h.folder.split("/") : [];
+  return raw.filter((p) => typeof p === "string").map((p) => p.trim()).filter(Boolean).slice(0, 5);
+}
+
+/** The tags an inbox entry carries: lowercased, without '#', no repeats. */
+export function inboxTags(h) {
+  const raw = Array.isArray(h.tags) ? h.tags : [];
+  return [...new Set(raw.filter((t) => typeof t === "string").map((t) => t.trim().replace(/^#/, "").toLowerCase()).filter(Boolean))];
+}
 
 function mimeForName(name) {
   const ext = /\.([^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? "";

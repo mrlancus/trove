@@ -4,6 +4,7 @@ import { handleDav } from "./webdav";
 import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
 import { checkPrice, type Price } from "./price";
 import { publishedPage } from "./publish";
+import { Bridges, FETCH_BUDGET } from "./bridges";
 
 export interface Env {
   VAULT: DurableObjectNamespace<VaultObject>;
@@ -14,6 +15,8 @@ export interface Env {
   EMAIL_VAULT_ID: string;
   /** "false" closes POST /v1/vaults once your own vault exists, so nobody else can use this relay. */
   ALLOW_NEW_VAULTS?: string;
+  /** Optional secret that encrypts bridge tokens (Telegram bot, GitHub) at rest (PROTOCOL.md §4 "Bridges"). */
+  BRIDGE_KEY?: string;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
@@ -37,6 +40,8 @@ export function error(status: number, message: string): Response {
 /** One Durable Object per vault: devices, journals, inbox index, WebDAV listing, live sockets. */
 export class VaultObject extends DurableObject<Env> {
   private sql: SqlStorage;
+  /** Bridges (bridges.ts): feeds, GitHub, Telegram and webhooks that seal into the inbox. */
+  readonly bridges: Bridges;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -58,6 +63,10 @@ export class VaultObject extends DurableObject<Env> {
         error TEXT, price REAL, currency TEXT, lowest REAL, history TEXT DEFAULT '[]', dropped_at INTEGER);
       CREATE TABLE IF NOT EXISTS published(slug TEXT PRIMARY KEY, title TEXT, markdown TEXT, updated_at INTEGER);
     `);
+    this.bridges = new Bridges({
+      sql: this.sql, storage: ctx.storage, vaultId: () => this.vaultId, fetcher: () => this.fetchPage, tokenKey: env.BRIDGE_KEY,
+      seal: (header, body) => this.sealIntoInbox(header, body, body.length, null),
+    });
     // Keep-alive pings never wake the object (free-tier friendly).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -132,6 +141,7 @@ export class VaultObject extends DurableObject<Env> {
       if (!this.vaultId) return error(404, "vault not found");
       if (path === "/internal/inbox") return await this.ingest(request);
       if (path.startsWith("/public/") && request.method === "GET") return this.publicPage(path.slice(8));
+      if (path.startsWith("/hook/")) return await this.bridges.hook(request, path.slice(6));
       if (path === "/api/devices" && request.method === "POST") return await this.pairDevice(request);
       if (path === "/api/recovery" && request.method === "POST") return await this.recoveryChallenge();
 
@@ -259,6 +269,11 @@ export class VaultObject extends DurableObject<Env> {
         if (!a && method === "GET") return this.listWatches();
         if (a && method === "PUT") return this.putWatch(a, await request.json());
         if (a && method === "DELETE") return this.deleteWatch(a);
+        break;
+      case "bridges":
+        return this.bridges.route(request, a, b);
+      case "preview":
+        if (!a && method === "POST") return this.bridges.preview(request);
         break;
       case "published":
         if (!a && method === "GET") {
@@ -530,12 +545,18 @@ export class VaultObject extends DurableObject<Env> {
   }
 
   async alarm() {
+    // Bridges first, within their own small fetch budget; price checks keep theirs (bridges.ts).
+    await this.bridges.runDue(Date.now(), FETCH_BUDGET);
     await this.checkWatches();
+    const times: number[] = [];
     const remaining = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches").one().n;
     if (remaining > 0) {
       const next = this.sql.exec<{ c: number }>("SELECT MIN(checked_at) AS c FROM watches").one().c ?? 0;
-      await this.ctx.storage.setAlarm(Math.max(Date.now() + 60_000, next + PRICE_CHECK_EVERY_MS));
+      times.push(next + PRICE_CHECK_EVERY_MS);
     }
+    const bridgeNext = this.bridges.nextDue();
+    if (bridgeNext !== null) times.push(bridgeNext);
+    if (times.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 60_000, Math.min(...times)));
   }
 
   // ---------- publish to link (PROTOCOL.md §6) ----------
