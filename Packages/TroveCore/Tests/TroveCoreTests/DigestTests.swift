@@ -52,6 +52,26 @@ struct DigestTests {
         #expect(Digest.weekly(all, week: w, summary: "Mostly bread.", model: "m").body.contains("## In short\nMostly bread.\n\n_Processed in the cloud (m)._"))
     }
 
+    @Test func autoDigestWritesLastWeekOnceAndRespectsDeletion() async throws {
+        let now = Date(timeIntervalSince1970: 1_792_540_800) // Wed 21 Oct 2026, week 43
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []), now: { now.addingTimeInterval(-7 * 86_400) })
+        #expect(await lib.autoDigest(now: now) == nil) // nothing saved last week
+        let note = await lib.addNote(title: "Garden plan", body: "Beans")
+        let id = try #require(await lib.autoDigest(now: now))
+        #expect(id == "digest-2026-w42")
+        let digest = try #require(await lib.item(id))
+        #expect(digest.title == "Week of 12 October 2026")
+        #expect(digest.body.contains("- [[Garden plan]]"))
+        #expect(!digest.needsEnrichment)
+        #expect(await lib.autoDigest(now: now) == nil) // already there
+        await lib.delete(id)
+        #expect(await lib.autoDigest(now: now) == nil) // deleted stays deleted
+        let cards = await lib.addFlashcards([("Q1", "A1")], title: "Cards", from: await lib.item(note), where: "device", model: "")
+        let made = try #require(await lib.item(cards))
+        #expect(made.body.contains("**Q:** Q1\n**A:** A1"))
+        #expect(made.links == [note])
+    }
+
     @Test func onThisDayAndDuplicatesMatchTheWebsite() throws {
         let f = try fixture()
         let all = items(f)
