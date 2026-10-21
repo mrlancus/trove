@@ -3,7 +3,12 @@
 // sides check Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-cases.json.
 import { b64uDecode, b64uEncode } from "./bytes.js";
 
-export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", color: "color", width: "width", points: "points", createdAt: "createdAt", device: "device", shape: "shape" };
+export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", color: "color", width: "width", points: "points", points2: "points2",
+  createdAt: "createdAt", device: "device", shape: "shape", fill: "fill", dash: "dash", arrow: "arrow", nib: "nib" };
+/** Shapes that close on themselves (they can be filled). */
+export const CLOSED_SHAPES = ["triangle", "rectangle", "polygon", "circle", "ellipse"];
+export const DASHES = ["dash", "dot"];
+export const ARROWS = ["end", "start", "both"];
 export const TOOLS = ["pen", "pencil", "marker", "highlighter", "fountain", "brush"];
 export const PAPERS = ["blank", "lined", "narrow", "wide", "margin", "grid", "smallgrid", "graph", "dotted", "smalldots", "isometric",
   "cornell", "todo", "planner", "storyboard", "music", "calligraphy"];
@@ -99,22 +104,53 @@ export function decodePoints(text) {
   return out;
 }
 
-/** A read-only view of a stroke record. */
+/** A stroke's points: `points2` (compact) when it has them, else `points` (PROTOCOL.md §10). */
+export function strokePoints(fields) {
+  return typeof fields.points2 === "string" && fields.points2 ? decodePoints2(fields.points2) : decodePoints(fields.points);
+}
+
+/**
+ * The fields that store points: `points2` when the vault writes compact points (settings.ink
+ * `compactPoints`), else `points`. `had` (the record's fields) empties the other one if it was set.
+ */
+export function pointFields(points, compact, had = null) {
+  const out = compact ? { points2: encodePoints2(points) } : { points: encodePoints(points) };
+  if (had && compact && typeof had.points === "string" && had.points) out.points = "";
+  if (had && !compact && typeof had.points2 === "string" && had.points2) out.points2 = "";
+  return out;
+}
+
+/** A read-only view of a stroke record. `cache` holds its outline and Path2D once drawn. */
 export function strokeView(record) {
   const f = record.fields;
+  const hex = (v) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null);
   return {
     id: record.id, on: typeof f.on === "string" ? f.on : "", layer: typeof f.layer === "string" ? f.layer : "",
     page: typeof f.page === "number" ? f.page : Number(f.page) || 0, pageKey: pageKey(f.page), tool: TOOLS.includes(f.tool) ? f.tool : "pen",
     shape: typeof f.shape === "string" ? f.shape : null,
     color: typeof f.color === "string" ? f.color : "#000000", width: typeof f.width === "number" ? f.width : 2,
-    points: decodePoints(f.points), createdAt: typeof f.createdAt === "number" ? f.createdAt : 0,
+    points: strokePoints(f), createdAt: typeof f.createdAt === "number" ? f.createdAt : 0,
+    fill: hex(f.fill), dash: DASHES.includes(f.dash) ? f.dash : null, arrow: ARROWS.includes(f.arrow) ? f.arrow : null,
+    nib: typeof f.nib === "number" && Number.isFinite(f.nib) ? f.nib : null,
+    cache: {},
   };
 }
 
+/** The look of a stroke beyond tool, colour and width, copied along with it (duplicate, paste, erased pieces). */
+export function strokeStyle(s) {
+  const out = {};
+  if (s.fill) out.fill = s.fill;
+  if (s.dash) out.dash = s.dash;
+  if (s.arrow) out.arrow = s.arrow;
+  if (typeof s.nib === "number") out.nib = s.nib;
+  return out;
+}
+
 /**
- * Draws strokes on a 2D canvas context already scaled to page points. Pens and pencils vary in
- * width with pressure (drawn segment by segment with round ends); markers and highlighters are one
- * even line, highlighters blended under the ink.
+ * Draws strokes on a 2D canvas context already scaled to page points. Pens, pencils, fountain pens
+ * and brushes are one filled outline each (`strokeOutline`, cached as a Path2D per stroke version);
+ * markers, highlighters, clean shapes and dashed lines are one even line, highlighters blended
+ * under the ink. Closed shapes with `fill` are filled underneath; line shapes get `arrow` heads.
  */
 export function drawStrokes(ctx, strokes) {
   for (const s of strokes) drawStroke(ctx, s);
@@ -124,46 +160,131 @@ export function drawStroke(ctx, s) {
   const pts = s.points;
   if (!pts.length) return;
   ctx.save();
-  ctx.strokeStyle = s.color;
-  ctx.fillStyle = s.color;
   ctx.globalAlpha = toolOpacity(s.tool);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
   if (s.tool === "highlighter") ctx.globalCompositeOperation = "multiply";
-  if (pts.length === 1) {
+  if (s.fill && s.shape && CLOSED_SHAPES.includes(s.shape) && pts.length > 2) {
+    ctx.fillStyle = s.fill;
     ctx.beginPath();
-    ctx.arc(pts[0].x, pts[0].y, widthAt(s.width, s.tool, pts[0].p) / 2, 0, Math.PI * 2);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
     ctx.fill();
-  } else if (!usesPressure(s.tool) || s.tool === "pencil" || s.shape) {
-    ctx.lineWidth = s.tool === "pencil" || s.shape ? widthAt(s.width, s.tool, average(pts)) : s.width;
-    ctx.beginPath();
-    if (s.shape) { ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y); } else smoothPath(ctx, pts);
-    ctx.stroke();
+  }
+  const outline = outlineOf(s);
+  if (outline) {
+    ctx.fillStyle = s.tool === "pencil" ? pencilFill(ctx, s.color) : s.color;
+    fillOutline(ctx, s, outline);
   } else {
-    // Each piece from the middle of one segment to the middle of the next, at that point's width.
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = i === 0 ? pts[0] : mid(pts[i - 1], pts[i]);
-      const b = i === pts.length - 2 ? pts[i + 1] : mid(pts[i], pts[i + 1]);
-      ctx.lineWidth = pointWidth(s, pts, i);
+    ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const w = lineWidthOf(s);
+    if (pts.length === 1) {
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, b.x, b.y);
+      ctx.arc(pts[0].x, pts[0].y, w / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const heads = arrowHeads(s);
+      const line = heads.length ? trimForArrows(s, w) : pts;
+      if (s.dash) ctx.setLineDash?.(dashPattern(s.dash, w));
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      if (s.shape) { ctx.moveTo(line[0].x, line[0].y); for (let i = 1; i < line.length; i++) ctx.lineTo(line[i].x, line[i].y); } else smoothPath(ctx, line);
       ctx.stroke();
+      ctx.setLineDash?.([]);
+      for (const tri of heads) {
+        ctx.beginPath();
+        ctx.moveTo(tri[0].x, tri[0].y); ctx.lineTo(tri[1].x, tri[1].y); ctx.lineTo(tri[2].x, tri[2].y);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   }
   ctx.restore();
 }
 
-/** A pen's width at its i-th point: fountain pens follow their direction, brushes taper at the ends. */
+/** The width an even line is drawn at: markers and highlighters their width, the rest at their average pressure. */
+export function lineWidthOf(s) {
+  if (!usesPressure(s.tool)) return s.width;
+  return widthAt(s.width, s.tool, s.points.length ? average(s.points) : 0.5);
+}
+
+/** Dashes three widths long with two-width gaps; dots two widths apart (round caps make them round). */
+export const dashPattern = (dash, w) => (dash === "dot" ? [0.001, Math.max(2 * w, 2)] : [Math.max(3 * w, 3), Math.max(2 * w, 2)]);
+
+/** The outline of a stroke, cached on its view; null when it's drawn as an even line. */
+function outlineOf(s) {
+  if (s.cache && s.cache.outline !== undefined) return s.cache.outline;
+  const o = strokeOutline(s);
+  if (s.cache) s.cache.outline = o;
+  return o;
+}
+
+/** Fills an outline: a Path2D made once per stroke version on a real canvas, else traced (PDF export). */
+function fillOutline(ctx, s, outline) {
+  if (typeof Path2D !== "undefined" && ctx.canvas) {
+    let path = s.cache?.path;
+    if (!path) {
+      path = new Path2D();
+      traceOutline(path, outline);
+      if (s.cache) s.cache.path = path;
+    }
+    ctx.fill(path);
+    return;
+  }
+  ctx.beginPath();
+  traceOutline(ctx, outline);
+  ctx.fill();
+}
+
+/** A closed outline as quadratic curves through the midpoints of its corners (smooth, like perfect-freehand). */
+export function traceOutline(path, o) {
+  const n = o.length;
+  if (n < 3) return;
+  path.moveTo((o[n - 1].x + o[0].x) / 2, (o[n - 1].y + o[0].y) / 2);
+  for (let i = 0; i < n; i++) {
+    const b = o[(i + 1) % n];
+    path.quadraticCurveTo(o[i].x, o[i].y, (o[i].x + b.x) / 2, (o[i].y + b.y) / 2);
+  }
+  path.closePath();
+}
+
+/** A pencil's colour with grain: `grainTile` as a repeating pattern, one texel per half page point. */
+const grainPatterns = new Map();
+function pencilFill(ctx, color) {
+  if (typeof ctx.createPattern !== "function" || (typeof document === "undefined" && typeof OffscreenCanvas === "undefined")) return color;
+  let pattern = grainPatterns.get(color);
+  if (!pattern) {
+    const size = GRAIN_SIZE, alpha = grainTile();
+    const c = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(size, size) : Object.assign(document.createElement("canvas"), { width: size, height: size });
+    const g = c.getContext("2d");
+    const img = g.createImageData(size, size);
+    const [r, gr, b] = rgb(color).map((v) => Math.round(v * 255));
+    for (let i = 0; i < size * size; i++) { img.data[i * 4] = r; img.data[i * 4 + 1] = gr; img.data[i * 4 + 2] = b; img.data[i * 4 + 3] = alpha[i]; }
+    g.putImageData(img, 0, 0);
+    pattern = ctx.createPattern(c, "repeat");
+    if (!pattern) return color;
+    try { pattern.setTransform(new DOMMatrix([GRAIN_TEXEL, 0, 0, GRAIN_TEXEL, 0, 0])); } catch { /* a texel per point */ }
+    if (grainPatterns.size > 32) grainPatterns.clear();
+    grainPatterns.set(color, pattern);
+  }
+  return pattern;
+}
+
+/** A pen's width at its i-th point: fountain pens follow their direction and nib, brushes taper at the ends. */
 export function pointWidth(s, pts, i) {
   const p = pts[i];
   if (s.tool === "fountain") {
     const q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
-    return fountainWidth(s.width, p.p, q.x - o.x, q.y - o.y);
+    return fountainWidth(s.width, p.p, q.x - o.x, q.y - o.y, nibAt(s, p));
   }
   if (s.tool === "brush") return widthAt(s.width, s.tool, p.p) * brushTaper(i, pts.length);
   return widthAt(s.width, s.tool, p.p);
 }
+
+/** The fountain nib's angle at a point: its own (barrel roll, in `points2`), the stroke's `nib`, else 45°. */
+export const nibAt = (s, p) => (typeof p.a === "number" ? p.a : typeof s.nib === "number" ? s.nib : NIB_ANGLE);
 
 const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const average = (pts) => pts.reduce((n, p) => n + p.p, 0) / pts.length;
@@ -410,10 +531,10 @@ export function erase(pts, path, radius) {
 
 export const NIB_ANGLE = Math.PI / 4;
 
-/** Fountain pens write like a nib held at 45°: thin along it, broad across it. */
-export function fountainWidth(width, pressure, dx, dy) {
+/** Fountain pens write like a nib held at 45° (or `nib`, radians): thin along it, broad across it. */
+export function fountainWidth(width, pressure, dx, dy, nib = NIB_ANGLE) {
   const p = Math.min(1, Math.max(0, pressure));
-  const across = dx === 0 && dy === 0 ? 0.5 : Math.abs(Math.sin(Math.atan2(dy, dx) - NIB_ANGLE));
+  const across = dx === 0 && dy === 0 ? 0.5 : Math.abs(Math.sin(Math.atan2(dy, dx) - nib));
   return width * (0.25 + 0.75 * across) * (0.6 + 0.4 * p);
 }
 
@@ -536,7 +657,7 @@ export function elementView(record) {
   const f = record.fields, num = (v, d) => (typeof v === "number" ? v : d);
   return {
     id: record.id, on: typeof f.on === "string" ? f.on : "", layer: typeof f.layer === "string" ? f.layer : "", pageKey: pageKey(f.page),
-    type: f.type === "image" ? "image" : "text", x: num(f.x, 0), y: num(f.y, 0), w: Math.max(1, num(f.w, 200)), h: Math.max(1, num(f.h, 40)),
+    type: ELEMENT_TYPES.includes(f.type) ? f.type : "text", x: num(f.x, 0), y: num(f.y, 0), w: Math.max(1, num(f.w, 200)), h: Math.max(1, num(f.h, 40)),
     text: typeof f.text === "string" ? f.text : "", size: num(f.size, 20), color: typeof f.color === "string" ? f.color : "#000000",
     image: f.image && typeof f.image.id === "string" ? f.image : null, createdAt: num(f.createdAt, 0),
   };
@@ -554,6 +675,60 @@ export function wrapText(ctx, text, width) {
     out.push(line.trimEnd());
   }
   return out;
+}
+
+/** Text boxes, pictures and tape (a strip that hides what's under it until tapped). */
+export const ELEMENT_TYPES = ["text", "image", "tape"];
+export const TAPE_COLORS = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5", "#b0b0b5"];
+
+/**
+ * Tape: the colour with faint diagonal stripes, hiding what's under it. Peeked (tapped open, which
+ * each device keeps to itself), it's a faint outline so the answer shows through.
+ */
+export function drawTapeElement(ctx, e, peeked = false) {
+  const r = Math.min(4, e.w / 4, e.h / 4);
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(e.x + r, e.y);
+    ctx.lineTo(e.x + e.w - r, e.y); ctx.quadraticCurveTo(e.x + e.w, e.y, e.x + e.w, e.y + r);
+    ctx.lineTo(e.x + e.w, e.y + e.h - r); ctx.quadraticCurveTo(e.x + e.w, e.y + e.h, e.x + e.w - r, e.y + e.h);
+    ctx.lineTo(e.x + r, e.y + e.h); ctx.quadraticCurveTo(e.x, e.y + e.h, e.x, e.y + e.h - r);
+    ctx.lineTo(e.x, e.y + r); ctx.quadraticCurveTo(e.x, e.y, e.x + r, e.y);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.fillStyle = e.color;
+  ctx.strokeStyle = e.color;
+  if (peeked) {
+    ctx.globalAlpha = 0.16;
+    path(); ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1;
+    ctx.setLineDash?.([4, 3]);
+    path(); ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  path(); ctx.fill();
+  // Stripes, a little darker, across the strip.
+  path(); ctx.clip();
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = "#000000";
+  const step = 8;
+  ctx.beginPath();
+  for (let x = e.x - e.h; x < e.x + e.w; x += step * 2) {
+    ctx.moveTo(x, e.y); ctx.lineTo(x + step, e.y); ctx.lineTo(x + step + e.h, e.y + e.h); ctx.lineTo(x + e.h, e.y + e.h); ctx.closePath();
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+/** The box a tape strip covers when dragged from `a` to `b`: at least `thick` points in each direction. */
+export function tapeBox(a, b, thick) {
+  let x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+  if (w < thick) { x -= (thick - w) / 2; w = thick; }
+  if (h < thick) { y -= (thick - h) / 2; h = thick; }
+  return { x, y, w, h };
 }
 
 export const textFont = (size) => `${size}px -apple-system, "Segoe UI", system-ui, sans-serif`;
@@ -639,4 +814,344 @@ export function scribbleTargets(points, strokes) {
     out.push(s.id);
   }
   return out.length && total >= 4 ? out : null;
+}
+
+// ---------- outlines, compact points, pen settings, the page grid and pencil grain ----------
+// InkOutline.swift does the same; both check Fixtures/ink-outline.json (web/test/make-outline-fixture.mjs).
+
+/** How far each point moves towards the pen (1 = raw), the closest two kept points get, and a half circle's steps. */
+export const OUTLINE_STREAMLINE = 0.75, OUTLINE_MIN_GAP = 0.2, OUTLINE_CAP_STEPS = 8, OUTLINE_MIN_RADIUS = 0.15;
+
+/**
+ * A stroke as one filled outline (the perfect-freehand method): the points are streamlined a
+ * little (the last stays where the pen lifted), each gets its width (`pointWidth`: pressure,
+ * fountain direction and nib, brush taper), and the outline runs down the left side at half that
+ * width, round the end in a half circle, back along the right side and round the start. Sharp
+ * turns get a round corner. Returns the corners [{x, y}] (drawn with `traceOutline`), or null for
+ * strokes drawn as an even line: markers, highlighters, clean shapes and dashed lines.
+ */
+export function strokeOutline(s) {
+  if (s.shape || s.dash || !usesPressure(s.tool)) return null;
+  const raw = s.points;
+  if (!raw.length) return [];
+  const pts = [];
+  for (const p of raw) {
+    const last = pts[pts.length - 1];
+    if (!last) { pts.push({ x: p.x, y: p.y, p: p.p, a: p.a }); continue; }
+    const x = last.x + (p.x - last.x) * OUTLINE_STREAMLINE, y = last.y + (p.y - last.y) * OUTLINE_STREAMLINE;
+    if (Math.hypot(x - last.x, y - last.y) < OUTLINE_MIN_GAP) continue;
+    pts.push({ x, y, p: p.p, a: p.a });
+  }
+  // The line ends where the pen lifted.
+  const end = raw[raw.length - 1], tail = pts[pts.length - 1];
+  if (raw.length > 1) {
+    if (Math.hypot(end.x - tail.x, end.y - tail.y) >= OUTLINE_MIN_GAP) pts.push({ x: end.x, y: end.y, p: end.p, a: end.a });
+    else if (pts.length > 1) { tail.x = end.x; tail.y = end.y; }
+  }
+  const n = pts.length;
+  const r = pts.map((_, i) => Math.max(OUTLINE_MIN_RADIUS, pointWidth(s, pts, i) / 2));
+  if (n === 1) {
+    const out = [];
+    for (let k = 0; k < OUTLINE_CAP_STEPS * 2; k++) {
+      const a = (Math.PI * k) / OUTLINE_CAP_STEPS;
+      out.push({ x: pts[0].x + r[0] * Math.cos(a), y: pts[0].y + r[0] * Math.sin(a) });
+    }
+    return out;
+  }
+  const dirs = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y, len = Math.hypot(dx, dy);
+    dirs.push(len > 0 ? { x: dx / len, y: dy / len } : i > 0 ? dirs[i - 1] : { x: 1, y: 0 });
+  }
+  const left = [], right = [];
+  const arc = (side, c, radius, from, to) => {
+    let delta = to - from;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta <= -Math.PI) delta += 2 * Math.PI;
+    const steps = Math.max(1, Math.ceil(Math.abs(delta) / (Math.PI / OUTLINE_CAP_STEPS)));
+    for (let k = 0; k <= steps; k++) { const a = from + (delta * k) / steps; side.push({ x: c.x + radius * Math.cos(a), y: c.y + radius * Math.sin(a) }); }
+  };
+  for (let i = 0; i < n; i++) {
+    const din = dirs[Math.max(0, i - 1)], dout = dirs[Math.min(n - 2, i)], p = pts[i];
+    if (i > 0 && i < n - 1 && din.x * dout.x + din.y * dout.y < 0) {
+      // A sharp turn: round the corner on both sides.
+      const a0 = Math.atan2(din.y, din.x) + Math.PI / 2, a1 = Math.atan2(dout.y, dout.x) + Math.PI / 2;
+      arc(left, p, r[i], a0, a1);
+      arc(right, p, r[i], a0 + Math.PI, a1 + Math.PI);
+      continue;
+    }
+    let tx = din.x + dout.x, ty = din.y + dout.y, len = Math.hypot(tx, ty);
+    if (len < 1e-9) { tx = dout.x; ty = dout.y; len = 1; }
+    const nx = -ty / len, ny = tx / len;
+    left.push({ x: p.x + nx * r[i], y: p.y + ny * r[i] });
+    right.push({ x: p.x - nx * r[i], y: p.y - ny * r[i] });
+  }
+  const out = [...left];
+  const e = dirs[n - 2], ae = Math.atan2(e.y, e.x), last = pts[n - 1];
+  for (let k = 1; k < OUTLINE_CAP_STEPS; k++) {
+    const a = ae + Math.PI / 2 - (Math.PI * k) / OUTLINE_CAP_STEPS;
+    out.push({ x: last.x + r[n - 1] * Math.cos(a), y: last.y + r[n - 1] * Math.sin(a) });
+  }
+  for (let i = right.length - 1; i >= 0; i--) out.push(right[i]);
+  const b = dirs[0], ab = Math.atan2(b.y, b.x), first = pts[0];
+  for (let k = 1; k < OUTLINE_CAP_STEPS; k++) {
+    const a = ab - Math.PI / 2 - (Math.PI * k) / OUTLINE_CAP_STEPS;
+    out.push({ x: first.x + r[0] * Math.cos(a), y: first.y + r[0] * Math.sin(a) });
+  }
+  return out;
+}
+
+/** Arrowheads on a `line` or `polyline` shape with `arrow`: triangles [tip, left, right] in page points. */
+export function arrowHeads(s) {
+  const pts = s.points;
+  if (!s.arrow || (s.shape !== "line" && s.shape !== "polyline") || pts.length < 2) return [];
+  const w = lineWidthOf(s), length = 4 * w + 6, half = length * 0.45;
+  const head = (tip, from) => {
+    const dx = tip.x - from.x, dy = tip.y - from.y, d = Math.hypot(dx, dy);
+    if (d < 1e-6) return null;
+    const ux = dx / d, uy = dy / d, bx = tip.x - ux * length, by = tip.y - uy * length;
+    return [{ x: tip.x, y: tip.y }, { x: bx - uy * half, y: by + ux * half }, { x: bx + uy * half, y: by - ux * half }];
+  };
+  const out = [];
+  if (s.arrow === "end" || s.arrow === "both") { const t = head(pts[pts.length - 1], pts[pts.length - 2]); if (t) out.push(t); }
+  if (s.arrow === "start" || s.arrow === "both") { const t = head(pts[0], pts[1]); if (t) out.push(t); }
+  return out;
+}
+
+/** The line under arrowheads stops short of their tips, so its round end doesn't poke out. */
+function trimForArrows(s, w) {
+  const pts = s.points.map((p) => ({ ...p })), back = 2 * w + 3;
+  const pull = (tip, from) => {
+    const dx = tip.x - from.x, dy = tip.y - from.y, d = Math.hypot(dx, dy);
+    if (d < 1e-6) return;
+    const k = Math.min(back, d * 0.9) / d;
+    tip.x -= dx * k; tip.y -= dy * k;
+  };
+  if (s.arrow === "end" || s.arrow === "both") pull(pts[pts.length - 1], pts[pts.length - 2]);
+  if (s.arrow === "start" || s.arrow === "both") pull(pts[0], pts[1]);
+  return pts;
+}
+
+// ----- compact points (`points2`, PROTOCOL.md §10) -----
+
+/** Positions are kept to 1/20 point, times to a millisecond, pressure to 1/255 and a nib angle to π/256. */
+export const POINTS2_SCALE = 20;
+const roundHalfUp = (v) => Math.floor(v + 0.5);
+
+function pushVarint(out, n) {
+  while (n >= 128) { out.push((n % 128) + 128); n = Math.floor(n / 128); }
+  out.push(n);
+}
+const zigzag = (n) => (n >= 0 ? 2 * n : -2 * n - 1);
+const unzigzag = (z) => (z % 2 === 0 ? z / 2 : -(z + 1) / 2);
+
+/**
+ * Points as `points2`: byte 1 (the version), a flags byte (1: each point has a nib angle), the
+ * count as a varint, then per point x and y as zigzag varint steps from the last point in 1/20
+ * points, pressure as one byte (0–255), the time step in ms as a varint and, with angles, the angle
+ * in [0, π) as one byte (× 256/π). In base64url. About 5 bytes a point instead of 16.
+ */
+export function encodePoints2(points) {
+  const angles = points.some((p) => typeof p.a === "number");
+  const out = [1, angles ? 1 : 0];
+  pushVarint(out, points.length);
+  let px = 0, py = 0, pt = 0;
+  const fin = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  for (const p of points) {
+    const x = roundHalfUp(fin(p.x) * POINTS2_SCALE), y = roundHalfUp(fin(p.y) * POINTS2_SCALE);
+    const t = Math.max(pt, roundHalfUp(Math.max(0, fin(p.t))));
+    pushVarint(out, zigzag(x - px));
+    pushVarint(out, zigzag(y - py));
+    out.push(roundHalfUp(Math.min(1, Math.max(0, fin(p.p))) * 255));
+    pushVarint(out, t - pt);
+    if (angles) {
+      let a = (typeof p.a === "number" ? fin(p.a) : NIB_ANGLE) % Math.PI;
+      if (a < 0) a += Math.PI;
+      out.push(roundHalfUp((a / Math.PI) * 256) % 256);
+    }
+    px = x; py = y; pt = t;
+  }
+  return b64uEncode(new Uint8Array(out));
+}
+
+export function decodePoints2(text) {
+  let bytes;
+  try { bytes = b64uDecode(text ?? ""); } catch { return []; }
+  if (bytes.length < 3 || bytes[0] !== 1) return [];
+  const angles = (bytes[1] & 1) === 1;
+  let i = 2;
+  const varint = () => {
+    let n = 0, mul = 1;
+    for (;;) {
+      if (i >= bytes.length || mul > 2 ** 49) throw new Error("short");
+      const b = bytes[i++];
+      n += (b & 127) * mul;
+      if (b < 128) return n;
+      mul *= 128;
+    }
+  };
+  const out = [];
+  try {
+    const count = varint();
+    let x = 0, y = 0, t = 0;
+    for (let k = 0; k < count; k++) {
+      x += unzigzag(varint());
+      y += unzigzag(varint());
+      if (i >= bytes.length) break;
+      const p = bytes[i++] / 255;
+      t += varint();
+      const pt = { x: x / POINTS2_SCALE, y: y / POINTS2_SCALE, p, t };
+      if (angles) { if (i >= bytes.length) break; pt.a = (bytes[i++] * Math.PI) / 256; }
+      out.push(pt);
+    }
+  } catch { /* cut short: what was read */ }
+  return out;
+}
+
+// ----- pen settings (settings.ink, PROTOCOL.md §10) -----
+
+export const INK_SETTINGS_ID = "settings.ink";
+export const PRESSURE_CURVES = ["soft", "normal", "firm"];
+export const MAX_FAVOURITES = 10, MAX_PALETTE = 24;
+
+const clampInt = (v, lo, hi, d) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d);
+const isHex = (v) => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
+
+/** A pen's settings, cleaned: smoothing 0–100, pressure curve soft/normal/firm, minimum width 0–100 %. */
+export function penSettingsOf(v) {
+  const o = v && typeof v === "object" ? v : {};
+  return { smoothing: clampInt(o.smoothing, 0, 100, 0), curve: PRESSURE_CURVES.includes(o.curve) ? o.curve : "normal", minWidth: clampInt(o.minWidth, 0, 100, 0) };
+}
+
+/**
+ * The drawing settings every device follows, from the `settings.ink` record's fields: each pen's
+ * settings (field `pen.<tool>`), up to 10 favourites ({tool, color, width}), a custom palette (up
+ * to 24 colours) and `compactPoints` (write `points2`).
+ */
+export function inkSettingsOf(fields) {
+  const f = fields ?? {};
+  const pens = {};
+  for (const t of TOOLS) pens[t] = penSettingsOf(f[`pen.${t}`]);
+  const favourites = (Array.isArray(f.favourites) ? f.favourites : [])
+    .filter((x) => x && TOOLS.includes(x.tool) && isHex(x.color) && typeof x.width === "number" && x.width > 0 && x.width <= 200)
+    .slice(0, MAX_FAVOURITES).map((x) => ({ tool: x.tool, color: x.color.toLowerCase(), width: x.width }));
+  const palette = (Array.isArray(f.palette) ? f.palette : []).filter(isHex).map((c) => c.toLowerCase()).slice(0, MAX_PALETTE);
+  return { pens, favourites, palette, compactPoints: f.compactPoints === true };
+}
+
+/** Pressure after a pen's curve and minimum: m + (1 − m) · curve(p), with soft p^0.6 and firm p^1.6. */
+export function pressureAfter(pressure, settings) {
+  const p = Math.min(1, Math.max(0, pressure));
+  const c = settings.curve === "soft" ? p ** 0.6 : settings.curve === "firm" ? p ** 1.6 : p;
+  const m = settings.minWidth / 100;
+  return m + (1 - m) * c;
+}
+
+/**
+ * A pen's settings applied while points are captured, so the stored stroke is what was shown:
+ * the pressure curve and minimum, and the stabiliser (each point moves k = 1 − 0.9 · smoothing/100
+ * of the way from the last one to the pen; when the pen lifts, the line ends where it is).
+ */
+export class PenFilter {
+  constructor(settings) { this.settings = penSettingsOf(settings); this.k = 1 - 0.9 * (this.settings.smoothing / 100); this.last = null; }
+  add(p) {
+    const q = { x: p.x, y: p.y, p: pressureAfter(p.p, this.settings), t: p.t };
+    if (typeof p.a === "number") q.a = p.a;
+    if (this.last) { q.x = this.last.x + (p.x - this.last.x) * this.k; q.y = this.last.y + (p.y - this.last.y) * this.k; }
+    this.last = q;
+    return q;
+  }
+  /** Where the pen lifted, when smoothing left the line short of it (else null). */
+  end(p) {
+    if (!this.last || this.settings.smoothing === 0 || Math.hypot(p.x - this.last.x, p.y - this.last.y) < 0.5) return null;
+    const q = { x: p.x, y: p.y, p: pressureAfter(p.p, this.settings), t: p.t };
+    if (typeof p.a === "number") q.a = p.a;
+    return q;
+  }
+}
+
+export function filterPoints(raw, settings) {
+  const f = new PenFilter(settings);
+  const out = raw.map((p) => f.add(p));
+  if (raw.length > 1) { const e = f.end(raw[raw.length - 1]); if (e) out.push(e); }
+  return out;
+}
+
+// ----- the page grid: strokes near a point without testing them all -----
+
+/** Boxes in a grid of 256-point cells, so the eraser, lasso and scribble-to-erase test only nearby strokes. */
+export class InkGrid {
+  constructor(cell = 256) { this.cell = cell; this.cells = new Map(); this.boxes = new Map(); this.big = new Set(); }
+  span(r) {
+    const c = this.cell;
+    return [Math.floor(r.x / c), Math.floor(r.y / c), Math.floor((r.x + r.w) / c), Math.floor((r.y + r.h) / c)];
+  }
+  add(id, r) {
+    this.remove(id);
+    if (!r || ![r.x, r.y, r.w, r.h].every(Number.isFinite)) return;
+    this.boxes.set(id, r);
+    const [i0, j0, i1, j1] = this.span(r);
+    // Huge strokes (a whiteboard's frame) go in one list every query looks at.
+    if ((i1 - i0 + 1) * (j1 - j0 + 1) > 64) { this.big.add(id); return; }
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const k = `${i},${j}`;
+      let set = this.cells.get(k);
+      if (!set) this.cells.set(k, set = new Set());
+      set.add(id);
+    }
+  }
+  remove(id) {
+    const r = this.boxes.get(id);
+    if (!r) return;
+    this.boxes.delete(id);
+    if (this.big.delete(id)) return;
+    const [i0, j0, i1, j1] = this.span(r);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) this.cells.get(`${i},${j}`)?.delete(id);
+  }
+  /** Ids whose box touches `r`, sorted. */
+  query(r) {
+    const out = new Set();
+    const hit = (id) => { const b = this.boxes.get(id); if (b && b.x <= r.x + r.w && r.x <= b.x + b.w && b.y <= r.y + r.h && r.y <= b.y + b.h) out.add(id); };
+    for (const id of this.big) hit(id);
+    const [i0, j0, i1, j1] = this.span(r);
+    if ((i1 - i0 + 1) * (j1 - j0 + 1) > 4096) { for (const id of this.boxes.keys()) hit(id); }
+    else for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (const id of this.cells.get(`${i},${j}`) ?? []) hit(id);
+    return [...out].sort();
+  }
+}
+
+/** The box a stroke covers as drawn: its points, half its width out (more with arrowheads). Cached on its view. */
+export function strokeBounds(s) {
+  if (s.cache && s.cache.bounds !== undefined) return s.cache.bounds;
+  const b = bounds(s.points, s.width / 2 + (s.arrow ? 2 * s.width + 6 : 0) + 1);
+  if (s.cache) s.cache.bounds = b;
+  return b;
+}
+
+// ----- pencil grain -----
+
+export const GRAIN_SIZE = 64, GRAIN_TEXEL = 0.5;
+
+/** A well-mixed 32-bit hash of a cell (Swift does the same with UInt32 arithmetic). */
+function grainHash(x, y, seed) {
+  let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1) ^ seed;
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) & 255;
+}
+
+/**
+ * The pencil's grain: a 64 × 64 tile of alpha values (150–255) that repeats seamlessly, fine
+ * noise mixed with 2 × 2 specks, drawn a texel every half page point inside the outline.
+ */
+let grain = null;
+export function grainTile() {
+  if (grain) return grain;
+  grain = new Uint8Array(GRAIN_SIZE * GRAIN_SIZE);
+  for (let y = 0; y < GRAIN_SIZE; y++) for (let x = 0; x < GRAIN_SIZE; x++) {
+    const n1 = grainHash(x, y, 1), n2 = grainHash(x >> 1, y >> 1, 2);
+    grain[y * GRAIN_SIZE + x] = 150 + Math.floor(((6 * n1 + 4 * n2) * 105) / 2550);
+  }
+  return grain;
 }

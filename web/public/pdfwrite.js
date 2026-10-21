@@ -162,13 +162,18 @@ export class PdfContext {
     if (!this.path.length) return;
     const s = this.style(this.strokeStyle);
     const cap = { butt: 0, round: 1, square: 2 }[this.lineCap] ?? 0, join = { miter: 0, round: 1, bevel: 2 }[this.lineJoin] ?? 0;
-    this.ops.push("q", s.gs, `${s.rgb} RG`, `${num(this.lineWidth)} w ${cap} J ${join} j`, ...this.path, "S", "Q");
+    const dash = this.dash?.length ? `[${this.dash.map(num).join(" ")}] 0 d` : "[] 0 d";
+    this.ops.push("q", s.gs, `${s.rgb} RG`, `${num(this.lineWidth)} w ${cap} J ${join} j`, dash, ...this.path, "S", "Q");
   }
   fill() {
     if (!this.path.length) return;
     const s = this.style(this.fillStyle);
     this.ops.push("q", s.gs, `${s.rgb} rg`, ...this.path, "f", "Q");
   }
+  /** Clips to the current path until restore(). */
+  clip() { if (this.path.length) this.ops.push(...this.path, "W n"); }
+  /** Dashed lines: `stroke` writes them as a dash array. */
+  setLineDash(dashes) { this.dash = dashes; }
   fillRect(x, y, w, h) { const keep = this.path; this.path = [`${num(x)} ${num(y)} ${num(w)} ${num(h)} re`]; this.fill(); this.path = keep; }
   clearRect() {}
 
