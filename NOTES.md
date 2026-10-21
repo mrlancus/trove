@@ -62,6 +62,20 @@ user says "publish" (`cd server && npx wrangler deploy`).
     **Ask the user:** website search by meaning needs the CSP to allow `cdn.jsdelivr.net` and
     `huggingface.co` (third-party script in the worker that sees vault text), or wait until the model
     is self-hosted. Plumbing is built; the loader is blocked by `script-src 'self'`.
+  - **Drawing feel + pens** (ROADMAP S1, S2, S8; PROTOCOL.md §10): strokes drawn as one filled outline
+    (`strokeOutline` / `InkOutline`, fixture `ink-outline.json`); website pen layer desynchronized +
+    predicted points (input-to-paint 13 ms median in headless Chromium), 512 px tiles per zoom step and
+    a stroke grid for eraser/lasso (2,000-stroke canvas pans at 7 ms median); pen settings (smoothing,
+    pressure curve, min width) synced in `settings.ink`; up to 10 favourite pens; pencil grain;
+    dashes/dots, arrowheads, shape fill; highlighter straightens when held; your/recent colours, hex,
+    eyedropper (website); tape (`type: "tape"`). Pencil Pro (written, untested): hover preview, barrel
+    roll as nib, haptics. Compact `points2` (~4× smaller) is written only after "Smaller drawings" is
+    turned on (vault flag `settings.ink.compactPoints`): **tell the user to turn it on only once every
+    device runs this build** (older builds would see empty strokes). Swift point decoding ~6× faster.
+    Not done: OffscreenCanvas in a Worker, Mac CGLayer tiles, page checkpoints (S8 says design first).
+    On iPad PencilKit draws the ink, so pen settings, dashes/fill/arrows/grain show as plain strokes.
+    **Ask the user:** should tape's open/closed state sync? Should iPad draw styled strokes in Trove's
+    overlay instead of PencilKit? **iPad checks:** hover dot (doubled with PencilKit's?), barrel roll, haptics.
   - **Clip renaming fixed.** Apps: the clip form saved only with the Save button at its bottom, so
     Return, swiping the sheet away or picking another clip lost the name, and on iPhone/iPad the
     row's four buttons all fired at once (Cancel too). Now Return saves the name, closing saves
@@ -70,7 +84,7 @@ user says "publish" (`cd server && npx wrangler deploy`).
     change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
     where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
 - **In progress** (workers' committed work is backed up to `wip/*` branches on GitHub, e.g.
-  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): drawing feel + pens (S1, S2), AI (A1–A3;
+  `wip/search`, `wip/drawing`; if a container is lost, restart from those, not from scratch): AI (A1–A3;
   cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
 - **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
   audio (S5–S7), then the rest of the roadmap.
