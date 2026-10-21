@@ -18,6 +18,8 @@ struct MouseInkCanvas: NSViewRepresentable {
     let color: String
     let width: Double
     let zoomRequest: InkZoomRequest?
+    /// The text box being typed in (a text field on the page).
+    var textEdit: InkTextEdit?
 
     final class Coordinator {
         var handledZoom: UUID?
@@ -88,6 +90,7 @@ struct MouseInkCanvas: NSViewRepresentable {
                 editor.zoom = z
             }
         }
+        view.syncText(textEdit)
         view.needsDisplay = true
     }
 }
@@ -111,6 +114,12 @@ final class InkNSView: NSView {
     /// The pen's settings (stabiliser, pressure curve), applied as points come in so what's stored is what's shown.
     private var filter: PenFilter?
     private var lastRaw: InkPoint?
+    /// The ruler edge or protractor arc the line being drawn runs along.
+    private var guide: InkGuideSnap?
+    /// The text box being typed in, as a text field on the page.
+    private var textView: NSTextView?
+    private var textViewFor: String?
+    private let textDelegate = InkMacTextDelegate()
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -222,6 +231,9 @@ final class InkNSView: NSView {
             needsDisplay = true
             return
         }
+        // On the ruler or protractor (not at an edge): move or turn it instead of drawing.
+        if editor.beginGuideDrag(at, pageKey: page.key, scale: scale, pen: true) { needsDisplay = true; return }
+        guide = editor.guideSnap(at, pageKey: page.key, scale: scale)
         editor.clearSelection()
         drawingPen = true
         pressure = 0.5
@@ -230,10 +242,10 @@ final class InkNSView: NSView {
         lastMove = Date()
         var f = PenFilter(editor.penSettings(tool.ink ?? .pen))
         let raw = InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: 0)
-        points = [f.add(raw)]
+        points = [editor.along(guide, f.add(raw))]
         filter = f
         lastRaw = raw
-        armSnap()
+        if guide == nil { armSnap() }
         needsDisplay = true
     }
 
@@ -247,10 +259,13 @@ final class InkNSView: NSView {
         guard !points.isEmpty, !snapped else { return }
         let minGap = 0.6 / scale
         if let last = lastRaw, hypot(last.x - at.x, last.y - at.y) < minGap { return }
-        if let last = lastRaw, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); armSnap() }
+        if let last = lastRaw, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); if guide == nil { armSnap() } }
         let raw = InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: (event.timestamp - started) * 1000)
         lastRaw = raw
-        if var f = filter { points.append(f.add(raw)); filter = f } else { points.append(raw) }
+        var next = raw
+        if var f = filter { next = f.add(raw); filter = f }
+        points.append(editor?.along(guide, next) ?? next)
+        if let page { editor?.noteReading(at, pageKey: page.key) }
         invalidateTail()
     }
 
@@ -278,9 +293,10 @@ final class InkNSView: NSView {
         }
         drawingPen = false
         guard let ink = tool.ink, !points.isEmpty, let page else { return }
-        if !snapped, let f = filter, let raw = lastRaw, let end = f.end(raw) { points.append(end) }
+        if !snapped, let f = filter, let raw = lastRaw, let end = f.end(raw) { points.append(editor?.along(guide, end) ?? end) }
         filter = nil
         lastRaw = nil
+        guide = nil
         let finished = points
         points = []
         editor?.addStroke(points: finished, tool: ink, color: color, width: width, pageKey: page.key, held: snapped)
@@ -290,6 +306,61 @@ final class InkNSView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         if tool == .eraser { editor?.hover(location(event), scale: scale); needsDisplay = true }
+        if let editor, editor.protractor != nil, let page { editor.noteReading(location(event), pageKey: page.key); needsDisplay = true }
+    }
+
+    // MARK: Typing on the page
+
+    /// Shows the text box being typed in as a text field at its place on the page (or takes it away).
+    func syncText(_ edit: InkTextEdit?) {
+        guard let edit, let page, edit.pageKey == page.key else {
+            textView?.removeFromSuperview()
+            textView = nil
+            textViewFor = nil
+            return
+        }
+        if textView == nil || textViewFor != edit.id {
+            textView?.removeFromSuperview()
+            let tv = NSTextView(frame: .zero)
+            tv.isRichText = false
+            tv.allowsUndo = true
+            tv.drawsBackground = true
+            tv.backgroundColor = NSColor.white.withAlphaComponent(0.35)
+            tv.textContainerInset = .zero
+            tv.textContainer?.lineFragmentPadding = 0
+            tv.textContainer?.widthTracksTextView = true
+            tv.isVerticallyResizable = false
+            tv.string = edit.text
+            tv.delegate = textDelegate
+            textDelegate.changed = { [weak self] text in self?.editor?.textEdit?.text = text }
+            textDelegate.escape = { [weak self] in self?.editor?.commitTextEdit() }
+            addSubview(tv)
+            textView = tv
+            textViewFor = edit.id
+            DispatchQueue.main.async { [weak self, weak tv] in if let tv { self?.window?.makeFirstResponder(tv) } }
+        }
+        guard let tv = textView else { return }
+        if tv.string != edit.text { tv.string = edit.text }
+        let size = CGFloat(edit.size)
+        let ct = InkRenderer.font(size: edit.size, style: edit.style)
+        let font = NSFont(name: CTFontCopyPostScriptName(ct) as String, size: size) ?? NSFont.systemFont(ofSize: size)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = size * 1.25
+        paragraph.maximumLineHeight = size * 1.25
+        let colour = NSColor(cgColor: InkRenderer.cgColor(edit.color)) ?? .black
+        if tv.font != font || tv.textColor != colour {
+            tv.font = font
+            tv.textColor = colour
+            tv.defaultParagraphStyle = paragraph
+            tv.typingAttributes = [.font: font, .foregroundColor: colour, .paragraphStyle: paragraph]
+            if let storage = tv.textStorage {
+                storage.setAttributes(tv.typingAttributes, range: NSRange(location: 0, length: storage.length))
+            }
+        }
+        let h = max(Double(size) * 1.25, InkRenderer.textHeight(edit.text, width: edit.frame.width, size: edit.size, style: edit.style))
+        // The page's points are this view's (it's scaled by the scroll view's magnification).
+        let frame = NSRect(x: edit.frame.x + origin, y: edit.frame.y + origin, width: edit.frame.width, height: h + Double(size) * 0.25)
+        if tv.frame != frame { tv.frame = frame }
     }
 
     /// Force Touch trackpads report how hard you press while drawing.
@@ -314,11 +385,42 @@ final class InkNSView: NSView {
         addCursorRect(visibleRect, cursor: cursor)
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { textView?.removeFromSuperview(); textView = nil; textViewFor = nil }
+    }
+
     // Delete removes what the lasso picked up.
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 51 || event.keyCode == 117, editor?.selection != nil { editor?.deleteSelection(); return }
         if event.keyCode == 53, editor?.selection != nil { editor?.clearSelection(); needsDisplay = true; return }
         super.keyDown(with: event)
+    }
+}
+/// The Mac text field's typing, handed to the editor: a Return in a bulleted line continues the list,
+/// and Escape closes the box.
+@MainActor
+final class InkMacTextDelegate: NSObject, NSTextViewDelegate {
+    var changed: ((String) -> Void)?
+    var escape: (() -> Void)?
+
+    func textDidChange(_ notification: Notification) {
+        guard let tv = notification.object as? NSTextView else { return }
+        changed?(tv.string)
+    }
+
+    func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
+        guard text == "\n", range.length == 0, let next = InkBullets.afterReturn(textView.string, at: range.location) else { return true }
+        textView.string = next.text
+        textView.setSelectedRange(NSRange(location: next.cursor, length: 0))
+        changed?(next.text)
+        return false
+    }
+
+    func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
+        escape?()
+        return true
     }
 }
 #endif

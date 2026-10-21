@@ -33,6 +33,10 @@ struct PencilCanvas: UIViewRepresentable {
     let zoomRequest: InkZoomRequest?
     /// Dark mode: the canvas around the pages is a darker shade (it's light grey otherwise).
     var dark = false
+    /// The text box being typed in (a text field on the page).
+    var textEdit: InkTextEdit?
+    /// PencilKit's ruler is shown.
+    var rulerOn = false
 
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
 
@@ -77,12 +81,28 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
         canvas.onLayout = { [weak c, weak canvas] in if let c, let canvas { c.layout(canvas) } }
+        // The ruler is PencilKit's own: it draws along it as you write, and turns with two fingers.
+        editor.nativeRuler = true
 
         let tools = InkToolGesture()
+        // Touches in the text box being typed in are the text field's.
+        tools.delegate = c.textTouches
         tools.onTouch = { [weak c, weak canvas] phase, point in if let c, let canvas { c.toolTouch(phase, at: point, in: canvas) } }
         tools.isEnabled = false
         canvas.addGestureRecognizer(tools)
         c.toolGesture = tools
+
+        // A finger on the protractor moves it, or turns it by its knobs (while a pen is in hand; Trove's
+        // tools do that themselves).
+        let guidePan = UIPanGestureRecognizer(target: c, action: #selector(Coordinator.guidePanned(_:)))
+        guidePan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        guidePan.maximumNumberOfTouches = 1
+        guidePan.delegate = c.guideFilter
+        c.guideFilter.shouldBegin = { [weak c, weak canvas] g in
+            guard let c, let canvas else { return false }
+            return c.guideHit(g.location(in: canvas), in: canvas)
+        }
+        canvas.addGestureRecognizer(guidePan)
 
         let hold = HoldWatcher(target: nil, action: nil)
         hold.cancelsTouchesInView = false
@@ -143,7 +163,9 @@ struct PencilCanvas: UIViewRepresentable {
             c.handledZoom = zoomRequest.id
             c.zoom(zoomRequest.kind, in: canvas)
         }
+        if canvas.isRulerActive != rulerOn { canvas.isRulerActive = rulerOn }
         canvas.bringSubviewToFront(c.overlayView)
+        c.showText(textEdit, in: canvas)
     }
 
     static func pkTool(_ tool: InkTool, color: String, width: Double) -> PKTool {
@@ -241,6 +263,18 @@ struct PencilCanvas: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
         var editor: InkEditorModel
+        /// Keeps touches in the text field away from Trove's tool gesture.
+        let textTouches = InkGestureFilter()
+        /// Lets the protractor's pan start only on the protractor.
+        let guideFilter = InkGestureFilter()
+        /// The text box being typed in, as a text field over the page.
+        private var textView: UITextView?
+        private var textViewFor: String?
+        private let textDelegate = InkTextViewDelegate()
+        /// The font, size and colour the text field was last set to (set again only when they change: it disturbs typing).
+        private var textLook = ""
+        /// The page a protractor drag started on.
+        private var guideSlot: Slot?
         /// Paper, PDF pages and pictures for what's on screen.
         let paperView = InkAreaView()
         /// Text boxes, the lasso, the selection, the eraser and the laser, over the ink.
@@ -294,6 +328,11 @@ struct PencilCanvas: UIViewRepresentable {
             super.init()
             paperView.painter = { [weak self] ctx, area, scale in self?.drawUnder(ctx, area: area, scale: scale) }
             overlayView.painter = { [weak self] ctx, area, scale in self?.drawOver(ctx, area: area, scale: scale) }
+            textTouches.shouldReceive = { touch in !(touch.view is UITextView) }
+            textDelegate.changed = { [weak self] text in
+                guard let self else { return }
+                self.editor.textEdit?.text = text
+            }
         }
 
         private var isEndless: Bool { slots.first?.spec.infinite ?? false }
@@ -508,7 +547,7 @@ struct PencilCanvas: UIViewRepresentable {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
                 return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
-                    || editor.hasBoxesOver(slot.spec.key)
+                    || !o.handles.isEmpty || o.preview != nil || o.protractor != nil || o.ruler != nil || editor.hasBoxesOver(slot.spec.key)
             }
         }
 
@@ -693,6 +732,7 @@ struct PencilCanvas: UIViewRepresentable {
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             resize(scrollView)
+            if let canvas = scrollView as? TroveCanvasView { placeText(in: canvas) }
             let z = Double(scrollView.zoomScale)
             if !updating, abs(z - editor.zoom) > 0.004 { DispatchQueue.main.async { [weak self] in self?.editor.zoom = z } }
         }
@@ -733,6 +773,18 @@ struct PencilCanvas: UIViewRepresentable {
         /// isn't drawn too (that redrew the whole overlay, text boxes and all, on every hover move).
         @objc func hovered(_ g: UIHoverGestureRecognizer) {
             guard let canvas = g.view as? UIScrollView else { return }
+            if editor.protractor != nil {
+                // The protractor reads the angle of wherever the Pencil hovers.
+                let z = canvas.zoomScale
+                let raw = g.location(in: canvas)
+                let at = CGPoint(x: raw.x / z, y: raw.y / z)
+                let ended = g.state == .ended || g.state == .cancelled
+                if let slot = slot(at: at), !ended {
+                    editor.noteReading(InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y), pageKey: slot.spec.key)
+                } else {
+                    editor.noteReading(nil, pageKey: nil)
+                }
+            }
             guard editor.tool.ink == nil else { editor.pencilHover(nil, pageKey: nil, scale: canvas.zoomScale); return }
             var near = true
             if #available(iOS 16.1, *) { near = g.zOffset < 1 }
@@ -749,6 +801,113 @@ struct PencilCanvas: UIViewRepresentable {
             // The overlay redraws when the model says something changed (`overlayRevision`).
         }
         @objc func redoTap() { editor.redo() }
+
+        // MARK: The protractor (moved by a finger while a pen is in hand)
+
+        /// Whether a touch at `point` (in the canvas) is on the protractor and should move it.
+        func guideHit(_ point: CGPoint, in canvas: PKCanvasView) -> Bool {
+            guard editor.tool.ink != nil else { return false }
+            let z = canvas.zoomScale
+            let at = CGPoint(x: point.x / z, y: point.y / z)
+            guard let slot = slot(at: at) else { return false }
+            return editor.guideHit(InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y), pageKey: slot.spec.key, scale: z) != nil
+        }
+
+        @objc func guidePanned(_ g: UIPanGestureRecognizer) {
+            guard let canvas = g.view as? PKCanvasView else { return }
+            let z = canvas.zoomScale
+            let raw = g.location(in: canvas)
+            let at = CGPoint(x: raw.x / z, y: raw.y / z)
+            if g.state == .began { guideSlot = slot(at: at) }
+            guard let slot = guideSlot else { return }
+            let p = InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y)
+            switch g.state {
+            case .began:
+                // The finger moves the protractor: it doesn't scroll, or draw where a finger draws.
+                canvas.isScrollEnabled = false
+                if canvas.drawingGestureRecognizer.isEnabled {
+                    canvas.drawingGestureRecognizer.isEnabled = false
+                    canvas.drawingGestureRecognizer.isEnabled = true
+                }
+                editor.beginGuideDrag(p, pageKey: slot.spec.key, scale: z, pen: false)
+            case .changed:
+                editor.pointerMoved(p)
+            default:
+                editor.pointerUp()
+                canvas.isScrollEnabled = true
+                guideSlot = nil
+            }
+            overlayView.setNeedsDisplay()
+        }
+
+        // MARK: Typing on the page
+
+        /// Shows the text box being typed in as a text field at its place on the page (or takes it away).
+        func showText(_ edit: InkTextEdit?, in canvas: TroveCanvasView) {
+            guard let edit, slots.contains(where: { $0.spec.key == edit.pageKey }) else {
+                if let tv = textView { tv.removeFromSuperview() }
+                textView = nil
+                textViewFor = nil
+                return
+            }
+            if textView == nil || textViewFor != edit.id {
+                textView?.removeFromSuperview()
+                let tv = UITextView()
+                tv.backgroundColor = UIColor.white.withAlphaComponent(0.35)
+                tv.layer.borderColor = UIColor.systemBlue.cgColor
+                tv.layer.borderWidth = 1
+                tv.textContainerInset = .zero
+                tv.textContainer.lineFragmentPadding = 0
+                tv.isScrollEnabled = false
+                tv.delegate = textDelegate
+                tv.text = edit.text
+                canvas.addSubview(tv)
+                textView = tv
+                textViewFor = edit.id
+                textLook = ""
+                DispatchQueue.main.async { tv.becomeFirstResponder() }
+            }
+            if let tv = textView, tv.text != edit.text {
+                tv.text = edit.text
+                textLook = ""
+            }
+            placeText(in: canvas)
+        }
+
+        /// Puts the text field where its box is, at the canvas's zoom, in the box's font, size and colour.
+        func placeText(in canvas: TroveCanvasView) {
+            guard let tv = textView, let edit = editor.textEdit, let slot = slots.first(where: { $0.spec.key == edit.pageKey }) else { return }
+            let z = canvas.zoomScale
+            let size = CGFloat(edit.size) * z
+            let ct = InkRenderer.font(size: Double(size), style: edit.style)
+            let font = UIFont(name: CTFontCopyPostScriptName(ct) as String, size: size) ?? UIFont.systemFont(ofSize: size)
+            let look = "\(edit.id)|\(size)|\(edit.color)|\(edit.style.font.rawValue)|\(edit.style.bold)|\(edit.style.italic)"
+            if look != textLook {
+                textLook = look
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.minimumLineHeight = size * 1.25
+                paragraph.maximumLineHeight = size * 1.25
+                let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: PencilCanvas.uiColor(edit.color), .paragraphStyle: paragraph]
+                tv.typingAttributes = attributes
+                let all = NSRange(location: 0, length: tv.textStorage.length)
+                tv.textStorage.setAttributes(attributes, range: all)
+            }
+            let w = CGFloat(edit.frame.width) * z
+            let fit = tv.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
+            let h = max(size * 1.25, fit.height)
+            let left = (CGFloat(edit.frame.x) + slot.offset.x) * z, top = (CGFloat(edit.frame.y) + slot.offset.y) * z
+            tv.transform = .identity
+            if edit.rotate == 0 {
+                tv.frame = CGRect(x: left, y: top, width: w, height: h)
+            } else {
+                // Turned about the box's centre, like it's drawn.
+                let stored = CGFloat(edit.frame.height) * z
+                tv.bounds = CGRect(x: 0, y: 0, width: w, height: max(h, stored))
+                tv.center = CGPoint(x: left + w / 2, y: top + stored / 2)
+                tv.transform = CGAffineTransform(rotationAngle: CGFloat(edit.rotate))
+            }
+            canvas.bringSubviewToFront(tv)
+        }
 
         @objc func swiped(_ g: UISwipeGestureRecognizer) {
             guard layoutMode == .flip, let canvas = g.view as? UIScrollView else { return }
@@ -822,6 +981,36 @@ final class InkAreaView: UIView {
         ctx.scaleBy(x: z, y: z)
         let area = InkGeometry.Rect(x: Double(frame.minX) / z, y: Double(frame.minY) / z, width: Double(frame.width) / z, height: Double(frame.height) / z)
         painter?(ctx, area, z)
+    }
+}
+
+/// A gesture delegate made of closures: which touches a gesture sees, and whether it may start.
+@MainActor
+final class InkGestureFilter: NSObject, UIGestureRecognizerDelegate {
+    var shouldReceive: ((UITouch) -> Bool)?
+    var shouldBegin: ((UIGestureRecognizer) -> Bool)?
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool { shouldReceive?(touch) ?? true }
+    func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { shouldBegin?(g) ?? true }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        // Trove's tool gesture keeps its touch to itself (as without a delegate); the protractor's pan runs beside the canvas's own.
+        shouldBegin != nil
+    }
+}
+
+/// The text field's typing, handed to the editor; a Return in a bulleted line continues the list.
+@MainActor
+final class InkTextViewDelegate: NSObject, UITextViewDelegate {
+    var changed: ((String) -> Void)?
+
+    func textViewDidChange(_ textView: UITextView) { changed?(textView.text) }
+
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        guard text == "\n", range.length == 0, let next = InkBullets.afterReturn(textView.text, at: range.location) else { return true }
+        textView.text = next.text
+        textView.selectedRange = NSRange(location: next.cursor, length: 0)
+        changed?(next.text)
+        return false
     }
 }
 

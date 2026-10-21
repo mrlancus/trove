@@ -101,6 +101,40 @@ extension AppModel {
         }
     }
 
+    /// Ask AI on a lasso selection in the drawing editor: with Apple Intelligence, the on-device model
+    /// works on the handwriting read off it (`text`); otherwise the relay's cloud AI gets the picture
+    /// (`image`, PNG) when it's on. Nil (with a toast) when neither can.
+    func runInkAI(_ action: InkAIAction, image: Data, text: String) async -> NoteAI.Result? {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if OnDeviceAI.isAvailable, !words.isEmpty {
+            do {
+                if action == .flashcards {
+                    if let cards = try await OnDeviceAI.flashcards(from: words) {
+                        return NoteAI.Result(text: "", cards: cards, place: "device", model: "")
+                    }
+                } else if let out = try await OnDeviceAI.rewrite(words, instruction: action.instruction) {
+                    return NoteAI.Result(text: out, cards: [], place: "device", model: "")
+                }
+            } catch {
+                // The on-device model declined or failed: try the cloud below if it's on.
+            }
+        }
+        guard cloudAIStatus?.enabled == true, let relay = vault.relayClient else {
+            toast = words.isEmpty ? "No handwriting found to ask about" : "AI isn't available on this device"
+            return nil
+        }
+        do {
+            let out = try await relay.action(action.rawValue, image: image)
+            Task { await refreshAIStatus() }
+            let cards = out.cards.map { card in (front: card.front, back: card.back) }
+            return NoteAI.Result(text: out.text, cards: cards, place: "cloud", model: out.model ?? "")
+        } catch {
+            toast = "Cloud AI didn't answer. It may be off, or this month's allowance is used up."
+            await refreshAIStatus()
+            return nil
+        }
+    }
+
     /// Saves flashcards as a new note linked to `item`, and opens it.
     func saveFlashcards(_ result: NoteAI.Result, from item: Item) async {
         guard let library, !result.cards.isEmpty else { return }

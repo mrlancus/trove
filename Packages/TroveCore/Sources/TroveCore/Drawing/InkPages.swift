@@ -348,17 +348,24 @@ extension Library {
         for item in items { await refreshSketchText(item) }
     }
 
-    /// Some fields of an ink record, to put back on undo.
+    /// Some fields of an ink record, to put back on undo. A field it doesn't have comes back as its
+    /// "off" value (no turn, no group, upright text…), so undo takes back a style that was added.
     public func inkFields(_ id: String, _ names: [String]) async -> [String: JSONValue] {
         guard let r = await engine.record(id) else { return [:] }
         var out: [String: JSONValue] = [:]
         for name in names {
             if let v = r[name] { out[name] = v }
             // Points not there are put back empty, so undo can't leave newer compact points in front.
-            else if name == InkStroke.Field.points || name == InkStroke.Field.points2 { out[name] = .string("") }
+            else if let off = Self.inkOffValues[name] { out[name] = off }
         }
         return out
     }
+
+    static let inkOffValues: [String: JSONValue] = [
+        InkStroke.Field.points: .string(""), InkStroke.Field.points2: .string(""), InkStroke.Field.group: .string(""),
+        InkStroke.Field.shape: .null, InkStroke.Field.nib: .null, InkElement.Field.rotate: .number(0), InkElement.Field.flip: .bool(false),
+        InkElement.Field.font: .string("sans"), InkElement.Field.bold: .bool(false), InkElement.Field.italic: .bool(false),
+    ]
 
     public func setInkFields(_ id: String, kind: String, _ fields: [String: JSONValue]) async {
         guard kind == "stroke" || kind == "element", !fields.isEmpty else { return }
