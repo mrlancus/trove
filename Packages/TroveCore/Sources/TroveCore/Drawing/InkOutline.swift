@@ -121,7 +121,7 @@ public enum InkOutline {
 
     /// Arrowheads on a `line` or `polyline` shape with `arrow`: triangles [tip, left, right].
     public static func arrowHeads(tool: InkTool, width: Double, points pts: [InkPoint], shape: String?, arrow: String?) -> [[InkPoint]] {
-        guard let arrow, shape == "line" || shape == "polyline", pts.count >= 2 else { return [] }
+        guard let arrow, shape == "line" || shape == "polyline" || shape == "curve", pts.count >= 2 else { return [] }
         let w = lineWidth(tool: tool, width: width, points: pts), length = 4 * w + 6, half = length * 0.45
         func head(_ tip: InkPoint, _ from: InkPoint) -> [InkPoint]? {
             let dx = tip.x - from.x, dy = tip.y - from.y, d = hypot(dx, dy)
