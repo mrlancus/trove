@@ -53,6 +53,14 @@ public struct Journal: Sendable {
         return op
     }
 
+    /// Numbers new ops after `seq` (this device's ops up to it are already out there). Only while
+    /// nothing is pending, since pending ops can't be renumbered here.
+    public mutating func skip(past seq: Int) {
+        guard pending.isEmpty, seq >= state.nextSeq else { return }
+        state.nextSeq = seq + 1
+        state.unflushedFrom = state.nextSeq
+    }
+
     /// Cuts pending ops into segments (each ≤ 512 KiB) and clears them.
     public mutating func takeSegments() throws -> [Segment] {
         guard !pending.isEmpty else { return [] }

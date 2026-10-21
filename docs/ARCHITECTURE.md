@@ -43,7 +43,8 @@
 | File previews: GoodNotes, Word, Excel, PowerPoint, iWork, CSV | `web/public/core/files.js` |
 | Viewer (pdf.js in `vendor/pdfjs-4.10.38`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
-| Local copy in IndexedDB: append-only op chunks, sealed at rest (PROTOCOL.md §7) | `web/public/core/localstore.js`, `db.js` |
+| Local copy in IndexedDB: append-only op chunks, sealed at rest, plus the checkpoint it starts from (PROTOCOL.md §7) | `web/public/core/localstore.js`, `db.js` |
+| Checkpoints: materialised records a new device loads instead of every op (PROTOCOL.md §3) | `web/public/core/checkpoint.js` (Swift: `Checkpoint.swift`) |
 | Offline + install: service worker, manifest, registration; lazily loaded modules | `web/public/sw.js`, `manifest.webmanifest`, `offline.js`, `lazy.js` |
 | UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
 | Settings → Bridges, link previews for saved links | `web/public/bridges.js` |

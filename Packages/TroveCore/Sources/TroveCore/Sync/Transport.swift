@@ -14,6 +14,27 @@ public protocol SyncTransport: Sendable {
     func fetchBlob(_ id: String) async throws -> Data
 }
 
+/// A checkpoint somewhere (PROTOCOL.md §3 "Checkpoints"), without its contents.
+public struct CheckpointInfo: Codable, Sendable, Equatable {
+    public var id: String
+    public var device: String
+    public var size: Int
+    /// Unix milliseconds.
+    public var createdAt: Double
+
+    public init(id: String, device: String, size: Int, createdAt: Double) {
+        self.id = id; self.device = device; self.size = size; self.createdAt = createdAt
+    }
+}
+
+/// A transport that also keeps checkpoints (the relay and the iCloud folder).
+public protocol CheckpointTransport: SyncTransport {
+    /// Newest first.
+    func listCheckpoints() async throws -> [CheckpointInfo]
+    func fetchCheckpoint(_ id: String) async throws -> Data
+    func pushCheckpoint(_ id: String, data: Data) async throws
+}
+
 public enum TransportError: Error, Equatable {
     case notFound
     case conflict(String)
