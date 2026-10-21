@@ -41,6 +41,7 @@
 | Folders and auto-filing (port of `Organizer.swift`) | `web/public/core/organize.js` |
 | Wikilinks, backlinks, mentions, related (port of `Links.swift`) | `web/public/core/links.js` |
 | File previews: GoodNotes, Word, Excel, PowerPoint, iWork, CSV | `web/public/core/files.js` |
+| Ink editing: turn/flip, shape picker, handles, connectors, ruler/protractor, groups, elements library (port of `InkEditing.swift`, `InkStickers.swift`) | `web/public/core/inkedit.js`; editor `draw.js` + `drawedit.js` |
 | Viewer (pdf.js in `vendor/pdfjs-4.10.38`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
 | Local copy in IndexedDB: append-only op chunks, sealed at rest, plus the checkpoint it starts from (PROTOCOL.md §7) | `web/public/core/localstore.js`, `db.js` |
@@ -128,6 +129,8 @@
 | Obsidian / Apple Notes / screenshots | `App/Sources/Integrations/*` |
 | Folders line, files + versions, history, connections | `App/Sources/Views/ItemExtras.swift` |
 | Connections graph | `App/Sources/Views/GraphView.swift` |
+| Drawing editor: model (tools, lasso actions, shapes, guides, text, library) / toolbar and panels / iPad canvas (PencilKit) / Mac canvas | `App/Sources/Drawing/InkEditorModel.swift` / `InkEditorView.swift`, `InkEditingViews.swift`, `InkEditorPanels.swift` / `PencilCanvas.swift` / `MouseInkCanvas.swift` |
+| Ink maths shared with the website: geometry, outlines, shapes, editing, elements library, vault ops | `Packages/TroveCore/Sources/TroveCore/Drawing/` (`InkEditing.swift`, `InkStickers.swift`, `InkArrange.swift`, …) |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
 | Share sheet | `App/ShareExtension/ShareViewController.swift` (seals via `CaptureDrop`) |
 | Widgets + Control Center | `App/Widgets/TroveWidgets.swift` |

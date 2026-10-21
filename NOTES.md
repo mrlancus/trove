@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights) | ✅ Done | 82 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights) | ✅ Done | 137 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -14,7 +14,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 3cb7fcd, sketching/clipboard places/Paste round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
-| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | 5 Swift + 3 JS unit tests on `ink-cases.json` + `ink-geometry.json`, 2 Chromium e2e |
+| **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search, editing (S3: lasso actions, shape tool, connectors, ruler/protractor, text on the page, elements library) | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | Swift + JS unit tests on `ink-cases.json`, `ink-geometry.json`, `ink-editing.json`; 3 Chromium e2e (incl. `editing.e2e.mjs`) |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version 28f6c644, at c5eb332, after the performance/GoodNotes-editing round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
@@ -131,16 +131,49 @@ user says "publish" (`cd server && npx wrangler deploy`).
     stroke stamps rounded to 1/20 pt (a reload no longer rebuilds the PencilKit drawing), page panel
     redraws only the current page, inked-file previews wait behind the editor. `strokes(on:)` sorts
     on precomputed times (3,000 strokes: 84 → 32 ms debug, `InkSafetyTests`).
-- **Not started (lost):** editing (S3) and PDFs (S5) workers were started but left no commits or
-  `wip/*` branch before the container restarted; start them fresh. (Back up worker commits to `wip/*`
-  branches on GitHub so a lost container doesn't lose them.)
+  - **Editing faster than GoodNotes** (ROADMAP S3; PROTOCOL.md §10 "Lasso", "Arranging", "Groups",
+    "Shape picker", "Handles", "Connectors", "Ruler and protractor", "Straighten", text style,
+    "The elements library"): one core on both sides (`core/inkedit.js` = `InkEditing.swift`,
+    `InkStickers.swift`, `InkArrange.swift`), checked by `Fixtures/ink-editing.json`.
+    - Lasso: turning knob above the box (snaps to 15°, shows the angle), turn a quarter, flip both
+      ways, front/back, group/ungroup (groups are picked as one), straighten, copy as image, convert
+      to text (apps: Vision on the device; website: the relay's cloud AI, hidden while it's off),
+      Ask AI (summarise, explain, solve, make flashcards; apps use Apple Intelligence on the
+      handwriting when the device has it, else cloud AI on a picture), save as element; "Picks"
+      everything / ink / text / pictures.
+    - Shape tool: line, arrow, connector, rectangle, ellipse, circle, triangle, diamond, star,
+      heart, speech bubble (fill, dashes, arrows from the line options). A lone shape shows
+      handles: drag a line's middle to bend it into a curve, drag corners. Connectors stay joined
+      when what they join moves, turns or is reshaped.
+    - Ruler (720 pt, angle on it) and protractor (angle of the pen); a pen put down on an edge or
+      the arc draws along it. iPad uses PencilKit's own ruler (draws along it live, two fingers
+      turn it); the protractor is Trove's there, moved with a finger, turned by its knobs.
+    - Text boxes are typed on the page (no more sheet): font (sans, serif, mono, rounded), bold,
+      italic, bullets (Return continues a list), size and colour; turned boxes stay turned.
+    - Elements library: built-in arrows, checkboxes, dividers, star, heart and planner tags, plus
+      your own (`sticker` records, synced, in folders); placing one adds it as one group.
+    - Circle-to-select was removed everywhere (the user doesn't want it). Scribble-to-erase stays opt-in.
+    - Tests: web unit + `test/editing.e2e.mjs` (Chromium: shapes, connector following a moved
+      shape, bent line, turn/front/group, copy as image, text font/bold, lasso by type, ruler line,
+      save and place elements, all checked on a second device); Swift `InkEditingTests` (fixture +
+      library edits). **The app code was written without Xcode**: see CI for compile errors.
+    - **Check on the iPad** (Air M3 + Pencil Pro): the lasso's knob and handles with the Pencil;
+      Shape tool drags; PencilKit's ruler appears from the ruler button and lines snap to it; the
+      protractor moves with a finger while the Pencil draws, and arcs drawn on it snap; the text
+      field sits exactly over the box at any zoom and the keyboard doesn't hide it; Ask AI with
+      Apple Intelligence (iPadOS 26); Copy as image pastes into Notes; the Elements popover.
+    - **Ask the user:** should Trove's own ruler replace PencilKit's on the iPad (same look as the
+      Mac, but drawn along only after the stroke ends)? Should more built-in elements ship (which)?
+- **Not started (lost):** PDFs (S5) worker left no commits; start it fresh. (Back up worker commits
+  to `wip/*` branches on GitHub so a lost container doesn't lose them.)
 - **Published** (the user allowed it): `BRIDGE_KEY` set, relay + website deployed (version
   3f05d8e6, at 2f8bc9c). Against production: relay e2e 5/5 and the browser test that creates a
   vault pass; "set up with a code… live updates" failed once (it passes locally; likely live-update
   timing over the network). Not re-run: the session's permission rules block more test vaults on
   production. Check it next time a run against production is allowed.
-- **Next**: notebooks (S4; design direction ❓8 still open), wire AI into the lasso, handwriting and
-  audio (S6, S7), then the rest of the roadmap (§7).
+- **Next**: notebooks (S4; design direction ❓8 still open), PDFs (S5), handwriting and audio (S6,
+  S7; a study view for flashcards), then the rest of the roadmap (§7). The website/relay changes of
+  the editing round go live when the user says "publish".
 
 ## Round before (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
 - **Why drawing lagged** (found, not guessed): every stroke reloaded the drawing three times, rebuilt
