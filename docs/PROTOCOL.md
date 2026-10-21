@@ -135,7 +135,7 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
 | `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
 | `DELETE /vaults/:v/inbox/:id` | device | ack after import → `204` |
-| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last}`, `{"type":"inbox",cursor,id}`, `{"type":"price",id,itemId,price,previous,currency}` |
+| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last,count}` (one per device per burst of uploads: sent after 300 ms without another, at most 1.5 s after the first; `cursor` is the newest, `first`/`last` span the burst), `{"type":"inbox",cursor,id}`, `{"type":"price",id,itemId,price,previous,currency}` |
 | `GET /vaults/:v/watches` | device | → `{watches:[Watch]}` (§5) |
 | `PUT /vaults/:v/watches/:id` | device | `{url, itemId?}` → `201`/`200` `Watch` (§5) |
 | `DELETE /vaults/:v/watches/:id` | device | → `204` |
@@ -307,6 +307,22 @@ revoked the same way.
 - **Journal:** it writes the same ops and segments as the apps (§3). Its sequence numbers live in
   IndexedDB. If its own journal on the relay is already ahead (a stale tab or restored storage), it
   renumbers its unpushed ops past it before uploading.
+- **At rest** (`core/localstore.js`): the decrypted copy kept in IndexedDB (store `trove`/`kv`) is
+  sealed with a per-browser AES-GCM-256 key, `localKey`, made with `generateKey(…, false, …)`
+  (non-extractable) and kept next to the vault keys. A sealed value is
+  `{sealed: 1, iv: 12 random bytes, data: AES-GCM(utf8(JSON)), size: JSON length}` with additional
+  data `trove/local/<slot>`, where slot is `journal`, `applied`, `cursor` or `ops`. Ops are stored
+  append only: each save writes the ops new since the last one as a sealed chunk `ops.<n>` (a JSON
+  array of ops); `opChunks` (plain: `{v: 1, next, chunks: [{n, count, bytes}]}`, no content) lists
+  them in order. The last two chunks are merged while the older is at most twice the newer and the
+  two stay under 4 MB of JSON, so each op is rewritten O(log n) times. The index is written after
+  the chunk and old chunks are deleted after the index, so a crash leaves at worst an unlisted chunk.
+  Readers accept the older layout (plain `journal`/`applied`/`cursor` and every op under `ops`) and
+  rewrite it sealed on open. If anything can't be decrypted (the key was lost), the copy opens empty
+  with cursor 0 and pulls everything again; unsent edits survive when the journal is readable.
+  `localOwner` holds the id of the copy that last opened the storage; an older copy (another tab)
+  stops writing. This keeps vault content out of plain IndexedDB files; it does not protect against
+  someone with the whole browser profile, since the key is stored there too.
 - **Same results everywhere:** `web/test` and `WebInteropTests.swift` check journals written by
   each side materialise to identical records on the other.
 - **Headers:** static assets carry a strict CSP (`web/public/_headers`): scripts and connections to

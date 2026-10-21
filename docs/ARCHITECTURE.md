@@ -41,11 +41,14 @@
 | Folders and auto-filing (port of `Organizer.swift`) | `web/public/core/organize.js` |
 | Wikilinks, backlinks, mentions, related (port of `Links.swift`) | `web/public/core/links.js` |
 | File previews: GoodNotes, Word, Excel, PowerPoint, iWork, CSV | `web/public/core/files.js` |
-| Viewer (pdf.js in `vendor/pdfjs`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
+| Viewer (pdf.js in `vendor/pdfjs-4.10.38`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
+| Local copy in IndexedDB: append-only op chunks, sealed at rest (PROTOCOL.md §7) | `web/public/core/localstore.js`, `db.js` |
+| Offline + install: service worker, manifest, registration; lazily loaded modules | `web/public/sw.js`, `manifest.webmanifest`, `offline.js`, `lazy.js` |
 | UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
 | Settings → Bridges, link previews for saved links | `web/public/bridges.js` |
-| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `bridges.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs`, `bridges.e2e.mjs` |
+| Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `bridges.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs`, `draw.e2e.mjs`, `offline.e2e.mjs`, `bridges.e2e.mjs` |
+| Benchmarks with a regression gate (CI: `.github/workflows/tests.yml`) | `web/test/bench.mjs`, `bench-baseline.json`; Swift: `TroveCoreTests/Benchmarks.swift` (`TROVE_BENCH=1`) |
 
 ## Bridges and Trove for Claude
 | Concern | File |

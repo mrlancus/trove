@@ -5,7 +5,7 @@ export const BASE = process.env.TROVE_RELAY_URL ?? "http://127.0.0.1:8787";
 
 export function memoryStorage() {
   const m = new Map();
-  return { map: m, get: async (k) => structuredClone(m.get(k)), set: async (k, v) => { m.set(k, structuredClone(v)); }, clear: async () => m.clear() };
+  return { map: m, get: async (k) => structuredClone(m.get(k)), set: async (k, v) => { m.set(k, structuredClone(v)); }, delete: async (k) => { m.delete(k); }, clear: async () => m.clear() };
 }
 
 /** Creates a vault (as the "Mac") and returns its token plus a function that mints setup codes. */

@@ -24,7 +24,11 @@ export function b64uEncode(bytes) {
 
 export function b64uDecode(text) {
   const clean = text.trim().replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(atob(clean + "===".slice((clean.length + 3) % 4)), (c) => c.charCodeAt(0));
+  const binary = atob(clean + "===".slice((clean.length + 3) % 4));
+  // A plain loop: Uint8Array.from(string, fn) was the slow part of decoding strokes.
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
 }
 
 export function hex(bytes) {

@@ -1,0 +1,24 @@
+{
+  "scale": 1,
+  "sizes": {
+    "items": 50000,
+    "clips": 50000,
+    "pages": 500,
+    "strokesPerPage": 200
+  },
+  "node": "v22.22.0",
+  "metrics": {
+    "materialise": 1745.6351990000003,
+    "vaultItems": 39.30652299999929,
+    "vaultClips": 22.146960000000036,
+    "saveAll": 1487.9806240000034,
+    "saveOneEdit": 1.3319809999993595,
+    "openFromStorage": 1469.1089950000023,
+    "decodeAllStrokes": 1817.8224130000017,
+    "notebookPage": 24.120285000000877,
+    "eraserHits": 71.3031919999994,
+    "partialErase": 22.389346999996633
+  },
+  "calibration": 262.33698200000003,
+  "ops": 233334
+}
