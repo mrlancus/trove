@@ -81,7 +81,7 @@ enum InkEraserMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .stroke: "Whole strokes"
+        case .stroke: "Strokes"
         case .partial: "Partial"
         case .precise: "Precise"
         }
@@ -175,6 +175,8 @@ final class InkEditorModel {
     private(set) var overlayRevision = 0
     /// Bumped when the pages change (added, moved, new paper).
     private(set) var pagesRevision = 0
+    /// Bumped when a tool's colour or size changes (they're kept in UserDefaults, which isn't observed).
+    private(set) var styleRevision = 0
 
     var selection: InkSelection? { didSet { overlayRevision += 1 } }
     private(set) var dragTransform: InkGeometry.Transform?
@@ -213,6 +215,10 @@ final class InkEditorModel {
     @ObservationIgnored private var unsavedDeletes: Set<String> = []
     @ObservationIgnored private weak var app: AppModel?
     private var pagesSig = ""
+    /// The item's ink as last loaded (count and newest change), so a reload with nothing new is skipped.
+    @ObservationIgnored private var inkSig = ""
+    /// Decoded strokes by id and version: a reload decodes only what changed.
+    @ObservationIgnored private var lineCache: [String: (hlc: String, line: InkLine)] = [:]
 
     init(target: InkTarget, app: AppModel) {
         self.target = target
@@ -239,8 +245,12 @@ final class InkEditorModel {
 
     // MARK: Colour and size per tool
 
-    func color(for t: InkEditorTool) -> String { UserDefaults.standard.string(forKey: "ink.color.\(t.rawValue)") ?? t.defaultColor }
+    func color(for t: InkEditorTool) -> String {
+        _ = styleRevision
+        return UserDefaults.standard.string(forKey: "ink.color.\(t.rawValue)") ?? t.defaultColor
+    }
     func width(for t: InkEditorTool) -> Double {
+        _ = styleRevision
         let w = UserDefaults.standard.double(forKey: "ink.width.\(widthKey(t))")
         return w > 0 ? w : (widthKey(t) == "eraserPrecise" ? 3 : t.defaultWidth)
     }
@@ -252,12 +262,12 @@ final class InkEditorModel {
             if let selection, tool == .lasso, selection.count > 0 { recolourSelection(newValue); return }
             if !tool.hasColor { tool = .pen }
             UserDefaults.standard.set(newValue, forKey: "ink.color.\(tool.rawValue)")
-            revision += 1
+            styleRevision += 1
         }
     }
     var width: Double {
         get { width(for: tool) }
-        set { UserDefaults.standard.set(newValue, forKey: "ink.width.\(widthKey(tool))"); revision += 1 }
+        set { UserDefaults.standard.set(newValue, forKey: "ink.width.\(widthKey(tool))"); styleRevision += 1 }
     }
 
     func select(_ t: InkEditorTool) {
@@ -297,6 +307,7 @@ final class InkEditorModel {
     /// Picks up ink and pages from other devices (and our own writes).
     func reloadInk() async {
         guard let library = app?.library else { return }
+        let sig = await library.inkSignature(target.itemId)
         if isSketch, let item = await library.item(target.itemId) {
             let sig = Self.signature(item)
             if sig != pagesSig {
@@ -307,12 +318,22 @@ final class InkEditorModel {
                 pagesRevision += 1
             }
         }
+        // Nothing new since the last load (our own writes are already shown as made).
+        if sig == inkSig, loaded { return }
+        inkSig = sig
         let strokes = await library.strokes(on: target.itemId, layer: target.layer)
         let elements = await library.elements(on: target.itemId, layer: target.layer)
         var next: [String: InkContent] = [:]
         let stored = Set(strokes.map(\.id))
         for id in unsavedStrokes.keys where stored.contains(id) { unsavedStrokes[id] = nil }
-        for s in strokes where !unsavedDeletes.contains(s.id) { next[s.pageKey, default: InkContent()].strokes.append(InkLine(s)) }
+        var cache: [String: (hlc: String, line: InkLine)] = [:]
+        for s in strokes where !unsavedDeletes.contains(s.id) {
+            let hlc = s.record.updatedHLC
+            let line = lineCache[s.id].flatMap { $0.hlc == hlc ? $0.line : nil } ?? InkLine(s)
+            cache[s.id] = (hlc, line)
+            next[s.pageKey, default: InkContent()].strokes.append(line)
+        }
+        lineCache = cache
         for (_, s) in unsavedStrokes.sorted(by: { $0.key < $1.key }) where !unsavedDeletes.contains(s.line.id) {
             next[s.key, default: InkContent()].strokes.append(s.line)
         }
@@ -381,7 +402,6 @@ final class InkEditorModel {
             Task {
                 await library.deleteStrokes(gone)
                 unsavedDeletes.subtract(gone)
-                await reloadInk()
                 app?.inkChanged()
             }
             return true
@@ -398,8 +418,8 @@ final class InkEditorModel {
         let itemId = target.itemId, layer = target.layer
         Task {
             await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: tool, color: color, width: width, points: pts, shape: shape)
+            // What's stored is what's shown: no reload (it would decode every stroke again).
             unsavedStrokes[id] = nil
-            await reloadInk()
             app?.inkChanged()
         }
         return snapped != nil
@@ -558,6 +578,7 @@ final class InkEditorModel {
 
     private func eraseTo(_ p: InkPoint) {
         eraserAt = p
+        var inkTouched = false
         let only: Set<InkTool>? = highlighterOnly ? [.highlighter] : nil
         switch gesture {
         case .erase(let key, let last, var removed):
@@ -567,6 +588,7 @@ final class InkEditorModel {
             }.map(\.id)
             if !gone.isEmpty, let library = app?.library {
                 content[key]?.strokes.removeAll { gone.contains($0.id) }
+                inkTouched = true
                 removed.formUnion(gone)
                 unsavedDeletes.formUnion(gone)
                 Task {
@@ -586,14 +608,13 @@ final class InkEditorModel {
                     changed = true
                     return cut
                 }
-                if changed { erasePreview[line.id] = next }
+                if changed { erasePreview[line.id] = next; inkTouched = true }
             }
             gesture = .partial(key: key, last: p)
         default:
             break
         }
-        edited = true
-        revision += 1
+        if inkTouched { edited = true; revision += 1 }
         overlayRevision += 1
     }
 
@@ -993,6 +1014,6 @@ final class InkEditorModel {
             try? await library.setThumbnail(target.itemId, jpeg: jpeg)
         }
         await Handwriting.read(target.itemId, library: library)
-        app?.inkChanged()
+        app?.inkChanged(now: true)
     }
 }

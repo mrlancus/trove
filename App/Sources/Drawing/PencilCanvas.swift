@@ -93,9 +93,11 @@ struct PencilCanvas: UIViewRepresentable {
         defer { c.updating = false }
         c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)
         c.apply(version: revision, to: canvas)
-        c.overlayView.setNeedsDisplay()
+        if overlayRevision != c.shownOverlay { c.shownOverlay = overlayRevision; c.overlayView.setNeedsDisplay() }
         let pen = tool.ink != nil
-        if let ink = tool.ink { canvas.tool = Self.pkTool(ink, color: color, width: width) }
+        // Setting PencilKit's tool resets its state: only when it really changes.
+        let toolKey = "\(tool.rawValue)|\(color)|\(width)"
+        if let ink = tool.ink, toolKey != c.shownTool { c.shownTool = toolKey; canvas.tool = Self.pkTool(ink, color: color, width: width) }
         canvas.drawingGestureRecognizer.isEnabled = pen
         c.toolGesture?.isEnabled = !pen
         // Where a finger draws (iPhone), it also works the lasso and eraser; two fingers scroll.
@@ -180,9 +182,10 @@ struct PencilCanvas: UIViewRepresentable {
 
     /// PencilKit strokes have no ids, so they're matched by their points.
     static func signature(_ s: PKStroke) -> String {
-        let pts = Array(s.path)
-        let first = pts.first?.location ?? .zero, last = pts.last?.location ?? .zero
-        return "\(pts.count)-\(Int(first.x * 10)),\(Int(first.y * 10))-\(Int(last.x * 10)),\(Int(last.y * 10))"
+        // Without copying the path: this runs for every stroke on each update.
+        let path = s.path, n = path.count
+        let first = n > 0 ? path[0].location : .zero, last = n > 0 ? path[n - 1].location : .zero
+        return "\(n)-\(Int(first.x * 10)),\(Int(first.y * 10))-\(Int(last.x * 10)),\(Int(last.y * 10))"
     }
 
     // MARK: Coordinator
@@ -208,6 +211,13 @@ struct PencilCanvas: UIViewRepresentable {
         var swipes: [UISwipeGestureRecognizer] = []
         var handledZoom: UUID?
         var updating = false
+        var shownOverlay = -1
+        var shownTool = ""
+        /// How each stroke on the canvas looked when put there (`InkLine.stamp`), so an update only
+        /// replaces what changed instead of rebuilding the whole drawing (which redraws every tile).
+        private var shownStamps: [String: String] = [:]
+        /// Strokes whose rough line was replaced in the model (a snapped shape): redraw them.
+        private var stale: Set<String> = []
         private(set) var slots: [Slot] = []
         private var layoutMode: InkPageLayout = .vertical
         private var shownSig = ""
@@ -276,6 +286,7 @@ struct PencilCanvas: UIViewRepresentable {
                 }
                 slots = out
                 ids = [:]
+                shownStamps = [:]
                 shownVersion = -1
                 bitmaps = bitmaps.filter { k, _ in pages.contains { $0.key == k } }
                 if previous.isEmpty || isEndless != wasEndless { fittedWidth = 0 }
@@ -365,8 +376,12 @@ struct PencilCanvas: UIViewRepresentable {
             for v in [paperView, overlayView] {
                 v.frame = visible
                 v.zoom = canvas.zoomScale
-                v.setNeedsDisplay()
             }
+            paperView.setNeedsDisplay()
+            // The overlay is usually empty (no text boxes, lasso or eraser): then it needn't redraw.
+            let z0 = max(0.01, canvas.zoomScale)
+            let area = InkGeometry.Rect(x: visible.minX / z0, y: visible.minY / z0, width: visible.width / z0, height: visible.height / z0)
+            if overlayHasContent(area) || overlayView.drewSomething { overlayView.setNeedsDisplay() }
             let z = canvas.zoomScale
             if isEndless, let slot = slots.first {
                 editor.visibleCenter = InkPoint(x: visible.midX / z - slot.offset.x, y: visible.midY / z - slot.offset.y)
@@ -407,11 +422,12 @@ struct PencilCanvas: UIViewRepresentable {
                 let o = slot.offset
                 ctx.saveGState()
                 if !slot.spec.infinite {
-                    // A soft shadow under the page.
-                    ctx.setShadow(offset: CGSize(width: 0, height: 1.5 / scale), blur: 8 / scale, color: UIColor.black.withAlphaComponent(0.18).cgColor)
+                    // A thin edge under the page: a blurred shadow is redrawn on every scroll frame and costs battery.
+                    let edge = 1 / scale
+                    ctx.setFillColor(UIColor.black.withAlphaComponent(0.08).cgColor)
+                    ctx.fill(slot.frame.insetBy(dx: -edge, dy: -edge).offsetBy(dx: 0, dy: edge))
                     ctx.setFillColor(UIColor.white.cgColor)
                     ctx.fill(slot.frame)
-                    ctx.setShadow(offset: .zero, blur: 0)
                     ctx.clip(to: slot.frame)
                 }
                 ctx.translateBy(x: o.x, y: o.y)
@@ -430,7 +446,16 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
 
+        private func overlayHasContent(_ area: InkGeometry.Rect) -> Bool {
+            visibleSlots(area).contains { slot in
+                let o = editor.overlay(slot.spec.key)
+                return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil
+                    || editor.display(slot.spec.key).elements.contains { $0.kind == .text }
+            }
+        }
+
         private func drawOver(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
+            overlayView.drewSomething = overlayHasContent(area)
             for slot in visibleSlots(area) {
                 let o = slot.offset
                 ctx.saveGState()
@@ -467,30 +492,58 @@ struct PencilCanvas: UIViewRepresentable {
 
         // MARK: Ink
 
-        /// Shows every page's strokes, unless the canvas already has this version of them.
+        /// Shows every page's strokes, unless the canvas already has this version of them. Strokes
+        /// that look the same are kept as they are; the drawing is replaced only when something differs.
         func apply(version: Int, to canvas: PKCanvasView) {
-            paperView.setNeedsDisplay()
             guard version != shownVersion else { return }
             if drawing { pending = true; return }
+            paperView.setNeedsDisplay()
+            var want: [(id: String, stamp: String, line: InkLine, offset: CGPoint)] = []
+            for slot in slots {
+                for line in editor.display(slot.spec.key).strokes where !line.points.isEmpty { want.append((line.id, line.stamp, line, slot.offset)) }
+            }
+            let modelIds = Set(want.map(\.id))
+            let current = canvas.drawing.strokes
+            var onCanvas: [String: PKStroke] = [:]
+            var order: [String] = []
+            var kept: [PKStroke] = []
+            for s in current {
+                let sig = PencilCanvas.signature(s)
+                guard let id = ids[sig] else { continue }
+                if modelIds.contains(id) { onCanvas[id] = s; order.append(id) }
+                // Just drawn and still on its way to the model: keep it.
+                else if handingOver.contains(id) { kept.append(s) }
+            }
+            func unchanged(_ w: (id: String, stamp: String, line: InkLine, offset: CGPoint)) -> Bool {
+                guard onCanvas[w.id] != nil, !stale.contains(w.id) else { return false }
+                // A stroke PencilKit drew itself: it is what the model has.
+                return (shownStamps[w.id] ?? w.stamp) == w.stamp
+            }
+            if order == want.map(\.id), kept.count == current.count - order.count, want.allSatisfy(unchanged) {
+                for w in want { shownStamps[w.id] = w.stamp }
+                shownVersion = version
+                return
+            }
             applying = true
             var pk: [PKStroke] = []
             var map: [String: String] = [:]
-            var modelIds: Set<String> = []
-            for slot in slots {
-                for line in editor.display(slot.spec.key).strokes {
-                    modelIds.insert(line.id)
-                    guard let s = PencilCanvas.pkStroke(line, offset: slot.offset) else { continue }
-                    pk.append(s)
-                    map[PencilCanvas.signature(s)] = line.id
-                }
+            var stamps: [String: String] = [:]
+            for w in want {
+                let stroke = unchanged(w) ? onCanvas[w.id] : PencilCanvas.pkStroke(w.line, offset: w.offset)
+                guard let stroke else { continue }
+                pk.append(stroke)
+                map[PencilCanvas.signature(stroke)] = w.id
+                stamps[w.id] = w.stamp
             }
-            // Keep what was just drawn and is still on its way to the model.
-            for s in canvas.drawing.strokes {
+            for s in kept {
                 let sig = PencilCanvas.signature(s)
-                if let id = ids[sig], handingOver.contains(id), !modelIds.contains(id) { pk.append(s); map[sig] = id }
+                pk.append(s)
+                if let id = ids[sig] { map[sig] = id }
             }
             canvas.drawing = PKDrawing(strokes: pk)
             ids = map
+            shownStamps = stamps
+            stale = []
             shownVersion = version
             applying = false
         }
@@ -532,6 +585,7 @@ struct PencilCanvas: UIViewRepresentable {
                     let c = s.ink
                     // Snapped or scribbled out: show what was kept instead of the rough line.
                     if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: s.key, held: held) {
+                        self.stale.insert(s.id)
                         self.shownVersion = -1
                     }
                 }
@@ -629,6 +683,8 @@ final class TroveCanvasView: PKCanvasView {
 final class InkAreaView: UIView {
     var painter: ((CGContext, InkGeometry.Rect, Double) -> Void)?
     var zoom: CGFloat = 1
+    /// Whether the last draw put anything on screen (an empty overlay needn't redraw while scrolling).
+    var drewSomething = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)

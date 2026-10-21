@@ -31,7 +31,7 @@ const TOOL_INFO = {
   text: { label: "Text", key: "t", width: 20, color: "#1c1c1e", icon: "M5 5h14M12 5v14M9 19h6" },
   laser: { label: "Laser pointer: shows a line that fades, never saved", key: "k", width: 6, color: "#ff3b30", icon: "M5 19l7-7M14 4v3M20 10h-3M18.5 5.5l-2 2M12 12a1.5 1.5 0 1 0 .01 0" },
 };
-const ERASER_MODES = { stroke: "Whole strokes", partial: "Partial", precise: "Precise (exactly under the tip)" };
+const ERASER_MODES = { stroke: "Strokes", partial: "Partial", precise: "Precise (exactly under the tip)" };
 const LAYOUTS = { vertical: "Scroll down", horizontal: "Scroll sideways", flip: "Flip pages" };
 const MIN_ZOOM = 0.1, MAX_ZOOM = 10;
 const LASER_FADE_MS = 1100;
@@ -558,6 +558,16 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
   }
   function renderVisible() { for (const v of views) if (v.visible) renderView(v); }
 
+  // A pen reports up to 240 moves a second: draw at most once per screen frame.
+  function scheduleLive(v) {
+    if (v.liveFrame) return;
+    v.liveFrame = requestAnimationFrame(() => { v.liveFrame = 0; renderLive(v); });
+  }
+  function scheduleView(v) {
+    if (v.viewFrame) return;
+    v.viewFrame = requestAnimationFrame(() => { v.viewFrame = 0; renderView(v); });
+  }
+
   /** Ids hidden from the ink layer: a selection being dragged (drawn live instead), a text box being typed in. */
   function hidden(v) {
     const out = new Set();
@@ -697,18 +707,18 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
       if (lasso?.pointerId === e.pointerId) {
         for (const ev of coalesced(e)) lasso.points.push(toPage(v, ev));
         lasso.client = { x: e.clientX, y: e.clientY };
-        renderLive(v);
+        scheduleLive(v);
         return;
       }
       if (drag?.pointerId === e.pointerId) { moveDrag(v, toPage(v, e)); drag.client = { x: e.clientX, y: e.clientY }; return; }
       if (current?.pointerId !== e.pointerId) {
-        if (tool === "eraser" && e.pointerType !== "touch") { hover = { view: v, ...toPage(v, e) }; renderLive(v); }
+        if (tool === "eraser" && e.pointerType !== "touch") { hover = { view: v, ...toPage(v, e) }; scheduleLive(v); }
         return;
       }
       if (current.shape) return; // snapped: lift to keep it
       for (const ev of coalesced(e)) addPoint(ev);
       if (Math.hypot(e.clientX - current.anchor.x, e.clientY - current.anchor.y) > 4) { current.anchor = { x: e.clientX, y: e.clientY }; armSnap(); }
-      renderLive(v);
+      scheduleLive(v);
     });
     const end = (e) => {
       if (e.pointerType === "touch") noteTap(e, "up");
@@ -844,18 +854,21 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const only = prefs.highlighterOnly ? ["highlighter"] : null;
     const path = [g.last, p];
     g.last = p;
+    let changed = false;
     if (prefs.eraser === "partial" || prefs.eraser === "precise") {
-      for (const id of vault.eraseStrokes({ on: itemId, layer, page: v.key, path, radius: eraserRadius(v), only })) g.added.add(id);
+      const made = vault.eraseStrokes({ on: itemId, layer, page: v.key, path, radius: eraserRadius(v), only });
+      for (const id of made) g.added.add(id);
       // What disappeared: originals and pieces made earlier in this gesture.
       const alive = new Set(vault.strokes(itemId, layer, v.key).map((s) => s.id));
-      for (const id of [...g.before, ...g.added]) if (!alive.has(id)) g.removed.add(id);
+      for (const id of [...g.before, ...g.added]) if (!alive.has(id) && !g.removed.has(id)) { g.removed.add(id); changed = true; }
+      if (made.length) changed = true;
     } else {
       const gone = vault.strokes(itemId, layer, v.key).filter((s) => (!only || only.includes(s.tool)) && (hits(s, p.x, p.y, eraserRadius(v))
         || (path[0] && segmentHits(s, path[0], p, eraserRadius(v)))));
-      if (gone.length) { vault.deleteStrokes(gone.map((s) => s.id)); for (const s of gone) g.removed.add(s.id); }
+      if (gone.length) { vault.deleteStrokes(gone.map((s) => s.id)); for (const s of gone) g.removed.add(s.id); changed = true; }
     }
-    v.dirty = true;
-    renderView(v);
+    // Redraw the ink only when something was erased, once per frame; the eraser's circle moves on its own layer.
+    if (changed) { v.dirty = true; scheduleView(v); } else scheduleLive(v);
   }
   /** A stroke eraser moving fast still catches what it passed over. */
   function segmentHits(s, a, b, r) {

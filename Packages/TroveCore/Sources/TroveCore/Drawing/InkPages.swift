@@ -60,7 +60,7 @@ extension Library {
 
     /// A later time than anything drawn on the item, so new ink draws on top.
     func nextInkTime(on itemId: String) async -> Double {
-        let latest = await engine.records.filter { ($0.kind == "stroke" || $0.kind == "element") && $0[InkStroke.Field.on]?.string == itemId }
+        let latest = await engine.ink(on: itemId)
             .compactMap { $0[InkStroke.Field.createdAt]?.number }.max() ?? 0
         return max((now().timeIntervalSince1970 * 1000).rounded(), latest + 1)
     }
@@ -137,8 +137,8 @@ extension Library {
     // MARK: Text boxes and pictures
 
     public func elements(on itemId: String, layer: String = "", pageKey: String? = nil) async -> [InkElement] {
-        await engine.records.filter { $0.kind == "element" }.map(InkElement.init)
-            .filter { $0.on == itemId && $0.layer == layer && (pageKey == nil || $0.pageKey == pageKey) }
+        await engine.ink(on: itemId).filter { $0.kind == "element" }.map(InkElement.init)
+            .filter { $0.layer == layer && (pageKey == nil || $0.pageKey == pageKey) }
             .sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }
     }
 
@@ -207,7 +207,7 @@ extension Library {
 
     /// The item's `sketchText`: every text box's words, for search.
     func refreshSketchText(_ itemId: String) async {
-        let records = await engine.records.filter { $0.kind == "element" }
+        let records = await engine.ink(on: itemId).filter { $0.kind == "element" }
         let boxes: [InkElement] = records.map(InkElement.init).filter { $0.on == itemId && $0.kind == .text }
         let words: [String] = boxes.sorted { $0.createdAt < $1.createdAt }.map(\.text).filter { !$0.isEmpty }
         let text = words.joined(separator: "\n")
@@ -258,7 +258,7 @@ extension Library {
 
     /// Changes whenever a sketch's ink does, so handwriting is read again only when needed.
     public func inkSignature(_ itemId: String) async -> String {
-        let records = await engine.records.filter { ($0.kind == "stroke" || $0.kind == "element") && $0[InkStroke.Field.on]?.string == itemId }
+        let records = await engine.ink(on: itemId)
         let latest = records.map(\.updatedHLC).max() ?? ""
         return "\(records.count)-\(latest)"
     }

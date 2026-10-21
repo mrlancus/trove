@@ -289,15 +289,15 @@ extension Library {
     /// Strokes on an item (a sketch, or `layer` = the file's attachment id), oldest first, which is
     /// the order they're drawn in.
     public func strokes(on itemId: String, layer: String = "", page: Int? = nil) async -> [InkStroke] {
-        await engine.records.filter { $0.kind == "stroke" }.map(InkStroke.init)
-            .filter { $0.on == itemId && $0.layer == layer && (page == nil || $0.page == page) }
+        await engine.ink(on: itemId).filter { $0.kind == "stroke" }.map(InkStroke.init)
+            .filter { $0.layer == layer && (page == nil || $0.page == page) }
             .sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }
     }
 
     /// Every item that has ink on it, and on which layers.
     public func inkedLayers() async -> [String: Set<String>] {
         var out: [String: Set<String>] = [:]
-        for r in await engine.records where r.kind == "stroke" {
+        for r in await engine.records(kind: "stroke") {
             let s = InkStroke(r)
             out[s.on, default: []].insert(s.layer)
         }

@@ -69,9 +69,15 @@ final class AppModel {
 
     // MARK: Published state
     var phase: Phase = .loading
-    var items: [Item] = []
-    var collections: [ItemCollection] = []
-    var folders: [Folder] = []
+    var items: [Item] = [] { didSet { dataVersion += 1 } }
+    var collections: [ItemCollection] = [] { didSet { dataVersion += 1 } }
+    var folders: [Folder] = [] { didSet { dataVersion += 1 } }
+    /// Bumped when items, folders or collections change: lists and counts worked out from them are
+    /// kept until then (each section switch used to filter the whole library a dozen times).
+    private(set) var dataVersion = 0
+    @ObservationIgnored private var searchVersion = 0
+    @ObservationIgnored private var visibleCache: (key: String, items: [Item])?
+    @ObservationIgnored private var countsCache: (version: Int, counts: SidebarCounts)?
     /// Wikilinks and hand-made connections between items, rebuilt on every reload.
     var links = Links.Graph()
     var selection: Selection? = .smart(.recent) {
@@ -89,7 +95,7 @@ final class AppModel {
     var selecting = false { didSet { if !selecting { picked = [] } } }
     var picked: Set<String> = []
     var searchText = "" { didSet { if searchText != oldValue { searchNow() } } }
-    var searchResults: [Item]?
+    var searchResults: [Item]? { didSet { searchVersion += 1 } }
     /// Clips matching the search, shown under the library's results.
     private(set) var clipResults: [Clip] = []
     /// This device's search index, copied from the library after each change. Searching it on the
@@ -109,6 +115,10 @@ final class AppModel {
     private(set) var inkRevision = 0
     /// Which items have ink, and on which files ("" = a sketch's own pages).
     private(set) var inkedLayers: [String: Set<String>] = [:]
+    /// How many drawing editors are open. While one is, saving and pushing wait longer between
+    /// strokes (each save writes the whole vault, each push uses the radio: both cost battery).
+    @ObservationIgnored var drawingOpen = 0
+    @ObservationIgnored private var inkChangeTask: Task<Void, Never>?
     var config: VaultConfig? { vault.config }
 
     // MARK: Services
@@ -152,7 +162,7 @@ final class AppModel {
         let config = vault.config!
         enrichment = EnrichmentService(library: library, deviceId: config.deviceId, relay: vault.relayClient, cloudEnabled: config.cloudAI)
         vault.publishCaptureSettings()
-        await engine.observe { _ in Task { @MainActor [weak self] in self?.scheduleSave() } }
+        await engine.observe { Task { @MainActor [weak self] in self?.scheduleSave() } }
         await reload()
         await clipboard.attach(library)
         startClipboard()
@@ -262,9 +272,18 @@ final class AppModel {
     // MARK: Drawing
 
     /// Something drew or erased: views showing ink redraw. (Saving and syncing follow from the engine.)
-    func inkChanged() {
-        inkRevision += 1
-        Task { if let library { inkedLayers = await library.inkedLayers() } }
+    /// Strokes come many a second, so the redraw waits for a pause unless `now`.
+    func inkChanged(now: Bool = false) {
+        inkChangeTask?.cancel()
+        inkChangeTask = Task { [weak self] in
+            if !now {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+            }
+            guard let self else { return }
+            self.inkRevision += 1
+            if let library = self.library { self.inkedLayers = await library.inkedLayers() }
+        }
     }
 
     /// A new sketch, opened in the editor (filed in `folder` when given).
@@ -292,19 +311,46 @@ final class AppModel {
 
     var visibleItems: [Item] {
         if let searchResults { return searchResults }
+        let key = "\(dataVersion)|\(searchVersion)|\(String(describing: selection))"
+        if let visibleCache, visibleCache.key == key { return visibleCache.items }
+        let out: [Item]
         switch selection {
-        case .smart(let s): return items.filter(s.contains)
-        case .collection(let id): return items.filter { $0.collections.contains(id) }
-        case .source(let src): return items.filter { $0.sources.contains(src) }
-        case .folder(let id): return items.filter { $0.folder == id }
-        case .unfiled: return unfiledItems
-        case .graph, .importer, .clipboard, nil: return items
+        case .smart(let s): out = items.filter(s.contains)
+        case .collection(let id): out = items.filter { $0.collections.contains(id) }
+        case .source(let src): out = items.filter { $0.sources.contains(src) }
+        case .folder(let id): out = items.filter { $0.folder == id }
+        case .unfiled: out = unfiledItems
+        case .graph, .importer, .clipboard, nil: out = items
         }
+        visibleCache = (key, out)
+        return out
+    }
+
+    /// The sidebar's numbers, worked out once per library change instead of on every draw.
+    struct SidebarCounts {
+        var smart: [SmartCollection: Int] = [:]
+        var collections: [String: Int] = [:]
+        var sources: [ItemSource: Int] = [:]
+        var unfiled = 0
+    }
+
+    var sidebarCounts: SidebarCounts {
+        if let countsCache, countsCache.version == dataVersion { return countsCache.counts }
+        var c = SidebarCounts()
+        for s in SmartCollection.allCases { c.smart[s] = items.filter(s.contains).count }
+        let folderIds = Set(folders.map(\.id))
+        for item in items {
+            for id in item.collections { c.collections[id, default: 0] += 1 }
+            for s in Set(item.sources) { c.sources[s, default: 0] += 1 }
+            if item.folder.map({ !folderIds.contains($0) }) ?? true { c.unfiled += 1 }
+        }
+        countsCache = (dataVersion, c)
+        return c
     }
 
     var selectedItem: Item? { selectedItemID.flatMap { id in items.first { $0.id == id } } }
 
-    func count(_ smart: SmartCollection) -> Int { items.filter(smart.contains).count }
+    func count(_ smart: SmartCollection) -> Int { sidebarCounts.smart[smart] ?? 0 }
 
     // MARK: Folders
 
@@ -570,8 +616,9 @@ final class AppModel {
     /// Pushes local edits a moment after they're made, like the website does.
     private func pushSoon() {
         pushTask?.cancel()
+        let wait: Duration = drawingOpen > 0 ? .seconds(8) : .seconds(2)
         pushTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: wait)
             guard !Task.isCancelled else { return }
             await self?.syncNow()
         }
@@ -611,8 +658,9 @@ final class AppModel {
 
     private func scheduleSave() {
         saveTask?.cancel()
+        let wait: Duration = drawingOpen > 0 ? .seconds(4) : .seconds(1)
         saveTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: wait)
             guard !Task.isCancelled else { return }
             self?.saveNow()
             await self?.reload()
@@ -623,9 +671,11 @@ final class AppModel {
 
     func saveNow() {
         guard let library else { return }
-        Task {
+        let url = vault.snapshotURL
+        // Encoding the whole vault takes a while with a big history: off the main thread.
+        Task.detached(priority: .utility) {
             let snapshot = await library.engine.snapshot()
-            vault.saveSnapshot(snapshot)
+            await SnapshotWriter.shared.write(snapshot, to: url)
         }
     }
 

@@ -27,6 +27,12 @@ public struct RecordStore: Sendable {
     private var lastApplied: String = ""
     /// text history per record/field: sha256 → text, so later edits can find their base.
     private var history: [String: [String: String]] = [:]
+    /// Record ids by kind (deleted ones too), so a screen reading one kind doesn't walk the whole vault.
+    private var byKind: [String: Set<String>] = [:]
+    /// Newest change per kind, for `stamp(of:)`.
+    private var newestByKind: [String: String] = [:]
+    /// Ink (strokes and elements) by the item it's on.
+    private var inkByItem: [String: Set<String>] = [:]
 
     public init() {}
 
@@ -46,12 +52,40 @@ public struct RecordStore: Sendable {
             ops.sort(by: Self.order)
             records = [:]
             history = [:]
+            byKind = [:]
+            newestByKind = [:]
+            inkByItem = [:]
             lastApplied = ""
             for op in ops { applyOne(op) }
         }
     }
 
     public var visible: [Record] { records.values.filter { !$0.isDeleted } }
+
+    /// The records of one kind that aren't deleted.
+    public func visible(kind: String) -> [Record] {
+        (byKind[kind] ?? []).compactMap { id in records[id].flatMap { $0.isDeleted ? nil : $0 } }
+    }
+
+    /// Every record of one kind, deleted ones included.
+    public func all(kind: String) -> [Record] { (byKind[kind] ?? []).compactMap { records[$0] } }
+
+    /// Strokes and elements on an item that aren't deleted.
+    public func ink(on itemId: String) -> [Record] {
+        (inkByItem[itemId] ?? []).compactMap { id in records[id].flatMap { $0.isDeleted ? nil : $0 } }
+    }
+
+    /// Every record of these kinds, deleted ones included: their count and newest change.
+    public func stamp(of kinds: Set<String>) -> (count: Int, newest: String) {
+        var count = 0, newest = ""
+        for k in kinds {
+            count += byKind[k]?.count ?? 0
+            if let n = newestByKind[k], n > newest { newest = n }
+        }
+        return (count, newest)
+    }
+
+    static let inkKinds: Set<String> = ["stroke", "element"]
 
     public func record(_ id: String) -> Record? { records[id] }
 
@@ -62,7 +96,13 @@ public struct RecordStore: Sendable {
     private mutating func applyOne(_ op: Op) {
         lastApplied = max(lastApplied, op.hlc)
         var record = records[op.record] ?? Record(id: op.record, kind: op.recordKind ?? "item", createdHLC: op.hlc, updatedHLC: op.hlc)
+        let oldKind = records[op.record]?.kind
         if let kind = op.recordKind { record.kind = kind }
+        if oldKind != record.kind {
+            if let oldKind { byKind[oldKind]?.remove(op.record) }
+            byKind[record.kind, default: []].insert(op.record)
+        }
+        if (newestByKind[record.kind] ?? "") < op.hlc { newestByKind[record.kind] = op.hlc }
         record.updatedHLC = max(record.updatedHLC, op.hlc)
         switch op.type {
         case .set:
@@ -84,6 +124,7 @@ public struct RecordStore: Sendable {
             }
             history[key] = versions
         }
+        if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string { inkByItem[on, default: []].insert(op.record) }
         records[op.record] = record
     }
 }

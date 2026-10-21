@@ -130,57 +130,50 @@ struct PaperThumb: View {
 /// size, undo and redo.
 struct InkPalette: View {
     let editor: InkEditorModel
-    private static let tools: [InkEditorTool] = [.pen, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .laser, .text]
+    static let width: CGFloat = 228
+    private static let tools: [InkEditorTool] = [.pen, .pencil, .highlighter, .eraser, .lasso]
 
+    /// Small and quick, like Apple Pencil's own palette: a row of tools, a row of colours and sizes.
+    /// Picking a tool or colour closes it.
     var body: some View {
-        @Bindable var editor = editor
-        VStack(spacing: 10) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(40), spacing: 4), count: 5), spacing: 4) {
+        VStack(spacing: 6) {
+            HStack(spacing: 2) {
                 ForEach(Self.tools) { t in
-                    Button { editor.select(t) } label: {
-                        Image(systemName: t.symbol).font(.title3).frame(width: 40, height: 38)
+                    Button { editor.select(t); editor.palette = nil } label: {
+                        Image(systemName: t.symbol).font(.body).frame(width: 34, height: 32)
                             .foregroundStyle(editor.tool == t ? Color.accentColor : Color.primary)
-                            .background(editor.tool == t ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 9))
+                            .background(editor.tool == t ? Color.accentColor.opacity(0.18) : .clear, in: Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(t.label)
                 }
+                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body).frame(width: 34, height: 32) }
+                    .buttonStyle(.plain)
+                    .disabled(!editor.canUndo)
+                    .accessibilityLabel("Undo")
             }
             if editor.tool.hasColor {
-                HStack(spacing: 6) {
-                    ForEach(InkEditorModel.colors, id: \.self) { c in
-                        Button { editor.color = c } label: {
-                            Circle().fill(Color(inkHex: c)).frame(width: 24, height: 24)
-                                .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.4), lineWidth: editor.color == c ? 2 : 1).padding(-2))
+                HStack(spacing: 5) {
+                    ForEach(InkEditorModel.colors.prefix(5), id: \.self) { c in
+                        Button { editor.color = c; editor.palette = nil } label: {
+                            Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20)
+                                .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.35), lineWidth: editor.color == c ? 2 : 1).padding(-2))
+                                .frame(width: 26, height: 26)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Colour \(c)")
                     }
+                    Divider().frame(height: 18)
+                    InkSizePresets(editor: editor).scaleEffect(0.85)
                 }
+            } else if editor.tool.hasSize {
+                InkSizePresets(editor: editor)
             }
-            if editor.tool.hasSize {
-                HStack {
-                    Image(systemName: "circle.fill").font(.system(size: 5))
-                    Slider(value: $editor.width, in: editor.tool == .eraser && editor.eraserMode == .precise ? 0.5...12 : 1...(editor.tool == .text ? 72 : 60))
-                    Image(systemName: "circle.fill").font(.system(size: 14))
-                }
-            }
-            if editor.tool == .eraser {
-                Picker("Eraser", selection: $editor.eraserMode) { ForEach(InkEraserMode.allCases) { Text($0.label).tag($0) } }
-                    .pickerStyle(.segmented)
-            }
-            HStack {
-                Button { editor.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }.disabled(!editor.canUndo)
-                Button { editor.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }.disabled(!editor.canRedo)
-                Spacer()
-                Button { editor.palette = nil } label: { Label("Close", systemImage: "xmark") }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
         }
-        .padding(12)
-        .frame(width: 320)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.2), radius: 18, y: 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(width: Self.width)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
     }
 }

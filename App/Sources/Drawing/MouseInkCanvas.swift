@@ -152,12 +152,48 @@ final class InkNSView: NSView {
             ctx.setFillColor(NSColor.white.cgColor)
             ctx.fill(CGRect(x: 0, y: 0, width: page.width, height: page.height))
         }
-        InkRenderer.drawContent(editor.display(page.key), in: ctx)
+        drawInk(page, editor: editor, in: ctx)
         if let ink = tool.ink, !points.isEmpty {
             InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, in: ctx)
         }
         InkRenderer.drawOverlay(editor.overlay(page.key), scale: scale, in: ctx)
         ctx.restoreGState()
+    }
+
+    /// The finished ink on screen, kept as a picture until it changes, the zoom changes or the view
+    /// scrolls: while the pen moves only the new bit of line is drawn, not every stroke again.
+    private var inkCache: (key: String, rect: CGRect, image: CGImage)?
+
+    private func drawInk(_ page: InkPageSpec, editor: InkEditorModel, in ctx: CGContext) {
+        let visible = visibleRect
+        let k = CGFloat(scale) * (window?.backingScaleFactor ?? 2)
+        let key = "\(editor.revision)|\(shownKey)|\(scale)"
+        if inkCache?.key != key || inkCache?.rect != visible {
+            inkCache = nil
+            let w = Int((visible.width * k).rounded(.up)), h = Int((visible.height * k).rounded(.up))
+            if w > 0, h > 0, w * h <= 40_000_000,
+               let bitmap = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                // The same y-down page coordinates as this (flipped) view.
+                bitmap.translateBy(x: 0, y: CGFloat(h))
+                bitmap.scaleBy(x: k, y: -k)
+                bitmap.translateBy(x: -visible.minX + origin, y: -visible.minY + origin)
+                InkRenderer.drawContent(editor.display(page.key), in: bitmap)
+                if let image = bitmap.makeImage() { inkCache = (key, visible, image) }
+            }
+        }
+        guard let cache = inkCache else { InkRenderer.drawContent(editor.display(page.key), in: ctx); return }
+        InkRenderer.drawImage(cache.image, in: cache.rect.offsetBy(dx: -origin, dy: -origin), ctx: ctx)
+    }
+
+    /// Only the end of the line being drawn needs redrawing.
+    private func invalidateTail() {
+        let tail = points.suffix(3)
+        guard let first = tail.first else { needsDisplay = true; return }
+        var r = CGRect(x: first.x, y: first.y, width: 0, height: 0)
+        for p in tail { r = r.union(CGRect(x: p.x, y: p.y, width: 0, height: 0)) }
+        let pad = CGFloat(width * 1.5 + 6)
+        setNeedsDisplay(r.offsetBy(dx: origin, dy: origin).insetBy(dx: -pad, dy: -pad))
     }
 
     private func location(_ event: NSEvent) -> InkPoint {
@@ -203,7 +239,7 @@ final class InkNSView: NSView {
         if let last = points.last, hypot(last.x - at.x, last.y - at.y) < minGap { return }
         if let last = points.last, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); armSnap() }
         points.append(InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: (event.timestamp - started) * 1000))
-        needsDisplay = true
+        invalidateTail()
     }
 
     /// Holding the mouse still at the end of a line turns it into a clean shape there and then.

@@ -17,7 +17,7 @@ public actor Library {
 
     public func items() async -> [Item] {
         await refreshIndex()
-        return await engine.records.filter { $0.kind == "item" && !$0.isStrayItem }.map(Item.init).sorted { $0.createdAt > $1.createdAt }
+        return await engine.records(kind: "item").filter { !$0.isStrayItem }.map(Item.init).sorted { $0.createdAt > $1.createdAt }
     }
 
     public func item(_ id: String) async -> Item? {
@@ -35,12 +35,8 @@ public actor Library {
     /// Changes when any record of these kinds is added, changed or deleted (count and newest HLC),
     /// so a screen can skip refreshing when a sync brought nothing new.
     public func stamp(of kinds: Set<String>) async -> String {
-        var count = 0, newest = ""
-        for r in await engine.store.records.values where kinds.contains(r.kind) {
-            count += 1
-            if r.updatedHLC > newest { newest = r.updatedHLC }
-        }
-        return "\(count)|\(newest)"
+        let s = await engine.store.stamp(of: kinds)
+        return "\(s.count)|\(s.newest)"
     }
 
     public func searchIndex() async -> SearchIndex {
@@ -53,7 +49,7 @@ public actor Library {
     }
 
     public func collections() async -> [ItemCollection] {
-        await engine.records.filter { $0.kind == "collection" }.map(ItemCollection.init).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        await engine.records(kind: "collection").map(ItemCollection.init).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     /// Work for this device's enrichment pass: never-enriched items, plus items still flagged as
@@ -66,8 +62,8 @@ public actor Library {
     }
 
     private func refreshIndex() async {
-        let records = await engine.store.records
-        for (id, record) in records where record.kind == "item" && !record.isStrayItem {
+        for record in await engine.store.all(kind: "item") where !record.isStrayItem {
+            let id = record.id
             if indexed[id] != record.updatedHLC {
                 index.update(Item(record))
                 indexed[id] = record.updatedHLC

@@ -63,6 +63,35 @@ enum ClipFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// A clip ready to be searched: its folded text as UTF-8 (byte search is many times faster than
+/// `String.contains`, which compares by grapheme), whether it's pinned and its tags.
+struct ClipSearchRow {
+    let entry: ClipEntry
+    let hay: [UInt8]
+    let pinned: Bool
+    let tags: [String]
+
+    static func contains(_ hay: [UInt8], _ needle: [UInt8]) -> Bool {
+        guard !needle.isEmpty else { return true }
+        guard hay.count >= needle.count else { return false }
+        return hay.withUnsafeBufferPointer { h in
+            needle.withUnsafeBufferPointer { n in
+                memmem(h.baseAddress, h.count, n.baseAddress, n.count) != nil
+            }
+        }
+    }
+}
+
+extension ClipQuery {
+    /// Whether everything this query finds is among what `old` found (it only adds to it).
+    func narrows(_ old: ClipQuery) -> Bool {
+        guard old.words.count <= words.count, old.tags == tags, !old.pinnedOnly || pinnedOnly, old.apps.count <= apps.count else { return false }
+        for (i, w) in old.words.enumerated() where !words[i].contains(w) { return false }
+        for (i, a) in old.apps.enumerated() where !apps[i].contains(a) { return false }
+        return true
+    }
+}
+
 /// What the palette is showing: search, filter, the highlighted row and the paste stack.
 @MainActor
 @Observable
@@ -90,28 +119,65 @@ final class ClipPaletteState {
 
     /// The last answer, kept until the clips, the search or the filters change: the view asks
     /// several times per keystroke.
-    @ObservationIgnored private var cached: (key: String, entries: [ClipEntry])?
+    @ObservationIgnored private var cached: (key: String, base: String, query: ClipQuery, found: [Int], entries: [ClipEntry])?
+    /// Every clip with what searching it needs, made once per change of the clips (not per keystroke).
+    @ObservationIgnored private var corpus: (key: String, rows: [ClipSearchRow])?
 
     func entries(_ store: ClipboardStore, thisDevice: String?) -> [ClipEntry] {
-        let key = "\(store.revision)|\(store.ephemeral.map(\.id).joined(separator: ","))|\(filter.rawValue)|\(tag ?? "")|\(thisDevice ?? "")|\(query)"
+        let base = "\(store.revision)|\(store.ephemeral.map(\.id).joined(separator: ","))|\(filter.rawValue)|\(tag ?? "")|\(thisDevice ?? "")"
+        let key = base + "|" + query
         if let cached, cached.key == key { return cached.entries }
         let parsed = ClipQuery(query)
-        let sensitive = tag == nil ? store.ephemeral.map(ClipEntry.sensitive) : []
-        let synced = store.clips.map(ClipEntry.clip)
-        let pinnedFirst = filter == .all && parsed.isEmpty
-            ? synced.filter { $0.clip?.isPinned == true } + synced.filter { $0.clip?.isPinned != true }
-            : synced
-        let found = (sensitive + pinnedFirst).filter { entry in
-            guard filter.includes(entry, thisDevice: thisDevice, store: store) else { return false }
-            switch entry {
-            case .clip(let c):
-                if let tag, !c.tags.contains(tag) { return false }
-                return parsed.isEmpty || parsed.matches(c, haystack: store.searchText(c))
-            case .sensitive(let e): return query.isEmpty || e.text.localizedCaseInsensitiveContains(query)
-            }
+        let rows = searchRows(store, thisDevice: thisDevice, base: base)
+        // Typing more only narrows: search what the last keystroke found instead of everything.
+        let candidates: [Int]
+        if let cached, cached.base == base, !cached.query.isEmpty, parsed.narrows(cached.query) {
+            candidates = cached.found
+        } else {
+            candidates = Array(rows.indices)
         }
-        cached = (key, found)
-        return found
+        let words = parsed.words.map { Array($0.utf8) }
+        var found: [Int] = []
+        found.reserveCapacity(min(candidates.count, 4096))
+        for i in candidates {
+            let row = rows[i]
+            switch row.entry {
+            case .clip(let c):
+                if parsed.pinnedOnly, !row.pinned { continue }
+                if !parsed.tags.isEmpty, !parsed.tags.allSatisfy(row.tags.contains) { continue }
+                if !parsed.apps.isEmpty {
+                    let app = ClipQuery.fold(c.sourceApp ?? "")
+                    if !parsed.apps.allSatisfy(app.contains) { continue }
+                }
+                if !words.allSatisfy({ ClipSearchRow.contains(row.hay, $0) }) { continue }
+            case .sensitive(let e):
+                if !query.isEmpty, !e.text.localizedCaseInsensitiveContains(query) { continue }
+            }
+            found.append(i)
+        }
+        // Pinned clips first while nothing is searched for.
+        if filter == .all, parsed.isEmpty {
+            found = found.filter { rows[$0].pinned } + found.filter { !rows[$0].pinned }
+        }
+        let entries = found.map { rows[$0].entry }
+        cached = (key, base, parsed, found, entries)
+        return entries
+    }
+
+    /// The clips that pass the filter and tag, in order, with their folded text as bytes.
+    private func searchRows(_ store: ClipboardStore, thisDevice: String?, base: String) -> [ClipSearchRow] {
+        if let corpus, corpus.key == base { return corpus.rows }
+        var rows: [ClipSearchRow] = []
+        if tag == nil { rows += store.ephemeral.map { ClipSearchRow(entry: .sensitive($0), hay: [], pinned: false, tags: []) } }
+        for c in store.clips {
+            let entry = ClipEntry.clip(c)
+            guard filter.includes(entry, thisDevice: thisDevice, store: store) else { continue }
+            let tags = c.tags
+            if let tag, !tags.contains(tag) { continue }
+            rows.append(ClipSearchRow(entry: entry, hay: Array(store.searchText(c).utf8), pinned: c.isPinned, tags: tags))
+        }
+        corpus = (base, rows)
+        return rows
     }
 
     func move(_ delta: Int, in entries: [ClipEntry]) {

@@ -5,7 +5,7 @@ extension Library {
     // MARK: Folders
 
     public func folders() async -> [Folder] {
-        await engine.records.filter { $0.kind == "folder" }.map(Folder.init)
+        await engine.records(kind: "folder").map(Folder.init)
     }
 
     /// The fields that file a new item into its folder (made if needed), chosen by `Organizer`.

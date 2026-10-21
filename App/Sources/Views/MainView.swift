@@ -84,7 +84,34 @@ struct MainView: View {
         .environment(\.showAsk, { showAsk = true })
     }
 
-    private var split: some View {
+    /// Connections takes the whole right side (list and detail columns); what was open closes, and a
+    /// point tapped there opens over it.
+    @ViewBuilder private var split: some View {
+        if model.selection == .graph, model.searchText.isEmpty { graphSplit } else { columnsSplit }
+    }
+
+    private var graphSplit: some View {
+        @Bindable var model = model
+        return NavigationSplitView(columnVisibility: $columns) {
+            SidebarView(showSettings: $showSettings)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } detail: {
+            GraphScreen()
+                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
+                .toolbar { toolbar }
+        }
+        .sheet(item: Binding(get: { model.selectedItem }, set: { if $0 == nil { model.selectedItemID = nil } })) { item in
+            NavigationStack {
+                ItemDetailView(item: item).id(item.id)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.selectedItemID = nil } } }
+            }
+            #if os(macOS)
+            .sheetSize(width: 760, height: 820)
+            #endif
+        }
+    }
+
+    private var columnsSplit: some View {
         @Bindable var model = model
         return NavigationSplitView(columnVisibility: $columns) {
             SidebarView(showSettings: $showSettings)
@@ -92,7 +119,6 @@ struct MainView: View {
         } content: {
             Group {
                 if model.selection == .importer, model.searchText.isEmpty { ImportView() }
-                else if model.selection == .graph, model.searchText.isEmpty { GraphScreen() }
                 else if model.selection == .clipboard { ClipboardScreen(embedded: true, select: { model.selectedClipID = $0 }) }
                 else { LibraryView() }
             }
@@ -255,7 +281,7 @@ struct SidebarView: View {
                 OutlineGroup(model.folderNodes, children: \.children) { node in
                     folderRow(node.folder)
                 }
-                let unfiled = model.unfiledItems.count
+                let unfiled = model.sidebarCounts.unfiled
                 if unfiled > 0 {
                     Label("Unfiled", systemImage: "tray").badge(unfiled).tag(AppModel.Selection.unfiled)
                         .contextMenu { Button("Tidy up: file everything") { Task { await model.tidyUp() } } }
@@ -277,7 +303,7 @@ struct SidebarView: View {
                 ForEach(model.collections) { c in
                     Label(c.name, systemImage: c.symbol)
                         .foregroundStyle(Color.trove(c.color))
-                        .badge(model.items.filter { $0.collections.contains(c.id) }.count)
+                        .badge(model.sidebarCounts.collections[c.id] ?? 0)
                         .tag(AppModel.Selection.collection(c.id))
                 }
             } header: {
@@ -287,12 +313,12 @@ struct SidebarView: View {
                     Button { addingCollection = true } label: { Image(systemName: "plus") }.buttonStyle(.borderless).sidebarHeaderButton()
                 }
             }
-            let sources = Set(model.items.flatMap(\.sources)).subtracting([.app, .share]).sorted { ItemStyle.sourceLabel($0) < ItemStyle.sourceLabel($1) }
+            let sources = Set(model.sidebarCounts.sources.keys).subtracting([.app, .share]).sorted { ItemStyle.sourceLabel($0) < ItemStyle.sourceLabel($1) }
             if !sources.isEmpty {
                 Section("Sources") {
                     ForEach(sources, id: \.self) { s in
                         Label(ItemStyle.sourceLabel(s), systemImage: ItemStyle.sourceSymbol(s))
-                            .badge(model.items.filter { $0.sources.contains(s) }.count)
+                            .badge(model.sidebarCounts.sources[s] ?? 0)
                             .tag(AppModel.Selection.source(s))
                     }
                 }

@@ -70,7 +70,7 @@ public struct ClipEvent: Identifiable, Hashable, Sendable {
 extension Library {
     /// Every copy and paste, or one clip's, oldest first.
     public func clipEvents(of clip: String? = nil) async -> [ClipEvent] {
-        await engine.records.filter { $0.kind == ClipEvent.kind }.map(ClipEvent.init)
+        await engine.records(kind: ClipEvent.kind).map(ClipEvent.init)
             .filter { $0.clip != nil && (clip == nil || $0.clip == clip) }
             .sorted { $0.at != $1.at ? $0.at < $1.at : $0.record.createdHLC < $1.record.createdHLC }
     }

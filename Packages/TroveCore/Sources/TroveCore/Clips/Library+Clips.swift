@@ -4,7 +4,7 @@ import Foundation
 extension Library {
     /// Newest first (by last copy or use).
     public func clips() async -> [Clip] {
-        await engine.records.filter { $0.kind == "clip" }.map(Clip.init).sorted { $0.sortDate > $1.sortDate }
+        await engine.records(kind: "clip").map(Clip.init).sorted { $0.sortDate > $1.sortDate }
     }
 
     public func clip(_ id: String) async -> Clip? {

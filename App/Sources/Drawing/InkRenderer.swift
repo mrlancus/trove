@@ -45,6 +45,11 @@ struct InkLine: Sendable, Identifiable {
         InkLine(id: id, tool: tool, color: color, width: width * t.widthScale, points: points.map { t.apply($0) }, shape: shape)
     }
     var bounds: InkGeometry.Rect? { InkGeometry.bounds(points, pad: width / 2) }
+    /// Changes when how the line looks does (for a canvas deciding what to redraw).
+    var stamp: String {
+        let a = points.first, b = points.last
+        return "\(color)|\(width)|\(tool.rawValue)|\(points.count)|\(a?.x ?? 0),\(a?.y ?? 0)|\(b?.x ?? 0),\(b?.y ?? 0)"
+    }
 }
 
 /// A text box or picture as drawn.

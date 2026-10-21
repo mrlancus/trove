@@ -51,6 +51,14 @@ export class RecordStore {
     this.opIds = new Set();
     this.lastApplied = "";
     this.history = new Map();
+    this.resetIndex();
+  }
+
+  /** Ids by kind and ink by item (deleted ones too), so reading one kind doesn't walk every record. */
+  resetIndex() {
+    this.byKind = new Map();
+    this.inkByItem = new Map();
+    this.version = (this.version ?? 0) + 1;
   }
 
   /** Adds ops (duplicates ignored); incremental when all are newer, otherwise a full rebuild. */
@@ -65,6 +73,7 @@ export class RecordStore {
       this.ops.sort(order);
       this.records = new Map();
       this.history = new Map();
+      this.resetIndex();
       this.lastApplied = "";
       for (const op of this.ops) this.applyOne(op);
     }
@@ -75,10 +84,31 @@ export class RecordStore {
     return [...this.records.values()].filter((r) => r.fields._deleted !== true);
   }
 
+  /** Records of one kind that aren't deleted. */
+  visibleOf(kind) {
+    const out = [];
+    for (const id of this.byKind.get(kind) ?? []) { const r = this.records.get(id); if (r && r.kind === kind && r.fields._deleted !== true) out.push(r); }
+    return out;
+  }
+
+  /** Strokes and elements on an item that aren't deleted. */
+  inkOn(itemId) {
+    const out = [];
+    for (const id of this.inkByItem.get(itemId) ?? []) { const r = this.records.get(id); if (r && r.fields._deleted !== true) out.push(r); }
+    return out;
+  }
+
   applyOne(op) {
     this.lastApplied = maxString(this.lastApplied, op.h);
     const record = this.records.get(op.r) ?? { id: op.r, kind: op.k ?? "item", fields: {}, texts: {}, conflicts: {}, createdHLC: op.h, updatedHLC: op.h };
+    const oldKind = this.records.has(op.r) ? record.kind : null;
     if (op.k) record.kind = op.k;
+    if (oldKind !== record.kind) {
+      if (oldKind) this.byKind.get(oldKind)?.delete(op.r);
+      if (!this.byKind.has(record.kind)) this.byKind.set(record.kind, new Set());
+      this.byKind.get(record.kind).add(op.r);
+    }
+    this.version++;
     record.updatedHLC = maxString(record.updatedHLC, op.h);
     if (op.t === "set") {
       for (const [key, value] of Object.entries(op.f ?? {})) record.fields[key] = value;
@@ -102,6 +132,10 @@ export class RecordStore {
         }
       }
       this.history.set(key, versions);
+    }
+    if ((record.kind === "stroke" || record.kind === "element") && typeof record.fields.on === "string") {
+      if (!this.inkByItem.has(record.fields.on)) this.inkByItem.set(record.fields.on, new Set());
+      this.inkByItem.get(record.fields.on).add(op.r);
     }
     this.records.set(op.r, record);
   }

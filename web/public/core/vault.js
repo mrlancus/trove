@@ -40,6 +40,16 @@ export function parseSetupCode(text) {
 
 const encodePayload = (payload) => b64uEncode(utf8.encode(JSON.stringify(payload)));
 
+/** A stroke's view, decoded once per version of its record (decoding points is the slow part). */
+const strokeViews = new WeakMap();
+function cachedStrokeView(r) {
+  const hit = strokeViews.get(r);
+  if (hit && hit.hlc === r.updatedHLC && hit.fields === r.fields) return { ...hit.view };
+  const view = strokeView(r);
+  strokeViews.set(r, { hlc: r.updatedHLC, fields: r.fields, view });
+  return { ...view };
+}
+
 export class RelayError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -188,7 +198,7 @@ export class Vault {
   // ---------- reading ----------
 
   items() {
-    return this.store.visible.filter((r) => r.kind === "item" && !isStrayItem(r)).map(itemView).sort((a, b) => b.createdAt - a.createdAt);
+    return this.store.visibleOf("item").filter((r) => !isStrayItem(r)).map(itemView).sort((a, b) => b.createdAt - a.createdAt);
   }
 
   item(id) {
@@ -199,7 +209,7 @@ export class Vault {
   // ---------- folders (PROTOCOL.md §9, Library+Folders.swift) ----------
 
   folders() {
-    return this.store.visible.filter((r) => r.kind === "folder")
+    return this.store.visibleOf("folder")
       .map((r) => ({ id: r.id, name: typeof r.fields.name === "string" ? r.fields.name : "Untitled", parent: typeof r.fields.parent === "string" ? r.fields.parent : null,
         isAuto: r.fields.auto === true, color: r.fields.color ?? null }));
   }
@@ -332,7 +342,7 @@ export class Vault {
   }
 
   collections() {
-    return this.store.visible.filter((r) => r.kind === "collection")
+    return this.store.visibleOf("collection")
       .map((r) => ({ id: r.id, name: r.fields.name ?? "Untitled", symbol: r.fields.symbol, color: r.fields.color }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -467,21 +477,25 @@ export class Vault {
   /** Strokes on an item (a sketch's own pages, or `layer` = a file's attachment id), oldest first.
    * `page` is a file's page number, or a sketch page's id (string). */
   strokes(on, layer = "", page = null) {
-    return this.store.visible.filter((r) => r.kind === "stroke").map(strokeView)
-      .filter((s) => s.on === on && s.layer === layer && (page === null || (typeof page === "string" ? s.pageKey === page : s.page === page)))
+    return this.store.inkOn(on).filter((r) => r.kind === "stroke").map(cachedStrokeView)
+      .filter((s) => s.layer === layer && (page === null || (typeof page === "string" ? s.pageKey === page : s.page === page)))
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
   /** Which items have ink, and on which layers: Map(itemId → Set(layer)). */
   inkedLayers() {
     const out = new Map();
-    for (const r of this.store.visible) if (r.kind === "stroke") { const s = strokeView(r); if (!out.has(s.on)) out.set(s.on, new Set()); out.get(s.on).add(s.layer); }
+    for (const r of this.store.visibleOf("stroke")) {
+      const on = typeof r.fields.on === "string" ? r.fields.on : "", layer = typeof r.fields.layer === "string" ? r.fields.layer : "";
+      if (!out.has(on)) out.set(on, new Set());
+      out.get(on).add(layer);
+    }
     return out;
   }
 
   /** A later time than anything drawn on the item, so new ink draws on top (Library.nextInkTime). */
   nextInkTime(on) {
-    const latest = Math.max(0, ...this.store.visible.filter((r) => (r.kind === "stroke" || r.kind === "element") && r.fields.on === on)
+    const latest = Math.max(0, ...this.store.inkOn(on)
       .map((r) => r.fields.createdAt).filter((t) => typeof t === "number"));
     return Math.max(this.now(), latest + 1);
   }
@@ -552,8 +566,8 @@ export class Vault {
   }
 
   elements(on, layer = "", page = null) {
-    return this.store.visible.filter((r) => r.kind === "element").map(elementView)
-      .filter((e) => e.on === on && e.layer === layer && (page === null || e.pageKey === String(page)))
+    return this.store.inkOn(on).filter((r) => r.kind === "element").map(elementView)
+      .filter((e) => e.layer === layer && (page === null || e.pageKey === String(page)))
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
@@ -602,7 +616,7 @@ export class Vault {
 
   /** The item's `sketchText`: every text box's words, for search. */
   refreshSketchText(on) {
-    const text = this.store.visible.filter((r) => r.kind === "element").map(elementView).filter((e) => e.on === on && e.type === "text")
+    const text = this.store.inkOn(on).filter((r) => r.kind === "element").map(elementView).filter((e) => e.type === "text")
       .sort((a, b) => a.createdAt - b.createdAt).map((e) => e.text).filter(Boolean).join("\n");
     if ((this.item(on)?.sketchText ?? "") !== text) this.update(on, { sketchText: text });
   }
@@ -701,7 +715,7 @@ export class Vault {
   // ---------- clipboard history (PROTOCOL.md §8) ----------
 
   clips() {
-    return this.store.visible.filter((r) => r.kind === "clip").map(clipView).sort((a, b) => b.sortDate - a.sortDate);
+    return this.store.visibleOf("clip").map(clipView).sort((a, b) => b.sortDate - a.sortDate);
   }
 
   clip(id) {
@@ -850,7 +864,7 @@ export class Vault {
 
   /** Every copy and paste event, or one clip's, oldest first. */
   clipEvents(clip = null) {
-    return this.store.visible.filter((r) => r.kind === "clipEvent").map((r) => ({ ...clipEventView(r), hlc: r.createdHLC }))
+    return this.store.visibleOf("clipEvent").map((r) => ({ ...clipEventView(r), hlc: r.createdHLC }))
       .filter((e) => e.clip && (!clip || e.clip === clip)).sort((a, b) => a.at - b.at || (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
   }
 

@@ -311,3 +311,16 @@ final class VaultStore {
         try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }
+
+/// Writes vault snapshots one at a time, off the main thread, never an older one over a newer one.
+actor SnapshotWriter {
+    static let shared = SnapshotWriter()
+    private var written = -1
+
+    func write(_ snapshot: SyncEngine.Snapshot, to url: URL) {
+        // Ops only ever grow, so a snapshot with fewer is older than one already saved.
+        guard snapshot.ops.count >= written else { return }
+        written = snapshot.ops.count
+        VaultStore.write(snapshot, to: url)
+    }
+}

@@ -29,7 +29,7 @@ public actor SyncEngine {
     private var applied: Set<String> = []
     private var outbox: [String: Segment] = [:]          // key → segment
     private var unpushed: [String: Set<String>] = [:]     // transport → keys
-    private var observers: [UUID: @Sendable ([Record]) -> Void] = [:]
+    private var observers: [UUID: @Sendable () -> Void] = [:]
     /// Encrypted attachment bytes kept on this device (directory, or memory when nil).
     private let blobCache: URL?
     private var memoryBlobs: [String: Data] = [:]
@@ -71,6 +71,10 @@ public actor SyncEngine {
     /// Local edits not yet cut into segments, so the app can push them soon after the user types.
     public var hasUnsentChanges: Bool { !journal.pending.isEmpty }
     public var records: [Record] { store.visible }
+    /// The records of one kind (not deleted): much cheaper than filtering `records`.
+    public func records(kind: String) -> [Record] { store.visible(kind: kind) }
+    /// Strokes and elements on an item (not deleted).
+    public func ink(on itemId: String) -> [Record] { store.ink(on: itemId) }
     public func record(_ id: String) -> Record? { store.record(id) }
 
     public func addTransport(_ t: any SyncTransport) { transports.append(t) }
@@ -81,8 +85,9 @@ public actor SyncEngine {
                  bridgeBlobs: bridgeBlobs.isEmpty ? nil : bridgeBlobs.sorted())
     }
 
+    /// Hears that records changed (call `records` or `records(kind:)` for what's there now).
     @discardableResult
-    public func observe(_ callback: @escaping @Sendable ([Record]) -> Void) -> UUID {
+    public func observe(_ callback: @escaping @Sendable () -> Void) -> UUID {
         let id = UUID()
         observers[id] = callback
         return id
@@ -92,8 +97,7 @@ public actor SyncEngine {
 
     private func notify() {
         guard !observers.isEmpty, holding == 0 else { if holding > 0 { heldChanges = true }; return }
-        let visible = store.visible
-        for cb in observers.values { cb(visible) }
+        for cb in observers.values { cb() }
     }
 
     private var holding = 0
