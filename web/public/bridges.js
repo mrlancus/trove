@@ -151,11 +151,15 @@ export function showBridges(vault, { toast = () => {} } = {}) {
       } }, token, h("button", { type: "submit", class: "secondary" }, "Connect")));
   }
 
-  function render() {
-    list.replaceChildren(webhookSection(), feedSection(), githubSection(), telegramSection(),
-      h("section", {}, h("h3", { class: "section-title", text: "Link previews" }),
-        h("p", { class: "hint", text: "Links you save on this website get their title, description and picture from your relay, which sees only the link." })));
-  }
+  // Bridges *out of* Trove (roadmap §5.3 "GitHub backup", waiting on the user's decision) need the
+  // vault's keys, so they run here on a device, never on the relay: such a bridge adds its own
+  // section to this list, keeps its settings in a vault record (synced, encrypted) and does its work
+  // from the website or the apps.
+  const sections = () => [webhookSection(), feedSection(), githubSection(), telegramSection(),
+    h("section", {}, h("h3", { class: "section-title", text: "Link previews" }),
+      h("p", { class: "hint", text: "Links you save on this website get their title, description and picture from your relay, which sees only the link." }))];
+
+  function render() { list.replaceChildren(...sections()); }
 
   reload();
   $("button", box)?.focus();

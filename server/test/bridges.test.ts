@@ -183,6 +183,7 @@ describe("bridges", () => {
 
     const t0 = Date.now() + 5000;
     await runInDurableObject(vaultStub(v.vaultId), async (vault: VaultObject, state) => {
+      expect(await state.storage.getAlarm()).not.toBeNull(); // a new feed is checked within seconds
       await state.storage.deleteAlarm();
       expect(await vault.bridges.runDue(t0)).toBe(1);
       expect(await vault.bridges.runDue(t0 + 60_000)).toBe(0); // not due again yet
@@ -207,6 +208,20 @@ describe("bridges", () => {
     status = (await ran.json()) as Bridge;
     expect(status.status.lastError).toBe("the feed answered 404");
     expect(status.status.nextRunAt! - status.status.lastRunAt!).toBe(4 * 3_600_000); // backs off
+  });
+
+  it("the vault alarm runs due bridges and schedules the next check, next to price watches", async () => {
+    const v = await createVault();
+    await mockFetch(v, () => new Response(rss([1]), { headers: { "content-type": "application/rss+xml" } }));
+    await bridgeCall(v, "", { json: { kind: "rss", settings: { url: "https://tech.example/feed.xml" } } });
+    await runInDurableObject(vaultStub(v.vaultId), async (vault: VaultObject, state) => {
+      await state.storage.deleteAlarm();
+      await vault.alarm();
+      const next = await state.storage.getAlarm();
+      expect(next! - Date.now()).toBeGreaterThan(2 * 3_600_000 - 60_000);
+      expect(next! - Date.now()).toBeLessThanOrEqual(2 * 3_600_000);
+    });
+    expect((await inbox(v)).map((e) => e.header.title)).toEqual(["Post 1 & more"]);
   });
 
   it("github: public stars become links with description, language and topics", async () => {
