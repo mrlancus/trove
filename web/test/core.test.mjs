@@ -529,6 +529,118 @@ test("outlines, arrowheads, compact points, pen settings, the grid and grain mat
   assert.equal(b64uEncode(ink.grainTile()), f.grain.tile);
 });
 
+test("turning, flipping, shapes, handles, connectors, ruler, loops and the elements library match Fixtures/ink-editing.json (InkEditing.swift)", async () => {
+  const ink = await import("../public/core/ink.js");
+  const ed = await import("../public/core/inkedit.js");
+  const f = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/ink-editing.json", import.meta.url), "utf8"));
+  const pts = (a) => a.map(([x, y, p = 0.5, t = 0, a]) => (a === undefined ? { x, y, p, t } : { x, y, p, t, a }));
+  const flat = (a) => a.map((p) => (typeof p.a === "number" ? [p.x, p.y, p.p, p.t, p.a] : [p.x, p.y, p.p, p.t]));
+  const xy = (a) => a.map((p) => [p.x, p.y]);
+  const P = ([x, y]) => ({ x, y });
+  for (const c of f.transforms) {
+    assert.deepEqual(flat(pts(c.points).map((p) => ink.transformPoint(c.t, p))), c.expect);
+    assert.deepEqual(ink.transformRect(c.t, { x: 10, y: 20, w: 60, h: 30 }), c.rect);
+    assert.equal(ink.transformAngle(c.t, 0.7), c.angle);
+  }
+  for (const c of f.elements) assert.deepEqual(ed.transformElement(c.t, c.element), c.expect);
+  for (const c of f.boxes) {
+    assert.deepEqual(ed.elementBounds(c.element), c.bounds);
+    for (const p of c.hits) assert.equal(ed.elementContains(c.element, p), p.inside);
+  }
+  for (const c of f.shapes) assert.deepEqual(xy(ed.shapePoints(c.shape, P(c.a), P(c.b))), c.expect, c.shape);
+  assert.deepEqual(xy(ed.curvePoints(P(f.curve.a), P(f.curve.c), P(f.curve.b))), f.curve.expect);
+  for (const c of f.handles) {
+    const s = { shape: c.stroke.shape, points: pts(c.stroke.points) };
+    assert.deepEqual(xy(ed.shapeHandles(s)), c.handles, c.name);
+    for (const m of c.moves) { const got = ed.moveShapeHandle(s, m.index, P(m.to)); assert.deepEqual([got.shape, flat(got.points)], [m.shape, m.points], c.name); }
+  }
+  for (const c of f.connectors.exits) assert.deepEqual(ed.boxExit(c.box, P(c.toward)), c.expect);
+  for (const c of f.connectors.ends) assert.deepEqual(ed.connectorEnds(P(c.a), P(c.b), c.from, c.to), c.expect);
+  const t = f.tools;
+  for (const c of t.rulerEdges) { assert.equal(ed.rulerEdge(t.ruler, P(c.p), c.tolerance), c.edge); assert.equal(ed.onRuler(t.ruler, P(c.p)), c.on); }
+  for (const c of t.rulerSnaps) assert.deepEqual([xy([ed.onRulerEdge(t.ruler, -1, P(c.p))])[0], xy([ed.onRulerEdge(t.ruler, 1, P(c.p))])[0]], [c.top, c.bottom]);
+  for (const c of t.arcs) {
+    assert.equal(ed.onProtractorArc(t.protractor, P(c.p), c.tolerance), c.near);
+    assert.deepEqual(xy([ed.onArc(t.protractor, P(c.p))])[0], c.on);
+    assert.equal(ed.protractorDegrees(t.protractor, P(c.p)), c.degrees);
+  }
+  for (const c of t.degrees) assert.equal(ed.toolDegrees(c.angle), c.expect);
+  for (const c of t.snaps) assert.equal(ed.snapRotation(c.r), c.expect);
+  for (const c of f.loops) assert.equal(ed.isSelectionLoop(pts(c.points)), c.expect, c.name);
+  for (const c of f.straighten) assert.equal(ed.straightenAngle(pts(c.points)), c.expect);
+  for (const c of f.groups.cases) assert.deepEqual(ed.withGroups(c.ids, f.groups.all).sort(), c.expect);
+  const st = f.stickers;
+  const sample = { ...st.sample, strokes: st.sample.strokes.map((s) => ({ ...s, points: pts(s.points) })) };
+  assert.deepEqual(ed.stickerFields({ ...sample, compact: false }), st.fields);
+  assert.deepEqual(ed.stickerFields({ ...sample, compact: true }), st.fields2);
+  const view = ed.stickerView("s1", st.fields);
+  assert.deepEqual({ ...view, strokes: view.strokes.map((s) => ({ ...s, points: flat(s.points) })) }, st.view);
+  const placed = ed.placeSticker(view, P(st.placed.at), st.placed.scale);
+  assert.deepEqual(placed.strokes.map((s) => ({ ...s, points: flat(s.points) })), st.placed.strokes);
+  assert.deepEqual(placed.elements, st.placed.elements);
+  assert.deepEqual(ed.builtInStickers().map((b) => ({ ...b, strokes: b.strokes.map((s) => ({ ...s, points: flat(s.points) })) })), st.builtins);
+  const bad = ed.stickerView("bad", st.bad.fields);
+  assert.deepEqual({ ...bad, strokes: bad.strokes.map((s) => ({ ...s, points: flat(s.points) })) }, st.bad.expect);
+});
+
+test("lasso edits in the vault: turning, flipping, front and back, groups, connectors, text styles and the elements library", async () => {
+  const { v: vault } = await testVault();
+  const ed = await import("../public/core/inkedit.js");
+  const sketch = vault.addSketch({ paper: "blank" });
+  const page = "0";
+  const box = vault.addStroke({ on: sketch, page, tool: "pen", color: "#000000", width: 2, shape: "rectangle", points: ed.shapePoints("rectangle", { x: 0, y: 0 }, { x: 100, y: 50 }) });
+  const other = vault.addStroke({ on: sketch, page, tool: "pen", color: "#000000", width: 2, shape: "ellipse", points: ed.shapePoints("ellipse", { x: 300, y: 0 }, { x: 400, y: 50 }) });
+  const [a, b] = ed.connectorEnds({ x: 50, y: 25 }, { x: 350, y: 25 }, vault.inkBox(box), vault.inkBox(other));
+  const link = vault.addStroke({ on: sketch, page, tool: "pen", color: "#000000", width: 2, shape: "line", points: [{ ...a, p: 0.5, t: 0 }, { ...b, p: 0.5, t: 0 }], style: { arrow: "end" }, from: box, to: other });
+  assert.deepEqual(vault.connectorsOf(sketch, "", page, [other]), [link]);
+  // Moving the ellipse down: the connector follows.
+  vault.transformStrokes([other], { t: { sx: 1, sy: 1, ox: 0, oy: 0, dx: 0, dy: 200 } });
+  vault.rerouteConnectors([link]);
+  const moved = vault.strokes(sketch, "", page).find((s) => s.id === link);
+  assert.ok(moved.points.at(-1).y > 150 && moved.from === box && moved.to === other && moved.arrow === "end");
+  // Turning a picture-less text box and flipping a picture.
+  const text = vault.addElement({ on: sketch, page, type: "text", frame: { x: 0, y: 100, w: 100, h: 30 }, text: "Hi", size: 20, color: "#000000",
+    style: { font: "serif", bold: true } });
+  assert.equal(vault.element(text).font, "serif");
+  assert.equal(vault.element(text).bold, true);
+  assert.equal(vault.store.records.get(text).fields.italic, undefined);
+  vault.transformElements([text], ed.rotateAbout(Math.PI / 2, 50, 115));
+  assert.ok(Math.abs(vault.element(text).rotate - Math.PI / 2) < 1e-9);
+  vault.updateElement(text, { style: { bold: false, italic: true } });
+  assert.equal(vault.store.records.get(text).fields.bold, false);
+  assert.equal(vault.element(text).italic, true);
+  // Front and back.
+  vault.reorderInk([box], true);
+  assert.equal(vault.strokes(sketch, "", page).at(-1).id, box);
+  vault.reorderInk([box], false);
+  assert.equal(vault.strokes(sketch, "", page)[0].id, box);
+  // Groups: duplicating a group makes a new group; a connector between copies joins the copies.
+  const g = vault.setInkGroup([box, other, link]);
+  const copies = vault.duplicateInk({ strokes: [box, other, link], on: sketch, page });
+  const views = vault.strokes(sketch, "", page).filter((s) => copies.includes(s.id));
+  assert.equal(new Set(views.map((s) => s.group)).size, 1);
+  assert.notEqual(views[0].group, g);
+  const linkCopy = views.find((s) => s.from);
+  assert.ok(copies.includes(linkCopy.from) && copies.includes(linkCopy.to));
+  vault.setInkGroup([box], "");
+  assert.equal(vault.strokes(sketch, "", page).find((s) => s.id === box).group, "");
+  // The library: save, list, place as a group, rename, delete.
+  const strokes = vault.strokes(sketch, "", page).filter((s) => s.id === box || s.id === other);
+  const sid = vault.addSticker({ name: "Two shapes", folder: "Diagrams", strokes, elements: [vault.element(text)] });
+  const saved = vault.stickers().find((s) => s.id === sid);
+  assert.equal(saved.strokes.length, 2);
+  assert.equal(saved.elements[0].font, "serif");
+  assert.ok(vault.stickers().some((s) => s.builtin && s.name === "Checkbox"));
+  const placedIds = vault.placeSticker(saved, { on: sketch, page: "0", at: { x: 500, y: 500 } });
+  assert.equal(placedIds.length, 3);
+  const placedGroups = new Set([...vault.strokes(sketch, "", page), ...vault.elements(sketch, "", page)].filter((x) => placedIds.includes(x.id)).map((x) => x.group));
+  assert.equal(placedGroups.size, 1);
+  vault.updateSticker(sid, { name: "Renamed" });
+  assert.equal(vault.stickers().find((s) => s.id === sid).name, "Renamed");
+  vault.deleteSticker(sid);
+  assert.ok(!vault.stickers().some((s) => s.id === sid));
+});
+
 test("compact points, pen settings, stroke styles and tape in the vault", async () => {
   const { v: vault } = await testVault();
   const sketch = vault.addSketch({ paper: "blank" });

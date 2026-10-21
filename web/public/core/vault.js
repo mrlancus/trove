@@ -13,14 +13,28 @@ import { parseHLC } from "./records.js";
 import { LocalStore } from "./localstore.js";
 import {
   bounds, elementView, erase, INK_SETTINGS_ID, InkField, inkSettingsOf, meanNib, moveBy, pageListOf, penSettingsOf, pointFields, strokeBounds, strokeStyle, strokeView,
-  transformPoint, transformRect, validSize, widthScale,
+  TEXT_FONTS, transformAngle, transformPoint, transformRect, validSize, widthScale,
 } from "./ink.js";
+import { builtInStickers, connectorEnds, elementBounds, placeSticker, STICKER_KIND, stickerFields, stickerView, transformElement } from "./inkedit.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
 /** Pages as the `pageList` field (InkPage.json: no null paper or colour). */
 const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}), ...(p.size ? { size: p.size } : {}) }));
 const newId = () => crypto.randomUUID().toLowerCase();
+
+/** An element's optional look (PROTOCOL.md §10); with `all`, off values (false, 0, "sans", "") are written too, to turn them off. */
+function elementStyle(type, style, all = false) {
+  const out = {};
+  if (typeof style.rotate === "number" && Number.isFinite(style.rotate) && (style.rotate || all)) out.rotate = style.rotate;
+  if (type === "image" && typeof style.flip === "boolean" && (style.flip || all)) out.flip = style.flip;
+  if (type === "text") {
+    if (TEXT_FONTS.includes(style.font) && (style.font !== "sans" || all)) out.font = style.font;
+    for (const k of ["bold", "italic"]) if (typeof style[k] === "boolean" && (style[k] || all)) out[k] = style[k];
+  }
+  if (typeof style.group === "string" && (style.group || all)) out.group = style.group;
+  return out;
+}
 /** The item id for a relay inbox entry, the same on every device (Library.inboxItemId). */
 export const inboxItemId = (entryId) => `inbox-${String(entryId).toLowerCase()}`;
 
@@ -543,13 +557,16 @@ export class Vault {
    * in its place. `style`: optional `fill`, `dash`, `arrow`, `nib` (PROTOCOL.md §10). Points are
    * written as `points2` once the vault says every device reads them (settings.ink `compactPoints`).
    */
-  addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null, style = null }) {
+  addStroke({ on, layer = "", page, tool, color, width, points, shape = null, createdAt = null, style = null, group = "", from = "", to = "" }) {
     if (!points.length) return null;
     const id = newId();
     const compact = this.compactPoints();
     const fields = { [InkField.on]: on, [InkField.layer]: layer, [InkField.page]: page, [InkField.tool]: tool, [InkField.color]: color, [InkField.width]: width,
       ...pointFields(points, compact), [InkField.createdAt]: createdAt ?? this.nextInkTime(on), [InkField.device]: this.journal.device };
     if (shape) fields[InkField.shape] = shape;
+    if (group) fields[InkField.group] = group;
+    if (from) fields[InkField.from] = from;
+    if (to) fields[InkField.to] = to;
     if (style) Object.assign(fields, strokeStyle(style));
     // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
     if (!compact && typeof fields[InkField.nib] !== "number") { const nib = meanNib(points); if (nib !== null) fields[InkField.nib] = nib; }
@@ -568,6 +585,8 @@ export class Vault {
       if (t) {
         Object.assign(fields, pointFields(s.points.map((p) => transformPoint(t, p)), this.compactPoints(), r.fields));
         if (widthScale(t) !== 1) fields[InkField.width] = s.width * widthScale(t);
+        // A turned or mirrored fountain pen's nib turns with it.
+        if (typeof s.nib === "number" && (t.r || t.sx < 0 || t.sy < 0 || t.sx !== t.sy)) fields[InkField.nib] = transformAngle(t, s.nib);
       }
       if (color) fields[InkField.color] = color;
       if (Object.keys(fields).length) this.set(fields, id, "stroke");
@@ -591,7 +610,7 @@ export class Vault {
       this.deleteStrokes([s.id]);
       // Pieces keep the dashes and nib; a piece of a shape isn't that shape, so no fill or arrows.
       const style = { dash: s.dash, nib: s.nib };
-      for (const piece of pieces) added.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width, points: piece, createdAt: s.createdAt, style }));
+      for (const piece of pieces) added.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width, points: piece, createdAt: s.createdAt, style, group: s.group }));
     }
     return added;
   }
@@ -610,22 +629,88 @@ export class Vault {
   setInkFavourites(list) { this.set({ favourites: inkSettingsOf({ favourites: list }).favourites }, INK_SETTINGS_ID, "setting"); }
   setInkPalette(colors) { this.set({ palette: inkSettingsOf({ palette: colors }).palette }, INK_SETTINGS_ID, "setting"); }
 
-  /** Copies of strokes and elements (duplicate, paste), moved by `t`. */
+  /**
+   * Copies of strokes and elements (duplicate, paste), moved by `t`. Copied groups become new
+   * groups, and a copied connector stays joined only to copies.
+   */
   duplicateInk({ strokes = [], elements = [], on, layer = "", page, t = moveBy(20, 20) }) {
-    const out = [];
+    const out = [], groups = new Map(), ids = new Map(), connectors = [];
+    const groupOf = (g) => { if (!g) return ""; if (!groups.has(g)) groups.set(g, newId()); return groups.get(g); };
     for (const id of strokes) {
       const r = this.store.records.get(id);
       if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
       const s = strokeView(r);
-      out.push(this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)), shape: s.shape,
-        style: s }));
+      const copy = this.addStroke({ on, layer, page, tool: s.tool, color: s.color, width: s.width * widthScale(t), points: s.points.map((p) => transformPoint(t, p)), shape: s.shape,
+        style: s, group: groupOf(s.group) });
+      out.push(copy);
+      ids.set(id, copy);
+      if (s.from || s.to) connectors.push([copy, s]);
     }
     for (const id of elements) {
       const e = this.element(id);
       if (!e) continue;
-      out.push(this.addElement({ on, layer, page, type: e.type, frame: transformRect(t, e), text: e.text, size: e.size * widthScale(t), color: e.color, image: e.image }));
+      const copy = this.addElement({ on, layer, page, type: e.type, frame: transformRect(t, e), text: e.text, size: e.size * widthScale(t), color: e.color, image: e.image,
+        style: { ...e, group: groupOf(e.group) } });
+      out.push(copy);
+      ids.set(id, copy);
     }
+    for (const [copy, s] of connectors) this.set({ from: ids.get(s.from) ?? "", to: ids.get(s.to) ?? "" }, copy, "stroke");
     return out;
+  }
+
+  /** Brings strokes and elements in front of everything else on the item (keeping their order), or sends them behind it. */
+  reorderInk(ids, front) {
+    const records = ids.map((id) => this.store.records.get(id)).filter((r) => r && (r.kind === "stroke" || r.kind === "element") && r.fields._deleted !== true)
+      .sort((a, b) => (a.fields.createdAt ?? 0) - (b.fields.createdAt ?? 0) || (a.id < b.id ? -1 : 1));
+    if (!records.length) return;
+    const on = records[0].fields.on;
+    if (front) {
+      let t = this.nextInkTime(on);
+      for (const r of records) this.set({ createdAt: t++ }, r.id, r.kind);
+    } else {
+      const first = Math.min(...this.store.inkOn(on).map((r) => r.fields.createdAt).filter((x) => typeof x === "number"));
+      let t = first - records.length;
+      for (const r of records) this.set({ createdAt: t++ }, r.id, r.kind);
+    }
+  }
+
+  /** Puts strokes and elements in one new group (picked and moved together), or takes them out of theirs (`group` ""). */
+  setInkGroup(ids, group = newId()) {
+    for (const id of ids) {
+      const r = this.store.records.get(id);
+      if (r && (r.kind === "stroke" || r.kind === "element") && r.fields._deleted !== true) this.set({ group }, id, r.kind);
+    }
+    return group;
+  }
+
+  /** Connectors on a page joined to any of `ids` (and not among them): their ids. */
+  connectorsOf(on, layer, page, ids) {
+    const set = new Set(ids);
+    return this.strokes(on, layer, page).filter((s) => !set.has(s.id) && ((s.from && set.has(s.from)) || (s.to && set.has(s.to)))).map((s) => s.id);
+  }
+
+  /** The box a connector end follows: a stroke's line or an element's box as drawn; null when it's gone. */
+  inkBox(id) {
+    const r = this.store.records.get(id);
+    if (!r || r.fields._deleted === true) return null;
+    if (r.kind === "element") return elementBounds(elementView(r));
+    if (r.kind !== "stroke") return null;
+    const s = strokeView(r);
+    return bounds(s.points, s.width / 2);
+  }
+
+  /** Moves connectors' joined ends onto the shapes they join, wherever those are now. */
+  rerouteConnectors(ids) {
+    for (const id of ids) {
+      const r = this.store.records.get(id);
+      if (!r || r.kind !== "stroke" || r.fields._deleted === true) continue;
+      const s = strokeView(r);
+      if (s.points.length < 2) continue;
+      const a = s.points[0], b = s.points.at(-1);
+      const [pa, pb] = connectorEnds(a, b, s.from ? this.inkBox(s.from) : null, s.to ? this.inkBox(s.to) : null);
+      if (pa.x === a.x && pa.y === a.y && pb.x === b.x && pb.y === b.y) continue;
+      this.set(pointFields([{ ...a, ...pa }, { ...b, ...pb }], this.compactPoints(), r.fields), id, "stroke");
+    }
   }
 
   // Text boxes and pictures (`element` records).
@@ -641,12 +726,14 @@ export class Vault {
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
-  addElement({ on, layer = "", page, type, frame, text = "", size = 20, color = "#000000", image = null }) {
+  /** `style`: optional `rotate`, `flip` (pictures), `font`, `bold`, `italic` (text) and `group` (PROTOCOL.md §10). */
+  addElement({ on, layer = "", page, type, frame, text = "", size = 20, color = "#000000", image = null, style = null }) {
     const id = newId();
     const fields = { on, layer, page, type, x: frame.x, y: frame.y, w: frame.w, h: frame.h, createdAt: this.nextInkTime(on), device: this.journal.device };
     if (type === "text") Object.assign(fields, { text, size, color });
     if (type === "tape") fields.color = color;
     if (image) fields.image = image;
+    if (style) Object.assign(fields, elementStyle(type, style));
     this.set(fields, id, "element");
     if (type === "text") this.refreshSketchText(on);
     return id;
@@ -659,7 +746,8 @@ export class Vault {
     return this.addElement({ on, layer, page, type: "image", frame, image });
   }
 
-  updateElement(id, { frame = null, text = null, size = null, color = null } = {}) {
+  /** `style` as in addElement; a field given as false / 0 / "sans" is written that way (turning it off). */
+  updateElement(id, { frame = null, text = null, size = null, color = null, style = null } = {}) {
     const e = this.element(id);
     if (!e) return;
     const fields = {};
@@ -667,15 +755,22 @@ export class Vault {
     if (text !== null) fields.text = text;
     if (size !== null) fields.size = size;
     if (color) fields.color = color;
+    if (style) Object.assign(fields, elementStyle(e.type, style, true));
     if (!Object.keys(fields).length) return;
     this.set(fields, id, "element");
     if (text !== null) this.refreshSketchText(e.on);
   }
 
+  /** Moves, resizes, turns or flips elements with the lasso (`t` as in transformStrokes). */
   transformElements(ids, t) {
     for (const id of ids) {
       const e = this.element(id);
-      if (e) this.updateElement(id, { frame: transformRect(t, e), size: e.type === "text" && widthScale(t) !== 1 ? e.size * widthScale(t) : null });
+      if (!e) continue;
+      const next = transformElement(t, e);
+      const style = {};
+      if (next.rotate !== e.rotate) style.rotate = next.rotate;
+      if (next.flip !== e.flip) style.flip = next.flip;
+      this.updateElement(id, { frame: next, size: e.type === "text" && widthScale(t) !== 1 ? e.size * widthScale(t) : null, style: Object.keys(style).length ? style : null });
     }
   }
 
@@ -683,6 +778,41 @@ export class Vault {
     const items = new Set();
     for (const id of ids) { const e = this.element(id); if (e) items.add(e.on); this.set({ _deleted: true }, id, "element"); }
     for (const on of items) this.refreshSketchText(on);
+  }
+
+  // ---------- the elements library (`sticker` records, PROTOCOL.md §10) ----------
+
+  /** Saved elements, newest first, then the ones Trove comes with. */
+  stickers() {
+    const mine = this.store.visibleOf(STICKER_KIND).map((r) => ({ ...stickerView(r.id, r.fields), createdAt: typeof r.fields.createdAt === "number" ? r.fields.createdAt : 0 }))
+      .sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? -1 : 1));
+    return [...mine, ...builtInStickers()];
+  }
+
+  /** Saves strokes and elements (views) as a reusable element. */
+  addSticker({ name, folder = "", strokes = [], elements = [] }) {
+    const id = newId();
+    this.set({ ...stickerFields({ name, folder, strokes, elements, compact: this.compactPoints() }), createdAt: this.now(), device: this.journal.device }, id, STICKER_KIND);
+    return id;
+  }
+
+  updateSticker(id, { name = null, folder = null } = {}) {
+    const fields = {};
+    if (name !== null) fields.name = String(name).slice(0, 80);
+    if (folder !== null) fields.folder = String(folder).slice(0, 80);
+    if (Object.keys(fields).length) this.set(fields, id, STICKER_KIND);
+  }
+
+  deleteSticker(id) { this.set({ _deleted: true }, id, STICKER_KIND); }
+
+  /** Puts a copy of a library element on a page, centred on `at`, as one new group. Returns the new ids. */
+  placeSticker(sticker, { on, layer = "", page, at, scale = 1 }) {
+    const group = newId(), placed = placeSticker(sticker, at, scale), out = [];
+    for (const s of placed.strokes) out.push(this.addStroke({ on, layer, page, ...s, group }));
+    for (const e of placed.elements) {
+      out.push(this.addElement({ on, layer, page, type: e.type, frame: e, text: e.text, size: e.size, color: e.color, image: e.image, style: { ...e, group } }));
+    }
+    return out.filter(Boolean);
   }
 
   /** The item's `sketchText`: every text box's words, for search. */

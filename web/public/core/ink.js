@@ -4,9 +4,9 @@
 import { b64uDecode, b64uEncode } from "./bytes.js";
 
 export const InkField = { on: "on", layer: "layer", page: "page", tool: "tool", color: "color", width: "width", points: "points", points2: "points2",
-  createdAt: "createdAt", device: "device", shape: "shape", fill: "fill", dash: "dash", arrow: "arrow", nib: "nib" };
-/** Shapes that close on themselves (they can be filled). */
-export const CLOSED_SHAPES = ["triangle", "rectangle", "polygon", "circle", "ellipse"];
+  createdAt: "createdAt", device: "device", shape: "shape", fill: "fill", dash: "dash", arrow: "arrow", nib: "nib", group: "group", from: "from", to: "to" };
+/** Shapes that close on themselves (they can be filled). The last four come from the shape picker (core/inkedit.js). */
+export const CLOSED_SHAPES = ["triangle", "rectangle", "polygon", "circle", "ellipse", "diamond", "star", "heart", "bubble"];
 export const DASHES = ["dash", "dot"];
 export const ARROWS = ["end", "start", "both"];
 export const TOOLS = ["pen", "pencil", "marker", "highlighter", "fountain", "brush"];
@@ -132,6 +132,7 @@ export function strokeView(record) {
     points: strokePoints(f), createdAt: typeof f.createdAt === "number" ? f.createdAt : 0,
     fill: hex(f.fill), dash: DASHES.includes(f.dash) ? f.dash : null, arrow: ARROWS.includes(f.arrow) ? f.arrow : null,
     nib: typeof f.nib === "number" && Number.isFinite(f.nib) ? f.nib : null,
+    group: typeof f.group === "string" ? f.group : "", from: typeof f.from === "string" ? f.from : "", to: typeof f.to === "string" ? f.to : "",
     cache: {},
   };
 }
@@ -483,11 +484,34 @@ export function lassoSelects(pts, lasso) {
 /** A box (text, picture) is picked up when its centre is inside. */
 export const lassoSelectsBox = (r, lasso) => lasso.length >= 3 && inside(r.x + r.w / 2, r.y + r.h / 2, lasso);
 
-/** Scale about (ox, oy), then move: x' = ox + (x − ox)·sx + dx. */
-export const transformPoint = (t, p) => ({ ...p, x: t.ox + (p.x - t.ox) * t.sx + t.dx, y: t.oy + (p.y - t.oy) * t.sy + t.dy });
+/**
+ * Scale about (ox, oy), turn by `r` radians (clockwise on the page, optional) about it too, then
+ * move: x' = ox + cos r·(x − ox)·sx − sin r·(y − oy)·sy + dx (and y' likewise). A point's nib
+ * angle turns with it (`transformAngle`).
+ */
+export const transformPoint = (t, p) => {
+  if (!t.r) {
+    const out = { ...p, x: t.ox + (p.x - t.ox) * t.sx + t.dx, y: t.oy + (p.y - t.oy) * t.sy + t.dy };
+    if (typeof p.a === "number" && (t.sx !== t.sy || t.sx < 0)) out.a = transformAngle(t, p.a);
+    return out;
+  }
+  const x = (p.x - t.ox) * t.sx, y = (p.y - t.oy) * t.sy, c = Math.cos(t.r), s = Math.sin(t.r);
+  const out = { ...p, x: t.ox + c * x - s * y + t.dx, y: t.oy + s * x + c * y + t.dy };
+  if (typeof p.a === "number") out.a = transformAngle(t, p.a);
+  return out;
+};
+/** A nib angle (radians, in [0, π)) after the transform: its direction scaled and turned. */
+export function transformAngle(t, a) {
+  const x = Math.cos(a) * t.sx, y = Math.sin(a) * t.sy, r = t.r ?? 0;
+  const turned = Math.atan2(Math.sin(r) * x + Math.cos(r) * y, Math.cos(r) * x - Math.sin(r) * y);
+  const out = ((turned % Math.PI) + Math.PI) % Math.PI;
+  return out >= Math.PI - 1e-12 ? 0 : out;
+}
 export const widthScale = (t) => Math.sqrt(Math.abs(t.sx) * Math.abs(t.sy));
 export const moveBy = (dx, dy) => ({ sx: 1, sy: 1, ox: 0, oy: 0, dx, dy });
+/** The box around a transformed box (its four corners when turned). */
 export function transformRect(t, r) {
+  if (t.r) return bounds([[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => transformPoint(t, { x, y })));
   const a = transformPoint(t, { x: r.x, y: r.y }), b = transformPoint(t, { x: r.x + r.w, y: r.y + r.h });
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }
@@ -549,7 +573,7 @@ export function brushTaper(index, count) {
 
 // ---------- shapes (InkShapes.swift) ----------
 
-export const SHAPES = ["line", "polyline", "triangle", "rectangle", "polygon", "circle", "ellipse"];
+export const SHAPES = ["line", "polyline", "triangle", "rectangle", "polygon", "circle", "ellipse", "curve", "diamond", "star", "heart", "bubble"];
 
 /** A rough drawing as a clean shape, {shape, points}, or null when it isn't one. */
 export function recognizeShape(raw) {
@@ -653,7 +677,10 @@ export function simplifyClosed(pts, epsilon) {
 // ---------- elements: text boxes and pictures ----------
 
 export const ElementField = { on: "on", layer: "layer", page: "page", type: "type", x: "x", y: "y", w: "w", h: "h", text: "text", size: "size",
-  color: "color", image: "image", createdAt: "createdAt", device: "device" };
+  color: "color", image: "image", createdAt: "createdAt", device: "device", rotate: "rotate", flip: "flip", font: "font", bold: "bold", italic: "italic",
+  group: "group" };
+/** Text box typefaces (`font`; unknown or unset is `sans`). */
+export const TEXT_FONTS = ["sans", "serif", "mono", "rounded"];
 
 export function elementView(record) {
   const f = record.fields, num = (v, d) => (typeof v === "number" ? v : d);
@@ -662,6 +689,9 @@ export function elementView(record) {
     type: ELEMENT_TYPES.includes(f.type) ? f.type : "text", x: num(f.x, 0), y: num(f.y, 0), w: Math.max(1, num(f.w, 200)), h: Math.max(1, num(f.h, 40)),
     text: typeof f.text === "string" ? f.text : "", size: num(f.size, 20), color: typeof f.color === "string" ? f.color : "#000000",
     image: f.image && typeof f.image.id === "string" ? f.image : null, createdAt: num(f.createdAt, 0),
+    rotate: typeof f.rotate === "number" && Number.isFinite(f.rotate) ? f.rotate : 0, flip: f.flip === true,
+    font: TEXT_FONTS.includes(f.font) ? f.font : "sans", bold: f.bold === true, italic: f.italic === true,
+    group: typeof f.group === "string" ? f.group : "",
   };
 }
 
@@ -688,6 +718,7 @@ export const TAPE_COLORS = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5
  * each device keeps to itself), it's a faint outline so the answer shows through.
  */
 export function drawTapeElement(ctx, e, peeked = false) {
+  if (e.rotate) { withElementTransform(ctx, e, () => drawTapeElement(ctx, { ...e, rotate: 0 }, peeked)); return; }
   const r = Math.min(4, e.w / 4, e.h / 4);
   const path = () => {
     ctx.beginPath();
@@ -733,12 +764,35 @@ export function tapeBox(a, b, thick) {
   return { x, y, w, h };
 }
 
-export const textFont = (size) => `${size}px -apple-system, "Segoe UI", system-ui, sans-serif`;
+const FONT_STACKS = {
+  sans: '-apple-system, "Segoe UI", system-ui, sans-serif', serif: '"New York", Georgia, "Times New Roman", serif',
+  mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', rounded: 'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif',
+};
+/** The CSS font of a text box at `size` (with its `font`, `bold` and `italic` when given). */
+export const textFont = (size, e = null) =>
+  `${e?.italic ? "italic " : ""}${e?.bold ? "bold " : ""}${size}px ${FONT_STACKS[e?.font] ?? FONT_STACKS.sans}`;
+
+/**
+ * Runs `draw` with the context turned about the element's centre by its `rotate` (and, for a
+ * picture, mirrored left to right when it has `flip`), so `draw` works in the unturned box.
+ */
+export function withElementTransform(ctx, e, draw) {
+  if (!e.rotate && !(e.flip && e.type === "image")) { draw(); return; }
+  const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (e.rotate) ctx.rotate(e.rotate);
+  if (e.flip && e.type === "image") ctx.scale(-1, 1);
+  ctx.translate(-cx, -cy);
+  draw();
+  ctx.restore();
+}
 
 /** Draws a text box: wrapped lines, 1.25 × size apart. */
 export function drawTextElement(ctx, e) {
+  if (e.rotate) { withElementTransform(ctx, e, () => drawTextElement(ctx, { ...e, rotate: 0 })); return; }
   ctx.save();
-  ctx.font = textFont(e.size);
+  ctx.font = textFont(e.size, e);
   ctx.fillStyle = e.color;
   ctx.textBaseline = "top";
   wrapText(ctx, e.text, e.w).forEach((line, i) => ctx.fillText(line, e.x, e.y + i * e.size * 1.25));
@@ -906,7 +960,7 @@ export function strokeOutline(s) {
 /** Arrowheads on a `line` or `polyline` shape with `arrow`: triangles [tip, left, right] in page points. */
 export function arrowHeads(s) {
   const pts = s.points;
-  if (!s.arrow || (s.shape !== "line" && s.shape !== "polyline") || pts.length < 2) return [];
+  if (!s.arrow || (s.shape !== "line" && s.shape !== "polyline" && s.shape !== "curve") || pts.length < 2) return [];
   const w = lineWidthOf(s), length = 4 * w + 6, half = length * 0.45;
   const head = (tip, from) => {
     const dx = tip.x - from.x, dy = tip.y - from.y, d = Math.hypot(dx, dy);

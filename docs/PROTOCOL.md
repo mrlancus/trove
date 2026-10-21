@@ -494,15 +494,17 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `layer` | `""` for a sketch's own pages; the attachment id of a file (PDF or image) drawn on |
 | `page` | a file's 0-based page (a PDF page, or 0 for an image); on a sketch, the page's id (a string; a number n means the page `"n"`) |
 | `tool` | `pen`, `pencil`, `marker`, `highlighter`, `fountain` or `brush` |
-| `shape` | optional: the clean shape it was snapped to (`line`, `polyline`, `triangle`, `rectangle`, `polygon`, `circle`, `ellipse`); drawn as straight segments at even width |
+| `shape` | optional: the clean shape it was snapped to (`line`, `polyline`, `triangle`, `rectangle`, `polygon`, `circle`, `ellipse`) or drawn with the shape picker (also `curve`, `diamond`, `star`, `heart`, `bubble`); drawn as straight segments at even width (readers that don't know a name still do that) |
 | `color` | `"#rrggbb"` |
 | `width` | full width in page points |
 | `points` | base64url of little-endian float32 quadruples `x, y, pressure (0…1), t (ms since the stroke began)` |
 | `points2` | optional, the compact form of the points (below). When it's a non-empty string readers use it instead of `points` |
-| `fill` | optional `"#rrggbb"`: a closed `shape` (triangle, rectangle, polygon, circle, ellipse) is filled with it, under its line |
+| `fill` | optional `"#rrggbb"`: a closed `shape` (triangle, rectangle, polygon, circle, ellipse, diamond, star, heart, bubble) is filled with it, under its line |
 | `dash` | optional `dash` (dashes 3 widths long, 2-width gaps) or `dot` (round dots 2 widths apart); the stroke is then an even line |
-| `arrow` | optional `end`, `start` or `both`: arrowheads on a `line` or `polyline` shape |
+| `arrow` | optional `end`, `start` or `both`: arrowheads on a `line`, `polyline` or `curve` shape |
 | `nib` | optional, radians: the fountain nib's angle for the whole stroke (45° when unset); a point's own angle in `points2` wins |
+| `group` | optional: a group id shared by strokes and elements picked and moved as one (below); `""` or unset is none |
+| `from`, `to` | optional: a connector's joined ends, the ids of a stroke or element on the same page (below) |
 | `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
 | `device` | device id |
 
@@ -562,9 +564,55 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   to half the radius first; pieces of fewer than 2 points go). Pieces keep the stroke's `createdAt`.
   The highlighter eraser only touches `highlighter` strokes.
 - **Lasso**: picks strokes with at least half their points inside the loop (even-odd rule) and
-  elements whose centre is inside. Moving and resizing rewrite `points` (x' = ox + (x − ox)·sx + dx)
-  and multiply `width` by √(sx·sy); recolouring sets `color`; duplicating adds copies 20 points
-  down and right.
+  elements whose centre is inside (optionally only ink, text or pictures and tape), plus every other
+  member of a picked thing's `group`. Moving, resizing, turning and flipping rewrite `points` with
+  one transform {sx, sy, ox, oy, dx, dy, r}: scale about (ox, oy), turn by r radians (clockwise on
+  the page) about it, then move: x' = ox + cos r·(x − ox)·sx − sin r·(y − oy)·sy + dx,
+  y' = oy + sin r·(x − ox)·sx + cos r·(y − oy)·sy + dy (r = 0 is the old x' = ox + (x − ox)·sx + dx).
+  `width` is multiplied by √|sx·sy|; a nib angle (a point's, or `nib`) becomes the angle of its
+  direction (cos a·sx, sin a·sy) turned by r, in [0, π). Elements move by their centre, `w` and `h`
+  scale by |sx| and |sy| and `rotate` gains r; a mirror (one of sx, sy negative) negates `rotate`
+  first, and a picture is mirrored too (`flip` toggles; upside down it also turns by π); both
+  negative turns by π. Text and tape are never mirrored. Recolouring sets `color`; duplicating adds
+  copies 20 points down and right (copied groups get a new group id; a copied connector keeps only
+  ends joined to things copied with it). Everything is `transformElement` / `transformPoint`
+  (core/inkedit.js, core/ink.js) and `InkEditing` (Swift), checked against `Fixtures/ink-editing.json`
+  (made by `web/test/make-editing-fixture.mjs`).
+- **Arranging**: bring to front sets the picked things' `createdAt` after everything on the item
+  (in their order); send to back sets them to first − n … first − 1 (first = the earliest on the
+  item). Pictures, strokes, text and tape still draw in that order of kinds.
+- **Groups**: grouping gives the picked strokes and elements one new `group` id; ungrouping sets
+  `group` to `""`. Erased pieces keep the group. Apps that don't know groups pick members one by one.
+- **Shape picker**: drag a box from corner a to b; `shapePoints` / `InkEditing.shapePoints` give the
+  points (pressure 0.5, time 0; closed shapes end where they start): `line` a→b; `rectangle`,
+  `triangle` (apex top middle), `diamond` (edge midpoints); `ellipse` (65 points round the box) and
+  `circle` (radius half the shorter side, centred); `star` (10 corners from the top, inner radius
+  0.382, stretched to fill the box); `heart` (48 points of x = 16 sin³t,
+  y = −(13 cos t − 5 cos 2t − 2 cos 3t − cos 4t), stretched to the box); `bubble` (a box over the top
+  80 % with corners of radius 0.15 × min(w, 0.8h) in 4 steps each, and a tail from 40 % to the
+  bottom at 15 % and back to 25 % of the width). An arrow is a `line` with `arrow`.
+- **Handles**: a selected `line` shows its ends and middle; dragging the middle to m makes a `curve`
+  (33 points of the quadratic from a to b with control 2m − (a + b)/2, so it passes through m;
+  pressure kept, time 0). A `curve` shows its ends and its middle point (index 16). `polyline`,
+  `triangle`, `rectangle`, `polygon` and `diamond` show their corners (a closed one's last point
+  moves with its first); a moved rectangle corner makes it a `polygon`. Others resize with the box.
+- **Connectors**: a `line` with `from` and/or `to`. Each joined end sits where the line between the
+  two ends' anchors (a joined end's anchor is the centre of the box of what it joins; a free end is
+  itself) leaves that box, 4 points further out (`boxExit`; the centre if the other anchor is inside
+  the box). The box is a stroke's points grown by half its width, or an element's box as drawn.
+  Whoever moves, resizes, turns or deletes joined things rewrites the connectors' points the same
+  way (`rerouteConnectors`); readers just draw a line. A connector whose target is gone keeps its
+  last points.
+- **Ruler and protractor** (each device's own, never synced): a ruler 720 × 64 points with a
+  centre and angle; a pen put down within 12 screen pixels of a long edge draws along that edge
+  (every point moved onto it, pressure kept). A protractor (radius 160) is the half circle above its
+  base line; a pen put down on the arc draws along it. Both show their angle (0–180°,
+  counter-clockwise from level).
+- **Circle to select** (opt-in, this device): a pen loop (closed within 20 % of its diagonal, at
+  least 24 points each way, 8 points or more) held still, with something inside it, becomes a lasso
+  selection instead of ink.
+- **Straighten** turns the selection about its centre by `straightenAngle`: minus the angle of its
+  points' main direction (principal axis) from the nearest of level or upright.
 - **Shapes**: `InkShapes.swift` / `recognizeShape` in ink.js. Open drawings: a line if no point is
   further than 8 % of the ends' distance from it, else up to 3 straight pieces (Ramer–Douglas–Peucker
   at 8 % of the diagonal). Closed ones (ends within 20 % of the diagonal): an ellipse (a circle when
@@ -613,8 +661,29 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 strokes (`on`, `layer`, `page`, `createdAt`, `device`), with `type` (`text` or `image`) and a box
 `x`, `y`, `w`, `h` in page points. Text has `text`, `size` (points) and `color`, wrapped to `w`
 with lines 1.25 × size apart. Pictures have `image` (an attachment, stored as a blob).
+Optional (readers that don't know them draw the box upright and plain):
+- `rotate`: radians, clockwise about the box's centre (any element). Hit tests turn the point back.
+- `flip`: `true` mirrors a picture left to right (before turning).
+- Text style: `font` (`sans` (unset), `serif`, `mono` or `rounded`), `bold`, `italic` (booleans).
+  Bullet lists are plain text: lines starting "• ".
+- `group`: as for strokes.
 **Tape** (`type: "tape"`, with `color`) covers its box with an opaque strip (faint diagonal stripes)
 drawn over everything else on the page, so what's under it is hidden until tapped. Tapping it (any
 pen, or the tape tool) opens it on that device only (a faint dashed outline); it isn't synced, so
 each device starts covered. Apps that don't know tape treat it as an empty text box (nothing drawn).
 Lasso picks it up like any element.
+
+**The elements library** (stickers): `kind: "sticker"` records, not tied to any item. Fields:
+`name`, `folder` (`""` for none; one level), `w`, `h` (the content's box, which starts at 0, 0),
+`strokes` (an array of `{tool, color, width, points | points2, shape?, fill?, dash?, arrow?, nib?}`,
+the points relative to that box, written as `points2` once the vault's `compactPoints` is on),
+`elements` (an array of `{type, x, y, w, h, text?, size?, color?, image?, rotate?, flip?, font?,
+bold?, italic?}`; a picture's `image` is the same attachment, so its blob is shared), `createdAt`,
+`device`. Saving a selection keeps everything's look and moves it so its box (strokes grown by half
+their width, elements as drawn) starts at 0, 0 (`stickerFields`). Placing one adds copies of its
+strokes and elements centred on a point, scaled by s (width, size, w, h too), all in one new
+`group` (`placeSticker`). Deleting is `_deleted`. Bad entries are dropped when read. Trove also
+comes with built-in elements (ids `builtin.*`, not records, the same on every device; `builtInStickers`
+/ `InkStickers.builtIns`): arrows (one-way, two-way, curved), checkboxes (empty, ticked), dividers
+(solid, dotted), a star, a heart and planner tags (Important, To do, Done, Due). All of this is
+checked against `Fixtures/ink-editing.json`. Apps that don't know `sticker` records ignore them.
