@@ -1106,13 +1106,17 @@ export class Vault {
   /** Pull everyone's new segments, then push ours. */
   async sync() {
     const report = { pulled: 0, pushed: 0, errors: [] };
+    // A copy that has pulled nothing yet starts from the newest checkpoint instead of every op.
+    if (this.cursor === 0 && !this.store.base) await this.loadCheckpoint(report);
     // Pull.
     let after = this.cursor, more = true, ok = true;
     while (more) {
       const page = await this.api("GET", `segments?after=${after}&limit=500`);
       for (const s of page.segments) {
         const key = `${s.device}/${s.first}`;
-        if (!this.applied.has(key)) {
+        // Already inside the checkpoint: no need to download it.
+        const inBase = this.store.base && coversRange(this.store.base.covers, s.device, s.first, s.last);
+        if (!inBase && !this.applied.has(key)) {
           try {
             const ops = await this.decodeOps(await this.api("GET", `segments/${s.device}/${s.first}/${s.last}`, { raw: true }), s.device);
             if (s.device === this.journal.device) this.makeRoomAfter(s.last);
@@ -1153,7 +1157,89 @@ export class Vault {
     }
     report.imported = imported.length;
     if (report.pulled || imported.length) this.changed();
+    if (ok && !report.errors.length && !this.journal.pending.length) await this.maybeWriteCheckpoint(report);
     return report;
+  }
+
+  // ---------- checkpoints (PROTOCOL.md §3 "Checkpoints", §4) ----------
+
+  /** The relay's checkpoints, newest first; [] when it has none or doesn't know them (an older relay). */
+  async checkpoints() {
+    try {
+      return (await this.api("GET", "checkpoints")).checkpoints ?? [];
+    } catch (e) {
+      if (e instanceof RelayError && (e.status === 404 || e.status === 405)) return [];
+      throw e;
+    }
+  }
+
+  /** Starts this copy from the newest checkpoint it can read. A failure just means pulling every op. */
+  async loadCheckpoint(report) {
+    if (!this.config.encrypted) return false;
+    let list;
+    try { list = await this.checkpoints(); } catch (e) { report.errors.push(`checkpoints: ${e.message}`); return false; }
+    for (const entry of list.slice(0, 2)) {
+      try {
+        const data = await this.api("GET", `checkpoints/${entry.id}`, { raw: true });
+        const base = parseCheckpoint(await openCheckpoint(data, this.keys.segment));
+        base.id = entry.id;
+        this.adoptCheckpoint(base, data);
+        report.checkpoint = entry.id;
+        return true;
+      } catch (e) {
+        report.errors.push(`checkpoint ${entry.id}: ${e.message}`);
+      }
+    }
+    return false;
+  }
+
+  /** Uses a checkpoint as this copy's base: the store starts from it, and it's saved locally in place of the ops it covers. */
+  adoptCheckpoint(base, data) {
+    if (!this.store.useBase(base)) return false;
+    for (const op of base.texts) this.journal.observe(op.h);
+    if (base.frontier) this.journal.observe(base.frontier);
+    // Our own journal is in it (this browser lost its copy): new edits number after it.
+    const mine = lastCoveredSeq(base, this.journal.device);
+    if (mine) this.makeRoomAfter(mine);
+    if (typeof base.cursor === "number" && base.cursor > this.cursor) this.cursor = base.cursor;
+    this.newBase = { v: 1, id: base.id, cursor: base.cursor, data: b64uEncode(data) };
+    this.changed();
+    return true;
+  }
+
+  /**
+   * Writes a checkpoint when enough ops have piled up since the last one and the newest on the relay
+   * is a day old, then uses it locally too (the local copy shrinks to it plus text history).
+   */
+  async maybeWriteCheckpoint(report, { force = false } = {}) {
+    if (!this.config.encrypted || this.checkpointsUnsupported) return false;
+    const since = this.store.ops.length - (this.store.base?.texts.length ?? 0);
+    if (!force && since < CHECKPOINT_AFTER_OPS) return false;
+    if (!force && this.now() - (this.checkpointCheckedAt ?? 0) < 60 * 60 * 1000) return false;
+    this.checkpointCheckedAt = this.now();
+    try {
+      const list = await this.checkpoints();
+      if (!force && list[0] && this.now() - list[0].createdAt < CHECKPOINT_MIN_AGE_MS) return false;
+      const id = newId();
+      const cp = makeCheckpoint(this.store, { cursor: this.cursor, device: this.journal.device, createdAt: this.now() });
+      const data = await sealCheckpoint(cp, this.keys.segment);
+      if (data.length > MAX_CHECKPOINT_BYTES) return false;
+      try {
+        await this.api("PUT", `checkpoints/${id}`, { body: data, expect: [200, 201] });
+      } catch (e) {
+        if (e instanceof RelayError && (e.status === 404 || e.status === 405)) { this.checkpointsUnsupported = true; return false; }
+        throw e;
+      }
+      const base = parseCheckpoint(cp);
+      base.id = id;
+      this.adoptCheckpoint(base, data);
+      await this.save();
+      report.wroteCheckpoint = id;
+      return true;
+    } catch (e) {
+      report.errors.push(`checkpoint: ${e.message}`);
+      return false;
+    }
   }
 
   async importInbox(report) {
@@ -1271,9 +1357,11 @@ export class Vault {
       return;
     }
     const pendingIds = new Set(this.journal.pending.map((op) => `${op.d}:${op.s}`));
-    const kept = this.store.ops.filter((op) => !pendingIds.has(`${op.d}:${op.s}`));
+    const kept = this.store.opsAfterBase.filter((op) => !pendingIds.has(`${op.d}:${op.s}`));
+    const base = this.store.base;
     this.journal.renumberFrom(last + 1);
     this.store = new RecordStore();
+    if (base) this.store.useBase(base);
     this.store.apply([...kept, ...this.journal.pending]);
     this.store.unsaved = [];
     this.local.needsRewrite = true; // op ids changed: the local op store is written again whole

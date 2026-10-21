@@ -22,6 +22,9 @@ export interface Env {
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
 
 const MAX_SEGMENT_BYTES = 1024 * 1024;
+/** Checkpoints (PROTOCOL.md §3): the newest few per vault, up to just under the Workers request limit. */
+const MAX_CHECKPOINT_BYTES = 95 * 1024 * 1024;
+const CHECKPOINTS_KEPT = 3;
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 const RECOVERY_TTL_MS = 5 * 60 * 1000;
 const MAX_OPEN_RECOVERIES = 10;
@@ -70,6 +73,7 @@ export class VaultObject extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS watches(id TEXT PRIMARY KEY, url TEXT, item_id TEXT, created_at INTEGER, checked_at INTEGER DEFAULT 0,
         error TEXT, price REAL, currency TEXT, lowest REAL, history TEXT DEFAULT '[]', dropped_at INTEGER);
       CREATE TABLE IF NOT EXISTS published(slug TEXT PRIMARY KEY, title TEXT, markdown TEXT, updated_at INTEGER);
+      CREATE TABLE IF NOT EXISTS checkpoints(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, device TEXT, size INTEGER, created_at INTEGER);
     `);
     this.bridges = new Bridges({
       sql: this.sql, storage: ctx.storage, vaultId: () => this.vaultId, fetcher: () => this.fetchPage, tokenKey: env.BRIDGE_KEY,
@@ -262,6 +266,11 @@ export class VaultObject extends DurableObject<Env> {
         if (a && b && c && method === "PUT") return this.putSegment(request, deviceId, a, Number(b), Number(c));
         if (a && b && c && method === "GET") return this.getSegment(a, Number(b), Number(c));
         break;
+      case "checkpoints":
+        if (!a && method === "GET") return this.listCheckpoints();
+        if (a && !b && method === "PUT") return this.putCheckpoint(request, deviceId, a);
+        if (a && !b && method === "GET") return this.getCheckpoint(a);
+        break;
       case "blobs":
         if (a && method === "PUT") return this.putBlob(request, a);
         if (a && method === "GET") return this.getBlob(a);
@@ -349,9 +358,45 @@ export class VaultObject extends DurableObject<Env> {
     return new Response(row.body, { headers: { "content-type": "application/octet-stream" } });
   }
 
+  // ---------- checkpoints (PROTOCOL.md §3 "Checkpoints"): opaque TRV1 blobs in R2 ----------
+
+  private async putCheckpoint(request: Request, device: string, id: string) {
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) return error(400, "bad checkpoint id");
+    if (this.sql.exec("SELECT 1 FROM checkpoints WHERE id = ?", id).toArray()[0]) return json({ id }, 200);
+    const length = Number(request.headers.get("content-length"));
+    if (!request.body || !Number.isFinite(length) || length <= 0) return error(411, "content-length required");
+    if (length > MAX_CHECKPOINT_BYTES) return error(413, "checkpoint too large");
+    await this.env.BLOBS.put(this.r2Key("c", id), fixedLength(request.body, length));
+    this.sql.exec("INSERT INTO checkpoints(id, device, size, created_at) VALUES(?, ?, ?, ?)", id, device, length, Date.now());
+    // Only the newest few are kept: each one holds everything before it.
+    const old = this.sql
+      .exec<{ id: string }>("SELECT id FROM checkpoints ORDER BY seq DESC LIMIT -1 OFFSET ?", CHECKPOINTS_KEPT)
+      .toArray();
+    for (const row of old) {
+      await this.env.BLOBS.delete(this.r2Key("c", row.id));
+      this.sql.exec("DELETE FROM checkpoints WHERE id = ?", row.id);
+    }
+    return json({ id }, 201);
+  }
+
+  private listCheckpoints() {
+    const checkpoints = this.sql
+      .exec<{ id: string; device: string; size: number; created_at: number }>("SELECT id, device, size, created_at FROM checkpoints ORDER BY seq DESC")
+      .toArray()
+      .map((r) => ({ id: r.id, device: r.device, size: r.size, createdAt: r.created_at }));
+    return json({ checkpoints });
+  }
+
+  private async getCheckpoint(id: string) {
+    if (!this.sql.exec("SELECT 1 FROM checkpoints WHERE id = ?", id).toArray()[0]) return error(404, "no such checkpoint");
+    const obj = await this.env.BLOBS.get(this.r2Key("c", id));
+    if (!obj) return error(404, "no such checkpoint");
+    return new Response(obj.body, { headers: { "content-type": "application/octet-stream", "content-length": String(obj.size) } });
+  }
+
   // ---------- blobs ----------
 
-  private r2Key(kind: "b" | "i", id: string) {
+  private r2Key(kind: "b" | "i" | "c", id: string) {
     return `v/${this.vaultId}/${kind}/${id}`;
   }
 
