@@ -79,6 +79,26 @@ import Testing
         }
     }
 
+    @Test func fastBase64MatchesFoundationAndDecodesQuickly() {
+        var rng = SystemRandomNumberGenerator()
+        for n in [0, 1, 2, 3, 16, 17, 100, 1601] {
+            let data = Data((0..<n).map { _ in UInt8.random(in: 0...255, using: &rng) })
+            #expect(InkPoints.base64URLBytes(data.base64URL) == [UInt8](data))
+            #expect(InkPoints.base64URLBytes(data.base64EncodedString()) == [UInt8](data))
+        }
+        #expect(InkPoints.base64URLBytes("a$bc") == nil && InkPoints.base64URLBytes("abcde") == nil)
+        let stroke = (0..<200).map { InkPoint(x: Double($0), y: Double($0) / 3, pressure: 0.5, t: Double($0) * 8) }
+        let legacy = InkPoints.encode(stroke), compact = InkPoints.encode2(stroke)
+        let start = Date()
+        for _ in 0..<2000 { _ = InkPoints.decode(legacy) }
+        let legacyTime = Date().timeIntervalSince(start)
+        let mid = Date()
+        for _ in 0..<2000 { _ = InkPoints.decode2(compact) }
+        let compactTime = Date().timeIntervalSince(mid)
+        print("decode 200-point stroke: points \(Int(legacyTime / 2000 * 1e6)) µs, points2 \(Int(compactTime / 2000 * 1e6)) µs; sizes \(legacy.count) vs \(compact.count) chars")
+        #expect(InkPoints.decode(legacy).count == 200)
+    }
+
     @Test func penSettingsMatchTheWebsite() throws {
         let f = try fixture()
         for c in f["settings"]?.array ?? [] {

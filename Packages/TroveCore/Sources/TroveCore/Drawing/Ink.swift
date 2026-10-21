@@ -142,13 +142,56 @@ public enum InkPoints {
     }
 
     public static func decode(_ string: String) -> [InkPoint] {
-        guard let data = Data(base64URL: string) else { return [] }
-        let bytes = [UInt8](data)
-        func f(_ i: Int) -> Double {
-            Double(Float(bitPattern: UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8 | UInt32(bytes[i + 2]) << 16 | UInt32(bytes[i + 3]) << 24))
+        guard let bytes = base64URLBytes(string) else { return [] }
+        let n = bytes.count / 16
+        var out: [InkPoint] = []
+        out.reserveCapacity(n)
+        bytes.withUnsafeBytes { raw in
+            func f(_ i: Int) -> Double { Double(Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: i, as: UInt32.self)))) }
+            for k in 0..<n {
+                let o = k * 16
+                out.append(InkPoint(x: f(o), y: f(o + 4), pressure: f(o + 8), t: f(o + 12)))
+            }
         }
-        return stride(from: 0, to: bytes.count - bytes.count % 16, by: 16).map { InkPoint(x: f($0), y: f($0 + 4), pressure: f($0 + 8), t: f($0 + 12)) }
+        return out
     }
+
+    /// base64url (or standard base64, padding optional) straight to bytes: much faster than going
+    /// through Foundation for the thousands of strokes a notebook has. Nil when it isn't base64.
+    static func base64URLBytes(_ string: String) -> [UInt8]? {
+        var text = string
+        return text.withUTF8 { src -> [UInt8]? in
+            var end = src.count
+            while end > 0, src[end - 1] == UInt8(ascii: "=") { end -= 1 }
+            if end % 4 == 1 { return nil }
+            var out = [UInt8](repeating: 0, count: end / 4 * 3 + max(0, end % 4 - 1))
+            var ok = true
+            out.withUnsafeMutableBufferPointer { dst in
+                var acc: UInt32 = 0, bits = 0, j = 0
+                for i in 0..<end {
+                    let v = base64Table[Int(src[i])]
+                    if v == 255 { ok = false; return }
+                    acc = acc << 6 | UInt32(v)
+                    bits += 6
+                    if bits >= 8 {
+                        bits -= 8
+                        dst[j] = UInt8(truncatingIfNeeded: acc >> UInt32(bits))
+                        j += 1
+                    }
+                }
+            }
+            return ok ? out : nil
+        }
+    }
+
+    private static let base64Table: [UInt8] = {
+        var t = [UInt8](repeating: 255, count: 256)
+        let chars = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".utf8)
+        for (i, c) in chars.enumerated() { t[Int(c)] = UInt8(i) }
+        t[Int(UInt8(ascii: "-"))] = 62; t[Int(UInt8(ascii: "+"))] = 62
+        t[Int(UInt8(ascii: "_"))] = 63; t[Int(UInt8(ascii: "/"))] = 63
+        return t
+    }()
 
     /// Positions are kept to 1/20 point (core/ink.js `POINTS2_SCALE`).
     public static let scale2 = 20.0
@@ -200,9 +243,7 @@ public enum InkPoints {
     }
 
     public static func decode2(_ string: String) -> [InkPoint] {
-        guard let data = Data(base64URL: string) else { return [] }
-        let bytes = [UInt8](data)
-        guard bytes.count >= 3, bytes[0] == 1 else { return [] }
+        guard let bytes = base64URLBytes(string), bytes.count >= 3, bytes[0] == 1 else { return [] }
         let angles = bytes[1] & 1 == 1
         var i = 2
         func varint() -> Int64? {
