@@ -1,4 +1,5 @@
 import { pageListOf, PAPERS, validSize } from "./ink.js";
+import { folderMap, ITEM_FIELDS, itemDoc, matchesFilters, parseQuery, TermIndex } from "./search.js";
 // Item view, search and smart collections for the web app. Mirrors Item.swift, SearchIndex.swift,
 // SmartCollections.swift, URLCleaner.swift and Markdown.hashtags closely enough to feel the same.
 
@@ -114,116 +115,26 @@ export function hashtags(text) {
   return tags;
 }
 
-// ---------- Search ----------
+// ---------- Search (core/search.js; the page searches in a Worker, searchclient.js) ----------
 
-const stopwords = new Set(["a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "has", "have", "i", "in", "is", "it",
-  "its", "of", "on", "or", "that", "the", "this", "to", "was", "were", "will", "with", "you", "your", "my", "me", "we"]);
+export { KINDS, matchesFilters, parseQuery, terms } from "./search.js";
 
-function stem(w) {
-  if (w.length <= 3 || !/^\p{L}+$/u.test(w)) return w;
-  if (w.endsWith("ies") && w.length > 4) return w.slice(0, -3) + "y";
-  for (const s of ["sses", "ches", "shes", "xes", "zes"]) if (w.endsWith(s)) return w.slice(0, -2);
-  if (w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us") && !w.endsWith("is")) return w.slice(0, -1);
-  return w;
-}
+/** SearchQuery.matches for an item view. */
+export const matchesQuery = (q, item, folders = null) => matchesFilters(q, itemDoc(item).meta, folders);
 
-export function terms(text) {
-  const folded = text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
-  return (folded.match(/[\p{L}\p{N}]+/gu) ?? [])
-    .filter((t) => !stopwords.has(t) && (t.length > 1 || /^\p{N}+$/u.test(t)))
-    .map(stem);
-}
+// One index for this page's synchronous searches (tests, the "connect to" box), updated per version of each item.
+const shared = new TermIndex(ITEM_FIELDS);
+const indexed = new Map(); // item id → the item view indexed
 
-export function parseQuery(input) {
-  const q = { text: "", kinds: [], categories: [], tags: [], sources: [], collection: null, pinnedOnly: false, unreadOnly: false, after: null, before: null };
-  const free = [];
-  for (const token of input.split(" ").filter(Boolean)) {
-    const i = token.indexOf(":");
-    const key = i > 0 ? token.slice(0, i).toLowerCase() : "", value = i > 0 ? token.slice(i + 1).toLowerCase() : "";
-    if (token.length > 1 && token.startsWith("#")) { q.tags.push(token.slice(1).toLowerCase()); continue; }
-    if (!value) { free.push(token); continue; }
-    if (key === "tag") q.tags.push(value.replace("#", ""));
-    else if (key === "type" || key === "kind") (KINDS.includes(value) ? q.kinds : q.categories).push(value);
-    else if (key === "is") value === "pinned" ? (q.pinnedOnly = true) : value === "unread" ? (q.unreadOnly = true) : q.categories.push(value);
-    else if (key === "from" || key === "source") q.sources.push(value);
-    else if (key === "in") q.collection = token.slice(i + 1);
-    else if (key === "after" || key === "before") q[key] = Date.parse(value + "T00:00:00Z") || null;
-    else free.push(token);
+/** BM25 over weighted fields with the last word as a prefix, typos, phrases and operators (SearchIndex.swift). */
+export function search(items, input, now = Date.now(), { folders = null, limit = Infinity } = {}) {
+  const byId = new Map();
+  for (const item of items) {
+    byId.set(item.id, item);
+    if (indexed.get(item.id) !== item) { shared.update(itemDoc(item)); indexed.set(item.id, item); }
   }
-  q.text = free.join(" ");
-  return q;
-}
-
-const KINDS = ["note", "link", "image", "pdf", "audio", "video", "file", "highlight", "email"];
-
-export function matchesQuery(q, item) {
-  if (q.kinds.length && !q.kinds.includes(item.kind)) return false;
-  if (q.categories.length && !q.categories.includes(item.category)) return false;
-  if (q.tags.length && !q.tags.every((t) => item.tags.map((x) => x.toLowerCase()).includes(t))) return false;
-  if (q.sources.length && !item.sources.some((s) => q.sources.includes(s.toLowerCase()))) return false;
-  if (q.collection && !item.collections.includes(q.collection)) return false;
-  if (q.pinnedOnly && !item.isPinned) return false;
-  if (q.unreadOnly && item.readAt !== null) return false;
-  if (q.after && item.createdAt < q.after) return false;
-  if (q.before && item.createdAt >= q.before) return false;
-  return true;
-}
-
-// Search docs, made once per version of each item and kept with the document frequencies of every
-// term, so a keystroke only scores (like SearchIndex.swift, which keeps one index per device).
-const docs = new Map(); // item id → { hlc, tf, length }
-const df = new Map();
-let totalLength = 0;
-
-function docFor(item) {
-  const hlc = item.record?.updatedHLC ?? "";
-  const cached = docs.get(item.id);
-  if (cached && cached.hlc === hlc && cached.item === item) return cached;
-  if (cached) {
-    totalLength -= cached.length;
-    for (const t of cached.tf.keys()) { const n = (df.get(t) ?? 1) - 1; if (n > 0) df.set(t, n); else df.delete(t); }
-  }
-  const tf = new Map();
-  const add = (text, w) => { for (const t of terms(text ?? "")) tf.set(t, (tf.get(t) ?? 0) + w); };
-  add(item.title, 3); add(item.tags.join(" "), 2.5); add(item.summary, 1.5); add(item.siteName, 1.5);
-  add(item.body, 1); add(item.ocrText, 1); add(item.sketchText, 1); add(item.inkText, 1); add(item.url?.host, 1);
-  const doc = { hlc, item, tf, length: [...tf.values()].reduce((a, b) => a + b, 0) };
-  docs.set(item.id, doc);
-  totalLength += doc.length;
-  for (const t of tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
-  return doc;
-}
-
-/** BM25 over weighted fields with a prefix match on the last word, like SearchIndex.swift. */
-export function search(items, input, now = Date.now()) {
-  const q = parseQuery(input);
-  const words = terms(q.text);
-  const shown = items.map(docFor);
-  const n = Math.max(docs.size, 1);
-  const avg = totalLength / n;
-  const hits = [];
-  for (const doc of shown) {
-    if (!matchesQuery(q, doc.item)) continue;
-    let score = 0, ok = true;
-    for (let i = 0; i < words.length && ok; i++) {
-      const w = words[i];
-      let matched = doc.tf.has(w) ? [[w, doc.tf.get(w)]] : [];
-      if (!matched.length && i === words.length - 1 && w.length >= 2) {
-        for (const [t, v] of doc.tf) if (t.startsWith(w)) matched.push([t, v * 0.7]);
-      }
-      if (!matched.length) ok = false;
-      for (const [t, tf] of matched) {
-        const d = df.get(t) ?? 1;
-        score += Math.log(1 + (n - d + 0.5) / (d + 0.5)) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * doc.length / Math.max(avg, 1)));
-      }
-    }
-    if (!ok) continue;
-    if (doc.item.isPinned) score += 0.25;
-    score += Math.max(0, 0.5 - (now - doc.item.createdAt) / 86_400_000 / 60);
-    hits.push({ item: doc.item, score });
-  }
-  hits.sort((a, b) => (words.length && a.score !== b.score ? b.score - a.score : b.item.createdAt - a.item.createdAt));
-  return hits.map((h) => h.item);
+  const { hits } = shared.search(parseQuery(input), { scope: new Set(byId.keys()), now, limit: Math.min(limit, items.length), folders: folders && folderMap(folders) });
+  return hits.map((h) => byId.get(h.id));
 }
 
 // ---------- Smart collections ----------

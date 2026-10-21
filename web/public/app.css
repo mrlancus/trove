@@ -101,6 +101,9 @@ textarea { resize: vertical; }
 .card .title { font-weight: 600; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
 .card .snippet { color: var(--muted); font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; overflow-wrap: anywhere; }
 .card.highlight .snippet { color: var(--fg); font-style: italic; -webkit-line-clamp: 6; }
+.card .snippet[hidden] { display: none; }
+.card .snippet.found b { color: var(--fg); font-weight: 650; }
+.card .snippet-label { font-weight: 600; }
 .card .price { color: var(--accent); font-weight: 600; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .tag-chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 0; }
