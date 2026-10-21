@@ -48,6 +48,12 @@ final class ClipboardStore {
     @ObservationIgnored private var images: [String: PlatformImage] = [:]
     @ObservationIgnored private var lastPrune = Date.distantPast
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    /// From this many clips on, words are looked up in a postings index instead of scanning every
+    /// clip's text (which stays the way below it, and while the index catches up).
+    static let indexFrom = 20_000
+    /// The clip index, when there are that many, and the revision it matches.
+    @ObservationIgnored private(set) var clipIndex: (revision: Int, index: ClipIndex)?
+    @ObservationIgnored private var indexing: Task<Void, Never>?
 
     init() {
         enabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
@@ -77,12 +83,48 @@ final class ClipboardStore {
         keep = await library.clipKeep()
         revision += 1
         warmFacts()
+        refreshClipIndex()
         #if os(iOS)
         publishForKeyboard()
         #endif
     }
 
     // MARK: Searching
+
+    /// Updates the clip index in the background with only the clips that changed.
+    private func refreshClipIndex() {
+        guard clips.count >= Self.indexFrom else { clipIndex = nil; return }
+        indexing?.cancel()
+        let snapshot = clips, revision = self.revision
+        let start = clipIndex?.index ?? ClipIndex()
+        indexing = Task { [weak self] in
+            let built = await Task.detached(priority: .utility) { () -> ClipIndex in
+                var index = start
+                let live = Set(snapshot.map(\.id))
+                for id in index.ids where !live.contains(id) { index.remove(id) }
+                for c in snapshot where index.version(c.id) != c.record.updatedHLC { index.update(c) }
+                index.prepare()
+                return index
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.clipIndex = (revision, built)
+        }
+    }
+
+    /// Clips matching `query`: from the index when there is one for these clips, else by scanning.
+    func matches(_ query: ClipQuery, limit: Int) -> [Clip] {
+        if !query.words.isEmpty, let clipIndex, clipIndex.revision == revision {
+            let byId = Dictionary(clips.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            return clipIndex.index.search(query, limit: limit).ids.compactMap { byId[$0] }
+        }
+        return Array(clips.lazy.filter { query.matches($0, haystack: self.searchText($0)) }.prefix(limit))
+    }
+
+    /// Ids of clips matching `query`'s words via the index, or nil to scan instead.
+    func indexedIDs(_ query: ClipQuery) -> Set<String>? {
+        guard !query.words.isEmpty, let clipIndex, clipIndex.revision == revision else { return nil }
+        return Set(clipIndex.index.search(query).ids)
+    }
 
     /// The clip's folded search text (`Clip.searchText`), worked out once per version of the clip.
     func searchText(_ clip: Clip) -> String { facts(clip).search }

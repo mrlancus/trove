@@ -498,8 +498,40 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `color` | `"#rrggbb"` |
 | `width` | full width in page points |
 | `points` | base64url of little-endian float32 quadruples `x, y, pressure (0…1), t (ms since the stroke began)` |
+| `points2` | optional, the compact form of the points (below). When it's a non-empty string readers use it instead of `points` |
+| `fill` | optional `"#rrggbb"`: a closed `shape` (triangle, rectangle, polygon, circle, ellipse) is filled with it, under its line |
+| `dash` | optional `dash` (dashes 3 widths long, 2-width gaps) or `dot` (round dots 2 widths apart); the stroke is then an even line |
+| `arrow` | optional `end`, `start` or `both`: arrowheads on a `line` or `polyline` shape |
+| `nib` | optional, radians: the fountain nib's angle for the whole stroke (45° when unset); a point's own angle in `points2` wins |
 | `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
 | `device` | device id |
+
+- **Compact points (`points2`)**: base64url of bytes: `1` (the version; readers give up on any
+  other), a flags byte (bit 0: every point has a nib angle), the point count as a varint (7 bits a
+  byte, low first, high bit = more), then per point: x and y as zigzag varints (n ≥ 0 → 2n, else
+  −2n − 1) of the step from the previous point in 1/20 page points (`floor(v × 20 + 0.5)`, so steps
+  of the rounded values never drift), the pressure as one byte (`floor(p × 255 + 0.5)`), the time
+  step in whole ms as a varint (never negative) and, with angles, the angle in [0, π) as one byte
+  (`floor(a / π × 256 + 0.5) mod 256`). About 5 bytes a point against `points`' 21 (base64 of 16).
+  `encodePoints2`/`InkPoints.encode2`, checked against `Fixtures/ink-outline.json`.
+  **Who writes it**: apps released before it can't read it (they'd see an empty stroke, and moving
+  one there would wipe it), so writers keep writing `points` until the vault's `settings.ink`
+  record has `compactPoints: true` ("Smaller drawings" in the drawing settings, which says to turn
+  it on once every device is up to date). Then new strokes get only `points2`, and a moved or
+  resized stroke gets `points2` with `points` set to `""` (and the other way round when it's
+  off). Undo puts back the old `points`/`points2` (empty when there were none). Without
+  `points2`, per-point nib angles are kept as their average in `nib`.
+- **Drawing settings** every device follows: one record, id `settings.ink`, kind `setting`
+  (`inkSettingsOf` / `InkSettings`, fixture-checked): `pen.<tool>` = `{smoothing 0–100, curve
+  "soft" | "normal" | "firm", minWidth 0–100}` per pen; `favourites` = up to 10 `{tool, color,
+  width}`; `palette` = up to 24 `"#rrggbb"`; `compactPoints` (above). Out-of-range values are
+  clamped, bad entries dropped. Recent colours and the line options (dashes, arrows, fill) stay on
+  the device.
+- **Pen settings apply while drawing**, so a stroke stores what was shown and every device draws
+  it the same: pressure becomes `m + (1 − m) · c(p)` (m = minWidth / 100; c(p) = p^0.6 soft, p
+  normal, p^1.6 firm), and each point moves k = 1 − 0.9 · smoothing / 100 of the way from the
+  previous stored point to the pen; when the pen lifts with smoothing on, the pen's own last point
+  is added if it's 0.5 points or more away (`PenFilter`).
 
 - **Coordinates** are page points: a PDF page's points, an image's pixels, or a sketch page
   (768 × 1024 unless the item's `pageSize` says otherwise).
@@ -507,7 +539,22 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   `width × (0.15 + 0.85 × pressure)` tapering over their first and last 15 % of points, and fountain
   pens `width × (0.25 + 0.75 × |sin(direction − 45°)|) × (0.6 + 0.4 × pressure)`, where the
   direction runs from the previous to the next point. Markers and highlighters are even. Opacity:
-  pencil 0.85, highlighter 0.35 (blended under the ink), others 1.
+  pencil 0.85, highlighter 0.35 (blended under the ink), others 1. The fountain pen's 45° is the
+  stroke's `nib` (or a point's own angle) when set.
+- **Outlines**: pens, pencils, fountain pens and brushes are drawn as one filled outline each
+  (`strokeOutline` / `InkOutline.outline`, checked against `Fixtures/ink-outline.json`, made by
+  `web/test/make-outline-fixture.mjs`): each point after the first moves 0.75 of the way from the
+  last kept one (closer than 0.2 points: dropped), the last is where the pen lifted; each point gets
+  its width above (at least 0.3); the outline runs down the left side (half the width along the
+  normal of the averaged neighbouring directions), round the end in a half circle of 8 steps, back
+  along the right side and round the start; a turn of more than 90° gets an arc on both sides. It's
+  filled (non-zero) with quadratic curves through the midpoints of its corners. Markers,
+  highlighters, shapes and `dash` strokes are one even line with round caps and joins at the
+  width (pressure tools: at their average pressure). Arrowheads are triangles 4 × width + 6 long
+  and 0.9 × that wide at the base; the line stops 2 × width + 3 short of the tip.
+- **Pencil grain**: a pencil fills its outline with its colour through a 64 × 64 alpha tile
+  (`grainTile`: 150 + ⌊(6·h(x, y, 1) + 4·h(x>>1, y>>1, 2)) · 105 / 2550⌋ with the 32-bit hash in
+  ink.js), repeating every 32 page points (a texel per half point). PDF export draws it plain.
 - **Drawing order**: pictures, then strokes, then text boxes, each by `createdAt` (a new stroke or
   element gets a later time than anything on the item).
 - **Partial eraser**: a crossed stroke is deleted and replaced by the pieces outside the eraser (a
@@ -566,3 +613,8 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 strokes (`on`, `layer`, `page`, `createdAt`, `device`), with `type` (`text` or `image`) and a box
 `x`, `y`, `w`, `h` in page points. Text has `text`, `size` (points) and `color`, wrapped to `w`
 with lines 1.25 × size apart. Pictures have `image` (an attachment, stored as a blob).
+**Tape** (`type: "tape"`, with `color`) covers its box with an opaque strip (faint diagonal stripes)
+drawn over everything else on the page, so what's under it is hidden until tapped. Tapping it (any
+pen, or the tape tool) opens it on that device only (a faint dashed outline); it isn't synced, so
+each device starts covered. Apps that don't know tape treat it as an empty text box (nothing drawn).
+Lasso picks it up like any element.

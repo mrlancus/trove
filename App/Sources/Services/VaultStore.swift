@@ -73,6 +73,9 @@ final class VaultStore {
     var configURL: URL { supportDir.appendingPathComponent("config.json") }
     var snapshotURL: URL { supportDir.appendingPathComponent("state.json") }
     var blobCacheURL: URL { supportDir.appendingPathComponent("blobs", isDirectory: true) }
+    /// This device's search index and "search by meaning" vectors (never synced; rebuilt if missing).
+    var searchIndexURL: URL { supportDir.appendingPathComponent("search-index.json") }
+    var semanticURL: URL { supportDir.appendingPathComponent("semantic-index.json") }
     var isSetUp: Bool { config != nil && keys != nil }
 
     func save(_ config: VaultConfig) {
@@ -291,7 +294,7 @@ final class VaultStore {
     func reset() {
         Keychain.delete(Self.keysAccount)
         Keychain.delete(Self.relayTokenAccount)
-        for url in [configURL, snapshotURL, blobCacheURL] { try? FileManager.default.removeItem(at: url) }
+        for url in [configURL, snapshotURL, blobCacheURL, searchIndexURL, semanticURL] { try? FileManager.default.removeItem(at: url) }
         scopedURL?.stopAccessingSecurityScopedResource()
         scopedURL = nil
         config = nil

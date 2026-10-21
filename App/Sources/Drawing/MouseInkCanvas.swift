@@ -108,6 +108,9 @@ final class InkNSView: NSView {
     private var snapped = false
     private var snapTimer: Timer?
     private var drawingPen = false
+    /// The pen's settings (stabiliser, pressure curve), applied as points come in so what's stored is what's shown.
+    private var filter: PenFilter?
+    private var lastRaw: InkPoint?
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -154,7 +157,8 @@ final class InkNSView: NSView {
         }
         drawInk(page, editor: editor, in: ctx)
         if let ink = tool.ink, !points.isEmpty {
-            InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, in: ctx)
+            let style = InkStrokeStyle(dash: editor.dash(for: tool))
+            InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, style: style, in: ctx)
         }
         InkRenderer.drawOverlay(editor.overlay(page.key), scale: scale, in: ctx)
         ctx.restoreGState()
@@ -222,7 +226,11 @@ final class InkNSView: NSView {
         started = event.timestamp
         snapped = false
         lastMove = Date()
-        points = [InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: 0)]
+        var f = PenFilter(editor.penSettings(tool.ink ?? .pen))
+        let raw = InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: 0)
+        points = [f.add(raw)]
+        filter = f
+        lastRaw = raw
         armSnap()
         needsDisplay = true
     }
@@ -236,9 +244,11 @@ final class InkNSView: NSView {
         }
         guard !points.isEmpty, !snapped else { return }
         let minGap = 0.6 / scale
-        if let last = points.last, hypot(last.x - at.x, last.y - at.y) < minGap { return }
-        if let last = points.last, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); armSnap() }
-        points.append(InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: (event.timestamp - started) * 1000))
+        if let last = lastRaw, hypot(last.x - at.x, last.y - at.y) < minGap { return }
+        if let last = lastRaw, hypot(last.x - at.x, last.y - at.y) * scale > 3 { lastMove = Date(); armSnap() }
+        let raw = InkPoint(x: at.x, y: at.y, pressure: pointerPressure(event), t: (event.timestamp - started) * 1000)
+        lastRaw = raw
+        if var f = filter { points.append(f.add(raw)); filter = f } else { points.append(raw) }
         invalidateTail()
     }
 
@@ -266,6 +276,9 @@ final class InkNSView: NSView {
         }
         drawingPen = false
         guard let ink = tool.ink, !points.isEmpty, let page else { return }
+        if !snapped, let f = filter, let raw = lastRaw, let end = f.end(raw) { points.append(end) }
+        filter = nil
+        lastRaw = nil
         let finished = points
         points = []
         editor?.addStroke(points: finished, tool: ink, color: color, width: width, pageKey: page.key, held: snapped)

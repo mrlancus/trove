@@ -5,7 +5,7 @@ import { h } from "./dom.js";
 import { icon } from "./icons.js";
 import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlides, previewKind, typeLabel, xlsxRows } from "./core/files.js";
 import { backgroundLayers, GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
-import { drawStrokes } from "./core/ink.js";
+import { drawStrokes, drawTapeElement } from "./core/ink.js";
 import { renderMarkdown } from "./markdown.js";
 
 let pdfjs = null;
@@ -158,7 +158,7 @@ export function notebookViewer(notebook, { onExpand, ink = null, elements = null
       ctx.save();
       ctx.setTransform(px, 0, 0, px, 0, 0);
       drawStrokes(ctx, ink(index));
-      for (const e of elements?.(index) ?? []) if (e.type === "text") drawPlainText(ctx, e);
+      for (const e of elements?.(index) ?? []) if (e.type === "text") drawPlainText(ctx, e); else if (e.type === "tape") drawTapeElement(ctx, e);
       ctx.restore();
     }
     el.replaceChildren(canvas);

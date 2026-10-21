@@ -1,5 +1,5 @@
 {
- "note": "Made by web/test/make-checkpoint-fixture.mjs. `checkpoint` is the materialised state of `inCheckpoint`; loading it and then applying `rest` (any order) must give `expected`, the same as replaying `ops`.",
+ "note": "Made by web/test/make-checkpoint-fixture.mjs. `checkpoint` is the materialised state of `inCheckpoint`; loading it and then applying the other ops (any order) must give `expected`, the same as replaying `ops`.",
  "ops": [
   {
    "d": "AAAA",

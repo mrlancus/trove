@@ -51,6 +51,22 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.insertSubview(c.paperView, at: 0)
         canvas.addSubview(c.overlayView)
         canvas.addInteraction(UIPencilInteraction(delegate: c))
+        // Apple Pencil hovering (M2 and later iPads, Pencil Pro): preview the tip and colour, or the eraser.
+        let hover = UIHoverGestureRecognizer(target: c, action: #selector(Coordinator.hovered(_:)))
+        hover.delegate = c
+        canvas.addGestureRecognizer(hover)
+        // Pencil Pro's haptics when a shape snaps or the tool changes (squeeze palette, double-tap).
+        if #available(iOS 17.5, *) {
+            let feedback = UICanvasFeedbackGenerator(view: canvas)
+            editor.haptic = { [weak canvas] kind in
+                guard let canvas else { return }
+                let at = CGPoint(x: canvas.bounds.midX, y: canvas.bounds.midY)
+                switch kind {
+                case .snapped: feedback.alignmentOccurred(at: at)
+                case .toolChanged: feedback.pathCompleted(at: at)
+                }
+            }
+        }
         canvas.onLayout = { [weak c, weak canvas] in if let c, let canvas { c.layout(canvas) } }
 
         let tools = InkToolGesture()
@@ -449,8 +465,8 @@ struct PencilCanvas: UIViewRepresentable {
         private func overlayHasContent(_ area: InkGeometry.Rect) -> Bool {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
-                return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil
-                    || editor.display(slot.spec.key).elements.contains { $0.kind == .text }
+                return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
+                    || editor.display(slot.spec.key).elements.contains { $0.kind == .text || $0.kind == .tape }
             }
         }
 
@@ -460,7 +476,10 @@ struct PencilCanvas: UIViewRepresentable {
                 let o = slot.offset
                 ctx.saveGState()
                 ctx.translateBy(x: o.x, y: o.y)
-                InkRenderer.drawTexts(editor.display(slot.spec.key).elements, in: ctx)
+                let shown = editor.display(slot.spec.key)
+                InkRenderer.drawTexts(shown.elements, in: ctx)
+                // Tape covers the ink (PencilKit's, underneath this view) too.
+                InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
                 InkRenderer.drawOverlay(editor.overlay(slot.spec.key), scale: scale, in: ctx)
                 ctx.restoreGState()
             }
@@ -580,11 +599,14 @@ struct PencilCanvas: UIViewRepresentable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let held = self.holdWatcher?.takeHeld() ?? false
+                // Pencil Pro's barrel roll turns the fountain pen's and brush's nib (kept as the stroke's angle).
+                let roll = self.holdWatcher?.takeRoll()
                 for s in strokes {
                     self.handingOver.remove(s.id)
                     let c = s.ink
                     // Snapped or scribbled out: show what was kept instead of the rough line.
-                    if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: s.key, held: held) {
+                    let nib: Double? = c.tool == .fountain || c.tool == .brush ? roll.map { InkGeometry.nibAngle + $0 } : nil
+                    if self.editor.addStroke(points: c.points, tool: c.tool, color: c.color, width: c.width, id: s.id, pageKey: s.key, held: held, nib: nib) {
                         self.stale.insert(s.id)
                         self.shownVersion = -1
                     }
@@ -630,6 +652,24 @@ struct PencilCanvas: UIViewRepresentable {
         }
 
         @objc func undoTap() { editor.undo() }
+
+        /// A hovering Pencil: its point on the page under it (nil when it leaves or touches down).
+        @objc func hovered(_ g: UIHoverGestureRecognizer) {
+            guard let canvas = g.view as? UIScrollView else { return }
+            var near = true
+            if #available(iOS 16.1, *) { near = g.zOffset < 1 }
+            switch g.state {
+            case .began, .changed:
+                let z = canvas.zoomScale
+                let p = g.location(in: canvas)
+                let at = CGPoint(x: p.x / z, y: p.y / z)
+                guard near, let slot = slot(at: at) else { editor.pencilHover(nil, pageKey: nil, scale: z); break }
+                editor.pencilHover(InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y), pageKey: slot.spec.key, scale: z)
+            default:
+                editor.pencilHover(nil, pageKey: nil, scale: canvas.zoomScale)
+            }
+            overlayView.setNeedsDisplay()
+        }
         @objc func redoTap() { editor.redo() }
 
         @objc func swiped(_ g: UISwipeGestureRecognizer) {
@@ -755,6 +795,20 @@ final class HoldWatcher: UIGestureRecognizer {
     private var lastMove = Date()
     private var lastPoint = CGPoint.zero
     private var held = false
+    /// Barrel roll (Apple Pencil Pro) seen during the last line, radians.
+    private var rolls: [Double] = []
+
+    /// The last line's average barrel roll, if the Pencil reported one (and forget it).
+    func takeRoll() -> Double? {
+        defer { rolls = [] }
+        guard !rolls.isEmpty else { return nil }
+        let points = rolls.map { InkPoint(x: 0, y: 0, angle: $0) }
+        return InkOutline.meanNib(points)
+    }
+
+    private func noteRoll(_ t: UITouch) {
+        if #available(iOS 17.5, *), t.type == .pencil { rolls.append(Double(t.rollAngle)) }
+    }
 
     /// Whether the last line ended with a hold (and forget it).
     func takeHeld() -> Bool {
@@ -767,10 +821,13 @@ final class HoldWatcher: UIGestureRecognizer {
         lastMove = Date()
         lastPoint = t.location(in: view)
         held = false
+        rolls = []
+        noteRoll(t)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
         guard let t = touches.first else { return }
+        noteRoll(t)
         let p = t.location(in: view)
         if hypot(p.x - lastPoint.x, p.y - lastPoint.y) > 3 { lastMove = Date(); lastPoint = p }
     }
