@@ -653,7 +653,7 @@ export function simplifyClosed(pts, epsilon) {
 // ---------- elements: text boxes and pictures ----------
 
 export const ElementField = { on: "on", layer: "layer", page: "page", type: "type", x: "x", y: "y", w: "w", h: "h", text: "text", size: "size",
-  color: "color", image: "image", createdAt: "createdAt", device: "device" };
+  color: "color", image: "image", createdAt: "createdAt", device: "device", quote: "quote", rects: "rects", name: "name", value: "value" };
 
 export function elementView(record) {
   const f = record.fields, num = (v, d) => (typeof v === "number" ? v : d);
@@ -662,6 +662,9 @@ export function elementView(record) {
     type: ELEMENT_TYPES.includes(f.type) ? f.type : "text", x: num(f.x, 0), y: num(f.y, 0), w: Math.max(1, num(f.w, 200)), h: Math.max(1, num(f.h, 40)),
     text: typeof f.text === "string" ? f.text : "", size: num(f.size, 20), color: typeof f.color === "string" ? f.color : "#000000",
     image: f.image && typeof f.image.id === "string" ? f.image : null, createdAt: num(f.createdAt, 0),
+    // Text highlights and form values on a PDF (core/pdfmarks.js).
+    quote: typeof f.quote === "string" ? f.quote : "", rects: Array.isArray(f.rects) ? f.rects : null,
+    name: typeof f.name === "string" ? f.name : "", value: f.value ?? null,
   };
 }
 
@@ -679,8 +682,8 @@ export function wrapText(ctx, text, width) {
   return out;
 }
 
-/** Text boxes, pictures and tape (a strip that hides what's under it until tapped). */
-export const ELEMENT_TYPES = ["text", "image", "tape"];
+/** Text boxes, pictures, tape (a strip that hides what's under it until tapped), text highlights and form values (PDFs). */
+export const ELEMENT_TYPES = ["text", "image", "tape", "highlight", "field"];
 export const TAPE_COLORS = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5", "#b0b0b5"];
 
 /**

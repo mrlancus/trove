@@ -618,3 +618,47 @@ drawn over everything else on the page, so what's under it is hidden until tappe
 pen, or the tape tool) opens it on that device only (a faint dashed outline); it isn't synced, so
 each device starts covered. Apps that don't know tape treat it as an empty text box (nothing drawn).
 Lasso picks it up like any element.
+
+### PDF text, highlights and forms
+`web/public/core/pdfmarks.js` and `PDFMarks.swift`, both checked against `Fixtures/pdf-cases.json`
+(made by `web/test/make-pdf-fixture.mjs`).
+
+- **Page points on a PDF** are what pdf.js shows at scale 1 and the apps draw: the page's crop box
+  `[x1, y1, x2, y2]` turned by its `/Rotate`, origin top left, y down. From PDF space: 0° (x − x1,
+  y2 − y), 90° (y − y1, x − x1), 180° (x2 − x, y − y1), 270° (y2 − y, x2 − x) (`pdfPageBox` /
+  `PDFPageBox`).
+- **PDF text for search** (`ocrText` on the item, as for images): each page's text (pdf.js: the
+  text items' strings with a line break after each `hasEOL`; PDFKit: `PDFPage.string`) is tidied
+  (line breaks as `\n`; runs of whitespace (tab, VT, FF, space, U+0085, U+00A0, U+1680,
+  U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) as one space; lines trimmed;
+  empty lines dropped), blank pages are skipped and pages are joined by a blank line. 40 Unicode
+  code points or fewer counts as no text (a scan: the apps then read the pages with OCR); the text
+  keeps at most 50,000 code points (`joinPdfText` / `PDFText.join`). The website writes it for PDFs
+  that have no `ocrText` yet (the first PDF among an item's first three attachments), so PDFs added
+  on the website are searchable without an Apple device; an Apple device's enrichment later writes
+  the same text.
+- **Text highlights** are elements with `type: "highlight"`: `color`, `quote` (the highlighted
+  text, whitespace as single spaces, at most 5,000 characters), the box `x`, `y`, `w`, `h` round
+  all the pieces (to 1/100 point) and `rects`: each piece as `[x, y, w, h]` fractions of that box
+  (to 1/10,000), so moving or resizing the box moves the pieces. No `rects` means the whole box.
+  Pieces come from the selected text's boxes (`highlightGeometry` / `HighlightGeometry.make`): boxes
+  under half a point are dropped; a box joins the first line it overlaps by at least half the
+  smaller height (in order of their centres); on a line, pieces closer than a line's height join.
+  Drawn like the highlighter (35 %, multiplied) under the ink. The item's `sketchText` holds text
+  boxes' words and highlights' quotes (oldest first, one per line), so highlighted text is
+  searchable. A highlight can become a quote item: `kind: "highlight"`, `category: "quote"`,
+  `links: [the PDF's item]`, body `> quote` + blank line + `— <title> (p. n)`, filed in
+  Highlights › <title>.
+- **Form values** are elements with `type: "field"`, one per field: id
+  `pdffield:<item id>:<layer>:<field name>`, so two devices filling a field write the same record
+  (last writer wins). `name` (the field's full name, parts joined by `.`), `value` (text for text
+  fields, choices and the chosen radio button's export value; `true`/`false` for a check box; a list
+  of strings for a multiple choice), and `page` and the box of the widget that shows it. The file
+  never changes: viewers show the saved values over the PDF's own fields.
+- **Old readers** see both as text boxes with no `text`, so they draw nothing (like tape).
+- **Export as PDF annotations** writes a new file (saved as the item's new version, `fileVersions`,
+  or downloaded): the original bytes plus an incremental update with an Ink annotation per stroke
+  (its even width: markers and highlighters their width, pens at their average pressure; its
+  opacity), a Highlight annotation per highlight (a quadrilateral per piece), a FreeText annotation
+  per text box, and the saved form values in the form's fields. Pictures and tape stay in Trove.
+  Like any new version, the new file starts with no Trove ink; the old version keeps it.

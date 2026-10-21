@@ -3,11 +3,13 @@ import Foundation
 /// A text box or a picture placed on a sketch page or on a file (PROTOCOL.md §10): an `element`
 /// record. Pictures draw under the ink and text boxes over it.
 public struct InkElement: Identifiable, Sendable {
-    /// Tape (`tape`) is a strip that hides what's under it until tapped.
-    public enum Kind: String, Sendable { case text, image, tape }
+    /// Tape (`tape`) is a strip that hides what's under it until tapped. `highlight` marks text on a
+    /// PDF and `field` holds a PDF form value (PDFMarks.swift).
+    public enum Kind: String, Sendable { case text, image, tape, highlight, field }
     public enum Field {
         public static let on = "on", layer = "layer", page = "page", type = "type", x = "x", y = "y", w = "w", h = "h"
         public static let text = "text", size = "size", color = "color", image = "image", createdAt = "createdAt", device = "device"
+        public static let quote = "quote", rects = "rects", name = "name", value = "value"
     }
 
     public let record: Record
@@ -138,8 +140,14 @@ extension Library {
         for id in elementIds {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
             let e = InkElement(r)
+            if e.kind == .field { continue }  // a form value belongs to its field
+            var extra: [String: JSONValue] = [:]
+            if e.kind == .highlight {
+                extra[InkElement.Field.quote] = .string(e.quote)
+                if let rects = r[InkElement.Field.rects] { extra[InkElement.Field.rects] = rects }
+            }
             out.append(await addElement(on: itemId, layer: layer, pageKey: pageKey, kind: e.kind, frame: transform.apply(e.frame),
-                                        text: e.text, size: e.size * transform.widthScale, color: e.color, image: e.image))
+                                        text: e.text, size: e.size * transform.widthScale, color: e.color, image: e.image, extra: extra))
         }
         return out
     }
@@ -154,7 +162,8 @@ extension Library {
 
     @discardableResult
     public func addElement(on itemId: String, layer: String = "", pageKey: String, kind: InkElement.Kind, frame: InkGeometry.Rect,
-                           text: String = "", size: Double = 20, color: String = "#000000", image: Attachment? = nil) async -> String {
+                           text: String = "", size: Double = 20, color: String = "#000000", image: Attachment? = nil,
+                           extra: [String: JSONValue] = [:]) async -> String {
         let id = newId()
         var fields: [String: JSONValue] = [
             InkElement.Field.on: .string(itemId), InkElement.Field.layer: .string(layer), InkElement.Field.page: .string(pageKey),
@@ -167,10 +176,11 @@ extension Library {
             fields[InkElement.Field.size] = .number(size)
             fields[InkElement.Field.color] = .string(color)
         }
-        if kind == .tape { fields[InkElement.Field.color] = .string(color) }
+        if kind == .tape || kind == .highlight { fields[InkElement.Field.color] = .string(color) }
         if let image { fields[InkElement.Field.image] = image.json }
+        fields.merge(extra) { _, b in b }
         await engine.set(fields, record: id, kind: "element")
-        if kind == .text { await refreshSketchText(itemId) }
+        if kind == .text || kind == .highlight { await refreshSketchText(itemId) }
         return id
     }
 
@@ -216,11 +226,12 @@ extension Library {
         for item in items { await refreshSketchText(item) }
     }
 
-    /// The item's `sketchText`: every text box's words, for search.
+    /// The item's `sketchText`: the words in its text boxes and highlights, for search.
     func refreshSketchText(_ itemId: String) async {
         let records = await engine.ink(on: itemId).filter { $0.kind == "element" }
-        let boxes: [InkElement] = records.map(InkElement.init).filter { $0.on == itemId && $0.kind == .text }
-        let words: [String] = boxes.sorted { $0.createdAt < $1.createdAt }.map(\.text).filter { !$0.isEmpty }
+        let boxes: [InkElement] = records.map(InkElement.init).filter { $0.on == itemId && ($0.kind == .text || $0.kind == .highlight) }
+        let sorted = boxes.sorted { $0.createdAt < $1.createdAt }
+        let words: [String] = sorted.map { $0.kind == .highlight ? $0.quote : $0.text }.filter { !$0.isEmpty }
         let text = words.joined(separator: "\n")
         let current: String = await item(itemId)?.sketchText ?? ""
         guard current != text else { return }
