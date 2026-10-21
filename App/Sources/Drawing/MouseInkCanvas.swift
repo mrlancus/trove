@@ -156,6 +156,8 @@ final class InkNSView: NSView {
             ctx.fill(CGRect(x: 0, y: 0, width: page.width, height: page.height))
         }
         drawInk(page, editor: editor, in: ctx)
+        // What the lasso is dragging, over the rest: the cached picture of the page stays as it is while it moves.
+        if let moving = editor.dragPreview(page.key) { InkRenderer.drawContent(moving, in: ctx) }
         if let ink = tool.ink, !points.isEmpty {
             let style = InkStrokeStyle(dash: editor.dash(for: tool))
             InkRenderer.draw(tool: ink, color: color, width: width, points: points, shape: snapped, style: style, in: ctx)
@@ -182,11 +184,11 @@ final class InkNSView: NSView {
                 bitmap.translateBy(x: 0, y: CGFloat(h))
                 bitmap.scaleBy(x: k, y: -k)
                 bitmap.translateBy(x: -visible.minX + origin, y: -visible.minY + origin)
-                InkRenderer.drawContent(editor.display(page.key), in: bitmap)
+                InkRenderer.drawContent(editor.display(page.key, lifted: true), in: bitmap)
                 if let image = bitmap.makeImage() { inkCache = (key, visible, image) }
             }
         }
-        guard let cache = inkCache else { InkRenderer.drawContent(editor.display(page.key), in: ctx); return }
+        guard let cache = inkCache else { InkRenderer.drawContent(editor.display(page.key, lifted: true), in: ctx); return }
         InkRenderer.drawImage(cache.image, in: cache.rect.offsetBy(dx: -origin, dy: -origin), ctx: ctx)
     }
 

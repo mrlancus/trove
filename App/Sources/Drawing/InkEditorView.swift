@@ -101,7 +101,7 @@ struct InkEditorView: View {
 
     // MARK: Toolbar: the tools on top, the chosen one's options underneath
 
-    private static let tools: [InkEditorTool] = [.pen, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .text, .laser, .tape]
+    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .text, .laser, .tape]
 
     private var toolbar: some View {
         @Bindable var editor = editor
@@ -125,6 +125,7 @@ struct InkEditorView: View {
                                         // The pen's colour under its icon.
                                         if t.ink != nil { Capsule().fill(Color(inkHex: editor.color(for: t))).frame(width: 14, height: 3).offset(y: 1) }
                                     }
+                                    .inkTapArea()
                             }
                             .buttonStyle(.plain)
                             .help(t.label)
@@ -235,6 +236,8 @@ struct InkEditorView: View {
                                 Circle().fill(Color(inkHex: c)).frame(width: 22, height: 22)
                                     .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                                     .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.4), lineWidth: editor.color == c ? 2 : 1).padding(-2))
+                                    .frame(width: 30, height: 32)
+                                    .inkTapArea()
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Colour \(c)")
@@ -274,7 +277,7 @@ struct InkEditorView: View {
                     if editor.selection != nil {
                         HStack(spacing: 6) {
                             ForEach(InkEditorModel.colors, id: \.self) { c in
-                                Button { editor.recolourSelection(c) } label: { Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20) }
+                                Button { editor.recolourSelection(c) } label: { Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20).frame(width: 28, height: 32).inkTapArea() }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel("Recolour \(c)")
                             }
@@ -331,12 +334,13 @@ struct InkEditorView: View {
 /// The drawing surface. Only this view watches the ink's revisions, so drawing doesn't redraw the toolbar.
 struct InkCanvasHost: View {
     let editor: InkEditorModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         #if os(iOS)
         PencilCanvas(editor: editor, pages: editor.pages, current: editor.page, layout: editor.isInfinite ? .vertical : editor.layout,
                      pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
-                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest)
+                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest, dark: scheme == .dark)
             .ignoresSafeArea(edges: .bottom)
         #else
         if let page = editor.currentPage {
@@ -353,12 +357,12 @@ struct InkUndoButtons: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Button { editor.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+            Button { editor.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward").frame(minWidth: 34, minHeight: 34).inkTapArea() }
                 .disabled(!editor.canUndo).keyboardShortcut("z", modifiers: .command)
-            Button { editor.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+            Button { editor.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward").frame(minWidth: 34, minHeight: 34).inkTapArea() }
                 .disabled(!editor.canRedo).keyboardShortcut("z", modifiers: [.command, .shift])
             if editor.canPaste {
-                Button { editor.paste() } label: { Label("Paste", systemImage: "doc.on.clipboard") }
+                Button { editor.paste() } label: { Label("Paste", systemImage: "doc.on.clipboard").frame(minWidth: 34, minHeight: 34).inkTapArea() }
                     .keyboardShortcut("v", modifiers: .command)
             }
         }
@@ -389,6 +393,7 @@ struct InkSizePresets: View {
                         .frame(width: CGFloat(6 + i * 5), height: CGFloat(6 + i * 5))
                         .frame(width: 30, height: 30)
                         .background(abs(editor.width - w) < 0.01 ? Color.accentColor.opacity(0.16) : .clear, in: Circle())
+                        .inkTapArea()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(["Thin", "Medium", "Thick"][i])
@@ -448,6 +453,8 @@ struct InkPagesPanel: View {
     let editor: InkEditorModel
     @Binding var confirmDelete: String?
     @State private var thumbs: [String: InkImage] = [:]
+    /// The pages the thumbnails were made for (`pagesRevision`): then every page is redrawn, else only the one being drawn on.
+    @State private var thumbsFor = -1
 
     var body: some View {
         List {
@@ -466,6 +473,7 @@ struct InkPagesPanel: View {
                             Text("\(index + 1)").font(.callout.monospacedDigit())
                             Spacer()
                         }
+                        .inkTapArea()
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -505,15 +513,17 @@ struct InkPagesPanel: View {
                 }
             }
         }
-        .task(id: "\(editor.revision)-\(editor.pagesRevision)") { await renderThumbs() }
+        .task(id: "\(editor.revision)-\(editor.pagesRevision)") { await renderThumbs(all: editor.pagesRevision != thumbsFor) }
         .inspectorColumnWidth(min: 200, ideal: 240, max: 320)
     }
 
-    private func renderThumbs() async {
+    private func renderThumbs(all: Bool) async {
         // Wait for a pause in the drawing (a new stroke cancels this and starts again).
         try? await Task.sleep(for: .milliseconds(800))
         guard !Task.isCancelled else { return }
-        for page in editor.pages where !page.infinite {
+        // Ink changes where you draw: the page in view (and any without a picture yet). Every page only when the pages changed.
+        if all { thumbsFor = editor.pagesRevision }
+        for page in editor.pages where !page.infinite && (all || page.key == editor.currentKey || thumbs[page.key] == nil) {
             let content = editor.display(page.key)
             if let image = await Task.detached(priority: .utility, operation: { InkRenderer.render(page, content: content, pixelWidth: 160).map(InkImage.init) }).value {
                 thumbs[page.key] = image
@@ -565,6 +575,13 @@ struct PDFFile: FileDocument {
     init(data: Data) { self.data = data }
     init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
+
+extension View {
+    /// The whole frame takes a tap, not just what's drawn in it. Plain buttons only answer where
+    /// their label has pixels: a finger's touch is wide enough to land on some, a Pencil tap is a
+    /// single point and often fell in a gap ("pressing items with Apple Pencil doesn't register").
+    func inkTapArea() -> some View { contentShape(Rectangle()) }
 }
 
 extension Color {
@@ -680,11 +697,12 @@ struct InkedFileView: View {
                 .onTapGesture { model.inkTarget = InkTarget(itemId: item.id, layer: attachment.id, title: attachment.name, startPage: index) }
             }
         }
-        .task(id: model.inkRevision) { await render() }
+        .task(id: "\(model.inkRevision)-\(model.inkTarget == nil)") { await render() }
     }
 
     private func render() async {
-        guard let library = model.library else { return }
+        // Behind the open editor (iPhone, iPad) nobody sees these: redraw once it closes.
+        guard model.inkTarget == nil, let library = model.library else { return }
         let data = data, mime = attachment.mime, name = attachment.name
         if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value }
         for page in pages {
@@ -709,6 +727,7 @@ struct InkFavouritesRow: View {
                         .opacity(f.tool == .highlighter ? 0.6 : 1)
                         .frame(width: 28, height: 28)
                         .background(editor.isCurrent(f) ? Color.accentColor.opacity(0.18) : .clear, in: Circle())
+                        .inkTapArea()
                 }
                 .buttonStyle(.plain)
                 .help("\(InkEditorTool(rawValue: f.tool.rawValue)?.label ?? "Pen"), size \(f.width.formatted())")
