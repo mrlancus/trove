@@ -11,8 +11,8 @@ import { renderMarkdown } from "./markdown.js";
 let pdfjs = null;
 async function loadPdfjs() {
   if (!pdfjs) {
-    pdfjs = await import("/vendor/pdfjs/pdf.min.mjs");
-    pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+    pdfjs = await import("/vendor/pdfjs-4.10.38/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs-4.10.38/pdf.worker.min.mjs";
   }
   return pdfjs;
 }

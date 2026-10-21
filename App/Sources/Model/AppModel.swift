@@ -134,6 +134,13 @@ final class AppModel {
     private var syncTask: Task<Void, Never>?
     /// A sync was asked for while one was running (a live ping, an edit): run once more after it.
     private var syncAgain = false
+    /// Whether the last sync round pulled, pushed or imported anything (the loop backs off when not).
+    private var lastSyncChanged = true
+    #if os(macOS)
+    private var syncBackoff = SyncBackoff(base: 30, idleMax: 300)
+    #else
+    private var syncBackoff = SyncBackoff(base: 60, idleMax: 300)
+    #endif
     private var pushTask: Task<Void, Never>?
     private var mirroring = false
     private var searchTask: Task<Void, Never>?
@@ -156,6 +163,8 @@ final class AppModel {
     }
 
     private func openLibrary() async throws {
+        let signpost = Perf.begin("Open library")
+        defer { Perf.end("Open library", signpost) }
         let engine = try vault.makeEngine()
         let library = Library(engine: engine)
         self.library = library
@@ -510,14 +519,18 @@ final class AppModel {
         syncTask?.cancel()
         syncTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.syncNow()
-                #if os(macOS)
-                try? await Task.sleep(for: .seconds(30))
-                #else
-                try? await Task.sleep(for: .seconds(60))
-                #endif
+                let wait = await self?.syncRound() ?? 60
+                try? await Task.sleep(for: .seconds(wait))
             }
         }
+    }
+
+    /// One background round; returns how long to wait before the next (longer while nothing changes
+    /// or in Low Power Mode; live pings, edits and coming back still sync at once).
+    private func syncRound() async -> Double {
+        await syncNow()
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        return syncBackoff.next(changed: lastSyncChanged, lowPower: lowPower)
     }
 
     /// Pulls and pushes. A request that arrives mid-sync (say a live ping because the website just
@@ -527,12 +540,16 @@ final class AppModel {
         guard let library else { return }
         if sync.syncing { syncAgain = true; return }
         sync.syncing = true
+        let signpost = Perf.begin("Sync")
+        var changed = false
         repeat {
             syncAgain = false
             await importLocalInbox()
             let report = await library.sync()
+            if report.pulled > 0 || report.pushed > 0 { changed = true }
             if let client = vault.relayClient, let keys = vault.keys {
                 let inbox = await InboxSync.run(client: client, keys: keys, library: library)
+                if !inbox.imported.isEmpty { changed = true }
                 if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
                 let watches = await PriceWatchSync.run(client: client, library: library)
                 for drop in watches.drops { await PriceAlerts.notify(drop) }
@@ -543,6 +560,8 @@ final class AppModel {
             await reload()
             saveNow()
         } while syncAgain
+        lastSyncChanged = changed
+        Perf.end("Sync", signpost)
         sync.syncing = false
         await enrichSoon()
         await mirrorIfOwner()

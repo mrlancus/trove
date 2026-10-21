@@ -178,7 +178,7 @@ extension Library {
         cleanTags([name.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).joined(separator: "-")]).first
     }
 
-    static func cleanTags(_ tags: [String]) -> [String] {
+    public static func cleanTags(_ tags: [String]) -> [String] {
         var seen: Set<String> = []
         return tags.map { $0.lowercased().replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && seen.insert($0).inserted }

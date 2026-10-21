@@ -183,13 +183,18 @@ export async function open(data: Uint8Array, opts: OpenOptions): Promise<Uint8Ar
 
 export interface InboxHeader {
   v: 1;
-  source: "email" | "webdav" | "web" | "ios" | "other";
+  /** Bridges (PROTOCOL.md §4 "Bridges") add "rss", "github", "telegram" and "webhook". */
+  source: "email" | "webdav" | "web" | "ios" | "other" | "rss" | "github" | "telegram" | "webhook";
   receivedAt: string;
   name?: string;
   mime?: string;
   url?: string;
   title?: string;
   groupId?: string;
+  /** Folder path hint, e.g. ["Feeds", "The Verge"]; importers file the item there (and keep it there). */
+  folder?: string[];
+  /** Tags to add to the item. */
+  tags?: string[];
   meta?: Record<string, unknown>;
 }
 

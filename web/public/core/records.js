@@ -66,7 +66,9 @@ export class RecordStore {
     const fresh = incoming.filter((op) => !this.opIds.has(opId(op)) && this.opIds.add(opId(op)));
     if (fresh.length === 0) return false;
     fresh.sort(order);
-    this.ops.push(...fresh);
+    // A loop, not push(...fresh): spreading overflows the stack past ~100k ops.
+    for (const op of fresh) this.ops.push(op);
+    if (this.unsaved) for (const op of fresh) this.unsaved.push(op); // the web app saves only these (localstore.js)
     if (fresh[0].h > this.lastApplied) {
       for (const op of fresh) this.applyOne(op);
     } else {

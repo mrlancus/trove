@@ -1,0 +1,64 @@
+{
+  "about": "Inbox entries from bridges (PROTOCOL.md §4 \"Bridges\"), imported in order into one empty library by Library.importInbox (Swift) and Vault.importEnvelope (web). Each expect is the item the entry ends up as.",
+  "cases": [
+    {
+      "name": "RSS post goes into Feeds/<feed> and stays there",
+      "entry": "R1",
+      "header": { "v": 1, "source": "rss", "receivedAt": "2026-10-21T10:00:00Z", "url": "https://tech.example/posts/3", "title": "Post 3", "mime": "text/plain",
+                  "folder": ["Feeds", "Tech Daily"], "meta": { "bridge": "b1", "feed": "Tech Daily" } },
+      "body": "Body of post 3",
+      "expect": { "id": "inbox-r1", "kind": "link", "title": "Post 3", "url": "https://tech.example/posts/3", "source": "share", "folder": ["Feeds", "Tech Daily"],
+                  "folderAuto": false, "tags": [], "body": "Body of post 3", "bridge": "rss", "attachments": 0 }
+    },
+    {
+      "name": "GitHub star with topic tags",
+      "entry": "G1",
+      "header": { "v": 1, "source": "github", "receivedAt": "2026-10-21T10:00:00Z", "url": "https://github.com/octo/one", "title": "octo/one", "mime": "text/plain",
+                  "folder": ["GitHub", "Stars"], "tags": ["github", "CLI", "#devtools", "github"] },
+      "body": "The one tool\n\nLanguage: TypeScript",
+      "expect": { "id": "inbox-g1", "kind": "link", "title": "octo/one", "url": "https://github.com/octo/one", "source": "share", "folder": ["GitHub", "Stars"],
+                  "folderAuto": false, "tags": ["cli", "devtools", "github"], "body": "The one tool\n\nLanguage: TypeScript", "bridge": "github", "attachments": 0 }
+    },
+    {
+      "name": "Telegram text note; folder may be written as A/B",
+      "entry": "T1",
+      "header": { "v": 1, "source": "telegram", "receivedAt": "2026-10-21T10:00:00Z", "mime": "text/plain", "folder": "Inbox/Phone", "tags": ["phone"] },
+      "body": "a quiet thought #idea",
+      "expect": { "id": "inbox-t1", "kind": "note", "title": "", "url": null, "source": "share", "folder": ["Inbox", "Phone"],
+                  "folderAuto": false, "tags": ["idea", "phone"], "body": "a quiet thought #idea", "bridge": "telegram", "attachments": 0 }
+    },
+    {
+      "name": "Telegram photo becomes an image item",
+      "entry": "T2",
+      "header": { "v": 1, "source": "telegram", "receivedAt": "2026-10-21T10:00:00Z", "name": "telegram-7.jpg", "mime": "image/jpeg", "title": "Receipt" },
+      "body": "not really a jpeg",
+      "expect": { "id": "inbox-t2", "kind": "image", "title": "Receipt", "url": null, "source": "share", "folder": ["Images"],
+                  "folderAuto": true, "tags": [], "body": "", "bridge": "telegram", "attachments": 1 }
+    },
+    {
+      "name": "Webhook link with no hints is filed as usual",
+      "entry": "W1",
+      "header": { "v": 1, "source": "webhook", "receivedAt": "2026-10-21T10:00:00Z", "url": "https://plain.example/b", "mime": "text/plain" },
+      "body": "",
+      "expect": { "id": "inbox-w1", "kind": "link", "title": "", "url": "https://plain.example/b", "source": "share", "folder": ["Links"],
+                  "folderAuto": true, "tags": [], "body": "", "bridge": "webhook", "attachments": 0 }
+    },
+    {
+      "name": "The same link again from another bridge keeps its folder and gains tags and the note",
+      "entry": "W2",
+      "header": { "v": 1, "source": "webhook", "receivedAt": "2026-10-21T10:00:00Z", "url": "https://tech.example/posts/3?utm_source=x", "mime": "text/plain",
+                  "folder": ["Elsewhere"], "tags": ["later"] },
+      "body": "worth a read",
+      "expect": { "id": "inbox-r1", "kind": "link", "title": "Post 3", "url": "https://tech.example/posts/3", "source": "share", "folder": ["Feeds", "Tech Daily"],
+                  "folderAuto": false, "tags": ["later"], "body": "Body of post 3\n\nworth a read", "bridge": "rss", "attachments": 0 }
+    },
+    {
+      "name": "An older entry without hints is unchanged",
+      "entry": "X1",
+      "header": { "v": 1, "source": "web", "receivedAt": "2026-10-21T10:00:00Z", "url": "https://news.example/a", "title": "Story", "mime": "text/plain" },
+      "body": "a quote",
+      "expect": { "id": "inbox-x1", "kind": "link", "title": "Story", "url": "https://news.example/a", "source": "web", "folder": ["Links"],
+                  "folderAuto": true, "tags": [], "body": "a quote", "bridge": null, "attachments": 0 }
+    }
+  ]
+}

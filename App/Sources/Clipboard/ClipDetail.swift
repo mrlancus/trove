@@ -15,6 +15,9 @@ struct ClipDetailForm: View {
     @State private var text = ""
     @State private var tags = ""
     @State private var note = ""
+    /// Cancel was pressed: leaving doesn't save. Anything else that closes the form (switching clips,
+    /// swiping the sheet away, the palette closing) keeps what was typed, like the website does.
+    @State private var cancelled = false
 
     private var editableText: Bool { clip.image == nil && clip.files.isEmpty }
     private var monospaced: Bool { [.code, .json].contains(clip.kind) }
@@ -23,6 +26,7 @@ struct ClipDetailForm: View {
         Form {
             Section("Name") {
                 TextField("Name", text: $name, prompt: Text(clip.aiTitle ?? clip.autoTitle))
+                    .onSubmit { let d = draft; Task { await Self.save(d) } }
                 if let summary = clip.summary { Text(summary).font(.callout).foregroundStyle(.secondary) }
             }
             if editableText {
@@ -53,16 +57,23 @@ struct ClipDetailForm: View {
                     Button(clip.savedItem == nil ? "Save to Trove" : "Saved in Trove") { saveToLibrary(clip) }
                         .disabled(clip.savedItem != nil)
                     Spacer()
-                    Button("Cancel", role: .cancel) { done() }
-                    Button("Save") { Task { await save(); done() } }
+                    Button("Cancel", role: .cancel) { cancelled = true; done() }
+                    Button("Save") { let d = draft; Task { await Self.save(d); done() } }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut("s", modifiers: .command)
                 }
+                // In an iOS Form, a row's buttons all fire on a tap unless each is borderless.
+                .buttonStyle(.borderless)
             }
         }
         .formStyle(.grouped)
         .onAppear(perform: load)
-        .onChange(of: clip.id) { load() }
+        .onChange(of: clip.id) { old, _ in
+            // Another clip is shown in the same form: keep what was typed for the one before.
+            if !cancelled, let previous = store.clips.first(where: { $0.id == old }) { let d = draft(of: previous); Task { await Self.save(d) } }
+            load()
+        }
+        .onDisappear { if !cancelled { let d = draft; Task { await Self.save(d) } } }
     }
 
     @ViewBuilder private var found: some View {
@@ -122,19 +133,36 @@ struct ClipDetailForm: View {
     private func count(_ n: Int, _ word: String) -> String { "\(n.formatted()) \(word)\(n == 1 ? "" : "s")" }
 
     private func load() {
+        cancelled = false
         name = clip.title ?? ""
         text = clip.text
         tags = clip.tags.joined(separator: ", ")
         note = clip.note
     }
 
-    /// Writes only what changed.
-    private func save() async {
-        if name != (clip.title ?? "") { await store.rename(clip, to: name) }
-        if editableText, text != clip.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await store.edit(clip, text: text) }
-        let newTags = tags.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init)
-        if newTags.map({ $0.lowercased().replacingOccurrences(of: "#", with: "") }) != clip.tags { await store.setTags(clip, newTags) }
-        if note != clip.note { await store.setNote(clip, note) }
+    /// What's typed, taken while the view is still there, so saving after it closes reads the right values.
+    struct Draft {
+        let id: String
+        let store: ClipboardStore
+        let name, text, tags, note: String
+        let editableText: Bool
+    }
+
+    private var draft: Draft { draft(of: clip) }
+
+    private func draft(of clip: Clip) -> Draft {
+        Draft(id: clip.id, store: store, name: name, text: text, tags: tags, note: note, editableText: clip.image == nil && clip.files.isEmpty)
+    }
+
+    /// Writes only what differs from the clip as it is now (so saving twice writes nothing the second time).
+    private static func save(_ d: Draft) async {
+        guard let clip = d.store.clips.first(where: { $0.id == d.id }) else { return }
+        let name = d.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name != (clip.title ?? "") { await d.store.rename(clip, to: name) }
+        if d.editableText, d.text != clip.text, !d.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await d.store.edit(clip, text: d.text) }
+        let newTags = d.tags.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init)
+        if Library.cleanTags(newTags) != clip.tags { await d.store.setTags(clip, newTags) }
+        if d.note != clip.note { await d.store.setNote(clip, d.note) }
     }
 }
 
