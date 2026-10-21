@@ -62,9 +62,9 @@ user says "publish" (`cd server && npx wrangler deploy`).
     TroveCore (`search-cases.json` fixture shared with JS), `search-index.json` snapshot, Float32/vDSP
     meaning vectors with a disk cache, rank fusion, `ClipIndex` from 20,000 clips. Bench: 50k items +
     50k clips, median 3.9 ms, p90 20 ms per keystroke (roadmap target 5 ms for 1–2 letters not yet met).
-    **Ask the user:** website search by meaning needs the CSP to allow `cdn.jsdelivr.net` and
-    `huggingface.co` (third-party script in the worker that sees vault text), or wait until the model
-    is self-hosted. Plumbing is built; the loader is blocked by `script-src 'self'`.
+    Website search by meaning (an in-browser model from jsDelivr/Hugging Face): **dropped for now**,
+    since the apps are the product and already search by meaning with Apple's on-device NLEmbedding.
+    The loader stays blocked by `script-src 'self'`; don't open the CSP for it.
   - **Drawing feel + pens** (ROADMAP S1, S2, S8; PROTOCOL.md §10): strokes drawn as one filled outline
     (`strokeOutline` / `InkOutline`, fixture `ink-outline.json`); website pen layer desynchronized +
     predicted points (input-to-paint 13 ms median in headless Chromium), 512 px tiles per zoom step and
