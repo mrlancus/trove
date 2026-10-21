@@ -7,9 +7,10 @@ Cloudflare and "the connection thing" (linking Trove to other services) should w
 
 How to read it:
 - Every item has a size: **S** (one session), **M** (2–3 sessions), **L** (a round of several sessions).
-- **Web first** means build it on the website first (the user's main client while there's no Apple
-  Silicon Mac), then port it to the apps. Shared logic goes in TroveCore and `web/public/core` together,
-  with a shared fixture, as usual.
+- **Apps first** (decided by the user after this was written: the Mac, iPhone and iPad apps are the
+  product, the website is secondary). Where an item below says "web first", build it in the apps first
+  and bring it to the website only if it's cheap. Shared logic still goes in TroveCore and
+  `web/public/core` together, with a shared fixture.
 - 🔒 marks anything that touches the protocol or encryption. Those change PROTOCOL.md, both cores and
   the fixtures in the same commit.
 - ❓ marks a decision that's the user's to make (collected at the end).

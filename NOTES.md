@@ -24,7 +24,10 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 
 ## The user's setup (important)
 - **No Apple Silicon Mac.** The user's Mac is Intel, and current Xcode needs M1 or later. So:
-  - **The website is the main client for now:** https://trove-relay.lancus.workers.dev. It can create the vault, sync, import the inbox and add devices.
+  - **The apps are the product; the website is secondary** (the user: "the main thing of this is the
+    app for mac and ios/ipados, the website is not primary and is there just cus we can have it").
+    Apps first, Apple frameworks first; website only where cheap. The website
+    (https://trove-relay.lancus.workers.dev) is still handy for creating the vault and adding devices.
   - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
     1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
@@ -104,10 +107,11 @@ user says "publish" (`cd server && npx wrangler deploy`).
 - **Not started (lost):** editing (S3) and PDFs (S5) workers were started but left no commits or
   `wip/*` branch before the container restarted; start them fresh. (Back up worker commits to `wip/*`
   branches on GitHub so a lost container doesn't lose them.)
-- **Publish pending:** `main` at 8973b32 passed everything (relay 57, TroveCore 128, web 59 unit +
-  21 e2e, trove-mcp 4 + e2e). The user said "publish everything", but the session's permission
-  rules block `wrangler deploy` and `wrangler secret put`. The user runs (or allows):
-  `cd server && npx wrangler secret put BRIDGE_KEY` (any random 32-byte base64) then `npx wrangler deploy`.
+- **Published** (the user allowed it): `BRIDGE_KEY` set, relay + website deployed (version
+  3f05d8e6, at 2f8bc9c). Against production: relay e2e 5/5 and the browser test that creates a
+  vault pass; "set up with a code… live updates" failed once (it passes locally; likely live-update
+  timing over the network). Not re-run: the session's permission rules block more test vaults on
+  production. Check it next time a run against production is allowed.
 - **Next**: notebooks (S4; design direction ❓8 still open), wire AI into the lasso, handwriting and
   audio (S6, S7), then the rest of the roadmap (§7).
 
