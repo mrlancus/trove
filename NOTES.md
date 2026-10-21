@@ -31,7 +31,41 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
+## Current round: the roadmap (user: "Bridges", iPad Air M3 + Pencil Pro; later "session ran out, continue; renaming clips doesn't work")
+Built from `docs/ROADMAP.md` with parallel workers on branches, merged into `main` one by one after
+the full test suites pass. **Not deployed yet**: the website/relay changes below go live when the
+user says "publish" (`cd server && npx wrangler deploy`).
+- **Landed:**
+  - **Bridges** (ROADMAP §5; PROTOCOL.md §4 "Bridges"): the relay seals what it fetches into the inbox.
+    Webhook "add" addresses (Shortcuts, scripts), RSS feeds, GitHub stars, a Telegram bot, link
+    previews (`POST /preview`, SSRF-checked). Website: Settings → Bridges. Apps: Settings → Bridges.
+    Optional Worker secret `BRIDGE_KEY` encrypts stored tokens (needed before saving a GitHub/Telegram
+    token: `npx wrangler secret put BRIDGE_KEY` with a random 32-byte base64 value).
+  - **trove-mcp** (`mcp/`, ROADMAP §5.2 step 1): Claude Desktop / Claude Code read and add to Trove;
+    joins as an `agent` device. Setup in `mcp/README.md`. After the website's sealed local store
+    landed, its file store broke (a CryptoKey can't go in a JSON file); fixed: file stores set
+    `plainAtRest` (the folder is owner-only), and the e2e passes again.
+  - **Website speed**: ops stored in append-only chunks sealed with a non-extractable AES-GCM key
+    (`core/localstore.js`, PROTOCOL.md §7 "At rest"); offline app + installable (`sw.js`, manifest);
+    drawing code loads lazily; one live ping per push on the relay.
+  - **Apps**: thumbnail cache capped by size, sync loop backs off, signposts; `SyncBackoff` in TroveCore.
+  - **CI** (`.github/workflows/tests.yml`): relay, web unit + benchmarks (fails if >20 % slower than
+    `web/test/bench-baseline.json`), Chromium e2e, trove-mcp unit + e2e, TroveCore + release-mode
+    benchmarks, on every push and PR. Dependabot for npm and Actions.
+  - **Clip renaming fixed.** Apps: the clip form saved only with the Save button at its bottom, so
+    Return, swiping the sheet away or picking another clip lost the name, and on iPhone/iPad the
+    row's four buttons all fired at once (Cancel too). Now Return saves the name, closing saves
+    unless Cancel was pressed, buttons are borderless. Website: a clip opened from the main
+    search's "From your clipboard" was rebuilt by a sync while typing (Safari then drops the
+    change); it now waits while you type (e2e checks focus survives a render). **Ask the user**
+    where they tried to rename (Mac palette, Mac window, iPhone, website) if it still fails.
+- **In progress** (the earlier session's workers were lost when its container was reclaimed, so
+  they were started again): search (Q1, Q2, Q4, §3.5), drawing feel + pens (S1, S2), AI (A1–A3;
+  cloud AI stays off until the user decides ❓3), sync scaling (§3.1 SQLite + checkpoints, S8).
+- **Next**: notebooks and editing (S3, S4; design direction ❓8 still open), PDFs, handwriting and
+  audio (S5–S7), then the rest of the roadmap.
+
+## Round before (user: "GoodNotes whiteboards miss the normal writing; edit GoodNotes with our sketching; clipboard search and switching menus laggy; Connections should fill the right side; two-row sketch toolbar; sketching laggy, use little battery; 'Whole strokes' → 'Strokes'; smaller squeeze menu; everything faster")
 - **Why drawing lagged** (found, not guessed): every stroke reloaded the drawing three times, rebuilt
   the whole PencilKit drawing twice (all tiles redrawn), and each reload scanned every record in the
   vault (thousands of Paste clips) and decoded every stroke; the whole editor (toolbar too) re-rendered

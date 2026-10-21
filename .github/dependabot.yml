@@ -1,0 +1,35 @@
+# Weekly update pull requests for the npm packages (relay, website tests, browser extension tests)
+# and the GitHub Actions the workflows use. Each PR runs tests.yml before anything is merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cloudflare:
+        patterns: ["wrangler", "@cloudflare/*"]
+      dev-tools:
+        dependency-type: development
+        exclude-patterns: ["wrangler", "@cloudflare/*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /extensions/browser
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

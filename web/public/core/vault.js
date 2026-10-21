@@ -10,6 +10,7 @@ import { cleanName, folderId, folderPath, folderPathOf } from "./organize.js";
 import { clipEventView } from "./clipmap.js";
 import { unwrap as unwrapPaste } from "./pasteimport.js";
 import { parseHLC } from "./records.js";
+import { LocalStore } from "./localstore.js";
 import { elementView, encodePoints, erase, InkField, moveBy, pageListOf, strokeView, transformPoint, transformRect, validSize, widthScale } from "./ink.js";
 
 const MAX_FILE_VERSIONS = 50;
@@ -56,8 +57,9 @@ export class RelayError extends Error {
 
 export class Vault {
   /**
-   * @param storage {get(key), set(key, value), clear()} – IndexedDB in the browser, a Map in tests.
-   * @param options {origin, fetch, now}
+   * @param storage {get(key), set(key, value), clear(), delete?(key)} – IndexedDB in the browser, a
+   *   Map in tests. Ops, journal, applied and cursor go through `LocalStore` (chunked and sealed).
+   * @param options {origin, fetch, now, local}
    */
   constructor(storage, config, keys, journalState, pending, ops, applied, cursor, options = {}) {
     this.storage = storage;
@@ -66,8 +68,10 @@ export class Vault {
     this.fetch = options.fetch ?? ((...a) => fetch(...a));
     this.now = options.now ?? (() => Date.now());
     this.journal = new Journal(journalState, pending, this.now);
+    this.local = options.local ?? new LocalStore(storage);
     this.store = new RecordStore();
     this.store.apply(ops);
+    this.store.unsaved = []; // ops not yet in the local op store (LocalStore saves only these)
     this.store.apply(pending); // edits saved before the full op cache caught up
     this.applied = new Set(applied);
     this.cursor = cursor;
@@ -75,7 +79,7 @@ export class Vault {
   }
 
   /** Joins the vault with a setup code and saves everything this browser needs. */
-  static async join(storage, setupCode, { origin, deviceName = "Web browser", ...options } = {}) {
+  static async join(storage, setupCode, { origin, deviceName = "Web browser", deviceKind = "web", ...options } = {}) {
     const payload = parseSetupCode(setupCode);
     const relayVaultId = payload.relayVaultId ?? payload.vaultId;
     const base = origin ?? payload.relayURL;
@@ -85,7 +89,7 @@ export class Vault {
     const res = await doFetch(`${base}/v1/vaults/${relayVaultId}/devices`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pairingCode: payload.pairingCode, deviceName, deviceKind: "web", deviceId: proposed }),
+      body: JSON.stringify({ pairingCode: payload.pairingCode, deviceName, deviceKind, deviceId: proposed }),
     });
     if (res.status === 403 || res.status === 404) throw new Error("That setup code has expired or was already used. Make a new one in the app.");
     if (!res.ok) throw new Error(`The relay said ${res.status}: ${await res.text()}`);
@@ -180,16 +184,24 @@ export class Vault {
     const config = await storage.get("config");
     const keys = await storage.get("keys");
     if (!config || !keys) return null;
-    const journal = (await storage.get("journal")) ?? { state: { device: config.deviceId }, pending: [] };
-    return new Vault(storage, config, keys, journal.state, journal.pending, (await storage.get("ops")) ?? [],
-      (await storage.get("applied")) ?? [], (await storage.get("cursor")) ?? 0, options);
+    const local = new LocalStore(storage);
+    await local.claim();
+    const saved = await local.load();
+    const journal = saved.journal ?? { state: { device: config.deviceId }, pending: [] };
+    const vault = new Vault(storage, config, keys, journal.state, journal.pending, saved.ops, saved.applied, saved.cursor, { ...options, local });
+    if (local.needsRewrite) await vault.save(); // data from before chunked, sealed storage
+    return vault;
   }
 
+  /** Writes what changed since the last save: new ops as one sealed chunk, plus journal and cursor. */
   async save() {
-    await this.storage.set("journal", { state: this.journal.state, pending: this.journal.pending });
-    await this.storage.set("ops", this.store.ops);
-    await this.storage.set("applied", [...this.applied]);
-    await this.storage.set("cursor", this.cursor);
+    const fresh = this.store.unsaved ?? [];
+    this.store.unsaved = [];
+    const store = this.store;
+    await this.local.save({
+      journal: { state: { ...this.journal.state }, pending: [...this.journal.pending] },
+      fresh, all: () => store.ops, applied: [...this.applied], cursor: this.cursor,
+    });
   }
 
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -363,7 +375,7 @@ export class Vault {
   edited() {
     this.changed();
     const journal = { state: { ...this.journal.state }, pending: [...this.journal.pending] };
-    this.writes = (this.writes ?? Promise.resolve()).then(() => this.storage.set("journal", journal)).catch(() => {});
+    this.local.writeJournal(journal).catch(() => {});
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.save().catch(() => {}), 1000);
   }
@@ -394,13 +406,13 @@ export class Vault {
   }
 
   /** Adds a link (the apps fetch its title and preview when they next enrich). */
-  addLink(url, { title = "", note = "", source = "web", id: givenId } = {}) {
+  addLink(url, { title = "", note = "", source = "web", id: givenId, folder = [] } = {}) {
     const cleaned = cleanURL(url);
     const key = dedupeKey(cleaned.toString());
     const existing = this.items().find((i) => i.url && dedupeKey(i.url.toString()) === key);
     if (existing) { this.noteSource(source, existing); return { id: existing.id, isNew: false }; }
     const id = givenId ?? newId();
-    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source }) }, id, "item");
+    this.set({ ...this.baseFields("link", title), [Field.source]: source, [Field.url]: cleaned.toString(), ...this.filing({ kind: "link", source, importPath: folder }) }, id, "item");
     if (note) this.editText(Field.body, note, id, "item");
     return { id, isNew: true };
   }
@@ -1149,15 +1161,50 @@ export class Vault {
       return this.addFile(body, attachment.name, attachment.mime, { source: "email", id: newItemId });
     }
     const source = h.source === "web" ? "web" : "share";
+    const folder = inboxFolder(h), tags = inboxTags(h);
     if (h.url) {
       const note = h.mime?.startsWith("text/") ? text() : "";
-      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source, id: newItemId });
+      const { id, isNew } = this.addLink(h.url, { title: h.title ?? "", note, source, id: newItemId, folder });
       const item = this.item(id);
       if (!isNew && note && item) this.setBody(id, item.body ? `${item.body}\n\n${note}` : note);
-      return id;
+      return this.applyInboxHints(id, isNew, h, folder, tags);
     }
-    if (h.mime && !h.mime.startsWith("text/")) return this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title, id: newItemId });
-    return this.addNote({ title: h.title ?? "", body: text(), source, id: newItemId });
+    if (h.mime && !h.mime.startsWith("text/")) {
+      return this.applyInboxHints(await this.addFile(body, h.name ?? "file", h.mime, { source, title: h.title, id: newItemId, folder }), true, h, folder, tags);
+    }
+    return this.applyInboxHints(this.addNote({ title: h.title ?? "", body: text(), source, id: newItemId, folder }), true, h, folder, tags);
+  }
+
+  /**
+   * Bridges' hints (PROTOCOL.md §4 "Bridges"): an item filed into the folder the entry asked for stays
+   * there (not moved by later enrichment), gets the entry's tags, and remembers which bridge sent it.
+   */
+  applyInboxHints(id, isNew, h, folder, tags) {
+    const item = this.item(id);
+    if (!item) return id;
+    const fields = {};
+    if (isNew && folder.length) fields[Field.folderAuto] = false;
+    if (isNew && BRIDGE_SOURCES.has(h.source)) fields[Field.origin] = { ...(item.record.fields.origin ?? {}), bridge: h.source };
+    const merged = [...new Set([...item.tags, ...tags])].sort();
+    if (merged.length !== item.tags.length) fields[Field.tags] = merged;
+    if (Object.keys(fields).length) this.update(id, fields);
+    return id;
+  }
+
+  /** Asks the relay for a link's title, description, picture and site, and fills in what the item lacks. */
+  async fillLinkPreview(id) {
+    const item = this.item(id);
+    if (!item?.url) return null;
+    const p = await this.api("POST", "preview", { body: { url: item.url.toString() } });
+    const now = this.item(id);
+    if (!now) return p;
+    const fields = {};
+    if (!now.title && p.title) fields[Field.title] = p.title;
+    if (!now.summary && p.description) fields[Field.summary] = p.description;
+    if (!now.siteName && p.site) fields[Field.siteName] = p.site;
+    if (!now.imageURL && p.image) fields[Field.imageURL] = p.image;
+    if (Object.keys(fields).length) this.update(id, fields);
+    return p;
   }
 
   /** Our own journal on the relay already reaches `last` (another tab, or lost local state): move pending ops past it. */
@@ -1171,6 +1218,8 @@ export class Vault {
     this.journal.renumberFrom(last + 1);
     this.store = new RecordStore();
     this.store.apply([...kept, ...this.journal.pending]);
+    this.store.unsaved = [];
+    this.local.needsRewrite = true; // op ids changed: the local op store is written again whole
   }
 
   /** Decrypted bytes of an attachment. */
@@ -1210,6 +1259,21 @@ export class Vault {
   }
 }
 
+
+/** Inbox entries from bridges (PROTOCOL.md §4 "Bridges"). */
+export const BRIDGE_SOURCES = new Set(["rss", "github", "telegram", "webhook"]);
+
+/** The folder path an inbox entry asks for (`folder`: an array, or "A/B"), at most 5 deep. */
+export function inboxFolder(h) {
+  const raw = Array.isArray(h.folder) ? h.folder : typeof h.folder === "string" ? h.folder.split("/") : [];
+  return raw.filter((p) => typeof p === "string").map((p) => p.trim()).filter(Boolean).slice(0, 5);
+}
+
+/** The tags an inbox entry carries: lowercased, without '#', no repeats. */
+export function inboxTags(h) {
+  const raw = Array.isArray(h.tags) ? h.tags : [];
+  return [...new Set(raw.filter((t) => typeof t === "string").map((t) => t.trim().replace(/^#/, "").toLowerCase()).filter(Boolean))];
+}
 
 function mimeForName(name) {
   const ext = /\.([^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? "";

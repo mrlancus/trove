@@ -4,6 +4,7 @@ import { handleDav } from "./webdav";
 import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
 import { checkPrice, type Price } from "./price";
 import { publishedPage } from "./publish";
+import { Bridges, FETCH_BUDGET } from "./bridges";
 
 export interface Env {
   VAULT: DurableObjectNamespace<VaultObject>;
@@ -14,6 +15,8 @@ export interface Env {
   EMAIL_VAULT_ID: string;
   /** "false" closes POST /v1/vaults once your own vault exists, so nobody else can use this relay. */
   ALLOW_NEW_VAULTS?: string;
+  /** Optional secret that encrypts bridge tokens (Telegram bot, GitHub) at rest (PROTOCOL.md §4 "Bridges"). */
+  BRIDGE_KEY?: string;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
@@ -26,6 +29,11 @@ const PRICE_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const PRICE_CHECKS_PER_RUN = 40; // stays under the free plan's subrequest limit
 const MAX_WATCHES = 200;
 const MAX_PUBLISHED_BYTES = 256 * 1024;
+/** "Something new" pings for segments wait for a quiet moment, so one push of many segments is one ping. */
+const SEGMENT_PING_QUIET_MS = 300;
+const SEGMENT_PING_MAX_WAIT_MS = 1500;
+
+interface SegmentPing { type: "segment"; cursor: number; device: string; first: number; last: number; count: number }
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -37,6 +45,11 @@ export function error(status: number, message: string): Response {
 /** One Durable Object per vault: devices, journals, inbox index, WebDAV listing, live sockets. */
 export class VaultObject extends DurableObject<Env> {
   private sql: SqlStorage;
+  /** Bridges (bridges.ts): feeds, GitHub, Telegram and webhooks that seal into the inbox. */
+  readonly bridges: Bridges;
+  private segmentPings = new Map<string, SegmentPing>();
+  private segmentPingTimer: ReturnType<typeof setTimeout> | null = null;
+  private segmentPingSince = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -58,6 +71,10 @@ export class VaultObject extends DurableObject<Env> {
         error TEXT, price REAL, currency TEXT, lowest REAL, history TEXT DEFAULT '[]', dropped_at INTEGER);
       CREATE TABLE IF NOT EXISTS published(slug TEXT PRIMARY KEY, title TEXT, markdown TEXT, updated_at INTEGER);
     `);
+    this.bridges = new Bridges({
+      sql: this.sql, storage: ctx.storage, vaultId: () => this.vaultId, fetcher: () => this.fetchPage, tokenKey: env.BRIDGE_KEY,
+      seal: (header, body) => this.sealIntoInbox(header, body, body.length, null),
+    });
     // Keep-alive pings never wake the object (free-tier friendly).
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -132,6 +149,7 @@ export class VaultObject extends DurableObject<Env> {
       if (!this.vaultId) return error(404, "vault not found");
       if (path === "/internal/inbox") return await this.ingest(request);
       if (path.startsWith("/public/") && request.method === "GET") return this.publicPage(path.slice(8));
+      if (path.startsWith("/hook/")) return await this.bridges.hook(request, path.slice(6));
       if (path === "/api/devices" && request.method === "POST") return await this.pairDevice(request);
       if (path === "/api/recovery" && request.method === "POST") return await this.recoveryChallenge();
 
@@ -260,6 +278,11 @@ export class VaultObject extends DurableObject<Env> {
         if (a && method === "PUT") return this.putWatch(a, await request.json());
         if (a && method === "DELETE") return this.deleteWatch(a);
         break;
+      case "bridges":
+        return this.bridges.route(request, a, b);
+      case "preview":
+        if (!a && method === "POST") return this.bridges.preview(request);
+        break;
       case "published":
         if (!a && method === "GET") {
           return json({ pages: this.sql.exec("SELECT slug, title, updated_at FROM published ORDER BY updated_at DESC").toArray()
@@ -305,7 +328,7 @@ export class VaultObject extends DurableObject<Env> {
         device, first, last, body.length, digest, body, Date.now(),
       )
       .one();
-    this.broadcast({ type: "segment", cursor: row.cursor, device, first, last });
+    this.queueSegmentPing(row.cursor, device, first, last);
     return json({ cursor: row.cursor }, 201);
   }
 
@@ -530,12 +553,18 @@ export class VaultObject extends DurableObject<Env> {
   }
 
   async alarm() {
+    // Bridges first, within their own small fetch budget; price checks keep theirs (bridges.ts).
+    await this.bridges.runDue(Date.now(), FETCH_BUDGET);
     await this.checkWatches();
+    const times: number[] = [];
     const remaining = this.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches").one().n;
     if (remaining > 0) {
       const next = this.sql.exec<{ c: number }>("SELECT MIN(checked_at) AS c FROM watches").one().c ?? 0;
-      await this.ctx.storage.setAlarm(Math.max(Date.now() + 60_000, next + PRICE_CHECK_EVERY_MS));
+      times.push(next + PRICE_CHECK_EVERY_MS);
     }
+    const bridgeNext = this.bridges.nextDue();
+    if (bridgeNext !== null) times.push(bridgeNext);
+    if (times.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 60_000, Math.min(...times)));
   }
 
   // ---------- publish to link (PROTOCOL.md §6) ----------
@@ -565,6 +594,31 @@ export class VaultObject extends DurableObject<Env> {
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1], [deviceId]);
     return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  /** Merges segment pings per device until uploads pause (or 1.5 s pass), then sends one each. */
+  private queueSegmentPing(cursor: number, device: string, first: number, last: number) {
+    const now = Date.now();
+    const pending = this.segmentPings.get(device);
+    if (pending) {
+      pending.cursor = Math.max(pending.cursor, cursor);
+      pending.first = Math.min(pending.first, first);
+      pending.last = Math.max(pending.last, last);
+      pending.count++;
+    } else {
+      this.segmentPings.set(device, { type: "segment", cursor, device, first, last, count: 1 });
+    }
+    if (this.segmentPingTimer === null) this.segmentPingSince = now;
+    else clearTimeout(this.segmentPingTimer);
+    const wait = Math.max(0, Math.min(SEGMENT_PING_QUIET_MS, this.segmentPingSince + SEGMENT_PING_MAX_WAIT_MS - now));
+    this.segmentPingTimer = setTimeout(() => this.flushSegmentPings(), wait);
+  }
+
+  private flushSegmentPings() {
+    this.segmentPingTimer = null;
+    const pings = [...this.segmentPings.values()];
+    this.segmentPings.clear();
+    for (const ping of pings) this.broadcast(ping);
   }
 
   private broadcast(message: unknown) {

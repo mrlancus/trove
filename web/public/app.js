@@ -13,9 +13,11 @@ import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
-import { openInkEditor, renderSketchPage, sketchPages, sketchThumbnail } from "./draw.js";
+import { drawLoaded, loadDraw, openInkEditor, preloadWhenIdle, renderSketchPage, sketchThumbnail } from "./lazy.js";
+import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
+import { saveLink, showBridges } from "./bridges.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
@@ -65,6 +67,8 @@ async function boot() {
   app.classList.remove("loading");
   app.removeAttribute("aria-busy");
   if (vault) showMain(vault); else showSetup();
+  registerOffline();
+  preloadWhenIdle();
 }
 
 function showSetup(message) {
@@ -180,7 +184,7 @@ function handleSharedAdd() {
   if (!value) return;
   let url = null;
   try { const u = new URL(value); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
-  if (url) toast(state.vault.addLink(url.toString()).isNew ? "Saved to Trove" : "Already saved");
+  if (url) toast(saveLink(state.vault, url.toString(), {}, () => syncSoon()).isNew ? "Saved to Trove" : "Already saved");
   else { state.vault.addNote({ body: value }); toast("Note saved to Trove"); }
   syncSoon(300);
 }
@@ -213,8 +217,8 @@ function showMain(vault) {
     let url = null;
     try { const u = new URL(text); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* plain text */ }
     if (url) {
-      const { isNew } = vault.addLink(url.toString());
-      toast(isNew ? "Link saved. Your Mac or iPhone will add the preview." : "Already saved");
+      const { isNew } = saveLink(vault, url.toString(), {}, () => syncSoon());
+      toast(isNew ? "Link saved" : "Already saved");
     } else {
       vault.addNote({ body: text });
       toast("Note saved");
@@ -241,6 +245,7 @@ function showMain(vault) {
   $("#select-mode").addEventListener("click", () => setSelecting(!state.selecting));
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
+  $("#bridges").addEventListener("click", () => showBridges(vault, { toast }));
   $("#new-folder").addEventListener("click", (e) => { e.stopPropagation(); newFolder(null); });
   folderDropTarget($("#folders-heading"), null);
   addEventListener("hashchange", handleSharedAdd);
@@ -315,7 +320,7 @@ function wireDrops() {
     if (!text) return;
     let url = null;
     try { const u = new URL(text); if (u.protocol === "http:" || u.protocol === "https:") url = u; } catch { /* text */ }
-    if (url) toast(state.vault.addLink(url.toString()).isNew ? "Link saved" : "Already saved");
+    if (url) toast(saveLink(state.vault, url.toString(), {}, () => syncSoon()).isNew ? "Link saved" : "Already saved");
     else { state.vault.addNote({ body: text }); toast("Note saved"); }
     syncSoon();
   });
@@ -591,13 +596,16 @@ function renderMain(items, collections, folders, unfiled, liveFolders, now) {
   $("#empty").hidden = shown.length > 0 || (inFolder && !$("#folder-tiles").hidden);
   $("#empty").textContent = "Nothing here yet.";
   if (shown.length > MAX_CARDS) $("#grid").append(h("p", { class: "empty", text: `Showing the newest ${MAX_CARDS}. Search to find the rest.` }));
-  $("#clip-results")?.remove();
-  const fromClips = state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query, clipAnswer) : null;
+  // A clip opened from the search results keeps its fields while you type in them (a sync used to
+  // rebuild the results and throw the new name away before it was saved).
+  const editingClip = $("#clip-results .clip.open")?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  const fromClips = editingClip ? null : state.query.trim() && !sel.startsWith("f:") && !sel.startsWith("c:") ? clipResults(state.query, clipAnswer) : null;
+  if (!editingClip) $("#clip-results")?.remove();
   if (fromClips) {
     fromClips.id = "clip-results";
     $("#grid").after(fromClips);
-    $("#empty").hidden = true;
   }
+  if (fromClips || editingClip) $("#empty").hidden = true;
   renderDetail();
 }
 
@@ -1642,7 +1650,9 @@ function inkSignature(item) {
 function sketchSection(item) {
   const vault = state.vault;
   const grid = h("div", { class: `sketch-pages${item.infinite ? " endless" : ""}` });
-  const specs = sketchPages(item);
+  // The drawing code loads lazily (lazy.js); until it has, show the section and fill it after.
+  if (!drawLoaded()) loadDraw().then(() => { panelCache.sig = null; queueRender(); }).catch(() => {});
+  const specs = drawLoaded()?.sketchPages(item) ?? [];
   specs.forEach((spec, page) => {
     const canvas = h("canvas", { class: "sketch-page", "aria-label": item.infinite ? "Endless canvas" : `Page ${page + 1}` });
     const button = h("button", { type: "button", class: "sketch-page-button", title: "Draw on this page", onclick: () => openSketch(item.id, page) }, canvas,

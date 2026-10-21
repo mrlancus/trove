@@ -120,7 +120,7 @@ public actor Library {
     /// Adds a link, or returns the existing item if the same page was saved before.
     @discardableResult
     public func addLink(_ url: URL, title: String = "", note: String = "", source: ItemSource = .app,
-                        id: String? = nil) async -> (id: String, isNew: Bool) {
+                        id: String? = nil, folder: [String] = []) async -> (id: String, isNew: Bool) {
         let cleaned = URLCleaner.clean(url)
         let key = URLCleaner.dedupeKey(cleaned)
         if let existing = await items().first(where: { $0.url.map(URLCleaner.dedupeKey) == key }) {
@@ -130,7 +130,7 @@ public actor Library {
         let id = id ?? newId()
         var fields = await baseFields(kind: .link, source: source, title: title)
         fields[Field.url] = .string(cleaned.absoluteString)
-        fields.merge(await filing(kind: .link, source: source)) { _, b in b }
+        fields.merge(await filing(kind: .link, source: source, importPath: folder)) { _, b in b }
         await engine.set(fields, record: id, kind: "item")
         if !note.isEmpty { await engine.editText(Field.body, value: note, record: id, kind: "item") }
         return (id, true)
@@ -378,20 +378,43 @@ public actor Library {
 
         default: // "web", "ios", "other": a page, selection, link or file sent from a browser / share sheet
             let source: ItemSource = h.source == "web" ? .web : .share
+            let folder = h.folderPath
             if let urlString = h.url, let url = URL(string: urlString) {
                 let note = String(decoding: envelope.body, as: UTF8.self)
                 let (id, isNew) = await addLink(url, title: h.title ?? "", note: h.mime?.hasPrefix("text/") == true ? note : "", source: source,
-                                                id: newItemId)
+                                                id: newItemId, folder: folder)
                 if !isNew, !note.isEmpty, let item = await item(id) {
                     await setBody(id, item.body.isEmpty ? note : item.body + "\n\n" + note)
                 }
-                return id
+                return await applyInboxHints(id, isNew: isNew, header: h)
             }
             if let mime = h.mime, !mime.hasPrefix("text/") {
-                return try await addFile(envelope.body, name: h.name ?? "file", mime: mime, source: source, title: h.title, id: newItemId)
+                let id = try await addFile(envelope.body, name: h.name ?? "file", mime: mime, source: source, title: h.title, id: newItemId,
+                                           folder: folder)
+                return await applyInboxHints(id, isNew: true, header: h)
             }
-            return await addNote(title: h.title ?? "", body: String(decoding: envelope.body, as: UTF8.self), source: source, id: newItemId)
+            let id = await addNote(title: h.title ?? "", body: String(decoding: envelope.body, as: UTF8.self), source: source, id: newItemId,
+                                   folder: folder)
+            return await applyInboxHints(id, isNew: true, header: h)
         }
+    }
+
+    /// Bridges' hints (PROTOCOL.md §4 "Bridges"): an item filed into the folder the entry asked for
+    /// stays there (later enrichment doesn't move it), gets the entry's tags, and remembers the bridge.
+    /// Mirrors `applyInboxHints` in web/public/core/vault.js.
+    func applyInboxHints(_ id: String, isNew: Bool, header h: InboxEnvelope.Header) async -> String {
+        guard let item = await item(id) else { return id }
+        var fields: [String: JSONValue] = [:]
+        if isNew, !h.folderPath.isEmpty { fields[Field.folderAuto] = false }
+        if isNew, InboxEnvelope.bridgeSources.contains(h.source) {
+            var origin = item.record[Field.origin]?.object ?? [:]
+            origin["bridge"] = .string(h.source)
+            fields[Field.origin] = .object(origin)
+        }
+        let merged = Array(Set(item.tags + h.tagList)).sorted()
+        if merged.count != item.tags.count { fields[Field.tags] = JSONValue(merged) }
+        if !fields.isEmpty { await update(id, fields) }
+        return id
     }
 
     /// The item id for an inbox entry (the same on every device).

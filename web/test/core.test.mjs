@@ -716,3 +716,84 @@ test("Paste's JSON-wrapped text is unwrapped (same as ClipTests.unwrapsPasteJSON
   assert.equal(unwrap('{"name":"not paste"}'), null);
   assert.equal(unwrap("plain"), null);
 });
+
+test("the local op store is append-only, sealed at rest, and opens old plain data", async () => {
+  const { Vault } = await import("../public/core/vault.js");
+  const { LocalStore } = await import("../public/core/localstore.js");
+  const writes = [];
+  const m = new Map();
+  const storage = { m, get: async (k) => structuredClone(m.get(k)), set: async (k, v) => { writes.push(k); m.set(k, structuredClone(v)); },
+    delete: async (k) => { m.delete(k); }, clear: async () => m.clear() };
+  let t = 1_760_000_000_000;
+  const keys = await importVaultKeys({ vaultKey: b64uEncode(crypto.getRandomValues(new Uint8Array(32))) });
+  const config = { deviceName: "Chrome", deviceId: "WEB", encrypted: true, base: "http://relay", vaultId: "V", token: "T" };
+  await storage.set("config", config);
+  await storage.set("keys", keys);
+
+  // An old browser: everything plain, every op under "ops".
+  const old = new Vault({ get: async () => undefined, set: async () => {} }, config, keys, { device: "WEB" }, [], [], [], 0, { now: () => (t += 1000) });
+  for (let i = 0; i < 20; i++) old.addNote({ title: `note ${i}`, body: `secret body ${i}` });
+  clearTimeout(old.saveTimer);
+  await storage.set("ops", old.store.ops.map((op) => structuredClone(op)));
+  await storage.set("journal", { state: old.journal.state, pending: [] });
+  await storage.set("applied", ["MAC/1"]);
+  await storage.set("cursor", 7);
+
+  const v = await Vault.open(storage, { now: () => (t += 1000) });
+  assert.equal(v.items().length, 20);
+  assert.equal(m.has("ops"), false, "the plain op list is gone after the migration");
+  const plain = (x) => JSON.stringify(x, (k, val) => (val instanceof Uint8Array ? "bytes" : val));
+  for (const [k, val] of m) if (!["config", "keys", "localKey", "localOwner", "opChunks"].includes(k)) assert.equal(val?.sealed, 1, `${k} is sealed`);
+  assert.ok(![...m.values()].some((val) => plain(val)?.includes("secret body")), "no note text in storage");
+
+  // A save after one edit writes one small chunk, not the whole op list.
+  writes.length = 0;
+  v.addNote({ title: "new", body: "another secret" });
+  clearTimeout(v.saveTimer);
+  await v.save();
+  const chunkWrites = writes.filter((k) => k.startsWith("ops."));
+  assert.ok(chunkWrites.length >= 1 && chunkWrites.length <= 6, `chunk writes: ${chunkWrites}`);
+  assert.ok(!writes.includes("ops"));
+
+  // Many saves keep few chunks (small ones merge), and a reopen gets every op back.
+  for (let i = 0; i < 40; i++) { v.addNote({ title: `more ${i}` }); clearTimeout(v.saveTimer); await v.save(); }
+  assert.ok(m.get("opChunks").chunks.length <= 8, `chunks: ${m.get("opChunks").chunks.length}`);
+  const stored = [...m.keys()].filter((k) => k.startsWith("ops."));
+  assert.equal(stored.length, m.get("opChunks").chunks.length, "merged chunks are deleted");
+  const again = await Vault.open(storage, { now: () => (t += 1000) });
+  assert.equal(again.items().length, 61);
+  assert.equal(again.cursor, 7);
+  assert.deepEqual([...again.applied], ["MAC/1"]);
+  assert.equal(again.store.ops.length, v.store.ops.length);
+
+  // The first copy no longer writes once another opened the storage (the "use here" tab).
+  assert.equal(await v.local.save({ journal: {}, fresh: [], all: [], applied: [], cursor: 0 }), false);
+  assert.equal(await again.local.save({ journal: { state: again.journal.state, pending: [] }, fresh: [], all: [], applied: [...again.applied], cursor: 7 }), true);
+
+  // A lost at-rest key opens as empty with the cursor at 0 (sync pulls everything again).
+  m.delete("localKey");
+  const lost = await new LocalStore(storage).load();
+  assert.deepEqual([lost.ops.length, lost.cursor, lost.applied.length], [0, 0, 0]);
+});
+
+test("a failed save leaves the local op store readable and is redone in full", async () => {
+  const { LocalStore } = await import("../public/core/localstore.js");
+  const m = new Map();
+  let failNext = false;
+  const storage = { get: async (k) => m.get(k), set: async (k, v) => { if (failNext && k.startsWith("ops.")) { failNext = false; throw new Error("disk full"); } m.set(k, v); },
+    delete: async (k) => { m.delete(k); }, clear: async () => m.clear() };
+  const op = (s) => ({ d: "WEB", s, h: `17000000000${String(s).padStart(2, "0")}-0000-WEB`, t: "set", r: `r${s}`, k: "item", f: { title: `t${s}` } });
+  const all = [];
+  const local = new LocalStore(storage, { chunkBytes: 400 });
+  for (let s = 1; s <= 30; s++) {
+    all.push(op(s));
+    failNext = s === 12 || s === 20;
+    await local.save({ journal: {}, fresh: [op(s)], all, applied: [], cursor: s }).catch(() => {});
+  }
+  await local.save({ journal: {}, fresh: [], all, applied: [], cursor: 30 });
+  const loaded = await new LocalStore(storage).load();
+  assert.deepEqual(loaded.ops.map((o) => o.s).sort((a, b) => a - b), all.map((o) => o.s));
+  const listed = new Set(m.get("opChunks").chunks.map((c) => `ops.${c.n}`));
+  assert.deepEqual([...m.keys()].filter((k) => k.startsWith("ops.")).sort(), [...listed].sort(), "no orphaned chunks");
+  assert.ok(listed.size > 1, "small chunk limit gives several chunks");
+});

@@ -146,6 +146,12 @@ enum ThumbnailCache {
     private static let cache: NSCache<NSString, PlatformImage> = {
         let cache = NSCache<NSString, PlatformImage>()
         cache.countLimit = 500
+        // Capped by decoded size too (a card picture is up to 700 px, ~2 MB), not just by count.
+        #if os(macOS)
+        cache.totalCostLimit = 192 * 1024 * 1024
+        #else
+        cache.totalCostLimit = 96 * 1024 * 1024
+        #endif
         return cache
     }()
     private static var loading: [String: Task<Decoded?, Never>] = [:]
@@ -169,7 +175,8 @@ enum ThumbnailCache {
         if let hit = cached(key) { return hit } // another card asking for the same file got there first
         guard let decoded else { return nil }
         let image = PlatformImage.make(decoded.cgImage)
-        cache.setObject(image, forKey: key as NSString)
+        let cost = decoded.cgImage.bytesPerRow * decoded.cgImage.height
+        cache.setObject(image, forKey: key as NSString, cost: cost)
         return image
     }
 

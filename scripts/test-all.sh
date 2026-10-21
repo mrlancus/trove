@@ -15,4 +15,7 @@ node --experimental-strip-types --test extensions/browser/test/trv1.test.mjs
 echo "▶ Web app core (+ Swift interop fixtures)"
 (cd web && npm test)
 
+echo "▶ trove-mcp (Trove for Claude)"
+(cd mcp && npm test)
+
 echo "✅ All green"
