@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { envelopePrefix, randomId, randomToken, seal, sealedLength, sealStream, sha256Hex, b64uDecode, b64uEncode, type InboxHeader } from "./crypto";
 import { handleDav } from "./webdav";
-import { aiAsk, aiEmbed, aiEnrich, aiTranscribe } from "./ai";
+import { aiAction, aiAsk, aiConfigured, aiEmbed, aiEnrich, aiTranscribe, DEFAULT_MONTHLY_TOKENS, modelOf } from "./ai";
 import { checkPrice, type Price } from "./price";
 import { publishedPage } from "./publish";
 import { Bridges, FETCH_BUDGET } from "./bridges";
@@ -15,6 +15,8 @@ export interface Env {
   EMAIL_VAULT_ID: string;
   /** "false" closes POST /v1/vaults once your own vault exists, so nobody else can use this relay. */
   ALLOW_NEW_VAULTS?: string;
+  /** Monthly allowance of Claude tokens (input + output) per vault; unset means DEFAULT_MONTHLY_TOKENS. */
+  AI_MONTHLY_LIMIT?: string;
   /** Optional secret that encrypts bridge tokens (Telegram bot, GitHub) at rest (PROTOCOL.md §4 "Bridges"). */
   BRIDGE_KEY?: string;
 }
@@ -295,16 +297,61 @@ export class VaultObject extends DurableObject<Env> {
         }
         break;
       case "ai": {
+        if (a === "status" && method === "GET") return json(this.aiStatus());
         if (method !== "POST") break;
-        if (this.meta("aiEnabled") !== "true") return error(403, "AI is disabled for this vault");
-        if (a === "enrich") return json(await aiEnrich(this.env, await request.json()));
-        if (a === "ask") return json(await aiAsk(this.env, await request.json()));
+        if (this.meta("aiEnabled") !== "true") { await request.arrayBuffer().catch(() => null); return error(403, "AI is disabled for this vault"); }
+        if (a === "enrich" || a === "ask" || a === "action") {
+          const status = this.aiStatus();
+          if (status.used >= status.limit) {
+            await request.arrayBuffer().catch(() => null);
+            return json({ error: `This month's cloud AI allowance is used up. It starts again on ${status.resetsAt.slice(0, 10)}.`, ...status }, 429);
+          }
+          const body = await request.json().catch(() => null);
+          if (!body || typeof body !== "object") return error(400, "a JSON body is required");
+          try {
+            const result = a === "enrich" ? await aiEnrich(this.env, body) : a === "ask" ? await aiAsk(this.env, body as never) : await aiAction(this.env, body);
+            this.addAiUsage(result.tokens);
+            return json({ ...result, usage: this.aiStatus() });
+          } catch (e) {
+            if (e instanceof HttpError && e.tokens) this.addAiUsage(e.tokens);
+            throw e;
+          }
+        }
         if (a === "transcribe") return json(await aiTranscribe(this.env, new Uint8Array(await request.arrayBuffer())));
         if (a === "embed") return json(await aiEmbed(this.env, await request.json()));
         break;
       }
     }
     return error(404, "not found");
+  }
+
+  // ---------- AI allowance (ROADMAP §4 A1) ----------
+
+  /** Claude use this calendar month (UTC), in tokens as the API reported them, against AI_MONTHLY_LIMIT. */
+  aiStatus() {
+    const now = new Date();
+    const month = now.toISOString().slice(0, 7);
+    const limit = Math.max(0, Math.floor(Number(this.env.AI_MONTHLY_LIMIT ?? "") || DEFAULT_MONTHLY_TOKENS));
+    const resetsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+    const vaultEnabled = this.meta("aiEnabled") === "true";
+    const configured = aiConfigured(this.env);
+    return {
+      enabled: vaultEnabled && configured,
+      vaultEnabled,
+      configured,
+      model: modelOf(this.env),
+      month,
+      used: Number(this.meta(`aiUsed:${month}`) ?? 0),
+      limit,
+      unit: "tokens",
+      resetsAt,
+    };
+  }
+
+  private addAiUsage(tokens: number) {
+    if (!(tokens > 0)) return;
+    const key = `aiUsed:${new Date().toISOString().slice(0, 7)}`;
+    this.setMeta(key, String(Number(this.meta(key) ?? 0) + Math.round(tokens)));
   }
 
   // ---------- journal segments ----------
@@ -653,7 +700,8 @@ function fixedLength(body: ReadableStream<Uint8Array>, length: number): Readable
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  /** `tokens`: what a failed Claude call still cost, so the monthly allowance counts it. */
+  constructor(public status: number, message: string, public tokens = 0) {
     super(message);
   }
 }

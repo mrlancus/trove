@@ -145,6 +145,8 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /p/:v/:slug` | none | the published page as HTML (§6) |
 | `POST /vaults/:v/ai/enrich` | device | `{text, url?, title?}` → `{title, summary, tags[], kind?}` (Claude) |
 | `POST /vaults/:v/ai/ask` | device | `{question, sources:[{id,text}]}` → `{answer, citations:[id]}` (Claude) |
+| `POST /vaults/:v/ai/action` | device | `{action, text}` or `{action, image (base64), mediaType}` (+ `language` for translate) → `{action, text, cards:[{front,back}]}` (Claude; below) |
+| `GET /vaults/:v/ai/status` | device | → `{enabled, vaultEnabled, configured, model, month, used, limit, unit:"tokens", resetsAt}` |
 | `POST /vaults/:v/ai/transcribe` | device | audio bytes → `{text}` (Workers AI Whisper) |
 | `POST /vaults/:v/ai/embed` | device | `{texts[]}` → `{vectors[][]}` (Workers AI bge-m3) |
 | `GET/POST /vaults/:v/bridges`, `GET/PUT/DELETE /vaults/:v/bridges/:id`, `POST …/:id/run`, `POST …/:id/regenerate` | device | Bridges (below) |
@@ -165,7 +167,21 @@ iCloud-only vault keeps the journal id it already writes under `.sync/<deviceId>
 
 AI routes return `403` unless the vault has AI enabled (`PUT /vaults/:v/settings {aiEnabled:true}`).
 The Anthropic key is a Worker secret (`ANTHROPIC_API_KEY`). Content sent to AI routes is plaintext
-by necessity, and the apps label those items "processed in cloud".
+by necessity, and the apps label those items "processed in cloud". The relay never stores it.
+
+Claude routes (`enrich`, `ask`, `action`) also return `tokens` (what the call cost: input + output +
+cache tokens, from the API's usage numbers) and `usage` (the status object). They count against a
+monthly allowance per vault, the Worker var `AI_MONTHLY_LIMIT` in tokens (default 1,000,000; the
+month is the UTC calendar month). Once `used >= limit` they answer `429 {error, ...status}` without
+calling Claude, until `resetsAt`. A refused or cut-off answer still counts what it cost. `enabled`
+in the status is `vaultEnabled && configured` (a key is set); clients hide AI features when it's false.
+
+`action` (ROADMAP §4 A2) takes text actions `continue`, `shorter`, `clearer`, `grammar`, `bullets`,
+`translate`, `summarise`, `explain`, `flashcards` and picture actions (a rendered page or lasso
+selection) `transcribe`, `summarise`, `explain`, `solve`, `flashcards`. `cards` is empty except for
+`flashcards`. Limits, refused with `413` (never cut): question 2,000 characters, 30 sources, text
+20,000 characters, picture 5,000,000 base64 characters (PNG, JPEG or WebP, else `415`), `language`
+40 letters.
 
 ### Inbox plaintext (inside the sealed TRV1)
 ```
