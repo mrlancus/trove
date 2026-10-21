@@ -4,7 +4,7 @@ import Testing
 
 /// Timings for the hot paths (docs/ROADMAP.md §3.6), on a seeded synthetic vault like
 /// web/test/bench.mjs: 50,000 items, 100,000 strokes on 500 pages. Off unless TROVE_BENCH is set:
-///   TROVE_BENCH=1 swift test --filter Benchmarks
+///   TROVE_BENCH=1 swift test -c release -Xswiftc -enable-testing --filter Benchmarks
 /// TROVE_BENCH_SCALE=0.1 makes the vault smaller; TROVE_BENCH_OUT=<file> writes the numbers as JSON.
 /// They print and are written, not gated: CI machines vary too much for a fixed Swift baseline yet.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["TROVE_BENCH"] != nil))

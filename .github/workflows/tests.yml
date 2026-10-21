@@ -140,4 +140,4 @@ jobs:
         env:
           TROVE_BENCH: "1"
           TROVE_BENCH_OUT: swift-bench.json
-        run: swift test --filter Benchmarks
+        run: swift test -c release -Xswiftc -enable-testing --filter Benchmarks
