@@ -135,7 +135,7 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/inbox?after=<cursor>` | device | → `{entries:[{id,cursor,size,source,davPath?,createdAt}], more}` |
 | `GET /vaults/:v/inbox/:id` | device | → TRV1 sealed bytes |
 | `DELETE /vaults/:v/inbox/:id` | device | ack after import → `204` |
-| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last}`, `{"type":"inbox",cursor,id}`, `{"type":"price",id,itemId,price,previous,currency}` |
+| `GET /vaults/:v/live` | device (token may also be sent as `?token=`) | WebSocket. Server → client messages: `{"type":"segment",cursor,device,first,last,count}` (one per device per burst of uploads: sent after 300 ms without another, at most 1.5 s after the first; `cursor` is the newest, `first`/`last` span the burst), `{"type":"inbox",cursor,id}`, `{"type":"price",id,itemId,price,previous,currency}` |
 | `GET /vaults/:v/watches` | device | → `{watches:[Watch]}` (§5) |
 | `PUT /vaults/:v/watches/:id` | device | `{url, itemId?}` → `201`/`200` `Watch` (§5) |
 | `DELETE /vaults/:v/watches/:id` | device | → `204` |

@@ -198,6 +198,26 @@ describe("live websocket", () => {
     expect(JSON.parse(await message)).toMatchObject({ type: "segment", device: v.deviceId, first: 1, last: 1 });
     ws.close();
   });
+
+  it("sends one ping for a push of many segments", async () => {
+    const v = await createVault();
+    const res = await call(`/v1/vaults/${v.vaultId}/live?token=${v.deviceToken}`, { headers: { upgrade: "websocket" } });
+    const ws = res.webSocket!;
+    ws.accept();
+    const messages: string[] = [];
+    ws.addEventListener("message", (e) => { messages.push(e.data as string); });
+    for (let i = 1; i <= 5; i++) {
+      const put = await call(`/v1/vaults/${v.vaultId}/segments/${v.deviceId}/${i * 10}/${i * 10 + 9}`, { method: "PUT", headers: auth(v.deviceToken), body: enc.encode(`x${i}`) });
+      expect(put.status).toBe(201);
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    expect(messages.length).toBe(1);
+    const ping = JSON.parse(messages[0]);
+    expect(ping).toMatchObject({ type: "segment", device: v.deviceId, first: 10, last: 59, count: 5 });
+    const list = (await (await call(`/v1/vaults/${v.vaultId}/segments?after=0`, { headers: auth(v.deviceToken) })).json()) as { segments: { cursor: number }[] };
+    expect(ping.cursor).toBe(Math.max(...list.segments.map((s) => s.cursor)));
+    ws.close();
+  });
 });
 
 describe("closing the relay to new vaults", () => {

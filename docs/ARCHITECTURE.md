@@ -41,7 +41,7 @@
 | Folders and auto-filing (port of `Organizer.swift`) | `web/public/core/organize.js` |
 | Wikilinks, backlinks, mentions, related (port of `Links.swift`) | `web/public/core/links.js` |
 | File previews: GoodNotes, Word, Excel, PowerPoint, iWork, CSV | `web/public/core/files.js` |
-| Viewer (pdf.js in `vendor/pdfjs`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
+| Viewer (pdf.js in `vendor/pdfjs-4.10.38`), thumbnails / graph view | `web/public/viewer.js` / `web/public/graph.js` |
 | Join, sync, edit, attachments | `web/public/core/vault.js` |
 | UI (vanilla modules, no build step) | `web/public/app.js`, `app.css`, `index.html` |
 | Tests: unit + Swift fixtures / relay e2e / real Chromium | `web/test/core.test.mjs`, `relay.e2e.mjs`, `ui.e2e.mjs`, `organize.e2e.mjs` |
