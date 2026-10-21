@@ -18,6 +18,7 @@ import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
 import { saveLink, showBridges } from "./bridges.js";
+import { afterSync, initAi, noteAiMenu, showAiSettings, showAsk, showReview, suggestLinksButton } from "./ai.js";
 
 const app = document.getElementById("app");
 const state = { vault: null, selection: "all", query: "", openId: null, mode: null, renderQueued: false, clipFilter: "all", openClip: null,
@@ -246,6 +247,10 @@ function showMain(vault) {
   $("#sync-now").addEventListener("click", () => runSync(true));
   $("#devices").addEventListener("click", showDevices);
   $("#bridges").addEventListener("click", () => showBridges(vault, { toast }));
+  $("#ask").addEventListener("click", () => showAsk(vault, aiCtx));
+  $("#review").addEventListener("click", () => showReview(vault, aiCtx));
+  $("#ai-settings").addEventListener("click", () => showAiSettings(vault, aiCtx));
+  initAi(vault, aiCtx);
   $("#new-folder").addEventListener("click", (e) => { e.stopPropagation(); newFolder(null); });
   folderDropTarget($("#folders-heading"), null);
   addEventListener("hashchange", handleSharedAdd);
@@ -274,6 +279,14 @@ function showMain(vault) {
   runSync();
   connectLive();
 }
+
+/** What the AI views (ai.js) need from the app. */
+const aiCtx = {
+  openItem: (id) => { flushBody(); state.mode = null; openItem(id); },
+  toast: (text) => toast(text),
+  syncSoon: () => syncSoon(),
+  flush: () => flushBody(),
+};
 
 function onKey(e) {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
@@ -1589,7 +1602,7 @@ function renderDetail(force = false) {
     h("button", { type: "button", "aria-pressed": String(state.mode === "edit" && !state.history), onclick: () => { state.mode = "edit"; state.history = false; renderDetail(true); $("#body-input")?.focus(); } }, "Edit"),
     h("button", { type: "button", "aria-pressed": String(state.history), onclick: () => { flushBody(); state.history = !state.history; renderDetail(true); } }, "History"));
   const saved = h("span", { class: "saved", id: "saved" });
-  parts.push(h("section", {}, hasFiles ? h("h3", { class: "section-title", text: "Notes" }) : null, h("div", { class: "body-head" }, segmented, saved)));
+  parts.push(h("section", {}, hasFiles ? h("h3", { class: "section-title", text: "Notes" }) : null, h("div", { class: "body-head" }, segmented, saved), item.kind === "note" ? noteAiMenu(item, vault, aiCtx) : null));
   if (state.history) parts.push(historyView(item));
   else if (state.mode === "edit") parts.push(bodyEditor(item, saved));
   else {
@@ -1920,6 +1933,7 @@ function connectionsSection(item, items, graph) {
     } }, `+ ${t}`))),
     group("Mentioned in", mentioned.map((o) => chip(o, { action: h("button", { type: "button", class: "chip-action", onclick: () => { vault.connect(o.id, item.id); syncSoon(); } }, "Link") }))),
     group("Maybe related", suggestions.map((o) => chip(o, { action: h("button", { type: "button", class: "chip-action", onclick: () => { vault.connect(item.id, o.id); syncSoon(); } }, "Connect") }))),
+    suggestLinksButton(item, state.vault, aiCtx),
     connectPicker(item));
   if (out.length || inc.length) section.append(h("div", { class: "local-graph-wrap" }, h("div", { id: "local-graph", class: "local-graph" }),
     h("button", { type: "button", class: "link-button", onclick: () => select("graph") }, "Open the whole graph →")));
@@ -2003,6 +2017,7 @@ async function runSync(manual = false) {
     if (report.imported) toast(report.imported === 1 ? "1 new item from your inbox" : `${report.imported} new items from your inbox`);
     setStatus(report.errors.length ? "error" : live ? "live" : "idle", report.errors[0]);
     if (manual) toast(report.errors.length ? `Sync problem: ${report.errors[0]}` : "Up to date");
+    if (!report.errors.length) afterSync(state.vault, aiCtx);
   } catch (e) {
     if (e instanceof RelayError && e.status === 401) {
       stopLive();

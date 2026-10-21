@@ -636,3 +636,23 @@ body.ink-open { overflow: hidden; }
 .bridge-copy input, .bridge-form input { flex: 1 1 180px; min-width: 0; }
 .bridge-url { overflow-wrap: anywhere; }
 .bridge-error { color: var(--danger); font-size: 13px; }
+
+/* ---------- AI and looking back (ai.js) ---------- */
+html:not(.ai-on) .ai-only { display: none !important; }
+.ai-label { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+.ask-form { display: grid; gap: 8px; }
+.ask-out { display: grid; gap: 10px; margin-top: 12px; }
+.ai-result { border-left: 3px solid var(--accent-soft); padding-left: 12px; }
+.ai-note { display: grid; gap: 8px; }
+.ai-menu { position: relative; justify-self: end; }
+.ai-menu > summary { list-style: none; cursor: pointer; display: inline-block; }
+.ai-menu > summary::-webkit-details-marker { display: none; }
+.ai-menu-items { position: absolute; right: 0; z-index: 5; display: grid; gap: 2px; min-width: 220px; padding: 6px; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.ai-menu-items .link-button { text-align: left; padding: 6px 8px; }
+.ai-note-result { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
+.meter { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--accent); }
+.review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.review-list .dupe { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.dupe-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.suggest-links { align-items: flex-start; }
