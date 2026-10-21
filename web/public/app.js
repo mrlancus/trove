@@ -12,7 +12,8 @@ import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
-import { openInkEditor, renderSketchPage, sketchPages, sketchThumbnail } from "./draw.js";
+import { drawLoaded, loadDraw, openInkEditor, preloadWhenIdle, renderSketchPage, sketchThumbnail } from "./lazy.js";
+import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
 
@@ -63,6 +64,8 @@ async function boot() {
   app.classList.remove("loading");
   app.removeAttribute("aria-busy");
   if (vault) showMain(vault); else showSetup();
+  registerOffline();
+  preloadWhenIdle();
 }
 
 function showSetup(message) {
@@ -1629,7 +1632,9 @@ function inkSignature(item) {
 function sketchSection(item) {
   const vault = state.vault;
   const grid = h("div", { class: `sketch-pages${item.infinite ? " endless" : ""}` });
-  const specs = sketchPages(item);
+  // The drawing code loads lazily (lazy.js); until it has, show the section and fill it after.
+  if (!drawLoaded()) loadDraw().then(() => { panelCache.sig = null; queueRender(); }).catch(() => {});
+  const specs = drawLoaded()?.sketchPages(item) ?? [];
   specs.forEach((spec, page) => {
     const canvas = h("canvas", { class: "sketch-page", "aria-label": item.infinite ? "Endless canvas" : `Page ${page + 1}` });
     const button = h("button", { type: "button", class: "sketch-page-button", title: "Draw on this page", onclick: () => openSketch(item.id, page) }, canvas,
