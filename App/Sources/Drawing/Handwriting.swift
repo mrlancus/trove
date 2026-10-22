@@ -119,7 +119,9 @@ actor HandwritingPages {
         guard let sketches, let data = try? JSONEncoder().encode(sketches) else { return }
         try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
+}
 
+extension Handwriting {
     /// Pixels wide for a page sent to your AI: ~1568 on the long side (what vision models read at).
     static func aiWidth(_ width: Double, _ height: Double) -> Int {
         let long = max(1, width, height)
