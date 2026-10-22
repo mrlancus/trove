@@ -71,8 +71,11 @@ public struct AISettings: Sendable, Equatable {
     public var customURL = ""
     public var models: [Tier: String] = [:]
     /// Read handwriting (sketches, GoodNotes, ink on PDFs, photos of pages) with the fast model as
-    /// soon as it arrives, instead of Apple's text recognition.
+    /// soon as it arrives, instead of Apple's text recognition ("live"). Only what's new or changed
+    /// since `liveSince`: everything older waits for Read all past handwriting (`HandwritingScan`).
     public var readHandwriting = true
+    /// When live reading was turned on. Before it was kept (nil), from when the app opened.
+    public var liveSince: Date?
     /// The most background work (reading handwriting) may spend a month, in US dollars, across
     /// every device; 0 means no limit. Ask and actions you start yourself aren't limited.
     public var monthlyLimit = 1.0
@@ -87,6 +90,7 @@ public struct AISettings: Sendable, Equatable {
             if let m = fields["model.\(t.rawValue)"]?.string, !m.isEmpty { models[t] = m }
         }
         readHandwriting = fields["readHandwriting"]?.bool ?? true
+        liveSince = fields["live.since"]?.date
         monthlyLimit = max(0, fields["limit.background"]?.number ?? 1.0)
     }
 
@@ -96,7 +100,19 @@ public struct AISettings: Sendable, Equatable {
             "readHandwriting": .bool(readHandwriting), "limit.background": .number(monthlyLimit),
         ]
         for t in Tier.allCases { f["model.\(t.rawValue)"] = .string(models[t] ?? "") }
+        if let liveSince { f["live.since"] = JSONValue(liveSince) }
         return f
+    }
+
+    static let opened = Date()
+
+    /// Whether live reading takes an item: added, or written on (`Library.inkSignature`), since it
+    /// was turned on. (Not any change: tagging an old notebook shouldn't read it.)
+    public func isLive(_ record: Record, inkSignature: String) -> Bool {
+        let since = Int64(((liveSince ?? Self.opened).timeIntervalSince1970 * 1000).rounded())
+        if (HLC(record.createdHLC)?.millis ?? 0) >= since { return true }
+        let latest = inkSignature.split(separator: "-", maxSplits: 1).dropFirst().first.map(String.init) ?? ""
+        return (HLC(latest)?.millis ?? 0) >= since
     }
 
     /// The model for a tier: yours, else the provider's default, else the fast one.
@@ -190,11 +206,13 @@ public struct AIClient: Sendable {
     /// One request. With `schema`, the reply is JSON in that shape (structured output where the API
     /// has it, else asked for in the prompt).
     /// `effort` is medium unless the job is simple (reading a page is "low": the thinking is billed
-    /// as output, and transcribing needs little of it).
+    /// as output, and transcribing needs little of it). Haiku always runs at medium: the user's
+    /// choice, since low read worse and Haiku is cheap enough.
     public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
                          effort: String = "medium", purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
+        let effort = Self.isHaiku(model) ? "medium" : effort
         if settings.provider == .anthropic {
             return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
         }
@@ -222,7 +240,8 @@ public struct AIClient: Sendable {
     func request(_ path: String, body: [String: Any]?) throws -> URLRequest {
         guard let url = URL(string: settings.baseURL + path) else { throw Failure(status: 0, message: "The API address isn't valid.") }
         var r = URLRequest(url: url)
-        r.timeoutInterval = 120
+        // Long: a request given up on is still billed, and wouldn't be counted in Activity.
+        r.timeoutInterval = 600
         if let body {
             r.httpMethod = "POST"
             r.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -307,6 +326,8 @@ public struct AIClient: Sendable {
         }
         throw lastError ?? Failure(status: 0, message: "The AI didn't answer.")
     }
+
+    static func isHaiku(_ model: String) -> Bool { model.lowercased().contains("haiku") }
 
     func send(_ request: URLRequest) async throws -> JSONValue {
         let (data, status) = try await transport(request)

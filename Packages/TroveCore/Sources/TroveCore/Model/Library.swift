@@ -192,6 +192,18 @@ public actor Library {
     }
 
     public func setPinned(_ id: String, _ pinned: Bool) async { await update(id, [Field.pinned: .bool(pinned)]) }
+    /// Lets your AI see an item or not.
+    public func setAIAllowed(_ id: String, _ allowed: Bool) async { await update(id, [Field.aiHidden: .bool(!allowed)]) }
+    /// Every item at once (Settings → AI); returns how many changed.
+    @discardableResult
+    public func setAIAllowedForAll(_ allowed: Bool) async -> Int {
+        var changed = 0
+        for item in await items() where item.aiAllowed != allowed {
+            await update(item.id, [Field.aiHidden: .bool(!allowed)])
+            changed += 1
+        }
+        return changed
+    }
     public func markRead(_ id: String, _ read: Bool = true) async { await update(id, [Field.readAt: read ? JSONValue(now()) : .null]) }
     public func delete(_ id: String) async { await engine.delete(id) }
 

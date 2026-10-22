@@ -53,6 +53,9 @@ struct ImportView: View {
                 Text("You can also drop things anywhere on the Trove window.")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
+                #if os(macOS)
+                AppleNotesImportCard()
+                #endif
                 PasteImportCard(choose: choosePaste)
             }
             .padding(32)
@@ -82,7 +85,7 @@ private struct DropZone: View {
     let choose: () -> Void
 
     private let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-    private let brand: [Color] = [.orange, .pink, .purple, .orange]
+    private let brand: [Color] = [Brand.amber, Brand.coral, Brand.orange, Brand.amber]
 
     var body: some View {
         ZStack {
@@ -151,22 +154,19 @@ private struct DropZone: View {
     }
     #endif
 
+    /// The box opens and each thing that arrives drops into it.
     private func progress(_ run: AppModel.ImportRun) -> some View {
-        VStack(spacing: 18) {
-            ZStack {
-                Circle().stroke(.quaternary, lineWidth: 10)
-                Circle()
-                    .trim(from: 0, to: max(0.02, run.fraction))
-                    .stroke(AngularGradient(colors: brand, center: .center), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.spring(duration: 0.4), value: run.fraction)
-                VStack(spacing: 2) {
-                    Text("\(run.added)").font(.system(size: 34, weight: .bold, design: .rounded)).contentTransition(.numericText())
-                    Text("added").font(.caption).foregroundStyle(.secondary)
-                }
-                .animation(.spring, value: run.added)
+        VStack(spacing: 16) {
+            BoxFilling(open: true, arrival: run.recent.first.map { .init(id: $0.id.uuidString, symbol: $0.symbol) }, size: 140)
+            VStack(spacing: 4) {
+                Text("\(run.added)").font(.system(size: 34, weight: .bold, design: .rounded)).contentTransition(.numericText())
+                    .animation(.spring, value: run.added)
+                Text(run.added == 1 ? "thing added" : "things added").font(.caption).foregroundStyle(.secondary)
             }
-            .frame(width: 130, height: 130)
+            ProgressView(value: max(0.02, run.fraction))
+                .tint(Brand.orange)
+                .frame(maxWidth: 320)
+                .animation(.spring(duration: 0.4), value: run.fraction)
             Text(run.current.map { "Reading \($0)…" } ?? "Finishing up…")
                 .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             Text("\(run.done) of \(run.total) \(run.unit)").font(.caption).foregroundStyle(.tertiary).monospacedDigit()
@@ -174,16 +174,19 @@ private struct DropZone: View {
         }
     }
 
+    /// The lid shuts on everything, with a little burst.
     private func finished(_ run: AppModel.ImportRun) -> some View {
         VStack(spacing: 16) {
             ZStack {
-                Burst()
+                if run.added > 0 { Burst() }
+                ClosingBox(size: 140)
                 Image(systemName: run.added > 0 ? "checkmark.circle.fill" : "questionmark.circle.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(run.added > 0 ? Color.green : Color.orange)
+                    .font(.system(size: 34))
+                    .foregroundStyle(.white, run.added > 0 ? Color.green : Color.orange)
+                    .offset(x: 60, y: 46)
                     .symbolEffect(.bounce, value: run.finished)
             }
-            .frame(height: 110)
+            .frame(height: 160)
             Text(run.added == 0 ? "Nothing new to add" : run.added == 1 ? "Added 1 thing" : "Added \(run.added) things")
                 .font(.title2.weight(.semibold))
             if run.added == 0 {
@@ -222,10 +225,24 @@ private struct DropZone: View {
     }
 }
 
+/// The box arriving open from the import, then shutting.
+private struct ClosingBox: View {
+    let size: CGFloat
+    @State private var open = true
+
+    var body: some View {
+        BoxFilling(open: open, arrival: nil, size: size)
+            .task {
+                try? await Task.sleep(for: .milliseconds(150))
+                open = false
+            }
+    }
+}
+
 /// A ring of dots flying outward once, for the "done" moment.
 private struct Burst: View {
     @State private var out = false
-    private let colors: [Color] = [.orange, .pink, .purple, .yellow, .mint, .blue]
+    private let colors: [Color] = [Brand.amber, Brand.coral, Brand.orange, .yellow]
 
     var body: some View {
         ZStack {
@@ -241,6 +258,44 @@ private struct Burst: View {
         .onAppear { withAnimation(.easeOut(duration: 0.9)) { out = true } }
     }
 }
+
+#if os(macOS)
+/// "Everything from Apple Notes": brought in here, so it gets the box and the progress, with a
+/// switch to keep checking for new notes afterwards.
+private struct AppleNotesImportCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "note.text").font(.title2).foregroundStyle(Brand.orange)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Everything from Apple Notes").font(.headline)
+                    Text("Every note (not locked ones) comes in as a Trove note, dated when it was last changed. Run it again any time: only new and changed notes are brought in. The first time, macOS asks whether Trove may use Notes.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Button { Task { await model.importAppleNotes(force: true, visible: true) } } label: {
+                    Label("Import from Apple Notes", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.importRun?.finished == false)
+                Toggle("Keep checking for new notes", isOn: Binding(
+                    get: { model.config?.appleNotesImport ?? false },
+                    set: { on in model.updateConfig { $0.appleNotesImport = on } }))
+                    .toggleStyle(.checkbox)
+            }
+            if let status = model.appleNotesStatus {
+                Text(status).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(cornerRadius: 16)
+    }
+}
+#endif
 
 /// "Everything from Paste": finds Paste's database on this Mac (App Store, direct download or
 /// Setapp copy) and brings its whole history and pinboards into the clipboard. On iPhone and iPad

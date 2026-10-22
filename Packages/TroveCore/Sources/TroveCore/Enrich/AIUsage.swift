@@ -135,6 +135,14 @@ public enum AIUsage {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
+    /// Reads the YYYY-MM-DD days records are filed under.
+    public static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     static func recordId(device: String, day: String) -> String { "aiusage.\(device).\(day)" }
 
     /// "$0.0123" or "<$0.0001", "12p"-style is up to the app.
@@ -161,13 +169,21 @@ public enum AIPrices {
     public struct Price: Sendable, Equatable {
         public var input: Double
         public var output: Double
+        /// Reading the prompt cache, per million (a tenth of input unless the model says otherwise).
+        public var cacheRead: Double?
+
+        public init(input: Double, output: Double, cacheRead: Double? = nil) {
+            self.input = input; self.output = output; self.cacheRead = cacheRead
+        }
     }
 
     /// Longest prefix first.
     static let table: [(prefix: String, price: Price)] = [
+        ("claude-fable-5-1", Price(input: 10, output: 50, cacheRead: 0.25)),
+        ("claude-mythos-5-1", Price(input: 10, output: 50, cacheRead: 0.25)),
         ("claude-fable-5", Price(input: 10, output: 50)),
         ("claude-mythos-5", Price(input: 10, output: 50)),
-        ("claude-opus-5-5", Price(input: 4, output: 20)),
+        ("claude-opus-5-5", Price(input: 4, output: 20, cacheRead: 0.20)),
         ("claude-opus-5", Price(input: 5, output: 25)),
         ("claude-opus-4", Price(input: 5, output: 25)),
         ("claude-sonnet-5", Price(input: 2, output: 10)),
@@ -181,12 +197,12 @@ public enum AIPrices {
         return table.first { m.hasPrefix($0.prefix) }?.price
     }
 
-    /// Cache reads cost a tenth of input, cache writes a quarter more. Haiku 5.5 prompts over 100K
-    /// tokens cost five times as much.
+    /// Cache reads cost a tenth of input (less on some models), cache writes a quarter more. Haiku 5.5
+    /// prompts over 100K tokens cost five times as much.
     public static func cost(model: String, input: Int, output: Int, cacheRead: Int = 0, cacheWrite: Int = 0) -> Double? {
         guard var p = price(model) else { return nil }
         if model.lowercased().contains("haiku-5-5"), input + cacheRead + cacheWrite > 100_000 { p = Price(input: 0.5, output: 2.5) }
-        let i = Double(input) * p.input + Double(cacheRead) * p.input * 0.1 + Double(cacheWrite) * p.input * 1.25
+        let i = Double(input) * p.input + Double(cacheRead) * (p.cacheRead ?? p.input * 0.1) + Double(cacheWrite) * p.input * 1.25
         return (i + Double(output) * p.output) / 1_000_000
     }
 }
@@ -214,6 +230,12 @@ extension Library {
             }
         }
         return out.sorted { $0.at > $1.at }
+    }
+
+    /// The first day anything was counted (YYYY-MM-DD), on any device: requests before then, or from
+    /// a device still on an older Trove, were never counted.
+    public func firstAIUsageDay() async -> String? {
+        await engine.records(kind: AIUsage.kind).compactMap { $0["day"]?.string }.min()
     }
 
     /// What background work (reading handwriting) has cost this calendar month, on every device.

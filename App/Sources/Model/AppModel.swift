@@ -55,6 +55,8 @@ final class AppModel {
         struct Arrival: Identifiable, Equatable {
             let id = UUID()
             let label: String
+            /// What falls into the box for it.
+            var symbol = "doc.fill"
         }
 
         var fraction: Double { total == 0 ? 1 : Double(done) / Double(total) }
@@ -120,6 +122,12 @@ final class AppModel {
     /// Your AI's requests this month on every device, newest first (live: this device's are added as
     /// they happen), for the costs in Ask and Settings → AI → Activity.
     var aiCalls: [AIUsage.Call] = []
+    /// What happened to the last screenshot brought in (Settings → Screenshots).
+    var screenshotStatus: String?
+    var screenshotProblem = false
+    /// Read all past handwriting (Settings → AI): progress, and the run itself (Stop cancels it).
+    var handwritingScan: HandwritingScan?
+    @ObservationIgnored var handwritingScanTask: Task<Void, Never>?
     /// When this run of the app began ("This session").
     @ObservationIgnored let aiSessionStart = Date()
     /// Saved chats with your AI, newest first.
@@ -371,10 +379,20 @@ final class AppModel {
         // Behind an open sketch the lists, search index, Spotlight and widget catch up when it closes.
         if libraryStamp != shownLibraryStamp, !covered {
             shownLibraryStamp = libraryStamp
-            items = await library.items()
+            let loaded = await library.items()
+            let loadedFolders = await library.folders()
+            // The link graph and the sidebar's numbers read every item: worked out off the main
+            // thread, so a change in the background (enrichment, reading handwriting, sync) doesn't
+            // stall taps and scrolling. The lists show the new items as soon as both are ready.
+            let folderIds = Set(loadedFolders.map(\.id))
+            let (graph, counts) = await Task.detached(priority: .userInitiated) {
+                (Links.graph(loaded), Self.counts(loaded, folderIds: folderIds))
+            }.value
+            items = loaded
             collections = await library.collections()
-            folders = await library.folders()
-            links = Links.graph(items)
+            folders = loadedFolders
+            links = graph
+            countsCache = (dataVersion, counts)
             index = await library.searchIndex()
             index.inked = Set(inkedLayers.keys)
             saveSearchIndexSoon(libraryStamp)
@@ -486,7 +504,7 @@ final class AppModel {
     }
 
     /// The sidebar's numbers, worked out once per library change instead of on every draw.
-    struct SidebarCounts {
+    struct SidebarCounts: Sendable {
         var smart: [SmartCollection: Int] = [:]
         var collections: [String: Int] = [:]
         var sources: [ItemSource: Int] = [:]
@@ -495,15 +513,19 @@ final class AppModel {
 
     var sidebarCounts: SidebarCounts {
         if let countsCache, countsCache.version == dataVersion { return countsCache.counts }
+        let c = Self.counts(items, folderIds: Set(folders.map(\.id)))
+        countsCache = (dataVersion, c)
+        return c
+    }
+
+    nonisolated static func counts(_ items: [Item], folderIds: Set<String>) -> SidebarCounts {
         var c = SidebarCounts()
         for s in SmartCollection.allCases { c.smart[s] = items.filter(s.contains).count }
-        let folderIds = Set(folders.map(\.id))
         for item in items {
             for id in item.collections { c.collections[id, default: 0] += 1 }
             for s in Set(item.sources) { c.sources[s, default: 0] += 1 }
             if item.folder.map({ !folderIds.contains($0) }) ?? true { c.unfiled += 1 }
         }
-        countsCache = (dataVersion, c)
         return c
     }
 
@@ -1034,9 +1056,16 @@ final class AppModel {
     /// Reads Apple Notes into Trove on any Mac where it's turned on (it used to run only on the Mac
     /// that made the vault, so a vault made on the website never imported). Every few minutes at
     /// most, or now when `force` (turning it on, Import now).
-    func importAppleNotes(force: Bool = false) async {
+    /// `visible` (Import → Apple Notes, Import now): on the Import screen, with its progress and the
+    /// box filling up, whether or not mirroring is switched on.
+    func importAppleNotes(force: Bool = false, visible: Bool = false) async {
         #if os(macOS)
-        guard vault.config?.appleNotesImport == true, let library, !appleNotesBusy else { return }
+        guard visible || vault.config?.appleNotesImport == true, let library, !appleNotesBusy else { return }
+        if visible {
+            guard importRun?.finished != false else { toast = "Still importing. Try again when it's done."; return }
+            selection = .importer
+            importRun = ImportRun(total: 1, current: "Apple Notes", destination: .source(.appleNotes), unit: "notes")
+        }
         let now = Self.clock
         guard force || now - lastAppleNotes >= 300 else { return }
         appleNotesBusy = true
@@ -1044,7 +1073,29 @@ final class AppModel {
         defer { appleNotesBusy = false }
         appleNotesStatus = "Reading Apple Notes…"
         do {
-            let result = try await AppleNotesBridge.importAll(into: library)
+            // On the Import screen: how far it's got, and each note dropping into the box.
+            var progress: (@MainActor @Sendable (Int, Int, String?) -> Void)?
+            if visible {
+                progress = { [weak self] (done: Int, total: Int, added: String?) in
+                    guard let self, var run = self.importRun, !run.finished else { return }
+                    run.total = max(1, total)
+                    run.done = done
+                    run.current = done < total ? "Apple Notes" : nil
+                    if let added {
+                        run.added += 1
+                        run.recent.insert(ImportRun.Arrival(label: added.isEmpty ? "Note" : added, symbol: "note.text"), at: 0)
+                        run.recent = Array(run.recent.prefix(8))
+                    }
+                    self.importRun = run
+                }
+            }
+            let result = try await AppleNotesBridge.importAll(into: library, progress: progress)
+            if visible, var run = importRun {
+                run.done = run.total
+                run.current = nil
+                run.finished = true
+                importRun = run
+            }
             let changed = result.added + result.updated
             appleNotesStatus = "\(result.total) notes in Apple Notes; \(result.added) new, \(result.updated) updated (\(Date().formatted(date: .omitted, time: .shortened)))"
             if changed > 0 {
@@ -1056,6 +1107,7 @@ final class AppModel {
             }
         } catch {
             appleNotesStatus = error.localizedDescription
+            if visible { importRun = nil }
             if force { toast = error.localizedDescription }
         }
         #endif
@@ -1191,11 +1243,12 @@ final class AppModel {
             importRun = run
             if let data = try? Data(contentsOf: url) {
                 let name = url.lastPathComponent
+                let made = Self.fileDate(url)
                 let placed = await Task.detached(priority: .userInitiated) { FileImport.placed(name: name, data: data, folder: folder) }.value
                 for entry in placed {
-                    let (count, label) = await perform(entry.action, folder: entry.folder, in: library, source: source)
+                    let (count, label) = await perform(entry.action, folder: entry.folder, in: library, source: source, made: made)
                     run.added += count
-                    if count > 0 { run.recent.insert(.init(label: label), at: 0) }
+                    if count > 0 { run.recent.insert(.init(label: label, symbol: Self.arrivalSymbol(entry.action)), at: 0) }
                 }
                 run.recent = Array(run.recent.prefix(8))
             }
@@ -1213,20 +1266,41 @@ final class AppModel {
         }
     }
 
+    nonisolated static func arrivalSymbol(_ action: ImportAction) -> String {
+        switch action {
+        case .items(let items): items.first?.kind == .highlight ? "highlighter" : "link"
+        case .note: "note.text"
+        case .file(let name, _, let mime):
+            name.lowercased().hasSuffix(".goodnotes") ? "pencil.and.scribble"
+                : mime.hasPrefix("image/") ? "photo.fill" : mime == "application/pdf" ? "doc.richtext.fill" : "doc.fill"
+        }
+    }
+
     /// Clears a finished import so the drop zone shows again.
     func dismissImport() { if importRun?.finished == true { importRun = nil } }
 
-    private func perform(_ action: ImportAction, folder: [String], in library: Library, source: ItemSource) async -> (Int, String) {
+    /// When a file was really made (the older of its creation and last change), so an imported
+    /// file sits on the day it's from, not the day it was imported. Nil for anything in the future
+    /// or before 1990 (a missing date reads as 1970 or 2001 on some file systems).
+    nonisolated static func fileDate(_ url: URL) -> Date? {
+        let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+        let dates = [values?.creationDate, values?.contentModificationDate].compactMap { $0 }
+            .filter { $0 < Date() && $0 > Date(timeIntervalSince1970: 631_152_000) }
+        return dates.min()
+    }
+
+    private func perform(_ action: ImportAction, folder: [String], in library: Library, source: ItemSource, made: Date? = nil) async -> (Int, String) {
         switch action {
         case .items(let items):
             let added = await library.importItems(items)
             let kind = items.first?.kind == .highlight ? "highlights" : "links"
             return (added, added == 1 ? "1 \(kind.dropLast())" : "\(added) \(kind)")
         case .note(let title, let body, let tags):
-            _ = await library.addNote(title: title, body: body, tags: tags, source: .import, folder: folder)
+            let id = await library.addNote(title: title, body: body, tags: tags, source: .import, folder: folder)
+            if let made { await library.update(id, [Field.createdAt: JSONValue(made)]) }
             return (1, title.isEmpty ? "Note" : title)
         case .file(let name, let data, let mime):
-            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source, folder: folder)) != nil
+            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source, createdAt: made, folder: folder)) != nil
             return (ok ? 1 : 0, name)
         }
     }
@@ -1375,7 +1449,7 @@ final class AppModel {
     func ask(_ question: String, tier: AISettings.Tier = .fast) async -> (answer: String, sources: [Item], by: String) {
         guard let library else { return ("", [], "") }
         let semanticScores = await semantic.scores(for: question)
-        let hits = await library.search(question, semantic: semanticScores, limit: ownAI == nil ? 8 : 12)
+        let hits = await library.search(question, semantic: semanticScores, limit: 30).filter(\.aiAllowed).prefix(ownAI == nil ? 8 : 12).map { $0 }
         let sources = hits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? "", $0.inkText ?? ""].joined(separator: "\n")) }
         guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", [], "") }
         func cited(_ ids: [String]) -> [Item] { hits.filter { ids.contains($0.id) }.nilIfEmpty ?? hits }

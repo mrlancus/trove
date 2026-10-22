@@ -24,6 +24,14 @@ struct FolderLine: View {
                 if item.isAutoFiled { Text("· filed automatically").foregroundStyle(.secondary).help("Move it and it stays where you put it.") }
             }
             Spacer()
+            // Whether your AI may look at it (Ask, reading handwriting); everything may by default.
+            Button { Task { await model.setAIAllowed(item, !item.aiAllowed) } } label: {
+                Label(item.aiAllowed ? "AI can see" : "Hidden from AI", systemImage: item.aiAllowed ? "eye" : "eye.slash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(item.aiAllowed ? Color.secondary : Color.orange)
+            .fixedSize()
+            .help(item.aiAllowed ? "Your AI can look at this when it needs to. Click to hide it." : "Your AI never sees this. Click to let it.")
             Menu {
                 Button("No folder") { Task { await model.move(item.id, to: nil) } }
                 ForEach(model.folderEntries) { entry in
@@ -206,15 +214,38 @@ struct ConnectionsSection: View {
     let item: Item
     @Environment(AppModel.self) private var model
     @State private var connecting = false
+    /// Worked out in the background when the item or the library changes: "Mentioned in" and
+    /// "Maybe related" read every other item's text, which stalled opening an item when it ran on
+    /// every redraw.
+    @State private var found = Found()
+
+    struct Found: Sendable {
+        var outgoing: [Item] = []
+        var incoming: [Item] = []
+        var mentions: [Item] = []
+        var related: [Item] = []
+    }
 
     var body: some View {
-        let byId = Dictionary(model.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let outgoing = (model.links.outgoing[item.id] ?? []).compactMap { byId[$0] }
-        let incoming = (model.links.incoming[item.id] ?? []).compactMap { byId[$0] }
-        let linked = Set(model.links.neighbours(of: item.id))
-        let mentions = Links.mentions(of: item, in: model.items, linked: linked).prefix(8)
-        let related = Links.related(to: item, in: model.items).filter { !linked.contains($0.id) }.prefix(5)
+        let outgoing = found.outgoing, incoming = found.incoming
+        let mentions = found.mentions, related = found.related
         let unmade = model.links.unresolved[item.id] ?? []
+        content(outgoing: outgoing, incoming: incoming, mentions: mentions, related: related, unmade: unmade)
+            .task(id: "\(item.id)|\(model.dataVersion)") {
+                let items = model.items, graph = model.links, item = item
+                found = await Task.detached(priority: .userInitiated) {
+                    let byId = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                    let linked = Set(graph.neighbours(of: item.id))
+                    return Found(outgoing: (graph.outgoing[item.id] ?? []).compactMap { byId[$0] },
+                                 incoming: (graph.incoming[item.id] ?? []).compactMap { byId[$0] },
+                                 mentions: Array(Links.mentions(of: item, in: items, linked: linked).prefix(8)),
+                                 related: Array(Links.related(to: item, in: items).filter { !linked.contains($0.id) }.prefix(5)))
+                }.value
+            }
+    }
+
+    @ViewBuilder
+    private func content(outgoing: [Item], incoming: [Item], mentions: [Item], related: [Item], unmade: [String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Connections").font(.headline)
@@ -234,11 +265,11 @@ struct ConnectionsSection: View {
             }
             if !mentions.isEmpty {
                 Text("Mentioned in").font(.caption).foregroundStyle(.secondary)
-                FlowRow { ForEach(Array(mentions)) { other in chip(other, action: ("Link", { _ = Task { await model.connect(other.id, item.id) } })) } }
+                FlowRow { ForEach(mentions) { other in chip(other, action: ("Link", { _ = Task { await model.connect(other.id, item.id) } })) } }
             }
             if !related.isEmpty {
                 Text("Maybe related").font(.caption).foregroundStyle(.secondary)
-                FlowRow { ForEach(Array(related)) { other in chip(other, action: ("Connect", { _ = Task { await model.connect(item.id, other.id) } })) } }
+                FlowRow { ForEach(related) { other in chip(other, action: ("Connect", { _ = Task { await model.connect(item.id, other.id) } })) } }
             }
             if outgoing.isEmpty, incoming.isEmpty, unmade.isEmpty, mentions.isEmpty, related.isEmpty {
                 Text("Type [[ and a title in your notes to link things, or use Connect to….").font(.caption).foregroundStyle(.secondary)

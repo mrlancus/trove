@@ -40,9 +40,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(spacing: 20) {
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
+            TroveMark().frame(width: 76)
             Text("Welcome to Trove").font(.largeTitle.bold())
             Text("Save anything. It organises itself, syncs through your own iCloud, and stays encrypted.")
                 .multilineTextAlignment(.center)
@@ -93,7 +91,7 @@ struct OnboardingView: View {
                         #endif
                         working = false
                     }
-                } label: { if working { ProgressView() } else { Text("Create") } }
+                } label: { BusyLabel("Create", busy: working) }
                 .buttonStyle(.borderedProminent)
                 .disabled(working || !canCreate)
             }
@@ -138,7 +136,7 @@ struct OnboardingView: View {
                 if payload?.relayURL != nil {
                     Button("Skip (relay only)") { finishJoin(useFolder: false) }
                 }
-                Button { finishJoin(useFolder: true) } label: { if working { ProgressView() } else { Text("Join") } }
+                Button { finishJoin(useFolder: true) } label: { BusyLabel("Join", busy: working) }
                     .buttonStyle(.borderedProminent)
                     .disabled(working)
             }

@@ -65,11 +65,13 @@ private struct UpdatesSection: View {
             LabeledContent("This version", value: "\(updater.currentVersion) (build \(updater.currentBuild))")
             Toggle("Download and offer updates automatically", isOn: Binding(get: { model.isOn(.autoUpdate) }, set: { model.setShared(.autoUpdate, $0) }))
                 .disabled(!updater.isEnabled)
-            HStack {
+            // The status changes as it checks: on its own line, so the button never moves.
+            LabeledContent {
                 Button("Check Now") { Task { await updater.check(userInitiated: true) } }
                     .disabled(updater.state == .checking)
-                Spacer()
-                Text(status).foregroundStyle(.secondary).font(.callout)
+                    .fixedSize()
+            } label: {
+                Text(status).foregroundStyle(.secondary).font(.callout).lineLimit(2)
             }
         } header: {
             Text("Updates")
@@ -190,7 +192,7 @@ struct WebSection: View {
                 }
                 HStack {
                     Button { makeCode() } label: {
-                        if working { ProgressView().controlSize(.small) } else { Text(code == nil ? "Make a setup code" : "Make a new code") }
+                        BusyLabel(code == nil ? "Make a setup code" : "Make a new code", busy: working)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(working)
@@ -201,7 +203,7 @@ struct WebSection: View {
                     .font(.callout).foregroundStyle(.secondary)
                 if let relay = AppModel.defaultRelay {
                     Button { turnOnRelay(relay) } label: {
-                        if working { ProgressView().controlSize(.small) } else { Text("Turn on the relay (\(URL(string: relay)?.host ?? relay))") }
+                        BusyLabel("Turn on the relay (\(URL(string: relay)?.host ?? relay))", busy: working)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(working)
@@ -305,7 +307,7 @@ private struct RelaySection: View {
                         do { try await model.connectRelay(url); error = nil } catch { self.error = error.localizedDescription }
                         working = false
                     }
-                } label: { if working { ProgressView() } else { Text("Connect relay") } }
+                } label: { BusyLabel("Connect relay", busy: working) }
                 .disabled(url.isEmpty || working)
                 if let error { Text(error).font(.caption).foregroundStyle(.red) }
             }
@@ -325,6 +327,11 @@ private struct OwnAISection: View {
     @State private var available: [String] = []
     @State private var status: String?
     @State private var busy = false
+
+    private var aiSeesLine: String {
+        let hidden = model.items.lazy.filter { !$0.aiAllowed }.count
+        return hidden == 0 ? "Everything (\(model.items.count) items). New things are visible to it too." : "All but \(hidden) of \(model.items.count) items. New things are visible to it unless you hide them."
+    }
 
     var body: some View {
         Section {
@@ -373,7 +380,12 @@ private struct OwnAISection: View {
                     }
                 }
             }
-            Toggle("Read handwriting with your AI", isOn: $draft.readHandwriting)
+            Toggle("Read new handwriting as it arrives", isOn: Binding(get: { draft.readHandwriting }, set: { on in
+                draft.readHandwriting = on
+                // Live from now: what's already in Trove waits for Read all past handwriting.
+                if on { draft.liveSince = Date() }
+            }))
+            HandwritingScanRow()
             if draft.readHandwriting {
                 LabeledContent("Background limit a month") {
                     HStack(spacing: 6) {
@@ -391,6 +403,14 @@ private struct OwnAISection: View {
                      : "No limit on reading handwriting (spent this month: \(AIUsage.dollars(model.backgroundAISpend))).")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            LabeledContent("What your AI can see") {
+                HStack {
+                    Button("Allow everything") { Task { await model.setAIAllowedForAll(true) } }
+                    Button("Hide everything") { Task { await model.setAIAllowedForAll(false) } }
+                }
+                .fixedSize()
+            }
+            Text(aiSeesLine).font(.caption).foregroundStyle(.secondary)
             NavigationLink {
                 AIActivityView()
             } label: {
@@ -409,13 +429,13 @@ private struct OwnAISection: View {
                 .disabled(draft == model.aiSettings)
                 Button("Test") { test() }.disabled(!draft.isReady || busy)
                 Button("Load models") { loadModels() }.disabled(busy || (draft.apiKey.isEmpty && draft.provider != .custom))
-                if busy { ProgressView().controlSize(.small) }
+                ProgressView().controlSize(.small).opacity(busy ? 1 : 0)
             }
             if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
         } header: {
             Text("Your AI")
         } footer: {
-            FormFooter("Paste an API key from Claude, OpenAI, Gemini, OpenRouter or any OpenAI-compatible service (a local Ollama or LM Studio too). Fast does everything by default: Ask, note and page actions, and reading handwriting as soon as a sketch, GoodNotes notebook, inked or scanned PDF or photo of a page arrives. Pick Smarter or Best per question in Ask. Medium effort (low for reading pages, which is mostly copying). Every request and its cost is listed under Activity and costs. The key is kept in your vault, end-to-end encrypted, and reaches your other devices; requests go straight from this device to the provider with only what each one needs. The provider bills you for what you use, so set a monthly limit on their site.")
+            FormFooter("Paste an API key from Claude, OpenAI, Gemini, OpenRouter or any OpenAI-compatible service (a local Ollama or LM Studio too). Fast does everything by default: Ask, note and page actions, and reading handwriting as soon as a sketch, GoodNotes notebook, inked or scanned PDF or photo of a page arrives. Pick Smarter or Best per question in Ask. Medium effort. Your AI never gets your whole Trove: it gets a short index and searches, then opens only what a question needs; hide an item from it with the eye on the item. Every request and its cost is listed under Activity and costs. The key is kept in your vault, end-to-end encrypted, and reaches your other devices; requests go straight from this device to the provider with only what each one needs. The provider bills you for what you use, so set a monthly limit on their site.")
         }
         .onAppear {
             guard !loaded else { return }
@@ -470,7 +490,13 @@ private struct AISection: View {
                 get: { model.isOn(.cloudAI) },
                 set: { model.setShared(.cloudAI, $0) }))
             .disabled(model.config?.relay == nil)
-            if model.enriching { HStack { ProgressView().controlSize(.small); Text("Organising…") } }
+            // Always there (only its words change), so nothing below jumps when work starts or stops.
+            LabeledContent("Background work") {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small).opacity(model.enriching ? 1 : 0)
+                    Text(model.enriching ? "Organising…" : "Up to date").foregroundStyle(.secondary)
+                }
+            }
         } header: {
             Text("Intelligence")
         } footer: {
@@ -492,11 +518,11 @@ private struct IntegrationsSection: View {
                 get: { model.config?.appleNotesImport ?? false },
                 set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.importAppleNotes(force: true) } } }))
             if model.config?.appleNotesImport == true {
-                HStack {
+                LabeledContent {
+                    Button("Import now") { Task { await model.importAppleNotes(force: true, visible: true) } }.fixedSize()
+                } label: {
                     Text(model.appleNotesStatus ?? "Checks Apple Notes every few minutes while Trove is open.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Import now") { Task { await model.importAppleNotes(force: true) } }
                 }
             }
             Button { choosingObsidian = true } label: {
@@ -541,6 +567,11 @@ private struct ScreenshotRoutesView: View {
                         toggle(d.id, \.clipboard)
                     }
                 }
+            }
+            if let status = model.screenshotStatus {
+                Text(status).font(.caption).foregroundStyle(model.screenshotProblem ? Color.orange : Color.secondary)
+            } else if model.myScreenshotRoute.isOn {
+                Text("Waiting for the next screenshot on this device. Only ones taken from now on come in.").font(.caption).foregroundStyle(.secondary)
             }
             #if os(iOS)
             Text("Screenshots only, never other photos. Notes puts each one in your library (its text becomes searchable); Clipboard adds it to clipboard history so you can paste it anywhere. Each device brings in its own as soon as you take them (iPhone and iPad when Trove is open or next opened).")
@@ -590,6 +621,59 @@ private struct ScreenshotRoutesView: View {
     }
 }
 
+/// Read all past handwriting: a button, then a progress bar with what it's cost and Stop.
+private struct HandwritingScanRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var waiting: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let scan = model.handwritingScan, !scan.finished {
+                HStack(spacing: 10) {
+                    ProgressView(value: scan.fraction)
+                    Text("\(scan.done) of \(scan.total)").monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                    Button("Stop", role: .destructive) { model.stopHandwritingScan() }.fixedSize()
+                }
+                Text("Reading \(scan.current ?? "…") · \(scan.pages) pages · \(AIUsage.dollars(model.handwritingScanCost)) so far")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            } else {
+                LabeledContent {
+                    Button("Read all past handwriting") { model.scanAllHandwriting() }
+                        .disabled(model.ownAI == nil || waiting == 0)
+                        .fixedSize()
+                } label: {
+                    Text(summary).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .task(id: model.handwritingScan?.finished) { waiting = await model.unreadHandwriting().count }
+    }
+
+    private var summary: String {
+        if let scan = model.handwritingScan, scan.finished {
+            return (scan.stopped ? "Stopped after \(scan.done) of \(scan.total)" : "Read \(scan.done) items")
+                + ": \(scan.pages) pages, \(AIUsage.dollars(model.handwritingScanCost))." + (waiting.map { $0 > 0 ? " \($0) still to read." : "" } ?? "")
+        }
+        guard let waiting else { return "Looking…" }
+        if model.ownAI == nil { return "Save your AI first." }
+        return waiting == 0 ? "Your AI has read everything." : "\(waiting) sketches, notebooks and pages your AI hasn't read. You can stop at any time."
+    }
+}
+
+/// A button's words, with a spinner over them while it works: the button keeps its size, so the
+/// ones next to it don't move.
+struct BusyLabel: View {
+    let text: String
+    let busy: Bool
+    init(_ text: String, busy: Bool) { self.text = text; self.busy = busy }
+
+    var body: some View {
+        Text(text)
+            .opacity(busy ? 0 : 1)
+            .overlay { if busy { ProgressView().controlSize(.small) } }
+    }
+}
+
 /// Section footnote. macOS right-aligns form footers by default; these are sentences, so they
 /// read from the left.
 struct FormFooter: View {
@@ -619,10 +703,14 @@ struct CopyRow: View {
                 Text(value).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
-            Button(copied ? "Copied" : "Copy") {
+            Button {
                 Pasteboard.copy(value)
                 copied = true
+            } label: {
+                // As wide as its widest label, so it doesn't jump when it changes.
+                ZStack { Text("Copied").hidden(); Text(copied ? "Copied" : "Copy") }
             }
+            .fixedSize()
         }
     }
 }
@@ -699,11 +787,11 @@ private struct ClipboardSection: View {
                     Text("Trove is running from a temporary copy macOS made of the download, so the permission doesn't reach it. Quit Trove, drag it into Applications, open it from there, then allow it.")
                         .font(.caption).foregroundStyle(.orange)
                 }
-                HStack {
+                LabeledContent {
+                    Button("Restart Trove") { Self.relaunch() }.fixedSize()
+                } label: {
                     Text("Until this is allowed, picking a clip copies it and you press ⌘V. Already switched on in Accessibility? macOS often only tells Trove after it restarts. If it still says this afterwards, select Trove there, remove it with −, add it again with +, and restart.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Restart Trove") { Self.relaunch() }
                 }
             }
             #else

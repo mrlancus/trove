@@ -12,6 +12,9 @@ struct TroveApp: App {
         BackgroundTasks.register(model: model)
         #endif
         MetricsReporter.shared.start()
+        #if os(macOS)
+        WindowFocus.start()
+        #endif
     }
 
     var body: some Scene {
@@ -80,8 +83,11 @@ struct TroveApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultPosition(.center)
 
-        MenuBarExtra("Trove", systemImage: "shippingbox") {
+        MenuBarExtra {
             MenuBarContent().environment(model)
+        } label: {
+            // Trove's own box, not the generic one.
+            Image(nsImage: TroveMark.menuBarImage)
         }
         .menuBarExtraStyle(.window)
 
