@@ -24,7 +24,7 @@ How to read it:
 | Pens, pressure, highlighter, shapes, lasso, text, pictures | ✅ | ✅ 6 pens, shape snap, lasso move/resize/recolour | Rotate, flip, arrange, convert to text |
 | Papers and templates | ✅ big library + custom | ✅ 17 papers, page sizes | Planners, custom templates from any PDF/image |
 | Notebook feel: covers, shelf, outline, links between pages | ✅ | ❌ sketches are cards in a folder | **Big gap** |
-| PDF markup | ✅ text-snapping highlighter, forms, links, outline | 🟡 ink on top only | Text selection, highlight-to-text, links, outline |
+| PDF markup | ✅ text-snapping highlighter, forms, links, outline | ✅ text highlights with quotes, find, links, forms, export as annotations | Outline |
 | Handwriting search | ✅ | 🟡 Apple devices only (Vision, page text) | Website, word positions, hit highlights |
 | Handwriting → text, spellcheck, word complete, math | ✅ | ❌ | Needs recognition with word boxes |
 | Audio recording synced to ink | ❌ (Notability has it) | ❌ | **A chance to beat GoodNotes** |
@@ -124,7 +124,7 @@ search and connections work), and give sketches a notebook face:
   camera (VisionKit on iPhone/iPad; website `getUserMedia` + edge crop), go-to-page, page thumbnails
   that include ink.
 
-### S5. PDFs like a PDF app **M**
+### S5. PDFs like a PDF app **M** ✅ done (apps + website; outline and handwriting on highlights later)
 - **Text-aware highlighter**: drag across PDF text and the highlight snaps to the lines (pdf.js text
   layer on the website, `PDFSelection` in the apps). The highlighted text is saved with the highlight,
   so it's searchable and can become a quote item ("Quotes & Highlights" already exists).
@@ -514,7 +514,7 @@ The repo already builds the apps on Actions (the user has no Apple Silicon Mac) 
 ### Notes
 - The **TextKit 2 live Markdown editor** (NOTES "later") in the apps, and a richer editor on the
   website: checklists, tables, headings that fold, slash menu, paste images, sketch blocks (§S7). **L**
-- **Daily note** and **templates** (meeting, journal, recipe). **S**
+- **Daily note** and **templates** (meeting, journal, recipe). **S** ✅ done (PROTOCOL.md §12; also tickable checklists)
 
 ### Clipboard
 - Pinboards with drag to reorder, snippets with placeholders (`{date}`, `{clipboard}`), paste as plain
