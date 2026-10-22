@@ -6,7 +6,9 @@ import Foundation
 ///  - `refresh`: opportunistic sync (pull new items) a few times a day.
 ///  - `enrich`: a processing task that requires external power, so the iPad (Apple Intelligence)
 ///    catches up on everything saved elsewhere overnight while charging. The on-device model isn't
-///    rate-limited on power, but is in the background on battery (RESEARCH.md §11).
+///    rate-limited on power, but is in the background on battery (RESEARCH.md §11). Everything the
+///    battery rules held back during the day runs here (docs/ROADMAP.md §3.7): AI, text in pictures,
+///    handwriting, and a checkpoint when due. The iPhone runs it too, without on-device AI.
 enum BackgroundTasks {
     static let refreshID = "com.mrlancus.trove.refresh"
     static let enrichID = "com.mrlancus.trove.enrich"
@@ -42,7 +44,6 @@ enum BackgroundTasks {
     }
 
     static func scheduleEnrichment() {
-        guard OnDeviceAI.isAvailable else { return }
         let request = BGProcessingTaskRequest(identifier: enrichID)
         request.requiresExternalPower = true
         request.requiresNetworkConnectivity = true

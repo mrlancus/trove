@@ -289,7 +289,10 @@ public struct PowerCounters: Sendable, Equatable, Codable {
     public var inkReloads = 0
     public var visionPages = 0
     public var aiCalls = 0
-    public var bytesWritten = 0
+    /// Saves of the local copy (only what changed goes into SQLite).
+    public var saves = 0
+    /// Bytes written to the caches (search index, meaning vectors).
+    public var cacheBytes = 0
 
     public init(started: Date = Date()) { self.started = started }
 
