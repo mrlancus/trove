@@ -1191,9 +1191,10 @@ final class AppModel {
             importRun = run
             if let data = try? Data(contentsOf: url) {
                 let name = url.lastPathComponent
+                let made = Self.fileDate(url)
                 let placed = await Task.detached(priority: .userInitiated) { FileImport.placed(name: name, data: data, folder: folder) }.value
                 for entry in placed {
-                    let (count, label) = await perform(entry.action, folder: entry.folder, in: library, source: source)
+                    let (count, label) = await perform(entry.action, folder: entry.folder, in: library, source: source, made: made)
                     run.added += count
                     if count > 0 { run.recent.insert(.init(label: label), at: 0) }
                 }
@@ -1216,17 +1217,28 @@ final class AppModel {
     /// Clears a finished import so the drop zone shows again.
     func dismissImport() { if importRun?.finished == true { importRun = nil } }
 
-    private func perform(_ action: ImportAction, folder: [String], in library: Library, source: ItemSource) async -> (Int, String) {
+    /// When a file was really made (the older of its creation and last change), so an imported
+    /// file sits on the day it's from, not the day it was imported. Nil for anything in the future
+    /// or before 1990 (a missing date reads as 1970 or 2001 on some file systems).
+    nonisolated static func fileDate(_ url: URL) -> Date? {
+        let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+        let dates = [values?.creationDate, values?.contentModificationDate].compactMap { $0 }
+            .filter { $0 < Date() && $0 > Date(timeIntervalSince1970: 631_152_000) }
+        return dates.min()
+    }
+
+    private func perform(_ action: ImportAction, folder: [String], in library: Library, source: ItemSource, made: Date? = nil) async -> (Int, String) {
         switch action {
         case .items(let items):
             let added = await library.importItems(items)
             let kind = items.first?.kind == .highlight ? "highlights" : "links"
             return (added, added == 1 ? "1 \(kind.dropLast())" : "\(added) \(kind)")
         case .note(let title, let body, let tags):
-            _ = await library.addNote(title: title, body: body, tags: tags, source: .import, folder: folder)
+            let id = await library.addNote(title: title, body: body, tags: tags, source: .import, folder: folder)
+            if let made { await library.update(id, [Field.createdAt: JSONValue(made)]) }
             return (1, title.isEmpty ? "Note" : title)
         case .file(let name, let data, let mime):
-            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source, folder: folder)) != nil
+            let ok = (try? await library.addFile(data, name: name, mime: mime, source: source, createdAt: made, folder: folder)) != nil
             return (ok ? 1 : 0, name)
         }
     }

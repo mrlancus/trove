@@ -8,6 +8,7 @@ struct AIActivityView: View {
     @Environment(AppModel.self) private var model
     @State private var period: AIUsage.Period = .day
     @State private var deviceNames: [String: String] = [:]
+    @State private var firstDay: String?
 
     private var calls: [AIUsage.Call] {
         let start = period.start(sessionStart: model.aiSessionStart)
@@ -33,7 +34,7 @@ struct AIActivityView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } footer: {
-                FormFooter("“This session” is this device since Trove opened; the others add up every device. Prices are Claude's list prices; your provider's bill is the final word.")
+                FormFooter(footer)
             }
 
             Section("By kind of work") {
@@ -89,10 +90,21 @@ struct AIActivityView: View {
         .navigationTitle("AI activity")
         .task {
             await model.loadAIRecords()
+            firstDay = await model.library?.firstAIUsageDay()
             if let devices = try? await model.vault.relayClient?.devices() {
                 deviceNames = Dictionary(devices.map { ($0.deviceId.uppercased(), $0.name) }, uniquingKeysWith: { a, _ in a })
             }
         }
+    }
+
+    /// Why this can read lower than the provider's console.
+    private var footer: String {
+        var parts = ["“This session” is this device since Trove opened; the others add up every device, using Claude's list prices."]
+        if let firstDay, let date = AIUsage.dayFormatter.date(from: firstDay) {
+            parts.append("Counting began on \(date.formatted(date: .abbreviated, time: .omitted)): anything your key spent before then, on a device still on an older Trove, or in other apps isn't here.")
+        }
+        parts.append("Anthropic's console counts days in UTC, so “Today” can differ by a few hours. Your provider's bill is the final word.")
+        return parts.joined(separator: " ")
     }
 
     private func stat(_ value: String, _ label: String) -> some View {

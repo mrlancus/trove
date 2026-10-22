@@ -128,7 +128,8 @@ struct AIProviderTests {
         #expect(calls.count == 1 && calls[0].purpose == .handwriting && calls[0].about == "Page 1")
         // 1M input at $0.10 (over 100K prompt: $0.50) and 200K output at $2.50: Haiku 5.5's long-prompt price.
         #expect(abs((calls[0].cost ?? 0) - (0.5 + 0.5)) < 1e-9)
-        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "low") // reading pages thinks little
+        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "medium") // Haiku always at medium
+        #expect(AIPrices.cost(model: "claude-opus-5-5", input: 0, output: 0, cacheRead: 1_000_000) == 0.20)
         #expect(AIPrices.cost(model: "claude-haiku-5-5", input: 10_000, output: 1_000) == (10_000 * 0.10 + 1_000 * 0.50) / 1_000_000)
         #expect(AIPrices.cost(model: "gpt-x", input: 1, output: 1) == nil)
 
@@ -168,7 +169,7 @@ struct AIProviderTests {
         // The first request carries the earlier turn and the tools; the second returns the tool result
         // after the assistant's turn exactly as it came, thinking block included.
         let first = net.body(0)
-        #expect((first["tools"] as? [[String: Any]])?.map { $0["name"] as? String } == ["overview", "search", "browse", "read"])
+        #expect((first["tools"] as? [[String: Any]])?.map { $0["name"] as? String } == ["overview", "index", "search", "browse", "read"])
         #expect((first["messages"] as? [[String: Any]])?.count == 3)
         let second = (net.body(1)["messages"] as? [[String: Any]]) ?? []
         let assistant = second[3]["content"] as? [[String: Any]]
@@ -196,6 +197,42 @@ struct AIProviderTests {
         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    }
+
+    @Test func hiddenItemsAreNeverShownAndPagesAreViewed() async throws {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let open = try await lib.addFile(Data([1, 2, 3]), name: "Whiteboard.pdf", mime: "application/pdf")
+        let secret = await lib.addNote(title: "Diary", body: "secret whiteboard plans")
+        await lib.setAIAllowed(secret, false)
+        let tools = AskTools(library: lib, pages: { item, first, count in
+            (item.id == open && first == 0 ? Array(repeating: Data([0xFF, 0xD8]), count: min(count, 2)) : [], 2)
+        })
+        #expect(await tools.run("search", ["query": "whiteboard"]).listed == [open])
+        #expect(await tools.run("read", ["ids": [.string(secret)]]).opened.isEmpty)
+        let index = await tools.run("index", [:]).text
+        #expect(index.contains("Whiteboard") && !index.contains("Diary") && index.hasPrefix("1 items"))
+        #expect(await tools.run("overview", [:]).text.contains("1 more items are kept private"))
+        #expect(await tools.run("read", ["ids": [.string(open)]]).text.contains("use view"))
+        let viewed = await tools.run("view", ["id": .string(open), "count": 4])
+        #expect(viewed.images.count == 2 && viewed.text.contains("pages 1–2 of 2") && viewed.opened == [open])
+        #expect(await tools.run("view", ["id": .string(secret)]).images.isEmpty)
+
+        // The pictures go back to Claude inside the tool result.
+        let net = FakeNet([
+            (200, #"{"model":"claude-haiku-5-5","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"view","input":{"id":"ID"}}],"usage":{"input_tokens":9,"output_tokens":4}}"#.replacingOccurrences(of: "ID", with: open)),
+            (200, #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"A plan."}],"usage":{"input_tokens":9,"output_tokens":4}}"#),
+        ])
+        var s = AISettings()
+        s.apiKey = "k"
+        _ = try await AIClient(settings: s, transport: net.transport).research("What's on it?", tools: tools)
+        #expect((net.body(0)["tools"] as? [[String: Any]])?.contains { $0["name"] as? String == "view" } == true)
+        let msgs = (net.body(1)["messages"] as? [[String: Any]]) ?? []
+        let result = (msgs.last?["content"] as? [[String: Any]])?.first
+        let parts = result?["content"] as? [[String: Any]] ?? []
+        #expect(parts.first?["type"] as? String == "text" && parts.dropFirst().first?["type"] as? String == "image")
+
+        #expect(await lib.setAIAllowedForAll(true) == 1)
+        #expect(await lib.item(secret)?.aiAllowed == true)
     }
 
     @Test func chatsAreSaved() async {

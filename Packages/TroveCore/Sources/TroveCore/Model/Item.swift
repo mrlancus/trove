@@ -57,6 +57,7 @@ public enum Field {
     public static let links = "links"           // ids of items this one is connected to by hand
     public static let fileVersions = "fileVersions" // earlier attachments, newest first: [{attachment, at, by}]
     public static let thumbnail = "thumbnail"   // a small JPEG preview (attachment JSON)
+    public static let aiHidden = "aiHidden"     // true: your AI never sees this item (Ask, background reading)
     public static let alsoFrom = "alsoFrom"     // other sources the same thing arrived from (it was a duplicate)
     // text fields
     public static let body = "body"
@@ -111,6 +112,8 @@ public struct Item: Identifiable, Hashable, Sendable {
         }
     }
     public var isPinned: Bool { record[Field.pinned]?.bool ?? false }
+    /// Your AI may look at it (everything may, unless you turned it off for this item).
+    public var aiAllowed: Bool { record[Field.aiHidden]?.bool != true }
     public var readAt: Date? { record[Field.readAt]?.date }
     public var ocrText: String? { record[Field.ocrText]?.string }
     public var siteName: String? { record[Field.siteName]?.string }

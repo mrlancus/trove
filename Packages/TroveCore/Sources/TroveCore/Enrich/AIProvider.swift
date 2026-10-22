@@ -190,11 +190,13 @@ public struct AIClient: Sendable {
     /// One request. With `schema`, the reply is JSON in that shape (structured output where the API
     /// has it, else asked for in the prompt).
     /// `effort` is medium unless the job is simple (reading a page is "low": the thinking is billed
-    /// as output, and transcribing needs little of it).
+    /// as output, and transcribing needs little of it). Haiku always runs at medium: the user's
+    /// choice, since low read worse and Haiku is cheap enough.
     public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
                          effort: String = "medium", purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
+        let effort = Self.isHaiku(model) ? "medium" : effort
         if settings.provider == .anthropic {
             return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
         }
@@ -222,7 +224,8 @@ public struct AIClient: Sendable {
     func request(_ path: String, body: [String: Any]?) throws -> URLRequest {
         guard let url = URL(string: settings.baseURL + path) else { throw Failure(status: 0, message: "The API address isn't valid.") }
         var r = URLRequest(url: url)
-        r.timeoutInterval = 120
+        // Long: a request given up on is still billed, and wouldn't be counted in Activity.
+        r.timeoutInterval = 600
         if let body {
             r.httpMethod = "POST"
             r.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -307,6 +310,8 @@ public struct AIClient: Sendable {
         }
         throw lastError ?? Failure(status: 0, message: "The AI didn't answer.")
     }
+
+    static func isHaiku(_ model: String) -> Bool { model.lowercased().contains("haiku") }
 
     func send(_ request: URLRequest) async throws -> JSONValue {
         let (data, status) = try await transport(request)
