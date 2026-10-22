@@ -11,7 +11,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
 | `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing, sketch tools, clip editor | ✅ Done | 28 unit/interop tests; 9 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. Deployed (version 3d43d4ca, at f01c8a3) |
-| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 3cb7fcd, sketching/clipboard places/Paste round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
+| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: e0d46ae, your AI / Apple Notes / sketching feedback round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Notes: Today's note, templates, checklists** (PROTOCOL.md §12) | 🟡 Core + website tested; apps build on CI, not yet run on a device | 4 Swift + 3 JS unit tests on `notes-cases.json`, Chromium e2e (`notes.e2e.mjs`, desktop + phone width) |
@@ -37,7 +37,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
 ## Latest round: your own AI, Apple Notes on any Mac, and sketching feedback (user: "laser should glow, line or dot; the second bar moves the sketch; snap inside the ruler/protractor; tape with a finger; two-row lasso menu; zoom pill in the corner; dragging things shouldn't pan; eraser and tape; the top bar's ends fixed; shapes should prioritise corners and regular shapes")
-Built on CI (see the status row for the last green commit); not yet run on a device.
+Builds on CI (e0d46ae; the shapes commit after it changes only TroveCore, the website and docs); not yet run on a device.
 - **Apple Notes import** used to run only on the Mac that made the vault (`mirrorOwner`); this vault
   was made on the website, so it never ran. Now any Mac imports after each sync (at most every
   5 minutes, `AppModel.importAppleNotes(force:)`), reading notes in bulk with JavaScript for
