@@ -102,6 +102,14 @@ private struct AboutSection: View {
             // Whether the share sheet, widgets and keyboard can reach the app (they share an App Group).
             LabeledContent("Share sheet and widgets", value: SharedConfig.appGroupFound.map { "Connected (\($0))" } ?? "Can't share storage on this install")
                 .textSelection(.enabled)
+            if !SharedConfig.hasSharedContainer, let keys = model.vault.keys, let c = model.config, let relay = c.relay,
+               let code = SharedConfig.setupCode(.init(vaultPublicKey: keys.publicKeyBase64URL, relayURL: relay.url,
+                                                       relayVaultId: relay.vaultId, inboxToken: relay.inboxToken)) {
+                Button("Copy share sheet code") {
+                    Pasteboard.copy(code)
+                    model.toast = "Copied. In the share sheet, tap Paste code"
+                }
+            }
             Link("How Trove works (docs)", destination: URL(string: "https://github.com/mrlancus/trove/blob/main/docs/RESEARCH.md")!)
         }
         Section {
@@ -353,15 +361,23 @@ private struct IntegrationsSection: View {
                 Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
             }
             #endif
-            #if os(iOS)
             Toggle("Import new screenshots", isOn: Binding(
                 get: { model.config?.screenshotsImport ?? false },
                 set: { on in
                     Task {
+                        #if os(iOS)
                         let ok = on ? await ScreenshotImporter.requestAccess() : true
+                        #else
+                        let ok = true
+                        #endif
                         model.updateConfig { $0.screenshotsImport = on && ok }
+                        model.watchScreenshots()
                     }
                 }))
+            #if os(iOS)
+            Text("Screenshots only, not other photos: as soon as you take one while Trove is open, otherwise when you come back to Trove.").font(.caption).foregroundStyle(.secondary)
+            #else
+            Text("Screenshots only, as soon as you take them.").font(.caption).foregroundStyle(.secondary)
             #endif
         } header: {
             Text("Other apps")

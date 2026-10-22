@@ -16,6 +16,7 @@ struct ShareForm: View {
     @State private var note = ""
     @State private var status: String?
     @State private var envelopes: [InboxEnvelope] = []
+    @State private var needsCode = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -28,9 +29,14 @@ struct ShareForm: View {
                 .padding(12).background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
             TextField("Add a note… #tags work", text: $note, axis: .vertical).lineLimit(2...5).textFieldStyle(.roundedBorder)
             if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+            if needsCode {
+                // No App Group on this install: the settings come from a code copied in Trove.
+                Button { pasteCode() } label: { Label("Paste code", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity) }
+                    .buttonStyle(.bordered).controlSize(.large)
+            }
             Button { save() } label: { Text("Save").frame(maxWidth: .infinity) }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-                .disabled(envelopes.isEmpty)
+                .disabled(envelopes.isEmpty || needsCode)
         }
         .padding(20)
         .task { await load() }
@@ -63,7 +69,29 @@ struct ShareForm: View {
         envelopes = out
         preview = titles.isEmpty ? "Nothing Trove can save here." : titles.joined(separator: "\n")
         // Said before Save is pressed, so it's clear why it can't work (and what to do instead).
-        if let problem = CaptureDrop.problem { status = problem.localizedDescription }
+        if let problem = CaptureDrop.problem {
+            status = problem.localizedDescription
+            needsCode = problem == .noSharedStorage
+        }
+    }
+
+    private func pasteCode() {
+        #if canImport(UIKit)
+        let text = UIPasteboard.general.string ?? ""
+        #else
+        let text = NSPasteboard.general.string(forType: .string) ?? ""
+        #endif
+        guard let capture = SharedConfig.capture(fromSetupCode: text) else {
+            status = "That isn't a share sheet code. In Trove: Settings → About → Copy share sheet code."
+            return
+        }
+        guard capture.relayURL != nil, capture.inboxToken != nil else {
+            status = "Your vault has no relay, so the share sheet has nowhere to send things on this install. Use Trove in the share sheet's row of apps instead."
+            return
+        }
+        SharedConfig.saveCapture(capture)
+        needsCode = false
+        status = "Connected. Saves go to your vault's inbox from now on."
     }
 
     private func save() {

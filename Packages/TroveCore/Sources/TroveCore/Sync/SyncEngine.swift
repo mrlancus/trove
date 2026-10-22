@@ -122,18 +122,41 @@ public actor SyncEngine {
             store.apply(snapshot.ops)
             store.apply(snapshot.pending)
             // Rebuild the outbox for anything not yet pushed from this device's own ops.
-            let mine = snapshot.ops.filter { $0.device == device }
-            for key in unpushed.values.reduce(into: Set<String>(), { $0.formUnion($1) }) {
-                let parts = key.split(separator: "/")
-                guard parts.count == 2, let first = Int(parts[1]) else { continue }
-                let run = mine.filter { $0.seq >= first }.sorted { $0.seq < $1.seq }
-                var batch: [Op] = []
-                for op in run where batch.isEmpty || op.seq == batch.last!.seq + 1 { batch.append(op) }
-                if let seg = try? Segment(device: device, ops: batch) { outbox[key] = seg }
-            }
+            let mine = snapshot.ops.filter { $0.device == device }.sorted { $0.seq < $1.seq }
+            let keys = unpushed.values.reduce(into: Set<String>(), { $0.formUnion($1) })
+            outbox = Self.rebuildOutbox(keys: keys, ops: mine, device: device)
         } else {
             journal = Journal(state: .init(device: device), now: now)
         }
+    }
+
+    /// Segments to push again after a restart, from their keys (`device/first`) and this device's ops.
+    /// Each runs from its first op while the seqs follow on, up to the next unpushed segment and at
+    /// most `Segment.maxPlaintextBytes`, as `Journal.takeSegments` cut it. (Taking every later op
+    /// made one segment over the relay's 1 MiB limit, refused for ever with 413.)
+    static func rebuildOutbox(keys: Set<String>, ops mine: [Op], device: String) -> [String: Segment] {
+        let starts = keys.compactMap { key -> Int? in
+            let parts = key.split(separator: "/")
+            return parts.count == 2 ? Int(parts[1]) : nil
+        }.sorted()
+        let encoder = JSONEncoder()
+        var out: [String: Segment] = [:]
+        for key in keys {
+            let parts = key.split(separator: "/")
+            guard parts.count == 2, let first = Int(parts[1]) else { continue }
+            let next = starts.first { $0 > first } ?? Int.max
+            var batch: [Op] = []
+            var size = 0
+            for op in mine where op.seq >= first && op.seq < next {
+                if let last = batch.last, op.seq != last.seq + 1 { break }
+                let opSize = ((try? encoder.encode(op))?.count ?? 0) + 1
+                if !batch.isEmpty, size + opSize > Segment.maxPlaintextBytes { break }
+                batch.append(op)
+                size += opSize
+            }
+            if let seg = try? Segment(device: device, ops: batch) { out[key] = seg }
+        }
+        return out
     }
 
     public var device: String { journal.device }

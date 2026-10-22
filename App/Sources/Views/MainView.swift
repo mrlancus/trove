@@ -74,6 +74,7 @@ struct MainView: View {
             DropHandler.handle(providers, model: model)
         }
         .environment(\.showAsk, { showAsk = true })
+        .copiesSelection(model)
         // The one file picker (and Photos and the scanner) for everything in this window.
         .importPickers()
     }
@@ -764,6 +765,7 @@ struct ItemMenu: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        Button { Task { await model.copy([item]) } } label: { Label("Copy", systemImage: "doc.on.doc") }
         Button { Task { await model.togglePin(item) } } label: {
             Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
         }

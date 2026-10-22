@@ -50,9 +50,10 @@ struct InkEditorView: View {
                     GeometryReader { geo in
                         // Tap anywhere else to close it.
                         Color.black.opacity(0.001).onTapGesture { editor.palette = nil }
+                        // The arcs' centre on the Pencil's tip, kept on screen.
                         InkPalette(editor: editor)
                             .position(x: min(max(p.x, InkPalette.width / 2 + 8), geo.size.width - InkPalette.width / 2 - 8),
-                                      y: min(max(p.y - 70, 60), geo.size.height - 60))
+                                      y: min(max(p.y - (InkPalette.centre.y - InkPalette.height / 2), InkPalette.height / 2 + 8), geo.size.height - InkPalette.height / 2 - 8))
                     }
                     .transition(.opacity)
                 }
@@ -267,6 +268,8 @@ struct InkEditorView: View {
     }
 
     /// The chosen tool's colours, sizes and modes.
+    static let optionsHeight: CGFloat = 48
+
     private var optionsBar: some View {
         @Bindable var editor = editor
         return ScrollView(.horizontal, showsIndicators: false) {
@@ -298,7 +301,12 @@ struct InkEditorView: View {
                 if editor.tool.ink != nil || editor.tool == .shape {
                     Button(editor.tool == .shape ? "Line options" : "Pen options") { penOptions = true }
                         .buttonStyle(.bordered)
-                        .popover(isPresented: $penOptions) { InkPenOptions(editor: editor).frame(minWidth: 300, idealWidth: 320) }
+                        .popover(isPresented: $penOptions) {
+                            // A Form in a popover has no height of its own: sized to show everything.
+                            InkPenOptions(editor: editor)
+                                .frame(minWidth: 340, idealWidth: 380, maxWidth: 420, minHeight: editor.tool.ink != nil ? 440 : 260, idealHeight: editor.tool.ink != nil ? 480 : 280)
+                                .presentationCompactAdaptation(.popover)
+                        }
                     if editor.tool != .shape {
                         Button("Save pen") { editor.saveFavourite() }
                             .buttonStyle(.bordered)
@@ -338,8 +346,10 @@ struct InkEditorView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            // One height for every tool's row (the eraser's segmented picker made it thinner).
+            .frame(height: Self.optionsHeight)
         }
+        .frame(height: Self.optionsHeight)
         .background(.bar)
         .transition(.move(edge: .top).combined(with: .opacity))
     }

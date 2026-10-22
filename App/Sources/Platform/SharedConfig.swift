@@ -137,6 +137,23 @@ enum SharedConfig {
 
     static var captureURL: URL { container.appendingPathComponent("capture.json") }
 
+    /// For an install with no shared App Group (Sideloadly can drop it): the capture settings as a
+    /// code the app copies and the share sheet pastes once, then keeps in its own storage. Public key,
+    /// relay address and inbox token only (enough to drop things into the inbox, nothing to read).
+    static let setupPrefix = "trove-share-setup:"
+
+    static func setupCode(_ capture: Capture) -> String? {
+        guard let data = try? JSONEncoder().encode(capture) else { return nil }
+        return setupPrefix + data.base64EncodedString()
+    }
+
+    static func capture(fromSetupCode text: String) -> Capture? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix(setupPrefix), let data = Data(base64Encoded: String(t.dropFirst(setupPrefix.count))),
+              let capture = try? JSONDecoder().decode(Capture.self, from: data), !capture.vaultPublicKey.isEmpty else { return nil }
+        return capture
+    }
+
     static func loadCapture() -> Capture? {
         guard let data = try? Data(contentsOf: captureURL) else { return nil }
         return try? JSONDecoder().decode(Capture.self, from: data)
