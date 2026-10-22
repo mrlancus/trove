@@ -347,7 +347,8 @@ struct PencilCanvas: UIViewRepresentable {
         private var fittedSize: CGSize = .zero
         /// A view smaller than this is still being laid out (SwiftUI can hand over a provisional size
         /// first): fitting to it gave 10 % and left the page tiny, so the fit waits for the real size.
-        static let usable: CGFloat = 120
+        /// The editor is never this small on an iPhone or iPad.
+        static let usable: CGFloat = 280
 
         init(editor: InkEditorModel) {
             self.editor = editor
@@ -446,7 +447,10 @@ struct PencilCanvas: UIViewRepresentable {
         private func needsFit(_ size: CGSize) -> Bool {
             guard size.width >= Self.usable, size.height >= Self.usable else { return false }
             if fittedSize == .zero { return true }
-            return size.width != fittedSize.width || (fittedSize.height < Self.usable * 2 && size.height != fittedSize.height)
+            if size.width != fittedSize.width { return true }
+            // The height settled after the fit (the toolbar's second row or the presentation finishing):
+            // fit again when it changed by more than a quarter, unless zoomed by hand.
+            return !zoomedByHand && abs(size.height - fittedSize.height) > fittedSize.height / 4
         }
 
         /// Fits the page in view once the view has its real size (and again on rotation), unless
@@ -470,9 +474,28 @@ struct PencilCanvas: UIViewRepresentable {
                     if let slot = slots.first(where: { $0.index == editor.page }) ?? slots.first { scroll(to: slot, in: canvas, animated: false, centred: true) }
                 }
                 let z = Double(canvas.zoomScale)
-                DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
+                DispatchQueue.main.async { [weak self, weak canvas] in
+                    self?.editor.zoom = z
+                    if let canvas { self?.redrawAfterFit(canvas) }
+                }
             }
             resize(canvas)
+        }
+
+        /// After fitting, everything is drawn for the new zoom: PencilKit's ink sometimes stayed
+        /// blank until a pinch (it renders on a zoom change), so the zoom is nudged and set back.
+        private func redrawAfterFit(_ canvas: TroveCanvasView) {
+            let z = canvas.zoomScale
+            updating = true
+            canvas.setZoomScale(min(InkEditorModel.maxZoom, z * 1.001), animated: false)
+            canvas.setZoomScale(z, animated: false)
+            updating = false
+            paperZoom = 0
+            boxesZoom = 0
+            resize(canvas)
+            paperView.setNeedsDisplay()
+            boxesView.setNeedsDisplay()
+            overlayView.setNeedsDisplay()
         }
 
         /// The zoom that shows the whole current page, or its width.
