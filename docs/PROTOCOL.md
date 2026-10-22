@@ -838,3 +838,35 @@ duplicates"). Groups are listed newest first; ids in a group oldest first.
 to the cited items. **Flashcards** are a note tagged `flashcards` with `flashcards: [{front, back}]`
 (for a study view) and the same cards in the body as `**Q:** front` / `**A:** back` pairs, connected to
 the note or sketch they came from.
+
+## 12. Notes: the daily note, templates and checklists
+
+All built from ordinary note items (`kind: "note"`); readers that don't know these conventions see
+plain notes. `web/public/core/notes.js` and `Notes.swift`, both checked against
+`Fixtures/notes-cases.json` (made by `web/test/make-notes-fixture.mjs`).
+
+**Placeholders** in a template's title and body: `{date}` (2026-10-21), `{time}` (14:05, 24-hour),
+`{datetime}` (`{date} {time}`), `{longdate}` (Wednesday 21 October 2026), `{weekday}`, `{day}` (21),
+`{month}` (October), `{year}`, `{clipboard}` (the clipboard's text, read only when the template has
+this placeholder) and, in the body only, `{title}` (the new note's title). Times are the device's
+local clock. Anything else in braces (unknown names, capitals, spaces) stays as written.
+
+**Templates.** Built in (ids `daily`, `meeting`, `journal`, `recipe`; not records, the same on every
+device): Daily note, Meeting, Journal and Recipe (the recipe makes `category: "recipe"`). Any note
+tagged `template` is one of yours: its name is its title with the placeholders taken out and spaces
+collapsed (`Template` when that leaves nothing), its tags (minus `template`) and its category (unless
+`note` or `other`) go onto notes made from it. Yours are listed first, A to Z by lowercased name then
+id; one of yours with a built-in template's name (any case) hides that one. Daily notes are never
+templates. A note made from a template is a new note with the filled-in title, body and tags.
+
+**The daily note** has the id `daily-<yyyy-mm-dd>` (the device's local date), so every device writes
+the same note for a day. Fields: title `{longdate}`, `daily: "yyyy-mm-dd"`, tags those of the
+template plus `daily`, and the body of your template named "Daily note" if there is one, else the
+built-in one. "Today" opens it, making it if no record has that id, or again (`_deleted: false`,
+fresh title, tags and body) if it was deleted. Two devices that make the same day's note before
+syncing both write the template's body, so it can appear twice; the apps sync before making one.
+
+**Checklists**: a line `- [ ] text` or `- [x] text` (also `*` or `•` for `-`, `X` for `x`), with
+spaces or tabs before it, and a space, tab or the end of the line after `]`. Lines inside ``` code
+fences don't count. Ticking one writes the body with that one mark changed (`x` or a space), as an
+ordinary text edit, so it merges with other edits.

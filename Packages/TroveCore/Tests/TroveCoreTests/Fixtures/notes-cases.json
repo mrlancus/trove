@@ -1,0 +1,519 @@
+{
+  "parts": [
+    {
+      "year": 2026,
+      "month": 10,
+      "day": 21,
+      "hour": 14,
+      "minute": 5,
+      "second": 2,
+      "weekday": 3
+    },
+    {
+      "year": 2027,
+      "month": 1,
+      "day": 3,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "weekday": 0
+    },
+    {
+      "year": 999,
+      "month": 12,
+      "day": 31,
+      "hour": 23,
+      "minute": 59,
+      "second": 59,
+      "weekday": 6
+    }
+  ],
+  "placeholders": [
+    {
+      "text": "Today is {longdate} ({weekday}), {date} at {time}; {datetime}. {day} {month} {year}.",
+      "part": 0,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Today is Wednesday 21 October 2026 (Wednesday), 2026-10-21 at 14:05; 2026-10-21 14:05. 21 October 2026.",
+      "has": true
+    },
+    {
+      "text": "Today is {longdate} ({weekday}), {date} at {time}; {datetime}. {day} {month} {year}.",
+      "part": 1,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Today is Sunday 3 January 2027 (Sunday), 2027-01-03 at 00:00; 2027-01-03 00:00. 3 January 2027.",
+      "has": true
+    },
+    {
+      "text": "Today is {longdate} ({weekday}), {date} at {time}; {datetime}. {day} {month} {year}.",
+      "part": 2,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Today is Saturday 31 December 999 (Saturday), 0999-12-31 at 23:59; 0999-12-31 23:59. 31 December 999.",
+      "has": true
+    },
+    {
+      "text": "From the clipboard: {clipboard}. Title: {title}.",
+      "part": 0,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "From the clipboard: clip. Title: My title.",
+      "has": true
+    },
+    {
+      "text": "From the clipboard: {clipboard}. Title: {title}.",
+      "part": 1,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "From the clipboard: clip. Title: My title.",
+      "has": true
+    },
+    {
+      "text": "From the clipboard: {clipboard}. Title: {title}.",
+      "part": 2,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "From the clipboard: clip. Title: My title.",
+      "has": true
+    },
+    {
+      "text": "Unknown {stays}, {Date} stays, {} and { date } stay, {{date}} half, {date",
+      "part": 0,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Unknown {stays}, {Date} stays, {} and { date } stay, {2026-10-21} half, {date",
+      "has": true
+    },
+    {
+      "text": "Unknown {stays}, {Date} stays, {} and { date } stay, {{date}} half, {date",
+      "part": 1,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Unknown {stays}, {Date} stays, {} and { date } stay, {2027-01-03} half, {date",
+      "has": true
+    },
+    {
+      "text": "Unknown {stays}, {Date} stays, {} and { date } stay, {{date}} half, {date",
+      "part": 2,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "Unknown {stays}, {Date} stays, {} and { date } stay, {0999-12-31} half, {date",
+      "has": true
+    },
+    {
+      "text": "No placeholders here",
+      "part": 0,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "No placeholders here",
+      "has": false
+    },
+    {
+      "text": "No placeholders here",
+      "part": 1,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "No placeholders here",
+      "has": false
+    },
+    {
+      "text": "No placeholders here",
+      "part": 2,
+      "clipboard": "clip",
+      "title": "My title",
+      "expect": "No placeholders here",
+      "has": false
+    }
+  ],
+  "templateNames": [
+    {
+      "title": "Meeting {date}",
+      "expect": "Meeting"
+    },
+    {
+      "title": "  {date}  ",
+      "expect": "Template"
+    },
+    {
+      "title": "Weekly   review {year}",
+      "expect": "Weekly review"
+    },
+    {
+      "title": "",
+      "expect": "Template"
+    },
+    {
+      "title": "{clipboard} notes",
+      "expect": "notes"
+    }
+  ],
+  "items": [
+    {
+      "id": "t1",
+      "title": "Meeting {date}",
+      "body": "Who: \n- [ ] {title}",
+      "tags": [
+        "template",
+        "work"
+      ]
+    },
+    {
+      "id": "t2",
+      "title": "Daily note",
+      "body": "## Today\n- [ ] Water plants\n- [ ] {weekday} things",
+      "tags": [
+        "template",
+        "mine"
+      ]
+    },
+    {
+      "id": "t3",
+      "title": "  {date}  ",
+      "body": "Just a date",
+      "tags": [
+        "template"
+      ]
+    },
+    {
+      "id": "t4",
+      "title": "bread",
+      "body": "Flour",
+      "tags": [
+        "template"
+      ],
+      "category": "recipe"
+    },
+    {
+      "id": "daily-2026-10-20",
+      "title": "Tuesday 20 October 2026",
+      "body": "x",
+      "tags": [
+        "daily",
+        "template"
+      ]
+    },
+    {
+      "id": "n1",
+      "title": "Not a template",
+      "body": "",
+      "tags": [
+        "work"
+      ]
+    },
+    {
+      "id": "l1",
+      "kind": "link",
+      "title": "A link tagged template",
+      "url": "https://example.com",
+      "tags": [
+        "template"
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "t4",
+      "name": "bread",
+      "title": "bread",
+      "body": "Flour",
+      "tags": [],
+      "category": "recipe",
+      "user": true,
+      "clipboard": false,
+      "made": {
+        "title": "bread",
+        "body": "Flour",
+        "tags": [],
+        "category": "recipe"
+      }
+    },
+    {
+      "id": "t2",
+      "name": "Daily note",
+      "title": "Daily note",
+      "body": "## Today\n- [ ] Water plants\n- [ ] {weekday} things",
+      "tags": [
+        "mine"
+      ],
+      "category": null,
+      "user": true,
+      "clipboard": false,
+      "made": {
+        "title": "Daily note",
+        "body": "## Today\n- [ ] Water plants\n- [ ] Wednesday things",
+        "tags": [
+          "mine"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "t1",
+      "name": "Meeting",
+      "title": "Meeting {date}",
+      "body": "Who: \n- [ ] {title}",
+      "tags": [
+        "work"
+      ],
+      "category": null,
+      "user": true,
+      "clipboard": false,
+      "made": {
+        "title": "Meeting 2026-10-21",
+        "body": "Who: \n- [ ] Meeting 2026-10-21",
+        "tags": [
+          "work"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "t3",
+      "name": "Template",
+      "title": "  {date}  ",
+      "body": "Just a date",
+      "tags": [],
+      "category": null,
+      "user": true,
+      "clipboard": false,
+      "made": {
+        "title": "  2026-10-21  ",
+        "body": "Just a date",
+        "tags": [],
+        "category": null
+      }
+    },
+    {
+      "id": "journal",
+      "name": "Journal",
+      "title": "Journal {date}",
+      "body": "## How I feel\n\n\n## What happened\n\n\n## Grateful for\n- \n\n## Tomorrow\n- [ ] ",
+      "tags": [
+        "journal"
+      ],
+      "category": null,
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "Journal 2026-10-21",
+        "body": "## How I feel\n\n\n## What happened\n\n\n## Grateful for\n- \n\n## Tomorrow\n- [ ] ",
+        "tags": [
+          "journal"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "recipe",
+      "name": "Recipe",
+      "title": "New recipe",
+      "body": "Serves: \nTakes: \n\n## Ingredients\n- \n\n## Method\n1. \n\n## Notes\n",
+      "tags": [
+        "recipe"
+      ],
+      "category": "recipe",
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "New recipe",
+        "body": "Serves: \nTakes: \n\n## Ingredients\n- \n\n## Method\n1. \n\n## Notes\n",
+        "tags": [
+          "recipe"
+        ],
+        "category": "recipe"
+      }
+    }
+  ],
+  "builtInTemplates": [
+    {
+      "id": "daily",
+      "name": "Daily note",
+      "title": "{longdate}",
+      "body": "## Tasks\n- [ ] \n\n## Notes\n",
+      "tags": [
+        "daily"
+      ],
+      "category": null,
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "Wednesday 21 October 2026",
+        "body": "## Tasks\n- [ ] \n\n## Notes\n",
+        "tags": [
+          "daily"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "meeting",
+      "name": "Meeting",
+      "title": "Meeting {date}",
+      "body": "{longdate}, {time}\n\n## Who\n- \n\n## Agenda\n- \n\n## Notes\n\n\n## Actions\n- [ ] ",
+      "tags": [
+        "meeting"
+      ],
+      "category": null,
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "Meeting 2026-10-21",
+        "body": "Wednesday 21 October 2026, 14:05\n\n## Who\n- \n\n## Agenda\n- \n\n## Notes\n\n\n## Actions\n- [ ] ",
+        "tags": [
+          "meeting"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "journal",
+      "name": "Journal",
+      "title": "Journal {date}",
+      "body": "## How I feel\n\n\n## What happened\n\n\n## Grateful for\n- \n\n## Tomorrow\n- [ ] ",
+      "tags": [
+        "journal"
+      ],
+      "category": null,
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "Journal 2026-10-21",
+        "body": "## How I feel\n\n\n## What happened\n\n\n## Grateful for\n- \n\n## Tomorrow\n- [ ] ",
+        "tags": [
+          "journal"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "recipe",
+      "name": "Recipe",
+      "title": "New recipe",
+      "body": "Serves: \nTakes: \n\n## Ingredients\n- \n\n## Method\n1. \n\n## Notes\n",
+      "tags": [
+        "recipe"
+      ],
+      "category": "recipe",
+      "user": false,
+      "clipboard": false,
+      "made": {
+        "title": "New recipe",
+        "body": "Serves: \nTakes: \n\n## Ingredients\n- \n\n## Method\n1. \n\n## Notes\n",
+        "tags": [
+          "recipe"
+        ],
+        "category": "recipe"
+      }
+    }
+  ],
+  "daily": {
+    "id": "daily-2026-10-21",
+    "date": "2026-10-21",
+    "note": {
+      "title": "Wednesday 21 October 2026",
+      "body": "## Today\n- [ ] Water plants\n- [ ] Wednesday things",
+      "tags": [
+        "daily",
+        "mine"
+      ],
+      "category": null
+    }
+  },
+  "dailyBuiltIn": {
+    "id": "daily-2027-01-03",
+    "date": "2027-01-03",
+    "note": {
+      "title": "Sunday 3 January 2027",
+      "body": "## Tasks\n- [ ] \n\n## Notes\n",
+      "tags": [
+        "daily"
+      ],
+      "category": null
+    }
+  },
+  "checklists": [
+    {
+      "body": "- [ ] one\n- [x] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+      "boxes": [
+        {
+          "line": 0,
+          "done": false,
+          "text": "one"
+        },
+        {
+          "line": 1,
+          "done": true,
+          "text": "two"
+        },
+        {
+          "line": 2,
+          "done": true,
+          "text": "three, indented"
+        },
+        {
+          "line": 3,
+          "done": false,
+          "text": "tabbed"
+        },
+        {
+          "line": 4,
+          "done": false,
+          "text": ""
+        },
+        {
+          "line": 10,
+          "done": false,
+          "text": "after code"
+        }
+      ],
+      "counts": {
+        "done": 2,
+        "total": 6
+      },
+      "toggled": [
+        "- [x] one\n- [x] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+        "- [ ] one\n- [ ] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+        "- [ ] one\n- [x] two\n  * [ ] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+        "- [ ] one\n- [x] two\n  * [X] three, indented\n\t• [x] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+        "- [ ] one\n- [x] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [x]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code",
+        "- [ ] one\n- [x] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [x] after code"
+      ],
+      "outOfRange": "- [ ] one\n- [x] two\n  * [X] three, indented\n\t• [ ] tabbed\n- [ ]\n- [ ]x not one\n-[ ] not one\n```\n- [ ] in code\n```\n- [ ] after code"
+    },
+    {
+      "body": "No tasks\n## Heading",
+      "boxes": [],
+      "counts": {
+        "done": 0,
+        "total": 0
+      },
+      "toggled": [],
+      "outOfRange": "No tasks\n## Heading"
+    },
+    {
+      "body": "- [ ] crlf\r\n- [x] done\r\n",
+      "boxes": [
+        {
+          "line": 0,
+          "done": false,
+          "text": "crlf\r"
+        },
+        {
+          "line": 1,
+          "done": true,
+          "text": "done\r"
+        }
+      ],
+      "counts": {
+        "done": 1,
+        "total": 2
+      },
+      "toggled": [
+        "- [x] crlf\r\n- [x] done\r\n",
+        "- [ ] crlf\r\n- [ ] done\r\n"
+      ],
+      "outOfRange": "- [ ] crlf\r\n- [x] done\r\n"
+    }
+  ]
+}
