@@ -15,7 +15,7 @@ enum CaptureDrop {
             case .notSetUp:
                 "Trove hasn't shared its settings with the share sheet yet. Open Trove on this device (set up, with your vault showing), then try again."
             case .noSharedStorage:
-                "The share sheet can't reach Trove's shared storage on this install (the App Group wasn't kept when the app was signed). Use Trove in the share sheet's row of apps instead (it copies the file into Trove), or reinstall Trove with SideStore."
+                "This install of Trove can't share its storage with the share sheet (the signing tool dropped it). To connect it once: in Trove, Settings → About → Copy share sheet code, then come back here and tap Paste code."
             }
         }
     }
@@ -34,9 +34,15 @@ enum CaptureDrop {
             let client = RelayClient(baseURL: url, vaultId: vault, token: token)
             if (try? await client.postInbox(sealed: sealed, source: envelope.header.source)) != nil { return "relay" }
         }
+        // With no shared storage the app never sees a local drop: only the relay can take it.
+        guard SharedConfig.hasSharedContainer else { throw RelayOnly() }
         let file = SharedConfig.localInbox.appendingPathComponent("\(Date().timeIntervalSince1970)-\(UUID().uuidString).trv")
         try sealed.write(to: file, options: .atomic)
         return "local"
+    }
+
+    struct RelayOnly: LocalizedError {
+        var errorDescription: String? { "Couldn't reach your relay to save this. Check the connection and try again." }
     }
 
     static func text(_ text: String, title: String? = nil, source: String = "ios") -> InboxEnvelope {
