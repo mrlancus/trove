@@ -34,6 +34,47 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
+## Battery round (ROADMAP §3.7, branch `battery`, merged into main)
+Written on Linux; TroveCore tested on Linux, the apps build on GitHub Actions; **not yet run on a device**.
+- **TroveCore** (`Sync/PowerPolicy.swift`, tests in `PowerPolicyTests.swift`): `PowerState` (Settings
+  mode, Low Power Mode, charger, heat, sketch open) → `PowerPolicy` (push rule, ping window, minimum
+  poll, checkpoints, enrichment budget, recognition level). `PushCoalescer` (push after a 30 s pause or
+  3 min of writing, never within 60 s of the last push; 30/180/300 s when saving; only on close when
+  very hot), `Throttle` (pings, widget), `PowerCounters`, `VectorCache` (binary Float32 meaning
+  vectors), `SyncEngine.allowCheckpoints`. **Simulated 3-hour writing session** (seeded; bursts,
+  pauses, 18 page changes): 67 pushes batched vs 200 with the old rule modelled faithfully (the
+  roadmap's "about 900" estimate assumed a push every 12 s; the old timer only pushed after 4 s
+  pauses). Low Power Mode: ≤ 45.
+- **Apps**: pushes batched while sketching and flushed on close/background; live pings merged
+  (30 s sketching, 60 s saving; held until close when very hot) and the socket closed in the
+  background; inbox only on a ping, on becoming active or every 15 min, price watches every 6 h, AI
+  status once per launch and when Settings → Intelligence opens; enrichment on battery only for what
+  this device saved in the last hour, 5 a round, none in Low Power Mode / hot / sketching, stops
+  mid-batch at `.serious`; the overnight charger task now runs on the iPhone too (no on-device AI
+  there) and takes everything else; handwriting re-reads only pages whose strokes changed (local
+  per-page cache `Caches/trove-handwriting-pages.json`), `.fast` Vision when saving; meaning-vector
+  cache binary (old JSON read once) and, like the search index, written after 60 s quiet, on
+  background or at once on the charger; checkpoints only on the charger or with no sketch open;
+  widget reloads only when recent/pinned/counts change, at most every 15 min.
+- **Settings → Battery** (per device, not synced): Automatic / Save battery / Full speed, the state
+  right now, counters for this sketch, the last sketch and since launch (pushes, pulls, requests,
+  syncs, pings, ink reloads, pages read, AI calls, saves, cache KB), and the **battery report**:
+  MetricKit's daily payloads (iPhone/iPad; diagnostics on the Mac too) kept as JSON in Application
+  Support/Trove/metrics, each shareable. Signposts (Instruments → Points of Interest): Sync, Enrich,
+  Read handwriting, Checkpoint (event), Open library.
+- **How to read the battery report**: the first payload arrives about a day after installing. In
+  the JSON look at `cumulativeCPUTime`, `cumulativeGPUTime`, `cellularConditionTime`/network
+  `cumulativeWifiUpload/Download`, `cumulativeLogicalWrites` (disk) and `cumulativeForegroundTime`.
+  Compare a day of writing before and after; also iPadOS Settings → Battery → Trove (% and screen
+  time) after an hour of writing, and Settings → Battery → "Last sketch" counters (an hour of
+  writing should show ~20 pushes, not hundreds).
+- **Check on the iPad**: an hour of writing → "Last sketch" pushes ≈ 20, pages read only for pages
+  you wrote on; strokes reach the Mac within ~3 min (instantly on closing the sketch); the widget
+  still updates; Low Power Mode → "Right now" says so; an item saved on the iPad gets its AI title on
+  battery, items from the Mac wait for the charger.
+- **Not done here**: no automatic clipboard picture capture in Low Power Mode (the clipboard reads
+  belong to the other session's paste-permission work). ITEMS_1_8_9_11
+
 ## Current round: the roadmap (user: "Bridges", iPad Air M3 + Pencil Pro; later "session ran out, continue; renaming clips doesn't work")
 Built from `docs/ROADMAP.md` with parallel workers on branches, merged into `main` one by one after
 the full test suites pass. **Not deployed yet**: the website/relay changes below go live when the
