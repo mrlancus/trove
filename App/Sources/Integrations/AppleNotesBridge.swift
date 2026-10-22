@@ -19,10 +19,18 @@ enum AppleNotesBridge {
     /// took minutes and hit Apple Events' two-minute timeout on big libraries). Runs `osascript` off
     /// the main thread, so the app never stalls while Notes answers.
     static func fetchAll() async throws -> [Note] {
+        // The notes go to a file, written as UTF-8 by Foundation: osascript's printed result is in
+        // the system's default encoding for an app started from Finder, and came back empty or garbled.
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("trove-apple-notes-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let path = file.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
         let script = """
+        ObjC.import('Foundation');
         const Notes = Application('Notes');
         const out = [];
+        let folders = 0;
         for (const f of Notes.folders()) {
+          folders++;
           const folder = f.name();
           if (folder === 'Recently Deleted') continue;
           const notes = f.notes;
@@ -35,11 +43,16 @@ enum AppleNotesBridge {
             out.push({ id: ids[i], name: names[i] || '', modified: mods[i].toISOString(), folder: folder, html: bodies[i] || '' });
           }
         }
-        // Plain ASCII: osascript writes its result in the system's default encoding, which isn't
-        // UTF-8 for an app started from Finder, so accents and emoji broke the JSON.
-        JSON.stringify(out).replace(/[\\u007f-\\uffff]/g, c => '\\\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4));
+        const text = $.NSString.alloc.initWithUTF8String(JSON.stringify(out));
+        const ok = text.writeToFileAtomicallyEncodingError('\(path)', true, $.NSUTF8StringEncoding, null);
+        'wrote ' + out.length + ' notes from ' + folders + ' folders: ' + ok;
         """
-        let data = try await run(script, language: "JavaScript")
+        let printed = String(decoding: try await run(script, language: "JavaScript"), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = try? Data(contentsOf: file), !data.isEmpty else {
+            throw Failure(message: printed.isEmpty
+                ? "Apple Notes didn't answer. Check System Settings → Privacy & Security → Automation → Trove → Notes is on (if Trove isn't listed there, restart Trove and press Import now to be asked)."
+                : "Apple Notes answered but no notes were saved (\(printed.prefix(120))).")
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { d in
             let text = try d.singleValueContainer().decode(String.self)
@@ -51,8 +64,7 @@ enum AppleNotesBridge {
         // is left out rather than failing the whole import.
         let text = String(decoding: data, as: UTF8.self)
         guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]") else {
-            let shown = text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)
-            throw Failure(message: shown.isEmpty ? "Apple Notes sent nothing back. Open Notes once, then press Import now." : "Couldn't read what Apple Notes sent back: “\(shown)”")
+            throw Failure(message: "Couldn't read what Apple Notes sent back: “\(text.prefix(120))”")
         }
         struct Loose: Decodable { let note: Note? ; init(from d: Decoder) throws { note = try? Note(from: d) } }
         do {
@@ -80,6 +92,8 @@ enum AppleNotesBridge {
             let errors = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { throw failure(errors) }
+            // Nothing printed but something said on stderr: that's the reason.
+            if data.isEmpty, !errors.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw failure(errors) }
             return data
         }.value
     }
