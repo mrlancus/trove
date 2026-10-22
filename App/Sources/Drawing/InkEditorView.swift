@@ -60,7 +60,7 @@ struct InkEditorView: View {
             if showsPageBar { pageBar }
         }
         .task { await editor.load() }
-        .task(id: app.inkRevision) { if editor.loaded { await editor.reloadInk() } }
+        .task(id: app.inkPulledRevision) { if editor.loaded { await editor.reloadInk() } }
         .onAppear { app.drawingOpen += 1 }
         .onDisappear { app.drawingOpen = max(0, app.drawingOpen - 1) }
         .inspector(isPresented: $editor.showPages) { InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage) }
@@ -652,6 +652,8 @@ struct SketchSection: View {
     let item: Item
     @Environment(AppModel.self) private var model
     @State private var images: [String: InkImage] = [:]
+    /// What each page's picture was drawn from: only pages whose ink changed are drawn again.
+    @State private var drawn: [String: String] = [:]
 
     private var pages: [InkPageSpec] { InkRenderer.sketchPages(item) }
 
@@ -694,7 +696,8 @@ struct SketchSection: View {
         // Behind the open editor nobody sees these: redraw once it closes.
         guard model.inkTarget == nil, let library = model.library else { return }
         for page in pages {
-            let content = await Self.content(library, itemId: item.id, layer: "", key: page.key)
+            let (content, sig) = await Self.page(library, itemId: item.id, layer: "", spec: page)
+            guard drawn[page.key] != sig || images[page.key] == nil else { continue }
             var area: InkGeometry.Rect?
             if page.infinite {
                 let b = await library.inkBounds(on: item.id, pageKey: page.key) ?? InkGeometry.Rect(x: 0, y: 0, width: 800, height: 600)
@@ -702,19 +705,25 @@ struct SketchSection: View {
             }
             let box = area
             images[page.key] = await Task.detached(priority: .utility) { InkRenderer.render(page, content: content, pixelWidth: 480, area: box).map(InkImage.init) }.value
+            drawn[page.key] = sig
         }
     }
 
-    /// A page's ink with its pictures, for previews.
-    static func content(_ library: Library, itemId: String, layer: String, key: String) async -> InkContent {
+    /// A page's ink with its pictures, for previews, and a signature of what it was made from (closing
+    /// a sketch used to redraw every page of every preview on screen; ROADMAP §3.7 item 9).
+    static func page(_ library: Library, itemId: String, layer: String, spec: InkPageSpec) async -> (InkContent, String) {
         var c = InkContent()
-        c.strokes = await library.strokes(on: itemId, layer: layer, pageKey: key).map(InkLine.init)
-        let elements = await library.elements(on: itemId, layer: layer, pageKey: key)
+        let strokes = await library.strokes(on: itemId, layer: layer, pageKey: spec.key)
+        c.strokes = strokes.map(InkLine.init)
+        let elements = await library.elements(on: itemId, layer: layer, pageKey: spec.key)
         c.elements = elements.map(InkBox.init)
+        let newestStroke = strokes.map(\.record.updatedHLC).max() ?? ""
+        let newestElement = elements.map(\.record.updatedHLC).max() ?? ""
+        let sig = "\(strokes.count)-\(newestStroke)-\(elements.count)-\(newestElement)-\(spec)"
         for e in elements {
             if let att = e.image, let data = try? await library.attachmentData(att), let image = InkRenderer.cgImage(data) { c.pictures[att.id] = image }
         }
-        return c
+        return (c, sig)
     }
 }
 
@@ -726,6 +735,7 @@ struct InkedFileView: View {
     @Environment(AppModel.self) private var model
     @State private var pages: [InkPageSpec] = []
     @State private var images: [String: InkImage] = [:]
+    @State private var drawn: [String: String] = [:]
 
     var body: some View {
         VStack(spacing: 12) {
@@ -749,9 +759,13 @@ struct InkedFileView: View {
         let data = data, mime = attachment.mime, name = attachment.name
         if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value }
         for page in pages {
-            let content = await SketchSection.content(library, itemId: item.id, layer: attachment.id, key: page.key)
+            let (content, sig) = await SketchSection.page(library, itemId: item.id, layer: attachment.id, spec: page)
+            guard drawn[page.key] != sig || images[page.key] == nil else { continue }
             let width = Int(min(2400, page.width * 2))
-            images[page.key] = await Task.detached(priority: .userInitiated) { InkRenderer.render(page, content: content, pixelWidth: width).map(InkImage.init) }.value
+            // The first picture is waited for; redraws after an edit can take their time.
+            let priority: TaskPriority = images[page.key] == nil ? .userInitiated : .utility
+            images[page.key] = await Task.detached(priority: priority) { InkRenderer.render(page, content: content, pixelWidth: width).map(InkImage.init) }.value
+            drawn[page.key] = sig
         }
     }
 }

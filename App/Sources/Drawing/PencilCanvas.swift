@@ -65,6 +65,7 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.maximumZoomScale = InkEditorModel.maxZoom
         canvas.bouncesZoom = true
         canvas.insertSubview(c.paperView, at: 0)
+        canvas.addSubview(c.boxesView)
         canvas.addSubview(c.overlayView)
         canvas.addInteraction(UIPencilInteraction(delegate: c))
         // Apple Pencil hovering (M2 and later iPads, Pencil Pro): preview the tip and colour, or the eraser.
@@ -146,6 +147,7 @@ struct PencilCanvas: UIViewRepresentable {
         c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)
         c.apply(version: revision, to: canvas)
         if overlayRevision != c.shownOverlay { c.shownOverlay = overlayRevision; c.overlayView.setNeedsDisplay() }
+        c.refreshBoxes()
         let pen = tool.ink != nil
         // Setting PencilKit's tool resets its state: only when it really changes.
         let shownColor = c.darkInk ? InkDark.swap(color) : color
@@ -170,6 +172,7 @@ struct PencilCanvas: UIViewRepresentable {
             c.zoom(zoomRequest.kind, in: canvas)
         }
         if canvas.isRulerActive != rulerOn { canvas.isRulerActive = rulerOn }
+        canvas.bringSubviewToFront(c.boxesView)
         canvas.bringSubviewToFront(c.overlayView)
         c.showText(textEdit, in: canvas)
     }
@@ -287,6 +290,11 @@ struct PencilCanvas: UIViewRepresentable {
         let paperView = InkAreaView()
         /// Text boxes, the lasso, the selection, the eraser and the laser, over the ink.
         let overlayView = InkAreaView()
+        /// Text boxes and tape, over the ink and under the overlay: drawn past the screen's edges like the
+        /// paper and redrawn only when they change, not on every lasso or eraser move.
+        let boxesView = InkAreaView()
+        private var shownBoxes = ""
+        private var boxesZoom: CGFloat = 0
         var toolGesture: InkToolGesture?
         var holdWatcher: HoldWatcher?
         var swipes: [UISwipeGestureRecognizer] = []
@@ -308,6 +316,10 @@ struct PencilCanvas: UIViewRepresentable {
         /// Signature → Trove stroke ids for what's on the canvas, in canvas order (two strokes can look
         /// the same, say pasted twice in one place: each keeps its own id).
         private var ids: [String: [String]] = [:]
+        /// The Trove id of each stroke on the canvas, in canvas order, while that's known for sure (nil
+        /// after anything unexpected). PencilKit only ever appends a new pen stroke, so with this a new
+        /// stroke and the update after it no longer sign every stroke (ROADMAP §3.7 item 8).
+        private var canvasOrder: [String]?
         /// When PencilKit's pen last lifted: strokes it reports as new are only taken while a pen is in
         /// hand or just after (anything else is the canvas echoing a drawing set from the model).
         private var penLifted = Date.distantPast
@@ -342,6 +354,8 @@ struct PencilCanvas: UIViewRepresentable {
             super.init()
             paperView.painter = { [weak self] ctx, area, scale in self?.drawUnder(ctx, area: area, scale: scale) }
             overlayView.painter = { [weak self] ctx, area, scale in self?.drawOver(ctx, area: area, scale: scale) }
+            boxesView.painter = { [weak self] ctx, area, scale in self?.drawBoxes(ctx, area: area) }
+            editor.overlayListener = { [weak self] in self?.overlayView.setNeedsDisplay() }
             textTouches.shouldReceive = { touch in !(touch.view is UITextView) }
             textDelegate.changed = { [weak self] text in
                 guard let self else { return }
@@ -365,6 +379,7 @@ struct PencilCanvas: UIViewRepresentable {
             paperZoom = 0
             paperView.setNeedsDisplay()
             overlayView.setNeedsDisplay()
+            boxesView.setNeedsDisplay()
             if let tv = textView { tv.backgroundColor = Self.textFieldBackground(dark: on) }
         }
 
@@ -528,10 +543,20 @@ struct PencilCanvas: UIViewRepresentable {
             }
             overlayView.frame = visible
             overlayView.zoom = canvas.zoomScale
-            // The overlay is usually empty (no text boxes, lasso or eraser): then it needn't redraw.
+            // The overlay is usually empty (no lasso or eraser): then it needn't redraw.
             let z0 = max(0.01, canvas.zoomScale)
             let area = InkGeometry.Rect(x: visible.minX / z0, y: visible.minY / z0, width: visible.width / z0, height: visible.height / z0)
             if overlayHasContent(area) || overlayView.drewSomething { overlayView.setNeedsDisplay() }
+            let hasBoxes = slots.contains { editor.hasBoxesOver($0.spec.key) }
+            if canvas.zoomScale != boxesZoom {
+                boxesZoom = canvas.zoomScale
+                boxesView.zoom = canvas.zoomScale
+                boxesView.frame = visible
+                if hasBoxes || boxesView.drewSomething { boxesView.setNeedsDisplay() }
+            } else if !boxesView.frame.contains(visible) {
+                boxesView.frame = visible.insetBy(dx: -visible.width / 4, dy: -visible.height / 4)
+                if hasBoxes || boxesView.drewSomething { boxesView.setNeedsDisplay() }
+            }
             let z = canvas.zoomScale
             if isEndless, let slot = slots.first {
                 editor.visibleCenter = InkPoint(x: visible.midX / z - slot.offset.x, y: visible.midY / z - slot.offset.y)
@@ -603,8 +628,35 @@ struct PencilCanvas: UIViewRepresentable {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
                 return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
-                    || !o.handles.isEmpty || o.preview != nil || o.protractor != nil || o.ruler != nil || editor.hasBoxesOver(slot.spec.key)
+                    || !o.handles.isEmpty || o.preview != nil || o.protractor != nil || o.ruler != nil || editor.dragPreview(slot.spec.key) != nil
             }
+        }
+
+        /// The text boxes and tape changed (new ink version, a peek, the box being typed in, a drag
+        /// starting or ending): redraw their layer.
+        func refreshBoxes() {
+            let edit = editor.textEdit.map { "\($0.pageKey):\($0.elementId ?? "")" } ?? ""
+            let sig = "\(editor.revision)|\(edit)|\(dark)"
+            guard sig != shownBoxes else { return }
+            shownBoxes = sig
+            boxesView.setNeedsDisplay()
+        }
+
+        private func drawBoxes(_ ctx: CGContext, area: InkGeometry.Rect) {
+            var drew = false
+            for slot in visibleSlots(area) where editor.hasBoxesOver(slot.spec.key) {
+                drew = true
+                let o = slot.offset
+                ctx.saveGState()
+                ctx.translateBy(x: o.x, y: o.y)
+                let stored = editor.display(slot.spec.key, lifted: true)
+                let shown = isDark(slot) ? InkDark.content(stored) : stored
+                InkRenderer.drawTexts(shown.elements, in: ctx)
+                // Tape covers the ink (PencilKit's, underneath this view) too.
+                InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
+                ctx.restoreGState()
+            }
+            boxesView.drewSomething = drew
         }
 
         private func drawOver(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
@@ -614,13 +666,9 @@ struct PencilCanvas: UIViewRepresentable {
                 ctx.saveGState()
                 ctx.translateBy(x: o.x, y: o.y)
                 let darkSlot = isDark(slot)
-                let stored = editor.display(slot.spec.key, lifted: true)
-                let shown = darkSlot ? InkDark.content(stored) : stored
-                InkRenderer.drawTexts(shown.elements, in: ctx)
-                // Tape covers the ink (PencilKit's, underneath this view) too.
-                InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
-                // What the lasso is dragging: lifted off PencilKit's drawing while it moves, so a move
-                // redraws just this instead of replacing the whole drawing on every frame.
+                // Text boxes and tape are in `boxesView` underneath. What the lasso is dragging: lifted
+                // off PencilKit's drawing while it moves, so a move redraws just this instead of
+                // replacing the whole drawing on every frame.
                 if let moving = editor.dragPreview(slot.spec.key) { InkRenderer.drawContent(darkSlot ? InkDark.content(moving) : moving, in: ctx) }
                 InkRenderer.drawOverlay(editor.overlay(slot.spec.key), scale: scale, in: ctx)
                 ctx.restoreGState()
@@ -683,17 +731,27 @@ struct PencilCanvas: UIViewRepresentable {
             var onCanvas: [String: PKStroke] = [:]
             var order: [String] = []
             var kept: [(stroke: PKStroke, id: String)] = []
-            var seen: [String: Int] = [:]
-            for s in current {
-                let sig = PencilCanvas.signature(s)
-                let k = seen[sig, default: 0]
-                seen[sig] = k + 1
-                guard let list = ids[sig], k < list.count else { continue }
-                let id = list[k]
+            // Each stroke's id: from the known canvas order when it still fits, else by signature.
+            var currentIds: [String?] = []
+            if let known = canvasOrder, known.count == current.count {
+                currentIds = known
+            } else {
+                var seen: [String: Int] = [:]
+                for s in current {
+                    let sig = PencilCanvas.signature(s)
+                    let k = seen[sig, default: 0]
+                    seen[sig] = k + 1
+                    if let list = ids[sig], k < list.count { currentIds.append(list[k]) } else { currentIds.append(nil) }
+                }
+            }
+            for (s, found) in zip(current, currentIds) {
+                guard let id = found else { continue }
                 if modelIds.contains(id), onCanvas[id] == nil { onCanvas[id] = s; order.append(id) }
                 // Just drawn and still on its way to the model: keep it.
                 else if handingOver.contains(id) { kept.append((s, id)) }
             }
+            let known = currentIds.compactMap { $0 }
+            canvasOrder = known.count == current.count ? known : nil
             func unchanged(_ w: (id: String, stamp: String, line: InkLine, offset: CGPoint)) -> Bool {
                 guard onCanvas[w.id] != nil, !stale.contains(w.id) else { return false }
                 // A stroke PencilKit drew itself: it is what the model has.
@@ -725,6 +783,7 @@ struct PencilCanvas: UIViewRepresentable {
             var map: [String: [String]] = [:]
             for (s, id) in zip(canvas.drawing.strokes, pkIds) { map[PencilCanvas.signature(s), default: []].append(id) }
             ids = map
+            canvasOrder = pkIds
             shownStamps = stamps
             stale = []
             shownVersion = version
@@ -756,12 +815,19 @@ struct PencilCanvas: UIViewRepresentable {
             // each copy would be added again, until the app ran out of memory).
             guard drawing || editor.tool.ink != nil || Date().timeIntervalSince(penLifted) < 2 else { return }
             var added: [PKStroke] = []
-            var seen: [String: Int] = [:]
-            for s in canvasView.drawing.strokes {
-                let sig = PencilCanvas.signature(s)
-                let k = seen[sig, default: 0]
-                seen[sig] = k + 1
-                if k >= (ids[sig]?.count ?? 0) { added.append(s) }
+            let all = canvasView.drawing.strokes
+            if let known = canvasOrder, all.count >= known.count {
+                // The pen appends: what's past the known strokes is new.
+                added = Array(all[known.count...])
+            } else {
+                canvasOrder = nil
+                var seen: [String: Int] = [:]
+                for s in all {
+                    let sig = PencilCanvas.signature(s)
+                    let k = seen[sig, default: 0]
+                    seen[sig] = k + 1
+                    if k >= (ids[sig]?.count ?? 0) { added.append(s) }
+                }
             }
             guard !added.isEmpty else { return }
             let inHand = editor.tool.ink
@@ -773,6 +839,8 @@ struct PencilCanvas: UIViewRepresentable {
                 strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, ink))
             }
             for s in strokes { ids[s.signature, default: []].append(s.id); handingOver.insert(s.id) }
+            // A stroke that landed outside every page has no id: the order is no longer known.
+            if strokes.count == added.count { canvasOrder?.append(contentsOf: strokes.map(\.id)) } else { canvasOrder = nil }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let held = self.holdWatcher?.takeHeld() ?? false
