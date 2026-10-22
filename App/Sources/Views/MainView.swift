@@ -56,12 +56,19 @@ struct MainView: View {
         .sheet(isPresented: $showClipboard) { ClipboardScreen() }
         #if os(iOS)
         .fullScreenCover(item: $model.inkTarget) { target in InkEditorView(target: target, app: model).environment(model) }
+        .fullScreenCover(item: $model.fileViewer) { target in FileViewer(target: target).environment(model) }
         #else
         // On the Mac a sketch opens in its own window, beside the library, not over it.
         .onChange(of: model.inkTarget) { _, target in
             guard let target else { return }
             openWindow(id: "ink", value: target)
             model.inkTarget = nil
+        }
+        // Files open in a viewer window of their own too.
+        .onChange(of: model.fileViewer) { _, target in
+            guard let target else { return }
+            openWindow(id: "file", value: target)
+            model.fileViewer = nil
         }
         #endif
         #if os(iOS)
@@ -766,6 +773,12 @@ struct ItemMenu: View {
 
     var body: some View {
         Button { Task { await model.copy([item]) } } label: { Label("Copy", systemImage: "doc.on.doc") }
+        if item.kind != .sketch, let file = item.attachments.first {
+            Button { model.openFile(item, file) } label: { Label("Open", systemImage: "arrow.up.left.and.arrow.down.right") }
+            if FilePrinter.isPrintable(file) {
+                Menu { FilePrintItems(item: item, attachment: file) } label: { Label("Print", systemImage: "printer") }
+            }
+        }
         Button { Task { await model.togglePin(item) } } label: {
             Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
         }

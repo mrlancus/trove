@@ -23,8 +23,12 @@ struct InkEditorView: View {
     @State private var elementName = ""
     @State private var elementFolder = ""
 
-    init(target: InkTarget, app: AppModel) {
+    /// Inside the file viewer's Edit: the viewer has the Done button, and leaving saves.
+    let embedded: Bool
+
+    init(target: InkTarget, app: AppModel, embedded: Bool = false) {
         _editor = State(initialValue: InkEditorModel(target: target, app: app))
+        self.embedded = embedded
     }
 
     // The canvas, zoom pill and undo buttons are their own views, each watching only what it shows:
@@ -105,6 +109,8 @@ struct InkEditorView: View {
         #if os(macOS)
         .frame(minWidth: 640, minHeight: 480)
         .onDisappear { Task { await editor.finish() } } // closing the window counts as Done
+        #else
+        .onDisappear { if embedded { Task { await editor.finish() } } } // the viewer's Done
         #endif
     }
 
@@ -223,10 +229,12 @@ struct InkEditorView: View {
             .font(.title3)
             .padding(.leading, 10)
             .fixedSize()
-            Button("Done") { Task { await editor.finish() }; dismiss() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.cancelAction)
-                .padding(.horizontal, 12)
+            if !embedded {
+                Button("Done") { Task { await editor.finish() }; dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.cancelAction)
+                    .padding(.horizontal, 12)
+            }
         }
         .background(.bar)
         // The lasso's keys (the Mac and iPad keyboards).
@@ -759,15 +767,15 @@ struct InkedFileView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { shownWidth = max(shownWidth, $0) }
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                .onTapGesture { model.inkTarget = InkTarget(itemId: item.id, layer: attachment.id, title: attachment.name, startPage: index) }
+                .onTapGesture { model.openFile(item, attachment, page: index) }
             }
         }
-        .task(id: "\(model.inkRevision)-\(model.inkTarget == nil)-\(pixelWidth)") { await render() }
+        .task(id: "\(model.inkRevision)-\(model.fileViewer == nil)-\(pixelWidth)") { await render() }
     }
 
     private func render() async {
-        // Behind the open editor (iPhone, iPad) nobody sees these: redraw once it closes.
-        guard model.inkTarget == nil, let library = model.library else { return }
+        // Behind the open viewer (iPhone, iPad) nobody sees these: redraw once it closes.
+        guard model.fileViewer == nil, let library = model.library else { return }
         let data = data, mime = attachment.mime, name = attachment.name
         if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value }
         for page in pages {

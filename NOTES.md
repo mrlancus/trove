@@ -36,7 +36,31 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: your own AI, Apple Notes on any Mac, and sketching feedback (user: "laser should glow, line or dot; the second bar moves the sketch; snap inside the ruler/protractor; tape with a finger; two-row lasso menu; zoom pill in the corner; dragging things shouldn't pan; eraser and tape; the top bar's ends fixed; shapes should prioritise corners and regular shapes")
+## Latest round: Open replaces Quick Look and Draw on it (user: "replace Quick Look with Open … view-only by default, Edit turns editing on … Print … one button")
+Not yet run on a device; see the status row for the last green build.
+- **Open** (`FileViewer`, `Views/FileViewer.swift`): a file's row in the item view now shows only
+  its name, size, **Open** and **New version** (in "⋯" when there's no room), on one line. Draw on
+  it and Quick Look are gone from the row. Open shows the file full screen on iPhone/iPad (a cover)
+  and in its own window on the Mac (`WindowGroup` id `file`, `FileTarget`). Tapping the inline
+  preview (a PDF page away from highlights, links and fields; a picture; an inked file's page)
+  opens it too, as do the item's toolbar (Open replaces Draw for files), its menu (Open, Print)
+  and `model.draw(on:)`, which now opens files in the viewer.
+- **View-only by default**: PDFs in `PDFReaderView(fullScreen:editable: false)`: scroll, zoom, find,
+  select and copy; the form's fields are read-only and the selection bar offers only Copy. Pictures
+  and GoodNotes notebooks are drawn with their ink as vector PDF pages in PDFKit's view (zoom).
+  Other types: the inline preview with a Quick Look button (Quick Look stays as the fallback).
+- **Edit** (⌘E) tints the bar and shows an "Editing" label; **Done** goes back to view-only, with
+  everything saved. PDFs: **Pen** (the ink editor on the file, `InkEditorView(embedded: true)`:
+  no Done of its own, saves when it closes) or **Highlight & fill**. Pictures and notebooks: the pen.
+  **Markup** (iPhone/iPad, PDFs and pictures that are the item's main file) opens Quick Look's
+  editor on a copy; the result is saved as a new version, the original kept under Versions.
+- **Print** (viewer toolbar and the item's menu): PDFs "with my ink and highlights" (the
+  export-with-annotations code) or "the original"; pictures and other printable files as they are.
+  `UIPrintInteractionController` on iPhone/iPad, PDFKit's print operation on the Mac.
+- **Check**: open a PDF (nothing changes on a tap or in the form), Edit → Pen → draw → Done, then
+  print with and without ink; Markup a picture and find the original under Versions.
+
+## Round before: your own AI, Apple Notes on any Mac, and sketching feedback (user: "laser should glow, line or dot; the second bar moves the sketch; snap inside the ruler/protractor; tape with a finger; two-row lasso menu; zoom pill in the corner; dragging things shouldn't pan; eraser and tape; the top bar's ends fixed; shapes should prioritise corners and regular shapes")
 Builds on CI (e0d46ae; the shapes commit after it changes only TroveCore, the website and docs); not yet run on a device.
 - **Apple Notes import** used to run only on the Mac that made the vault (`mirrorOwner`); this vault
   was made on the website, so it never ran. Now any Mac imports after each sync (at most every

@@ -93,6 +93,8 @@ final class PDFReaderModel {
     let document: PDFDocument?
     @ObservationIgnored private let pageClass = TrovePDFPageClass()
     @ObservationIgnored weak var view: PDFView?
+    /// A tap on the page away from highlights, links and fields (the item's inline preview opens the viewer).
+    @ObservationIgnored var onOpen: (() -> Void)?
 
     /// The selected text (empty: nothing selected).
     var selectedText = ""
@@ -124,6 +126,8 @@ final class PDFReaderModel {
     }
 
     var pageCount: Int { document?.pageCount ?? 0 }
+    /// The page to show first (the viewer opened at a page).
+    @ObservationIgnored var startPage = 0
 
     // MARK: Marks
 
@@ -232,6 +236,13 @@ final class PDFReaderModel {
         openHighlight = (highlights[index] ?? []).reversed().first { e in
             e.highlightPieces.contains { r in p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height }
         }
+        if openHighlight == nil, page.annotation(at: inPage) == nil { onOpen?() }
+    }
+
+    /// View-only: the form's fields can't be typed in or ticked (PDFKit edits them in place otherwise).
+    func setFormEditable(_ on: Bool) {
+        guard hasForm, let document else { return }
+        for (_, a) in Self.widgets(document) where a.isReadOnly == on { a.isReadOnly = !on }
     }
 
     // MARK: Find
@@ -480,17 +491,28 @@ struct PDFReaderView: View {
     let item: Item
     let attachment: Attachment
     let data: Data
+    /// In the file viewer: fills it, no card.
+    var fullScreen = false
+    /// Highlights and the form can change (the viewer's view-only mode can only find, select and copy).
+    var editable = true
+    /// A tap on a page (the inline preview opens the viewer with it).
+    var onOpen: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @State private var reader: PDFReaderModel
     @State private var exportURL: URL?
     @State private var exporting = false
     @FocusState private var findFocused: Bool
 
-    init(item: Item, attachment: Attachment, data: Data) {
+    init(item: Item, attachment: Attachment, data: Data, fullScreen: Bool = false, editable: Bool = true, startPage: Int = 0, onOpen: (() -> Void)? = nil) {
         self.item = item
         self.attachment = attachment
         self.data = data
-        _reader = State(initialValue: PDFReaderModel(itemId: item.id, layer: attachment.id, data: data))
+        self.fullScreen = fullScreen
+        self.editable = editable
+        self.onOpen = onOpen
+        let reader = PDFReaderModel(itemId: item.id, layer: attachment.id, data: data)
+        reader.startPage = startPage
+        _reader = State(initialValue: reader)
     }
 
     var body: some View {
@@ -501,23 +523,29 @@ struct PDFReaderView: View {
                 PDFReaderRepresentable(reader: reader)
                 if !reader.selectedText.isEmpty || reader.openHighlight != nil { selectionBar.padding(10) }
             }
-            .frame(minHeight: 520)
+            .frame(minHeight: fullScreen ? nil : 520)
         }
         .background(.background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: fullScreen ? 0 : 14))
+        .onAppear {
+            reader.onOpen = onOpen
+            reader.setFormEditable(editable)
+        }
+        .onChange(of: editable) { reader.setFormEditable(editable) }
         .task(id: "\(model.inkRevision)-\(model.dataVersion)") {
             if let library = model.library { await reader.refresh(library) }
+            reader.setFormEditable(editable)
         }
-        .task(id: reader.hasForm) {
+        .task(id: "\(reader.hasForm)-\(editable)") {
             // PDFKit fills the form in place; changed values are saved as they're made.
-            guard reader.hasForm else { return }
+            guard reader.hasForm, editable else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1.5))
                 if let library = model.library, await reader.saveFields(library) { model.inkChanged() }
             }
         }
         .onDisappear {
-            guard reader.hasForm, let library = model.library else { return }
+            guard reader.hasForm, editable, let library = model.library else { return }
             let reader = reader
             Task { _ = await reader.saveFields(library) }
         }
@@ -568,27 +596,9 @@ struct PDFReaderView: View {
     private var selectionBar: some View {
         let open = reader.openHighlight
         return HStack(spacing: 10) {
-            ForEach(Array(PDFReaderModel.colors.enumerated()), id: \.offset) { i, color in
-                Button {
-                    Task {
-                        if let open { await reader.recolor(open, color, model: model) } else { await reader.highlightSelection(color, quote: false, model: model) }
-                    }
-                } label: {
-                    Circle().fill(Color(inkHex: color)).frame(width: 24, height: 24)
-                        .overlay(Circle().strokeBorder(.primary.opacity(open?.color == color ? 0.6 : 0.1), lineWidth: 2))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(open == nil ? "Highlight in \(PDFReaderModel.colorNames[i])" : "Make it \(PDFReaderModel.colorNames[i])")
-            }
-            Divider().frame(height: 22)
-            Button {
-                Task {
-                    if let open { await reader.quote(open, model: model) } else { await reader.highlightSelection(reader.lastColor, quote: true, model: model) }
-                }
-            } label: { Label("Quote", systemImage: "quote.opening") }
-                .help("Highlight it and keep it in Quotes & Highlights")
+            if editable { editingButtons(open) }
             Button { reader.copy(open) } label: { Label("Copy", systemImage: "doc.on.doc") }
-            if let open {
+            if editable, let open {
                 Button(role: .destructive) { Task { await reader.remove(open, model: model) } } label: { Label("Remove", systemImage: "trash") }
             }
         }
@@ -597,6 +607,30 @@ struct PDFReaderView: View {
         .padding(.vertical, 8)
         .background(.regularMaterial, in: Capsule())
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+    }
+
+    /// Highlight colours and Quote (edit mode only).
+    @ViewBuilder
+    private func editingButtons(_ open: InkElement?) -> some View {
+        ForEach(Array(PDFReaderModel.colors.enumerated()), id: \.offset) { i, color in
+            Button {
+                Task {
+                    if let open { await reader.recolor(open, color, model: model) } else { await reader.highlightSelection(color, quote: false, model: model) }
+                }
+            } label: {
+                Circle().fill(Color(inkHex: color)).frame(width: 24, height: 24)
+                    .overlay(Circle().strokeBorder(.primary.opacity(open?.color == color ? 0.6 : 0.1), lineWidth: 2))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open == nil ? "Highlight in \(PDFReaderModel.colorNames[i])" : "Make it \(PDFReaderModel.colorNames[i])")
+        }
+        Divider().frame(height: 22)
+        Button {
+            Task {
+                if let open { await reader.quote(open, model: model) } else { await reader.highlightSelection(reader.lastColor, quote: true, model: model) }
+            }
+        } label: { Label("Quote", systemImage: "quote.opening") }
+            .help("Highlight it and keep it in Quotes & Highlights")
     }
 
     private func export() async {
@@ -630,7 +664,7 @@ private struct ExportSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 Label(url.lastPathComponent, systemImage: "doc.richtext").font(.headline)
-                Text("Ink, highlights, text boxes and form values are real PDF annotations in this copy, so other PDF apps can edit them. Pictures and tape stay in Trove. To flatten instead, use Draw on it, then Export PDF.")
+                Text("Ink, highlights, text boxes and form values are real PDF annotations in this copy, so other PDF apps can edit them. Pictures and tape stay in Trove. To flatten instead, open it, press Edit, draw with the pen and use Export PDF.")
                     .font(.callout).foregroundStyle(.secondary)
                 ShareLink(item: url) { Label("Share or save…", systemImage: "square.and.arrow.up") }
                     .buttonStyle(.borderedProminent)
@@ -669,6 +703,7 @@ struct PDFReaderRepresentable: UIViewRepresentable {
         view.displayMode = .singlePageContinuous
         view.document = reader.document
         reader.view = view
+        if reader.startPage > 0, let page = reader.document?.page(at: reader.startPage) { view.go(to: page) }
         context.coordinator.observe(view)
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(PDFReaderCoordinator.tap(_:)))
         tap.delegate = context.coordinator
@@ -710,6 +745,7 @@ struct PDFReaderRepresentable: NSViewRepresentable {
         view.displayMode = .singlePageContinuous
         view.document = reader.document
         reader.view = view
+        if reader.startPage > 0, let page = reader.document?.page(at: reader.startPage) { view.go(to: page) }
         context.coordinator.observe(view)
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(PDFReaderCoordinator.click(_:)))
         click.delaysPrimaryMouseButtonEvents = false

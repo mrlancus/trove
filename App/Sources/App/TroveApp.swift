@@ -61,6 +61,16 @@ struct TroveApp: App {
         }
         .defaultSize(width: 1100, height: 820)
 
+        // A file opened with Open: view-only until Edit.
+        WindowGroup("File", id: "file", for: FileTarget.self) { $target in
+            if let target {
+                FileViewer(target: target)
+                    .environment(model)
+                    .navigationTitle(target.title)
+            }
+        }
+        .defaultSize(width: 1000, height: 820)
+
         Window("Capture", id: "capture") {
             CaptureView()
                 .environment(model)
