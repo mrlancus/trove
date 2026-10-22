@@ -265,3 +265,23 @@ struct SeededRandom {
         return range.lowerBound + unit * (range.upperBound - range.lowerBound)
     }
 }
+
+/// New ink goes on top without reading the item's ink (ROADMAP §3.7 item 8): the store keeps each
+/// item's newest time, including ink that came from another device with a clock ahead of ours.
+@Suite struct NewestInkTimeTests {
+    @Test func newInkAlwaysDrawsOnTop() async throws {
+        let engine = SyncEngine(device: "IPAD", keys: .generate(), transports: [])
+        let lib = Library(engine: engine, now: { Date(timeIntervalSince1970: 1000) })
+        let pts = [InkPoint(x: 0, y: 0, t: 0), InkPoint(x: 10, y: 10, t: 16)]
+        func created(_ id: String?) async -> Double { await engine.record(id ?? "")?["createdAt"]?.number ?? -1 }
+        let a = await lib.addStroke(on: "s", pageKey: "0", tool: .pen, color: "#000000", width: 2, points: pts)
+        let b = await lib.addStroke(on: "s", pageKey: "0", tool: .pen, color: "#000000", width: 2, points: pts)
+        #expect(await created(a) == 1_000_000)
+        #expect(await created(b) == 1_000_001)
+        // A stroke from a device whose clock is an hour ahead.
+        await engine.set(["on": "s", "page": "0", "createdAt": .number(4_600_000), "tool": "pen"], record: "theirs", kind: "stroke")
+        let c = await lib.addStroke(on: "s", pageKey: "0", tool: .pen, color: "#000000", width: 2, points: pts)
+        #expect(await created(c) == 4_600_001)
+        #expect(await engine.newestInkTime(on: "other") == nil)
+    }
+}
