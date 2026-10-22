@@ -35,7 +35,8 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
 ## Latest round: iPad fixes (user, iPad Air M3 + Pencil Pro: "import does nothing", "sharing says open Trove once", "sketch opens partly hidden", page colours, a dark page, "Allow Paste" every launch)
-Written on Linux; CI build result below. **Check on the iPad** after installing the new build
+Written on Linux; builds on CI for macOS and iOS (run on `wip/ipad-fixes` at bdcaab7, no errors); not yet
+run on a device. **Check on the iPad** after installing the new build
 (SideStore update, or Sideloadly; reinstalling over the old one keeps the data).
 - **Import on iPhone/iPad** (Choose files did nothing): SwiftUI on iOS presents only one
   `.fileImporter` per view tree, and the window's own (Import files… in the + menu) sat above the
