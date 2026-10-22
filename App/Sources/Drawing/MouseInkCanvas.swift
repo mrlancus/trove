@@ -305,8 +305,9 @@ final class InkNSView: NSView {
             needsDisplay = true
             return
         }
-        // On the ruler or protractor (not at an edge): move or turn it instead of drawing.
-        if editor.beginGuideDrag(at, pageKey: page.key, scale: scale, pen: true) { needsDisplay = true; return }
+        // A pen on the ruler or protractor draws along its edge or arc; its knobs turn it, and ⌥-dragging
+        // (or any tool that isn't a pen) moves it.
+        if editor.beginGuideDrag(at, pageKey: page.key, scale: scale, pen: !event.modifierFlags.contains(.option)) { needsDisplay = true; return }
         guide = editor.guideSnap(at, pageKey: page.key, scale: scale)
         editor.clearSelection()
         drawingPen = true

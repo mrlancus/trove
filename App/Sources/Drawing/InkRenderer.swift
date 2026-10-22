@@ -633,8 +633,8 @@ struct InkOverlay {
     var selection: InkGeometry.Rect?
     var eraser: InkPoint?
     var eraserRadius = 10.0
-    /// Laser pointer lines: points, colour, width in screen points, and how faded (1 = solid).
-    var lasers: [(points: [InkPoint], color: String, width: Double, alpha: Double)] = []
+    /// Laser pointer lines (or, `dot`, just where the pen is): points, colour, width in screen points, and how faded (1 = solid).
+    var lasers: [(points: [InkPoint], color: String, width: Double, alpha: Double, dot: Bool)] = []
     /// Tape being laid.
     var tape: (frame: InkGeometry.Rect, rotate: Double, color: String)?
     /// A hovering Apple Pencil's tip: where, in the pen's colour and size.
@@ -716,7 +716,9 @@ extension InkRenderer {
             }
         }
         if o.ruler != nil || o.protractor != nil { drawGuides(ruler: o.ruler, protractor: o.protractor, reading: o.reading, scale: scale, in: ctx) }
-        for l in o.lasers where l.alpha > 0 { drawLaser(l.points, color: l.color, width: l.width * Double(px), alpha: l.alpha, in: ctx) }
+        for l in o.lasers where l.alpha > 0 {
+            drawLaser(l.points, color: l.color, width: l.width * Double(px), screenWidth: l.width, alpha: l.alpha, dot: l.dot, in: ctx)
+        }
         if let t = o.tape {
             let cx = CGFloat(t.frame.x + t.frame.width / 2), cy = CGFloat(t.frame.y + t.frame.height / 2)
             ctx.saveGState()
@@ -748,35 +750,60 @@ extension InkRenderer {
 }
 
 extension InkRenderer {
-    /// The laser pointer: a wide soft glow in its colour, a brighter band, and a near-white hot core,
-    /// so it reads like light on the page. `width` is in page points for the line's screen size.
-    static func drawLaser(_ points: [InkPoint], color: String, width: Double, alpha: Double, in ctx: CGContext) {
-        guard let first = points.first else { return }
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: first.x, y: first.y))
-        if points.count == 1 { path.addLine(to: CGPoint(x: first.x + 0.01, y: first.y)) }
-        for p in points.dropFirst() { path.addLine(to: CGPoint(x: p.x, y: p.y)) }
-        let glow = cgColor(color)
-        // (line width × width, colour, its alpha, blur in screen points)
-        let passes: [(Double, CGColor, Double, CGFloat)] = [
-            (3.2, glow, 0.22, 26),
-            (1.7, glow, 0.55, 14),
-            (1, glow, 1, 6),
-            (0.42, CGColor(red: 1, green: 1, blue: 1, alpha: 1), 0.92, 3),
-        ]
+    /// The laser pointer, drawn like light rather than paint: a faint wide haze, a soft coloured glow
+    /// and a white-hot core along a smoothed line, with a brighter round glow where the pen is. A
+    /// `dot` is only that round glow. `width` is in page points for the line's screen size
+    /// (`screenWidth`), which the blurs follow.
+    static func drawLaser(_ points: [InkPoint], color: String, width: Double, screenWidth: Double, alpha: Double, dot: Bool, in ctx: CGContext) {
+        guard let last = points.last else { return }
         ctx.saveGState()
-        ctx.setLineCap(.round)
-        ctx.setLineJoin(.round)
         ctx.setLineDash(phase: 0, lengths: [])
-        for pass in passes {
-            ctx.saveGState()
-            ctx.setAlpha(alpha * pass.2)
-            ctx.setShadow(offset: .zero, blur: pass.3, color: glow)
-            ctx.setStrokeColor(pass.1)
-            ctx.setLineWidth(CGFloat(width * pass.0))
-            ctx.addPath(path)
-            ctx.strokePath()
-            ctx.restoreGState()
+        if !dot, points.count > 1 {
+            // Through the midpoints, so the line has no corners where the pen's samples are.
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: points[0].x, y: points[0].y))
+            for i in 1..<points.count {
+                let a = points[i - 1], b = points[i]
+                path.addQuadCurve(to: CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2), control: CGPoint(x: a.x, y: a.y))
+            }
+            path.addLine(to: CGPoint(x: last.x, y: last.y))
+            let sw = CGFloat(max(1, screenWidth))
+            let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
+            // (line width × width, colour, alpha, blur × screen width, the blur's colour)
+            let passes: [(Double, CGColor, Double, CGFloat, CGColor)] = [
+                (5, cgColor(color), 0.07, 3.2, cgColor(color, alpha: 0.5)),
+                (2.4, cgColor(color), 0.22, 1.8, cgColor(color, alpha: 0.8)),
+                (1, cgColor(color), 0.85, 0.9, cgColor(color)),
+                (0.38, white, 0.95, 0.35, cgColor(color)),
+            ]
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            for pass in passes {
+                ctx.saveGState()
+                ctx.setAlpha(alpha * pass.2)
+                ctx.setShadow(offset: .zero, blur: sw * pass.3, color: pass.4)
+                ctx.setStrokeColor(pass.1)
+                ctx.setLineWidth(CGFloat(width * pass.0))
+                ctx.addPath(path)
+                ctx.strokePath()
+                ctx.restoreGState()
+            }
+        }
+        // The glow where the pen is: white at the middle, through the colour, fading to nothing.
+        let r = CGFloat(width * (dot ? 3.4 : 2.2))
+        let c = CGPoint(x: last.x, y: last.y)
+        let colors = [
+            CGColor(red: 1, green: 1, blue: 1, alpha: 1),
+            CGColor(red: 1, green: 1, blue: 1, alpha: 0.95),
+            cgColor(color, alpha: 0.9),
+            cgColor(color, alpha: 0.4),
+            cgColor(color, alpha: 0.12),
+            cgColor(color, alpha: 0),
+        ] as CFArray
+        let stops: [CGFloat] = [0, 0.1, 0.24, 0.45, 0.7, 1]
+        if let space = CGColorSpace(name: CGColorSpace.sRGB), let gradient = CGGradient(colorsSpace: space, colors: colors, locations: stops) {
+            ctx.setAlpha(alpha)
+            ctx.drawRadialGradient(gradient, startCenter: c, startRadius: 0, endCenter: c, endRadius: r, options: [])
         }
         ctx.restoreGState()
     }

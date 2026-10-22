@@ -36,8 +36,6 @@ struct PencilCanvas: UIViewRepresentable {
     var dark = false
     /// The text box being typed in (a text field on the page).
     var textEdit: InkTextEdit?
-    /// PencilKit's ruler is shown.
-    var rulerOn = false
 
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
 
@@ -89,8 +87,41 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
         canvas.onLayout = { [weak c, weak canvas] in if let c, let canvas { c.layout(canvas) } }
-        // The ruler is PencilKit's own: it draws along it as you write, and turns with two fingers.
-        editor.nativeRuler = true
+        // The ruler is Trove's own (PencilKit's only follows a line started at its edge): the Pencil put
+        // down anywhere on it, or inside the protractor, draws along the nearer edge or the arc as it
+        // goes. PencilKit's drawing waits for this to say no, which it does as the Pencil touches down.
+        editor.nativeRuler = false
+        let ruled = InkToolGesture()
+        ruled.claims = { [weak c, weak canvas] touch, point in
+            guard let c, let canvas, touch.type == .pencil else { return false }
+            return c.ruledHit(point, in: canvas)
+        }
+        ruled.onTouch = { [weak c, weak canvas] phase, point in if let c, let canvas { c.ruledTouch(phase, at: point, in: canvas) } }
+        canvas.addGestureRecognizer(ruled)
+        canvas.drawingGestureRecognizer.require(toFail: ruled)
+
+        // A finger on the selection (its box, corners, knob or handles) or on a guide moves that, not
+        // the page; anywhere else (over ink too) it scrolls as before. Where a finger works Trove's
+        // tools (iPhone), the tool gesture has it already.
+        let grab = InkToolGesture()
+        grab.claims = { [weak c, weak canvas] touch, point in
+            guard let c, let canvas, touch.type == .direct, !c.fingersDraw(canvas) else { return false }
+            return c.grabHit(point, in: canvas)
+        }
+        grab.onTouch = { [weak c, weak canvas] phase, point in if let c, let canvas { c.toolTouch(phase, at: point, in: canvas) } }
+        canvas.addGestureRecognizer(grab)
+        canvas.panGestureRecognizer.require(toFail: grab)
+
+        // A finger tap on tape opens or covers it (the Pencil draws, lassos or lays tape there instead).
+        let tapeTap = UITapGestureRecognizer(target: c, action: #selector(Coordinator.tapeTapped(_:)))
+        tapeTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        tapeTap.delegate = c.tapeFilter
+        c.tapeFilter.shouldReceive = { [weak c, weak canvas] touch in
+            guard let c, let canvas else { return false }
+            return c.tapeAt(touch.location(in: canvas), in: canvas) != nil
+        }
+        c.tapeFilter.shouldBegin = { _ in true }
+        canvas.addGestureRecognizer(tapeTap)
 
         let tools = InkToolGesture()
         // Touches in the text box being typed in are the text field's.
@@ -175,7 +206,7 @@ struct PencilCanvas: UIViewRepresentable {
             c.handledZoom = zoomRequest.id
             c.zoom(zoomRequest.kind, in: canvas)
         }
-        if canvas.isRulerActive != rulerOn { canvas.isRulerActive = rulerOn }
+        if canvas.isRulerActive { canvas.isRulerActive = false }
         canvas.bringSubviewToFront(c.boxesView)
         canvas.bringSubviewToFront(c.overlayView)
         c.showText(textEdit, in: canvas)
@@ -282,6 +313,8 @@ struct PencilCanvas: UIViewRepresentable {
         let textTouches = InkGestureFilter()
         /// Lets the protractor's pan start only on the protractor.
         let guideFilter = InkGestureFilter()
+        /// Lets the finger's tap on tape see only touches on tape.
+        let tapeFilter = InkGestureFilter()
         /// The text box being typed in, as a text field over the page.
         private var textView: UITextView?
         private var textViewFor: String?
@@ -921,6 +954,65 @@ struct PencilCanvas: UIViewRepresentable {
 
         @objc func undoTap() { editor.undo() }
 
+        /// Whether a finger works Trove's tools and draws (iPhone, or the Pencil-only setting off).
+        func fingersDraw(_ canvas: PKCanvasView) -> Bool {
+            canvas.drawingPolicy == .anyInput || !UIPencilInteraction.prefersPencilOnlyDrawing
+        }
+
+        /// A canvas point as a page point on the page under it.
+        private func pagePoint(_ point: CGPoint, in canvas: PKCanvasView) -> (slot: Slot, point: InkPoint)? {
+            let z = canvas.zoomScale
+            let at = CGPoint(x: point.x / z, y: point.y / z)
+            guard let slot = slot(at: at) else { return nil }
+            return (slot, InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y))
+        }
+
+        /// Whether a finger at `point` takes hold of the selection or a guide (instead of scrolling).
+        func grabHit(_ point: CGPoint, in canvas: PKCanvasView) -> Bool {
+            guard let hit = pagePoint(point, in: canvas) else { return false }
+            return editor.grabs(hit.point, pageKey: hit.slot.spec.key, scale: canvas.zoomScale)
+        }
+
+        /// Whether the Pencil at `point` is on the ruler or protractor with a pen in hand.
+        func ruledHit(_ point: CGPoint, in canvas: PKCanvasView) -> Bool {
+            guard editor.tool.ink != nil, let hit = pagePoint(point, in: canvas) else { return false }
+            // Its knobs turn it (the protractor's pan, or the Pencil's drag below).
+            if let g = editor.guideHit(hit.point, pageKey: hit.slot.spec.key, scale: canvas.zoomScale), g.turn != 0 { return true }
+            return editor.guideSnap(hit.point, pageKey: hit.slot.spec.key, scale: canvas.zoomScale) != nil
+        }
+
+        /// The Pencil drawing along a guide (or turning it by a knob).
+        func ruledTouch(_ phase: UITouch.Phase, at point: CGPoint, in canvas: PKCanvasView) {
+            let z = canvas.zoomScale
+            let at = CGPoint(x: point.x / z, y: point.y / z)
+            if phase == .began { toolSlot = slot(at: at) }
+            guard let slot = toolSlot else { return }
+            let p = InkPoint(x: at.x - slot.offset.x, y: at.y - slot.offset.y)
+            switch phase {
+            case .began:
+                if !editor.beginGuideDrag(p, pageKey: slot.spec.key, scale: z, pen: true) {
+                    _ = editor.beginRuled(p, pageKey: slot.spec.key, scale: z)
+                }
+            case .moved: editor.pointerMoved(p)
+            case .ended: editor.pointerUp(); toolSlot = nil
+            default: editor.pointerCancelled(); toolSlot = nil
+            }
+            overlayView.setNeedsDisplay()
+        }
+
+        /// The tape under a point of the canvas, if any.
+        func tapeAt(_ point: CGPoint, in canvas: PKCanvasView) -> (id: String, key: String)? {
+            guard let hit = pagePoint(point, in: canvas), let strip = editor.tape(at: hit.point, key: hit.slot.spec.key) else { return nil }
+            return (strip.id, hit.slot.spec.key)
+        }
+
+        @objc func tapeTapped(_ g: UITapGestureRecognizer) {
+            guard g.state == .ended, let canvas = g.view as? PKCanvasView else { return }
+            // Where a finger lassos (iPhone), its tap picks the tape instead.
+            if editor.tool == .lasso, fingersDraw(canvas) { return }
+            if let strip = tapeAt(g.location(in: canvas), in: canvas) { editor.togglePeek(strip.id) }
+        }
+
         /// A hovering Pencil: its point on the page under it (nil when it leaves or touches down).
         /// Pens: PencilKit shows its own preview of the ink under a hovering Pencil, so Trove's tip
         /// isn't drawn too (that redrew the whole overlay, text boxes and all, on every hover move).
@@ -1171,9 +1263,16 @@ final class InkTextViewDelegate: NSObject, UITextViewDelegate {
 /// One finger or the Pencil working Trove's eraser, lasso, laser or text tool (PencilKit's drawing is off then).
 final class InkToolGesture: UIGestureRecognizer {
     var onTouch: ((UITouch.Phase, CGPoint) -> Void)?
+    /// When set, the gesture takes only a touch this says yes to (asked as it touches down; no
+    /// fails straight away, so gestures waiting on this one carry on at once).
+    var claims: ((UITouch, CGPoint) -> Bool)?
     private weak var touch: UITouch?
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if touch == nil, let claims, let t = touches.first, touches.count != 1 || !claims(t, t.location(in: view)) {
+            state = .failed
+            return
+        }
         guard touch == nil, touches.count == 1, let t = touches.first else {
             // A second finger: let the canvas scroll and zoom instead.
             if touch != nil { onTouch?(.cancelled, .zero); touch = nil; state = .cancelled } else { state = .failed }
