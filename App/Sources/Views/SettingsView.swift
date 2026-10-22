@@ -21,6 +21,8 @@ struct SettingsView: View {
                 .tabItem { Label("Intelligence", systemImage: "sparkles") }
             Form { IntegrationsSection(); BridgesSection() }.formStyle(.grouped)
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
+            Form { BatterySection() }.formStyle(.grouped)
+                .tabItem { Label("Battery", systemImage: "battery.75percent") }
         }
         .frame(width: 600, height: 560)
         #else
@@ -43,6 +45,7 @@ private struct SettingsList: View {
             IntegrationsSection()
             BridgesSection()
             ClipboardSection()
+            BatterySection()
             AboutSection()
         }
         .formStyle(.grouped)
@@ -322,6 +325,8 @@ private struct AISection: View {
         } footer: {
             FormFooter("Search by meaning, text in images, dates and places work on every device. Smart titles and summaries come from Apple Intelligence (your iPad does it for everything). Cloud AI sends that item's text to Claude via your relay; items processed this way show a cloud icon.")
         }
+        // The relay's AI status is asked for once per launch, and again here.
+        .task { await model.refreshAIStatus() }
     }
 }
 

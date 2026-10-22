@@ -11,6 +11,7 @@ struct TroveApp: App {
         #if os(iOS)
         BackgroundTasks.register(model: model)
         #endif
+        MetricsReporter.shared.start()
     }
 
     var body: some Scene {
@@ -30,7 +31,7 @@ struct TroveApp: App {
             if phase == .active { Task { await model.becameActive() } }
             #if os(iOS)
             if phase == .background {
-                model.saveNow()
+                model.enteredBackground()
                 BackgroundTasks.scheduleRefresh()
                 BackgroundTasks.scheduleEnrichment()
             }

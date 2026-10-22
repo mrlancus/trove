@@ -116,6 +116,8 @@ final class AppModel {
     var cloudAIStatus: RelayClient.AIStatus?
     /// Last week's digest was checked this launch (AppModel+AI.swift).
     var digestChecked = false
+    /// The relay's AI status was asked for this launch (AppModel+AI.swift).
+    @ObservationIgnored var aiStatusChecked = false
     var showCapture = false
     /// The drawing editor, when it's open.
     var inkTarget: InkTarget?
@@ -127,9 +129,13 @@ final class AppModel {
     /// strokes (each save writes the whole vault, each push uses the radio: both cost battery).
     @ObservationIgnored var drawingOpen = 0 {
         didSet {
-            guard oldValue > 0, drawingOpen == 0, sketchDeferred else { return }
+            if oldValue == 0, drawingOpen > 0 { power.sketchOpened() }
+            guard oldValue > 0, drawingOpen == 0 else { return }
+            // Closing sends what the batching held back (docs/ROADMAP.md §3.7), then the counters stop.
+            if !sketchDeferred { Task { await flushPushes(); power.sketchClosed() } }
+            guard sketchDeferred else { return }
             sketchDeferred = false
-            Task { await catchUpAfterSketch() }
+            Task { await catchUpAfterSketch(); power.sketchClosed() }
         }
     }
     /// On iPhone and iPad a sketch fills the screen. While one is open, work nobody can see waits
@@ -170,6 +176,24 @@ final class AppModel {
     private var syncBackoff = SyncBackoff(base: 60, idleMax: 300)
     #endif
     private var pushTask: Task<Void, Never>?
+    /// Battery (docs/ROADMAP.md §3.7): the device's power state, Settings → Battery and its counters.
+    let power = PowerMonitor()
+    /// When local edits go out (batched while sketching: `PowerPolicy.pushRule`).
+    @ObservationIgnored private var pusher = PushCoalescer(rule: PowerPolicy(PowerState()).pushRule)
+    /// When the engine last reported a change (a local edit, if it left something unsent).
+    @ObservationIgnored private var lastEngineChange = 0.0
+    /// Live pings close together share one sync (`PowerPolicy.pingWindow`).
+    @ObservationIgnored private var pings = Throttle(interval: 0)
+    /// A ping that waits for the sketch to close (a very hot device).
+    @ObservationIgnored private var pingHeld = false
+    /// The inbox is fetched on a ping, on becoming active or every 15 minutes; price watches every 6 hours.
+    @ObservationIgnored private var inboxWanted = true
+    @ObservationIgnored private var lastInbox = 0.0
+    @ObservationIgnored private var lastPriceWatches = 0.0
+    @ObservationIgnored private var searchSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var widgetThrottle = Throttle(interval: PowerPolicy.widgetEvery)
+    @ObservationIgnored private var widgetShown: SharedConfig.WidgetSnapshot?
+    @ObservationIgnored private var widgetTask: Task<Void, Never>?
     private var mirroring = false
     private var searchTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
@@ -303,7 +327,8 @@ final class AppModel {
             if !searchText.isEmpty { searchNow() }
             // Search by meaning catches up in the background; keyword search never waits for it.
             let snapshot = self.items, semantic = self.semantic
-            Task.detached(priority: .utility) { await semantic.update(snapshot) }
+            let saveCache = policy.unlimited
+            Task.detached(priority: .utility) { await semantic.update(snapshot, saveNow: saveCache) }
             publishWidget()
             SpotlightIndexer.index(items)
         }
@@ -579,14 +604,24 @@ final class AppModel {
     }
 
     /// Saves the search index next to the vault snapshot a little after the library changed.
-    private func saveSearchIndexSoon(_ stamp: String) {
+    /// The whole index is written each time, so it waits for a minute without changes (a few seconds
+    /// on the charger) and goes out at once when the app goes to the background.
+    private func saveSearchIndexSoon(_ stamp: String, quiet: Double? = nil) {
         guard stamp != searchIndexSaved, let library else { return }
-        searchIndexSaved = stamp
+        let wait = quiet ?? (policy.unlimited ? 5 : PowerPolicy.cacheQuiet)
         let url = vault.searchIndexURL
-        Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(5))
-            let snapshot = await library.searchSnapshot()
-            VaultStore.write(snapshot, to: url)
+        searchSaveTask?.cancel()
+        searchSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            self?.searchIndexSaved = stamp
+            let bytes = await Task.detached(priority: .utility) { () -> Int in
+                let snapshot = await library.searchSnapshot()
+                guard let data = try? JSONEncoder().encode(snapshot) else { return 0 }
+                try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                return data.count
+            }.value
+            self?.power.count { $0.cacheBytes += bytes }
         }
     }
 
@@ -605,12 +640,19 @@ final class AppModel {
     /// One background round; returns how long to wait before the next (longer while nothing changes
     /// or in Low Power Mode; live pings, edits and coming back still sync at once).
     private func syncRound() async -> Double {
+        let policy = self.policy
+        // Very hot while sketching: nothing until the sketch closes or the app goes to the background.
+        guard let minPoll = policy.minPoll else { return 60 }
         await syncNow()
-        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        let wait = syncBackoff.next(changed: lastSyncChanged, lowPower: lowPower)
+        let wait = syncBackoff.next(changed: lastSyncChanged, lowPower: policy.saving)
         // While drawing, others' strokes come with a live ping; polling waits longer.
-        return sketchCovers ? max(wait, 120) : wait
+        return max(wait, minPoll)
     }
+
+    /// What the device allows right now (`PowerPolicy`, docs/ROADMAP.md §3.7).
+    var policy: PowerPolicy { power.policy(sketching: drawingOpen > 0) }
+
+    private static var clock: Double { Date().timeIntervalSince1970 }
 
     /// Pulls and pushes. A request that arrives mid-sync (say a live ping because the website just
     /// saved something) runs right after instead of being dropped. Enrichment and the Mac mirror run
@@ -627,15 +669,35 @@ final class AppModel {
             // inbox and price watches wait for it to close.
             let light = sketchCovers
             if light { sketchDeferred = true } else { await importLocalInbox() }
+            // Checkpoints rewrite the whole vault: on the charger or with no sketch open.
+            await library.engine.allowCheckpoints(policy.checkpoints)
             let report = await library.sync()
+            if report.wroteCheckpoint != nil { Perf.event("Checkpoint") }
             if report.pulled > 0 || report.pushed > 0 { changed = true }
+            if pusher.hasPending, !(await library.engine.hasUnsentChanges) { pusher.pushed(at: Self.clock) }
+            power.count { c in
+                c.syncRounds += 1
+                c.pushes += report.pushed
+                c.pulls += report.pulled
+            }
             if !light, let client = vault.relayClient, let keys = vault.keys {
-                let inbox = await InboxSync.run(client: client, keys: keys, library: library)
-                if !inbox.imported.isEmpty { changed = true }
-                if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
-                let watches = await PriceWatchSync.run(client: client, library: library)
-                for drop in watches.drops { await PriceAlerts.notify(drop) }
-                if let drop = watches.drops.first { toast = PriceAlerts.message(drop) }
+                // The inbox and price watches were two more requests every round; now only when due.
+                let now = Self.clock
+                if inboxWanted || now - lastInbox >= PowerPolicy.inboxEvery {
+                    inboxWanted = false
+                    lastInbox = now
+                    power.count { $0.otherRequests += 1 }
+                    let inbox = await InboxSync.run(client: client, keys: keys, library: library)
+                    if !inbox.imported.isEmpty { changed = true }
+                    if !inbox.imported.isEmpty { toast = "\(inbox.imported.count) new from your inbox" }
+                }
+                if now - lastPriceWatches >= PowerPolicy.priceWatchesEvery {
+                    lastPriceWatches = now
+                    power.count { $0.otherRequests += 1 }
+                    let watches = await PriceWatchSync.run(client: client, library: library)
+                    for drop in watches.drops { await PriceAlerts.notify(drop) }
+                    if let drop = watches.drops.first { toast = PriceAlerts.message(drop) }
+                }
             }
             sync.lastSync = Date()
             sync.lastError = report.errors.first
@@ -718,24 +780,63 @@ final class AppModel {
         }
     }
 
-    /// Pushes local edits a moment after they're made, like the website does.
+    /// Pushes local edits a moment after they're made, like the website does. While sketching they're
+    /// batched (`PushCoalescer`): out after a real pause or a few minutes of writing, at most once a
+    /// minute, and at once when the sketch closes or the app goes to the background.
     private func pushSoon() {
+        pusher.rule = policy.pushRule
+        guard let due = pusher.dueTime() else { return }
         pushTask?.cancel()
-        let wait: Duration = drawingOpen > 0 ? .seconds(8) : .seconds(2)
+        let wait = max(0, due - Self.clock)
         pushTask = Task { [weak self] in
-            try? await Task.sleep(for: wait)
-            guard !Task.isCancelled else { return }
-            await self?.syncNow()
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled, let self else { return }
+            self.pusher.rule = self.policy.pushRule
+            if self.pusher.isDue(at: Self.clock) { await self.syncNow() } else { self.pushSoon() }
         }
     }
 
-    /// Back from the background: the live socket has usually been dropped by then.
+    /// The sketch's page changed: what's waiting goes out as soon as the batching allows.
+    func sketchPageChanged() {
+        pusher.pageChanged()
+        pushSoon()
+    }
+
+    /// Sends what the batching held back, and runs a ping that waited (sketch closed, app to the background).
+    func flushPushes() async {
+        guard pusher.hasPending || pingHeld else { return }
+        pingHeld = false
+        pushTask?.cancel()
+        await syncNow()
+    }
+
+    /// Back from the background: the live socket was closed there.
     func becameActive() async {
         #if os(iOS)
         clipboardWatcher?.check()
         #endif
+        inboxWanted = true
         if !sync.live { connectLive() }
         await syncNow()
+    }
+
+    /// To the background: send what's waiting, write the caches, and close the live socket (its 25 s
+    /// keep-alive would otherwise wake the radio for as long as the system lets the app run).
+    func enteredBackground() {
+        saveNow()
+        if let library {
+            Task { [weak self] in
+                guard let self else { return }
+                self.saveSearchIndexSoon(await library.stamp(of: ["item", "collection", "folder"]), quiet: 0)
+            }
+        }
+        let semantic = self.semantic
+        Task.detached(priority: .utility) { await semantic.saveNow() }
+        Task { await flushPushes() }
+        #if os(iOS)
+        live?.stop()
+        pings.cancel()
+        #endif
     }
 
     private func connectLive() {
@@ -744,9 +845,31 @@ final class AppModel {
         live = LiveConnection(url: url) { [weak self] connected in
             Task { @MainActor in self?.sync.live = connected }
         } onEvent: { [weak self] in
-            Task { @MainActor in await self?.syncNow() }
+            Task { @MainActor in self?.livePing() }
         }
         live?.start()
+    }
+
+    /// Another device saved something. While sketching or saving battery, pings close together share
+    /// one sync (a Mac copying to the clipboard mid-sketch used to wake the iPad every time).
+    private func livePing() {
+        power.count { $0.livePings += 1 }
+        inboxWanted = true
+        guard let window = policy.pingWindow else { pingHeld = true; return }
+        pings.interval = window
+        switch pings.request(at: Self.clock) {
+        case .now:
+            Task { await syncNow() }
+        case .after(let delay):
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self else { return }
+                self.pings.ran(at: Self.clock)
+                await self.syncNow()
+            }
+        case .waiting:
+            break
+        }
     }
 
     /// Envelopes the share extension sealed into the App Group when the relay wasn't available.
@@ -763,19 +886,24 @@ final class AppModel {
 
     private func scheduleSave() {
         saveTask?.cancel()
+        lastEngineChange = Self.clock
         let wait: Duration = drawingOpen > 0 ? .seconds(4) : .seconds(1)
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: wait)
             guard !Task.isCancelled else { return }
             self?.saveNow()
             await self?.reload()
-            guard let library = self?.library else { return }
-            if await library.engine.hasUnsentChanges { self?.pushSoon() }
+            guard let self, let library = self.library else { return }
+            if await library.engine.hasUnsentChanges {
+                self.pusher.edited(at: self.lastEngineChange)
+                self.pushSoon()
+            }
         }
     }
 
     func saveNow() {
         guard let library else { return }
+        power.count { $0.saves += 1 }
         let url = vault.snapshotURL
         let database = vault.database
         // Only what changed since the last save is written (SQLite), off the main thread.
@@ -786,13 +914,28 @@ final class AppModel {
 
     // MARK: Enrichment
 
+    /// After a sync, within what the power state allows (`PowerPolicy.enrichment`): on battery only
+    /// what this device saved in the last hour, nothing in Low Power Mode, when hot or while sketching;
+    /// the rest waits for the overnight task on the charger.
     func enrichSoon() async {
-        guard let enrichment, !enriching else { return }
+        let budget = policy.enrichment
+        guard let enrichment, !enriching, !budget.isNone else { return }
         enriching = true
+        let signpost = Perf.begin("Enrich")
         await enrichment.configure(relay: vault.relayClient, cloudEnabled: vault.config?.cloudAI ?? false)
-        let changed = await enrichment.run(limit: 20)
+        let round = await enrichment.run(budget: budget)
+        Perf.end("Enrich", signpost)
         enriching = false
-        if changed > 0 { await reload() }
+        countRound(round)
+        if round.changed > 0 { await reload() }
+    }
+
+    func countRound(_ round: EnrichmentService.Round) {
+        power.count { c in
+            c.aiCalls += round.aiCalls
+            c.visionPages += round.visionPages
+            c.otherRequests += round.requests
+        }
     }
 
     var aiStatus: String {
@@ -1157,6 +1300,8 @@ final class AppModel {
 
     // MARK: Widget
 
+    /// The widget reloads only when what it shows changed (recent, pinned, counts), and at most every
+    /// 15 minutes: each reload wakes the widget extension (docs/ROADMAP.md §3.7 item 12).
     private func publishWidget() {
         func w(_ item: Item) -> SharedConfig.WidgetItem {
             .init(id: item.id, title: item.displayTitle, subtitle: item.siteName ?? item.category.rawValue.capitalized,
@@ -1164,7 +1309,30 @@ final class AppModel {
         }
         var counts: [String: Int] = [:]
         for s in [SmartCollection.toRead, .recipes, .places, .thingsToBuy] { counts[s.rawValue] = count(s) }
-        SharedConfig.saveWidget(.init(updated: Date(), recent: items.prefix(6).map(w), pinned: items.filter(\.isPinned).prefix(6).map(w), counts: counts))
+        let recent = items.prefix(6).map(w)
+        let pinned = items.filter(\.isPinned).prefix(6).map(w)
+        let next = SharedConfig.WidgetSnapshot(updated: Date(), recent: recent, pinned: pinned, counts: counts)
+        if let shown = widgetShown, shown.recent == next.recent, shown.pinned == next.pinned, shown.counts == next.counts { return }
+        widgetShown = next
+        switch widgetThrottle.request(at: Self.clock) {
+        case .now:
+            writeWidget()
+        case .after(let delay):
+            widgetTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self else { return }
+                self.widgetThrottle.ran(at: Self.clock)
+                self.writeWidget()
+            }
+        case .waiting:
+            break
+        }
+    }
+
+    private func writeWidget() {
+        guard var snapshot = widgetShown else { return }
+        snapshot.updated = Date()
+        SharedConfig.saveWidget(snapshot)
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
         #endif

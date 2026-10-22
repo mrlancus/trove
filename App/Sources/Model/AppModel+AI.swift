@@ -159,21 +159,31 @@ extension AppModel {
     /// The iPad's overnight AI worker (BackgroundTasks `enrich`, only scheduled where Apple Intelligence
     /// is available, while charging): works through everything other devices flagged
     /// `needsEnrichment`, a batch at a time, until the queue is empty or the system stops it.
+    /// On the charger (the `BGProcessingTask` with `requiresExternalPower`): everything the battery
+    /// rules held back, AI for items from other devices, handwriting, then a checkpoint if one is due.
     func enrichOvernight() async {
-        guard let enrichment else { return }
+        guard let enrichment, !PowerMonitor.tooHot else { return }
         await enrichment.configure(relay: vault.relayClient, cloudEnabled: vault.config?.cloudAI ?? false)
+        let signpost = Perf.begin("Enrich")
         var rounds = 0
-        while rounds < 40, !Task.isCancelled {
-            let changed = await enrichment.run(limit: 20)
+        while rounds < 40, !Task.isCancelled, !PowerMonitor.tooHot {
+            let round = await enrichment.run(budget: PowerPolicy.overnight)
+            countRound(round)
             rounds += 1
-            if changed == 0 { break }
+            if round.changed == 0 { break }
         }
+        Perf.end("Enrich", signpost)
         await reload()
     }
 
-    /// After a sync: the relay's AI state, and (once per launch) last week's digest if no device made it yet.
+    /// After a sync: the relay's AI state (once per launch; Settings asks again when it opens), and
+    /// (once per launch) last week's digest if no device made it yet.
     func afterSyncAI() async {
-        await refreshAIStatus()
+        if !aiStatusChecked {
+            aiStatusChecked = true
+            power.count { $0.otherRequests += 1 }
+            await refreshAIStatus()
+        }
         guard !digestChecked, let library else { return }
         digestChecked = true
         if await library.autoDigest() != nil { await reload() }

@@ -10,9 +10,10 @@ enum AppleEnricher {
     // MARK: OCR
 
     /// Recognises printed and handwritten text. Accurate mode with language correction.
-    static func recognizeText(in image: CGImage) async -> String {
+    /// `fast` (Low Power Mode, a hot device) trades some accuracy for far less work.
+    static func recognizeText(in image: CGImage, fast: Bool = false) async -> String {
         let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
+        request.recognitionLevel = fast ? .fast : .accurate
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = true
         do {

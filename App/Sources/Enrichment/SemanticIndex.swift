@@ -5,7 +5,9 @@ import TroveCore
 
 /// "Search by meaning" on every device (Tier 0): NLEmbedding sentence vectors, normalised once and
 /// kept as Float32, scored with Accelerate (`vDSP_dotpr`). Cached on disk so a launch doesn't embed
-/// the whole library again; rebuilt locally from synced content (never synced). Its ranking is fused
+/// the whole library again; rebuilt locally from synced content (never synced). The cache is binary
+/// Float32 (`VectorCache`, was ~10 MB of JSON at 2,000 items) and written after a minute without
+/// changes, on background, or at once on the charger (docs/ROADMAP.md §3.7 item 7). Its ranking is fused
 /// with keyword search by reciprocal rank fusion (`SearchIndex.search(_:semantic:)`).
 actor SemanticIndex {
     private struct Entry: Codable {
@@ -23,6 +25,7 @@ actor SemanticIndex {
     private var cacheURL: URL?
     private var loaded = false
     private var dirty = false
+    private var saveTask: Task<Void, Never>?
 
     var isAvailable: Bool { embedding != nil }
 
@@ -37,11 +40,18 @@ actor SemanticIndex {
     private func loadIfNeeded() {
         guard !loaded, let cacheURL else { return }
         loaded = true
-        guard let data = try? Data(contentsOf: cacheURL), let saved = try? JSONDecoder().decode(Saved.self, from: data), saved.format == 1 else { return }
+        guard let data = try? Data(contentsOf: cacheURL) else { return }
+        if let saved = VectorCache.decode(data) {
+            for (id, e) in saved where entries[id] == nil { entries[id] = Entry(v: e.version, vec: e.vector) }
+            return
+        }
+        // The JSON cache from before: read once, written back as binary on the next save.
+        guard let saved = try? JSONDecoder().decode(Saved.self, from: data), saved.format == 1 else { return }
         for (id, e) in saved.entries where entries[id] == nil { entries[id] = e }
+        dirty = true
     }
 
-    func update(_ items: [Item]) {
+    func update(_ items: [Item], saveNow now: Bool = false) {
         guard let embedding else { return }
         loadIfNeeded()
         let live = Set(items.map(\.id))
@@ -56,14 +66,28 @@ actor SemanticIndex {
             entries[item.id] = Entry(v: item.record.updatedHLC, vec: vec)
             dirty = true
         }
-        save()
+        if now { saveNow(); return }
+        guard dirty else { return }
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(for: .seconds(PowerPolicy.cacheQuiet))
+            guard !Task.isCancelled else { return }
+            await self.saveNow()
+        }
     }
 
-    private func save() {
-        guard dirty, let cacheURL else { return }
+    /// Writes the cache if anything changed; returns the bytes written.
+    @discardableResult
+    func saveNow() -> Int {
+        saveTask?.cancel()
+        guard dirty, let cacheURL else { return 0 }
         dirty = false
-        guard let data = try? JSONEncoder().encode(Saved(format: 1, entries: entries)) else { return }
+        var out: [String: VectorCache.Entry] = [:]
+        out.reserveCapacity(entries.count)
+        for (id, e) in entries { out[id] = VectorCache.Entry(version: e.v, vector: e.vec) }
+        let data = VectorCache.encode(out)
         try? data.write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        return data.count
     }
 
     static func normalised(_ v: [Double]) -> [Float] {

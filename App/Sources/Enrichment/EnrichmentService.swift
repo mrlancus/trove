@@ -32,16 +32,31 @@ actor EnrichmentService {
         return .basic
     }
 
-    /// Processes up to `limit` items; returns how many changed.
+    /// What one round did, for Settings → Battery.
+    struct Round {
+        var changed = 0
+        var aiCalls = 0
+        var visionPages = 0
+        var requests = 0
+    }
+
+    /// One round within `budget` (`PowerPolicy.enrichment`: on battery only what this device saved in
+    /// the last hour, a few at a time; everything on the charger). Stops early when the device gets hot.
     @discardableResult
-    func run(limit: Int = 25) async -> Int {
-        guard !running else { return 0 }
+    func run(budget: EnrichmentBudget) async -> Round {
+        var round = Round()
+        guard !running, !budget.isNone else { return round }
         running = true
         defer { running = false }
-        var changed = 0
-        for item in await library.enrichmentQueue(below: bestTier).prefix(limit) {
-            if Task.isCancelled { break }
-            if await enrich(item) { changed += 1 }
+        let now = Date().timeIntervalSince1970
+        let fast = budget.recognition == .fast
+        func takes(_ record: Record, created: Date) -> Bool {
+            budget.takes(creator: HLC(record.createdHLC)?.device, device: deviceId, created: created.timeIntervalSince1970, now: now)
+        }
+        let items = await library.enrichmentQueue(below: bestTier).filter { takes($0.record, created: $0.createdAt) }
+        for item in items.prefix(budget.items) {
+            if Task.isCancelled || PowerMonitor.tooHot { break }
+            if await enrich(item, fast: fast, round: &round) { round.changed += 1 }
         }
         // Without AI, a text clip only needs marking as seen: do those in big batches, telling the
         // app once (a history imported from another app can be thousands of clips). Pictures (text
@@ -51,37 +66,39 @@ actor EnrichmentService {
         await library.engine.hold()
         var slow = 0
         for clip in queue {
-            if Task.isCancelled { break }
+            if Task.isCancelled || PowerMonitor.tooHot { break }
             if clip.image != nil || !cheap {
-                guard slow < 10 else { continue }
+                guard slow < min(10, budget.items), takes(clip.record, created: clip.createdAt) else { continue }
                 slow += 1
             }
-            await enrich(clip)
-            changed += 1
+            await enrich(clip, fast: fast, round: &round)
+            round.changed += 1
         }
         await library.engine.release()
         // Handwriting in sketches, wherever they were drawn (it's read again only when the ink changed).
+        // On battery it waits for the charger: the editor reads this device's own sketches when it closes.
         var sketches = 0
-        for item in await library.items() where item.kind == .sketch && sketches < 5 {
-            if Task.isCancelled { break }
+        for item in await library.items() where item.kind == .sketch && sketches < budget.handwriting {
+            if Task.isCancelled || PowerMonitor.tooHot { break }
             guard item.record[Handwriting.signatureField]?.string != (await library.inkSignature(item.id)) else { continue }
-            await Handwriting.read(item.id, library: library)
+            round.visionPages += await Handwriting.read(item.id, library: library, fast: fast)
             sketches += 1
-            changed += 1
+            round.changed += 1
         }
-        return changed
+        return round
     }
 
     /// Clips (PROTOCOL.md §8): read the text in images, then name, summarise and tag with the best
     /// tier here. Short copies get the rules only: AI has nothing to add to a phone number.
-    private func enrich(_ clip: Clip) async {
+    private func enrich(_ clip: Clip, fast: Bool, round: inout Round) async {
         var ocr: String?
         var text = clip.text
         if let image = clip.image {
             if let found = clip.ocrText {
                 ocr = found
             } else if let data = try? await library.attachmentData(image), let cg = PlatformImage.fromData(data)?.cgImageForVision {
-                let recognized = await AppleEnricher.recognizeText(in: cg).trimmingCharacters(in: .whitespacesAndNewlines)
+                let recognized = await AppleEnricher.recognizeText(in: cg, fast: fast).trimmingCharacters(in: .whitespacesAndNewlines)
+                round.visionPages += 1
                 if !recognized.isEmpty { ocr = String(recognized.prefix(20_000)) }
             }
             text = ocr ?? ""
@@ -99,6 +116,8 @@ actor EnrichmentService {
         let url = clip.kind == .link ? clip.text.trimmingCharacters(in: .whitespacesAndNewlines) : clip.sourceURL?.absoluteString
         let from = clip.sourceApp.map { " (from " + $0 + ")" } ?? ""
         let prompt = "A copy from the clipboard" + from + ". Name it for a clipboard history list.\n\n" + material
+        round.aiCalls += 1
+        if tier == .cloud { round.requests += 1 }
         if tier == .onDevice, let d = try? await OnDeviceAI.describe(text: prompt, url: url, existingTitle: nil) {
             await library.applyClipEnrichment(clip.id, title: d.title, summary: d.summary, tags: rulesTags + d.tags, ocrText: ocr, tier: .onDevice, by: deviceId)
         } else if tier == .cloud, let relay, let e = try? await relay.enrich(text: prompt, url: url, title: nil) {
@@ -109,12 +128,13 @@ actor EnrichmentService {
         }
     }
 
-    private func enrich(_ item: Item) async -> Bool {
+    private func enrich(_ item: Item, fast: Bool, round: inout Round) async -> Bool {
         // ---- Tier 0 (only if never done) ----
         var text = item.body
         if item.enrichment == nil {
             var fields: [String: JSONValue] = [:]
             if item.kind == .link, let url = item.url {
+                round.requests += 1
                 if let html = try? await AppleEnricher.fetchHTML(url) {
                     let link = BasicEnricher.enrich(html: html, url: url)
                     fields.merge(link.fields(existingTitle: item.title)) { _, new in new }
@@ -127,7 +147,8 @@ actor EnrichmentService {
                 if attachment.mime == "application/pdf" {
                     recognized = await AppleEnricher.pdfText(data)
                 } else if attachment.mime.hasPrefix("image/"), let image = PlatformImage.fromData(data)?.cgImageForVision {
-                    recognized = await AppleEnricher.recognizeText(in: image)
+                    recognized = await AppleEnricher.recognizeText(in: image, fast: fast)
+                    round.visionPages += 1
                 }
                 if !recognized.isEmpty {
                     fields[Field.ocrText] = .string(String(recognized.prefix(50_000)))
@@ -153,10 +174,13 @@ actor EnrichmentService {
         let material = [item.title, text].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard material.count >= 40 else { return true }
         if OnDeviceAI.isAvailable {
+            round.aiCalls += 1
             if let d = try? await OnDeviceAI.describe(text: material, url: item.url?.absoluteString, existingTitle: item.title) {
                 await library.applyEnrichment(item.id, fields: aiFields(d.title, d.summary, d.tags, d.category), tier: .onDevice, by: deviceId)
             }
         } else if cloudEnabled, let relay {
+            round.aiCalls += 1
+            round.requests += 1
             if let e = try? await relay.enrich(text: material, url: item.url?.absoluteString, title: item.title) {
                 await library.applyEnrichment(item.id, fields: aiFields(e.title, e.summary, e.tags, e.kind), tier: .cloud, by: e.model ?? "cloud")
             }
