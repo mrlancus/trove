@@ -130,6 +130,11 @@ public actor SyncEngine {
         }
     }
 
+    /// The end of the segment a transport already had (the relay's 409 says, PROTOCOL.md §4).
+    static func conflictLast(_ detail: String) -> Int? {
+        (try? JSONDecoder().decode(JSONValue.self, from: Data(detail.utf8)))?.object?["last"]?.number.map { Int($0) }
+    }
+
     /// Segments to push again after a restart, from their keys (`device/first`) and this device's ops.
     /// Each runs from its first op while the seqs follow on, up to the next unpushed segment and at
     /// most `Segment.maxPlaintextBytes`, as `Journal.takeSegments` cut it. (Taking every later op
@@ -301,6 +306,21 @@ public actor SyncEngine {
                     try await t.pushSegment(SegmentRef(device: segment.device, first: segment.first, last: segment.last), data: encode(segment))
                     unpushed[t.name]?.remove(key)
                     report.pushed += 1
+                } catch TransportError.conflict(let detail) {
+                    // It already has a segment of ours starting here: an upload that went through
+                    // before this device saved that it had (so it was sealed again, with new bytes).
+                    // Those ops are there; only any after its end still need sending.
+                    unpushed[t.name]?.remove(key)
+                    let theirLast = Self.conflictLast(detail) ?? segment.last
+                    let rest = segment.ops.filter { $0.seq > theirLast }
+                    if let remainder = try? Segment(device: segment.device, ops: rest) {
+                        let newKey = SegmentRef(device: remainder.device, first: remainder.first, last: remainder.last).key
+                        if outbox[newKey] == nil { outbox[newKey] = remainder }
+                        unpushed[t.name, default: []].insert(newKey)
+                        if applied.insert(newKey).inserted { unsavedApplied.append(newKey) }
+                    } else {
+                        report.pushed += 1
+                    }
                 } catch {
                     report.errors.append("\(t.name) push \(key): \(error)")
                 }

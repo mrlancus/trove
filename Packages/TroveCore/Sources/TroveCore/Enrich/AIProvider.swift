@@ -73,6 +73,9 @@ public struct AISettings: Sendable, Equatable {
     /// Read handwriting (sketches, GoodNotes, ink on PDFs, photos of pages) with the fast model as
     /// soon as it arrives, instead of Apple's text recognition.
     public var readHandwriting = true
+    /// The most background work (reading handwriting) may spend a month, in US dollars, across
+    /// every device; 0 means no limit. Ask and actions you start yourself aren't limited.
+    public var monthlyLimit = 1.0
 
     public init() {}
 
@@ -84,12 +87,13 @@ public struct AISettings: Sendable, Equatable {
             if let m = fields["model.\(t.rawValue)"]?.string, !m.isEmpty { models[t] = m }
         }
         readHandwriting = fields["readHandwriting"]?.bool ?? true
+        monthlyLimit = max(0, fields["limit.background"]?.number ?? 1.0)
     }
 
     public var fields: [String: JSONValue] {
         var f: [String: JSONValue] = [
             "provider": .string(provider.rawValue), "apiKey": .string(apiKey), "customURL": .string(customURL),
-            "readHandwriting": .bool(readHandwriting),
+            "readHandwriting": .bool(readHandwriting), "limit.background": .number(monthlyLimit),
         ]
         for t in Tier.allCases { f["model.\(t.rawValue)"] = .string(models[t] ?? "") }
         return f
@@ -130,11 +134,16 @@ extension Library {
 public struct AIClient: Sendable {
     public typealias Transport = @Sendable (URLRequest) async throws -> (Data, Int)
 
+    /// Told about every request that got an answer (Settings → AI → Activity, and the costs).
+    public typealias Meter = @Sendable (AIUsage.Call) async -> Void
+
     public let settings: AISettings
     let transport: Transport
+    let meter: Meter?
 
-    public init(settings: AISettings, transport: Transport? = nil) {
+    public init(settings: AISettings, transport: Transport? = nil, meter: Meter? = nil) {
         self.settings = settings
+        self.meter = meter
         self.transport = transport ?? { request in
             let (data, response) = try await URLSession.shared.data(for: request)
             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -158,6 +167,14 @@ public struct AIClient: Sendable {
         public var model: String
         public var inputTokens: Int
         public var outputTokens: Int
+        public var usage: AIUsage.Call
+    }
+
+    /// What a request is for, for the activity log.
+    public struct Purpose: Sendable {
+        public var kind: AIUsage.Purpose
+        public var about: String
+        public init(_ kind: AIUsage.Purpose, about: String = "") { self.kind = kind; self.about = about }
     }
 
     /// The API version this client is written for.
@@ -172,14 +189,37 @@ public struct AIClient: Sendable {
 
     /// One request. With `schema`, the reply is JSON in that shape (structured output where the API
     /// has it, else asked for in the prompt).
-    public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000) async throws -> Reply {
+    /// `effort` is medium unless the job is simple (reading a page is "low": the thinking is billed
+    /// as output, and transcribing needs little of it).
+    public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
+                         effort: String = "medium", purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
-        if settings.provider == .anthropic { return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens) }
-        return try await openAI(parts, model: model, schema: schema, maxTokens: maxTokens)
+        if settings.provider == .anthropic {
+            return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
+        }
+        return try await openAI(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
     }
 
-    private func request(_ path: String, body: [String: Any]?) throws -> URLRequest {
+    /// The usage in a Claude or OpenAI-style reply, logged with the meter.
+    func meterUsage(_ o: [String: JSONValue], model: String, purpose: Purpose) async -> AIUsage.Call {
+        let u = o["usage"]?.object ?? [:]
+        func n(_ k: String) -> Int { Int(u[k]?.number ?? 0) }
+        let served = o["model"]?.string ?? model
+        var call: AIUsage.Call
+        if settings.provider == .anthropic {
+            call = AIUsage.Call(purpose: purpose.kind, about: purpose.about, model: served, input: n("input_tokens"), output: n("output_tokens"),
+                                cacheRead: n("cache_read_input_tokens"), cacheWrite: n("cache_creation_input_tokens"))
+        } else {
+            let cached = Int(u["prompt_tokens_details"]?.object?["cached_tokens"]?.number ?? 0)
+            call = AIUsage.Call(purpose: purpose.kind, about: purpose.about, model: served, input: max(0, n("prompt_tokens") - cached),
+                                output: n("completion_tokens"), cacheRead: cached, cost: u["cost"]?.number)
+        }
+        await meter?(call)
+        return call
+    }
+
+    func request(_ path: String, body: [String: Any]?) throws -> URLRequest {
         guard let url = URL(string: settings.baseURL + path) else { throw Failure(status: 0, message: "The API address isn't valid.") }
         var r = URLRequest(url: url)
         r.timeoutInterval = 120
@@ -198,7 +238,7 @@ public struct AIClient: Sendable {
         return r
     }
 
-    private func anthropic(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int) async throws -> Reply {
+    private func anthropic(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int, effort: String, purpose: Purpose) async throws -> Reply {
         var content: [[String: Any]] = []
         for part in parts {
             switch part {
@@ -207,7 +247,7 @@ public struct AIClient: Sendable {
                 content.append(["type": "image", "source": ["type": "base64", "media_type": mime, "data": data.base64EncodedString()]])
             }
         }
-        var output: [String: Any] = ["effort": "medium"]
+        var output: [String: Any] = ["effort": effort]
         if let schema { output["format"] = ["type": "json_schema", "schema": schema] }
         let body: [String: Any] = [
             "model": model, "max_tokens": maxTokens, "system": Self.system,
@@ -215,20 +255,19 @@ public struct AIClient: Sendable {
         ]
         let json = try await send(request("/messages", body: body))
         let o = json.object ?? [:]
+        let usage = await meterUsage(o, model: model, purpose: purpose)
         let stop = o["stop_reason"]?.string
         if stop == "refusal" { throw Failure(status: 200, message: "The model declined this one.") }
         if stop == "max_tokens" { throw Failure(status: 200, message: "The answer was cut off.") }
         let text = (o["content"]?.array ?? []).compactMap { block -> String? in
             block.object?["type"]?.string == "text" ? block.object?["text"]?.string : nil
         }.joined()
-        let usage = o["usage"]?.object ?? [:]
-        return Reply(text: text, model: o["model"]?.string ?? model,
-                     inputTokens: Int(usage["input_tokens"]?.number ?? 0), outputTokens: Int(usage["output_tokens"]?.number ?? 0))
+        return Reply(text: text, model: usage.model, inputTokens: usage.input, outputTokens: usage.output, usage: usage)
     }
 
     /// OpenAI-style chat. APIs differ in what they accept, so a request the API refuses (400) is
     /// tried again plainer: without the effort setting, then with JSON asked for in the prompt.
-    private func openAI(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int) async throws -> Reply {
+    private func openAI(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int, effort: String, purpose: Purpose) async throws -> Reply {
         var content: [[String: Any]] = []
         for part in parts {
             switch part {
@@ -250,7 +289,7 @@ public struct AIClient: Sendable {
                 "messages": [["role": "system", "content": Self.system], ["role": "user", "content": userContent]],
             ]
             body[settings.provider == .openai ? "max_completion_tokens" : "max_tokens"] = maxTokens
-            if attempt.effort { body["reasoning_effort"] = "medium" }
+            if attempt.effort { body["reasoning_effort"] = effort }
             if let schema {
                 body["response_format"] = attempt.structured
                     ? ["type": "json_schema", "json_schema": ["name": "reply", "strict": true, "schema": schema]]
@@ -260,9 +299,8 @@ public struct AIClient: Sendable {
                 let json = try await send(request("/chat/completions", body: body))
                 let o = json.object ?? [:]
                 let message = o["choices"]?.array?.first?.object?["message"]?.object ?? [:]
-                let usage = o["usage"]?.object ?? [:]
-                return Reply(text: message["content"]?.string ?? "", model: o["model"]?.string ?? model,
-                             inputTokens: Int(usage["prompt_tokens"]?.number ?? 0), outputTokens: Int(usage["completion_tokens"]?.number ?? 0))
+                let usage = await meterUsage(o, model: model, purpose: purpose)
+                return Reply(text: message["content"]?.string ?? "", model: usage.model, inputTokens: usage.input, outputTokens: usage.output, usage: usage)
             } catch let e as Failure where e.status == 400 {
                 lastError = e
             }
@@ -270,7 +308,7 @@ public struct AIClient: Sendable {
         throw lastError ?? Failure(status: 0, message: "The AI didn't answer.")
     }
 
-    private func send(_ request: URLRequest) async throws -> JSONValue {
+    func send(_ request: URLRequest) async throws -> JSONValue {
         let (data, status) = try await transport(request)
         let json = try? JSONDecoder().decode(JSONValue.self, from: data)
         guard (200..<300).contains(status) else {
@@ -331,7 +369,7 @@ public struct AIClient: Sendable {
         If they don't contain the answer, say so plainly.
         <question>\(question)</question>
         """
-        let reply = try await complete([.text(prompt)], tier: tier, schema: Self.askSchema)
+        let reply = try await complete([.text(prompt)], tier: tier, schema: Self.askSchema, purpose: Purpose(.ask, about: question))
         guard let o = Self.object(reply.text) else { return (reply.text, [], reply.model) }
         let known = Set(sources.map(\.id))
         let cited = (o["citations"]?.array ?? []).compactMap(\.string).filter(known.contains)
@@ -348,13 +386,14 @@ public struct AIClient: Sendable {
 
     /// Reads a page: its handwriting (however messy) and typed text, plus a line on any drawing, for
     /// search. Uses the fast model.
-    public func readPage(_ image: Data, mime: String = "image/png") async throws -> String {
+    public func readPage(_ image: Data, mime: String = "image/png", about: String = "") async throws -> String {
         let prompt = """
         This is a page from the user's notes. Transcribe every word on it, handwritten or typed, as faithfully as you can, \
         in reading order, as plain text (maths in LaTeX between $ signs). Use the context to read messy handwriting; write \
         [?] only for words you really can't make out. Then describe in one short sentence anything drawn that isn't writing.
         """
-        let reply = try await complete([.image(image, mime), .text(prompt)], tier: .fast, schema: Self.pageSchema, maxTokens: 6000)
+        let reply = try await complete([.image(image, mime), .text(prompt)], tier: .fast, schema: Self.pageSchema, maxTokens: 6000,
+                                       effort: "low", purpose: Purpose(.handwriting, about: about))
         guard let o = Self.object(reply.text) else { return reply.text.trimmingCharacters(in: .whitespacesAndNewlines) }
         let text = (o["text"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let about = (o["description"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -376,12 +415,12 @@ public struct AIClient: Sendable {
     ] }
 
     /// An action on a note's text or a picture of a page (rewrite, summarise, explain, solve, flashcards).
-    public func action(_ instruction: String, text: String? = nil, image: Data? = nil, tier: AISettings.Tier = .fast) async throws -> (text: String, cards: [(front: String, back: String)], model: String) {
+    public func action(_ instruction: String, text: String? = nil, image: Data? = nil, tier: AISettings.Tier = .fast, about: String = "") async throws -> (text: String, cards: [(front: String, back: String)], model: String) {
         var parts: [Part] = []
         if let image { parts.append(.image(image, "image/png")) }
         if let text { parts.append(.text("<content>\n\(text)\n</content>")) }
         parts.append(.text(instruction))
-        let reply = try await complete(parts, tier: tier, schema: Self.actionSchema)
+        let reply = try await complete(parts, tier: tier, schema: Self.actionSchema, purpose: Purpose(.action, about: about))
         guard let o = Self.object(reply.text) else { return (reply.text, [], reply.model) }
         let cards = (o["cards"]?.array ?? []).compactMap { c -> (front: String, back: String)? in
             guard let f = c.object?["front"]?.string, let b = c.object?["back"]?.string, !f.isEmpty, !b.isEmpty else { return nil }
