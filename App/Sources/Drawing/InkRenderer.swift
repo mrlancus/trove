@@ -89,10 +89,13 @@ struct InkBox: Sendable, Identifiable {
     var flip = false
     var textStyle = InkTextStyle()
     var group = ""
+    /// A text highlight's pieces on a PDF, in page points (PROTOCOL.md §10).
+    var pieces: [InkGeometry.Rect] = []
 
     init(_ e: InkElement) {
         id = e.id; kind = e.kind; frame = e.frame; text = e.text; size = e.size; color = e.color; image = e.image
         rotate = e.rotate; flip = e.flip; textStyle = e.textStyle; group = e.group
+        if kind == .highlight { pieces = e.highlightPieces }
     }
 
     /// A library element's box, for its preview.
@@ -205,8 +208,9 @@ enum InkRenderer {
         return ctx.makeImage()
     }
 
-    /// Pictures under the ink, strokes, then text boxes on top (PROTOCOL.md §10).
+    /// Text highlights, pictures under the ink, strokes, then text boxes on top (PROTOCOL.md §10).
     static func drawContent(_ content: InkContent, in ctx: CGContext) {
+        drawHighlights(content.elements, in: ctx)
         drawPictures(content.elements, pictures: content.pictures, in: ctx)
         draw(content.strokes, in: ctx)
         drawTexts(content.elements, in: ctx)
@@ -435,6 +439,19 @@ enum InkRenderer {
             x += step * 2
         }
         ctx.fillPath()
+    }
+
+    /// Text highlights on a PDF: like the highlighter (35 %, multiplied), under the ink.
+    static func drawHighlights(_ elements: [InkBox], in ctx: CGContext) {
+        let highlights = elements.filter { $0.kind == .highlight }
+        guard !highlights.isEmpty else { return }
+        ctx.saveGState()
+        ctx.setBlendMode(.multiply)
+        for e in highlights {
+            ctx.setFillColor(cgColor(e.color, alpha: 0.35))
+            for r in e.pieces { ctx.fill(CGRect(x: r.x, y: r.y, width: r.width, height: r.height)) }
+        }
+        ctx.restoreGState()
     }
 
     /// Tape strips go over everything else on a page.

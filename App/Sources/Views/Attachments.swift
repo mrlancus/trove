@@ -22,7 +22,10 @@ struct AttachmentView: View {
     var body: some View {
         Group {
             if let data {
-                if let item, AppModel.canInk(attachment),
+                if let item, attachment.mime == "application/pdf" {
+                    // Find, highlights, quotes, links, the form and Trove's ink (ROADMAP S5).
+                    PDFReaderView(item: item, attachment: attachment, data: data)
+                } else if let item, AppModel.canInk(attachment),
                    model.inkedLayers[item.id]?.contains(attachment.id) == true || item.goodnotesInk.contains(attachment.id) {
                     InkedFileView(item: item, attachment: attachment, data: data)
                 } else if attachment.mime.hasPrefix("image/"), let image = PlatformImage(data: data) {

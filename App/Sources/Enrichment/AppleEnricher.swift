@@ -27,7 +27,16 @@ enum AppleEnricher {
     /// Typed PDFs give their text directly; scanned/handwritten pages (GoodNotes) are OCR'd.
     static func pdfText(_ data: Data, maxPages: Int = 40) async -> String {
         guard let pdf = PDFDocument(data: data) else { return "" }
-        if let text = pdf.string?.trimmingCharacters(in: .whitespacesAndNewlines), text.count > 40 { return text }
+        // Typed text: the same as the website writes (PROTOCOL.md §10, `PDFText.join`).
+        var typed: [String] = []
+        var total = 0
+        for index in 0..<pdf.pageCount where total <= PDFText.maximum {
+            let text = pdf.page(at: index)?.string ?? ""
+            typed.append(text)
+            total += PDFText.normalizePage(text).unicodeScalars.count + 2
+        }
+        let text = PDFText.join(typed)
+        if !text.isEmpty { return text }
         var pages: [String] = []
         for index in 0..<min(pdf.pageCount, maxPages) {
             guard let page = pdf.page(at: index) else { continue }
