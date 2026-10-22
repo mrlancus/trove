@@ -117,6 +117,14 @@ final class AppModel {
     /// Your own AI provider and key (Settings → AI; the `settings.ai` record, on every device).
     var aiSettings = AISettings()
     @ObservationIgnored var aiSettingsLoaded = false
+    /// Your AI's requests this month on every device, newest first (live: this device's are added as
+    /// they happen), for the costs in Ask and Settings → AI → Activity.
+    var aiCalls: [AIUsage.Call] = []
+    /// When this run of the app began ("This session").
+    @ObservationIgnored let aiSessionStart = Date()
+    /// Saved chats with your AI, newest first.
+    var aiChats: [AIChat] = []
+    @ObservationIgnored var aiStamp = ""
     /// Last week's digest was checked this launch (AppModel+AI.swift).
     var digestChecked = false
     /// The relay's AI status was asked for this launch (AppModel+AI.swift).

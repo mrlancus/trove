@@ -17,7 +17,7 @@ struct SettingsView: View {
                 .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
             Form { ClipboardSection() }.formStyle(.grouped)
                 .tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }
-            Form { AISection() }.formStyle(.grouped)
+            NavigationStack { Form { AISection() }.formStyle(.grouped) }
                 .tabItem { Label("Intelligence", systemImage: "sparkles") }
             Form { IntegrationsSection(); BridgesSection() }.formStyle(.grouped)
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
@@ -374,6 +374,30 @@ private struct OwnAISection: View {
                 }
             }
             Toggle("Read handwriting with your AI", isOn: $draft.readHandwriting)
+            if draft.readHandwriting {
+                LabeledContent("Background limit a month") {
+                    HStack(spacing: 6) {
+                        Text("$")
+                        TextField("1.00", value: $draft.monthlyLimit, format: .number.precision(.fractionLength(2)))
+                            .frame(width: 64)
+                            .multilineTextAlignment(.trailing)
+                            #if os(iOS)
+                            .keyboardType(.decimalPad)
+                            #endif
+                    }
+                }
+                Text(draft.monthlyLimit > 0
+                     ? "Reading handwriting stops for the month at this (spent so far: \(AIUsage.dollars(model.backgroundAISpend))); Apple's text recognition takes over. 0 means no limit. Ask and actions you start aren't limited."
+                     : "No limit on reading handwriting (spent this month: \(AIUsage.dollars(model.backgroundAISpend))).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            NavigationLink {
+                AIActivityView()
+            } label: {
+                LabeledContent("Activity and costs") {
+                    Text("\(AIUsage.dollars(model.aiTotal(.month).cost)) this month")
+                }
+            }
             HStack {
                 Button("Save") {
                     Task {
@@ -391,7 +415,7 @@ private struct OwnAISection: View {
         } header: {
             Text("Your AI")
         } footer: {
-            FormFooter("Paste an API key from Claude, OpenAI, Gemini, OpenRouter or any OpenAI-compatible service (a local Ollama or LM Studio too). Fast does everything by default: Ask, note and page actions, and reading handwriting as soon as a sketch, GoodNotes notebook, inked or scanned PDF or photo of a page arrives. Pick Smarter or Best per question in Ask. All at medium effort. The key is kept in your vault, end-to-end encrypted, and reaches your other devices; requests go straight from this device to the provider with only what each one needs. The provider bills you for what you use, so set a monthly limit on their site.")
+            FormFooter("Paste an API key from Claude, OpenAI, Gemini, OpenRouter or any OpenAI-compatible service (a local Ollama or LM Studio too). Fast does everything by default: Ask, note and page actions, and reading handwriting as soon as a sketch, GoodNotes notebook, inked or scanned PDF or photo of a page arrives. Pick Smarter or Best per question in Ask. Medium effort (low for reading pages, which is mostly copying). Every request and its cost is listed under Activity and costs. The key is kept in your vault, end-to-end encrypted, and reaches your other devices; requests go straight from this device to the provider with only what each one needs. The provider bills you for what you use, so set a monthly limit on their site.")
         }
         .onAppear {
             guard !loaded else { return }
@@ -403,10 +427,11 @@ private struct OwnAISection: View {
     private func test() {
         busy = true
         status = nil
-        let client = AIClient(settings: draft)
+        let client = AIClient(settings: draft, meter: { [weak model] call in await model?.logAI(call) })
         Task {
             do {
-                let reply = try await client.complete([.text("Reply with just the word OK.")], tier: .fast, maxTokens: 1000)
+                let reply = try await client.complete([.text("Reply with just the word OK.")], tier: .fast, maxTokens: 1000,
+                                                      effort: "low", purpose: .init(.test))
                 status = "Works: \(reply.model) said “\(reply.text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))”."
             } catch {
                 status = error.localizedDescription

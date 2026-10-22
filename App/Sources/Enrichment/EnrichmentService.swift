@@ -29,6 +29,9 @@ actor EnrichmentService {
         self.cloudEnabled = cloudEnabled
     }
 
+    /// Background reading has spent this month's limit (it falls back to Vision until next month).
+    private(set) var aiLimitReached = false
+
     func setOwnAI(_ ai: AIClient?) {
         ownAI = ai
         aiPausedUntil = .distantPast
@@ -94,7 +97,14 @@ actor EnrichmentService {
         // On battery it waits for the charger: the editor reads this device's own sketches when it closes.
         // With your AI the reading happens on its servers, so it doesn't wait for the charger: whatever
         // arrives (a GoodNotes notebook, a sketch from another device, a photo of a page) is read now.
-        let ai = reader
+        // Background reading stops for the month at your limit (Settings → AI), counted on every device.
+        var ai = reader
+        if let r = ai, r.settings.monthlyLimit > 0, await library.backgroundAISpend() >= r.settings.monthlyLimit {
+            ai = nil
+            aiLimitReached = true
+        } else {
+            aiLimitReached = false
+        }
         let allowance = ai != nil ? max(budget.handwriting, 10) : budget.handwriting
         let all = await library.items()
         var sketches = 0
@@ -106,8 +116,9 @@ actor EnrichmentService {
             sketches += 1
             round.changed += 1
             if ai != nil, await library.item(item.id)?.record[Handwriting.signatureField]?.string != sig { pauseAI(); break }
+            if let r = ai, r.settings.monthlyLimit > 0, await library.backgroundAISpend() >= r.settings.monthlyLimit { aiLimitReached = true; break }
         }
-        if let ai = reader {
+        if let ai = reader, !aiLimitReached {
             var files = 0
             for item in all where files < 10 && Handwriting.wantsFileRead(item) {
                 if Task.isCancelled { break }
@@ -117,6 +128,7 @@ actor EnrichmentService {
                 files += 1
                 round.changed += 1
                 if await library.item(item.id)?.record[Handwriting.filesField]?.string != sig { pauseAI(); break }
+                if ai.settings.monthlyLimit > 0, await library.backgroundAISpend() >= ai.settings.monthlyLimit { aiLimitReached = true; break }
             }
         }
         return round
