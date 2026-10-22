@@ -198,10 +198,22 @@ struct AskView: View {
     @State private var answer: String?
     @State private var sources: [Item] = []
     @State private var thinking = false
+    @State private var by = ""
+    /// Fast (the default), Smarter or Best: your AI's models (Settings → AI).
+    @State private var tier: AISettings.Tier = .fast
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
+                if model.aiSettings.isReady {
+                    Picker("Model", selection: $tier) {
+                        ForEach(AISettings.Tier.allCases, id: \.self) { t in
+                            Text("\(t.label) · \(model.aiSettings.model(t))").tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
                 HStack {
                     TextField("Ask anything about what you've saved…", text: $question)
                         .textFieldStyle(.plain)
@@ -216,7 +228,9 @@ struct AskView: View {
                 if let answer {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(answer).font(.body).textSelection(.enabled)
+                            Text((try? AttributedString(markdown: answer, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(answer))
+                                .font(.body).textSelection(.enabled)
+                            if !by.isEmpty { Text("Answered by \(by)").font(.caption).foregroundStyle(.secondary) }
                             if !sources.isEmpty {
                                 Text("Sources").font(.headline)
                                 ForEach(sources) { item in
@@ -247,9 +261,10 @@ struct AskView: View {
         guard !q.isEmpty else { return }
         thinking = true
         Task {
-            let result = await model.ask(q)
+            let result = await model.ask(q, tier: tier)
             answer = result.answer
             sources = result.sources
+            by = result.by
             thinking = false
         }
     }

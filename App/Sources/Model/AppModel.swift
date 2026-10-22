@@ -114,6 +114,9 @@ final class AppModel {
     var toast: String?
     /// The relay's cloud AI state and this month's use (AppModel+AI.swift); nil without a relay.
     var cloudAIStatus: RelayClient.AIStatus?
+    /// Your own AI provider and key (Settings → AI; the `settings.ai` record, on every device).
+    var aiSettings = AISettings()
+    @ObservationIgnored var aiSettingsLoaded = false
     /// Last week's digest was checked this launch (AppModel+AI.swift).
     var digestChecked = false
     /// The relay's AI status was asked for this launch (AppModel+AI.swift).
@@ -243,6 +246,7 @@ final class AppModel {
         await semantic.useCache(vault.semanticURL)
         let config = vault.config!
         enrichment = EnrichmentService(library: library, deviceId: config.deviceId, relay: vault.relayClient, cloudEnabled: config.cloudAI)
+        aiSettingsLoaded = false
         vault.publishCaptureSettings()
         await engine.observe { Task { @MainActor [weak self] in self?.scheduleSave() } }
         await reload()
@@ -371,6 +375,7 @@ final class AppModel {
             SpotlightIndexer.index(items)
         }
         await applySharedSettings()
+        await loadAISettings()
         let inkStamp = await library.stamp(of: ["stroke", "element"])
         if inkStamp != shownInkStamp {
             shownInkStamp = inkStamp
@@ -993,6 +998,7 @@ final class AppModel {
     }
 
     var aiStatus: String {
+        if aiSettings.isReady { return "Your AI: \(aiSettings.provider.label), \(aiSettings.model(.fast))" }
         if OnDeviceAI.isAvailable { return "Apple Intelligence on this device" }
         if vault.config?.cloudAI == true, vault.relayClient != nil {
             guard let s = cloudAIStatus else { return "Cloud AI (opt-in) via your relay" }
@@ -1343,20 +1349,30 @@ final class AppModel {
         await reload()
     }
 
-    func ask(_ question: String) async -> (answer: String, sources: [Item]) {
-        guard let library else { return ("", []) }
+    /// Ask Trove: search finds the closest items, then your AI (the tier you pick), Apple
+    /// Intelligence or the relay's cloud AI answers from them.
+    func ask(_ question: String, tier: AISettings.Tier = .fast) async -> (answer: String, sources: [Item], by: String) {
+        guard let library else { return ("", [], "") }
         let semanticScores = await semantic.scores(for: question)
-        let hits = await library.search(question, semantic: semanticScores, limit: 8)
-        let fallbackHits = hits
-        let sources = fallbackHits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? ""].joined(separator: "\n")) }
-        guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", []) }
+        let hits = await library.search(question, semantic: semanticScores, limit: ownAI == nil ? 8 : 12)
+        let sources = hits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? "", $0.inkText ?? ""].joined(separator: "\n")) }
+        guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", [], "") }
+        func cited(_ ids: [String]) -> [Item] { hits.filter { ids.contains($0.id) }.nilIfEmpty ?? hits }
+        if let ai = ownAI {
+            do {
+                let answer = try await ai.ask(question, sources: sources, tier: tier)
+                return (answer.answer, cited(answer.citations), answer.model)
+            } catch {
+                return ("Your AI didn't answer: \(error.localizedDescription)", hits, "")
+            }
+        }
         if let answer = try? await OnDeviceAI.ask(question, sources: sources) {
-            return (answer.answer, fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
+            return (answer.answer, cited(answer.citations), "Apple Intelligence")
         }
         if vault.config?.cloudAI == true, let relay = vault.relayClient, let answer = try? await relay.ask(question, sources: sources) {
-            return (answer.answer + "\n\n(Answered in the cloud)", fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
+            return (answer.answer, cited(answer.citations), "Cloud AI")
         }
-        return ("Here are the closest matches. (Turn on Apple Intelligence or cloud AI for written answers.)", fallbackHits)
+        return ("Here are the closest matches. (Add your AI in Settings → AI for written answers.)", hits, "")
     }
 
     // MARK: Settings helpers
