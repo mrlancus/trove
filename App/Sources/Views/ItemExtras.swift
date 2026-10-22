@@ -24,6 +24,14 @@ struct FolderLine: View {
                 if item.isAutoFiled { Text("· filed automatically").foregroundStyle(.secondary).help("Move it and it stays where you put it.") }
             }
             Spacer()
+            // Whether your AI may look at it (Ask, reading handwriting); everything may by default.
+            Button { Task { await model.setAIAllowed(item, !item.aiAllowed) } } label: {
+                Label(item.aiAllowed ? "AI can see" : "Hidden from AI", systemImage: item.aiAllowed ? "eye" : "eye.slash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(item.aiAllowed ? Color.secondary : Color.orange)
+            .fixedSize()
+            .help(item.aiAllowed ? "Your AI can look at this when it needs to. Click to hide it." : "Your AI never sees this. Click to let it.")
             Menu {
                 Button("No folder") { Task { await model.move(item.id, to: nil) } }
                 ForEach(model.folderEntries) { entry in

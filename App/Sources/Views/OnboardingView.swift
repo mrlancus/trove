@@ -93,7 +93,7 @@ struct OnboardingView: View {
                         #endif
                         working = false
                     }
-                } label: { if working { ProgressView() } else { Text("Create") } }
+                } label: { BusyLabel("Create", busy: working) }
                 .buttonStyle(.borderedProminent)
                 .disabled(working || !canCreate)
             }
@@ -138,7 +138,7 @@ struct OnboardingView: View {
                 if payload?.relayURL != nil {
                     Button("Skip (relay only)") { finishJoin(useFolder: false) }
                 }
-                Button { finishJoin(useFolder: true) } label: { if working { ProgressView() } else { Text("Join") } }
+                Button { finishJoin(useFolder: true) } label: { BusyLabel("Join", busy: working) }
                     .buttonStyle(.borderedProminent)
                     .disabled(working)
             }

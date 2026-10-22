@@ -118,7 +118,7 @@ extension AppModel {
         var chat = chat ?? AIChat()
         let turn: AIChat.Turn
         do {
-            let answer = try await ai.research(question, history: chat.turns, tools: AskTools(library: library), tier: tier,
+            let answer = try await ai.research(question, history: chat.turns, tools: askTools(library), tier: tier,
                                                progress: { p in await progress(p) })
             let usage = answer.progress.usage
             turn = AIChat.Turn(question: question, answer: answer.text.isEmpty ? "No answer came back." : answer.text, sources: answer.sources,
@@ -134,8 +134,103 @@ extension AppModel {
         return chat
     }
 
+    /// The library as Ask sees it: pages it asks to look at are drawn here.
+    func askTools(_ library: Library) -> AskTools {
+        AskTools(library: library, pages: { item, first, count in
+            await Handwriting.pageImages(item, library: library, first: first, count: count)
+        })
+    }
+
+    /// Lets your AI see an item or not.
+    func setAIAllowed(_ item: Item, _ allowed: Bool) async {
+        await library?.setAIAllowed(item.id, allowed)
+        await reload()
+        toast = allowed ? "Your AI can see this" : "Hidden from your AI"
+    }
+
+    /// Every item at once (Settings → AI).
+    func setAIAllowedForAll(_ allowed: Bool) async {
+        guard let library else { return }
+        let changed = await library.setAIAllowedForAll(allowed)
+        await reload()
+        toast = changed == 0 ? "Nothing to change" : allowed ? "Your AI can see all \(items.count) items" : "Everything is hidden from your AI"
+        Task { await syncNow() }
+    }
+
     func deleteAIChat(_ id: String) async {
         aiChats.removeAll { $0.id == id }
         await library?.deleteAIChat(id)
+    }
+}
+
+// MARK: Read all past handwriting
+
+extension AppModel {
+    /// Reading everything older with your AI, by hand (Settings → AI): how far it's got.
+    struct HandwritingScan: Equatable {
+        var total = 0
+        var done = 0
+        var pages = 0
+        var current: String?
+        var started = Date()
+        var finished = false
+        var stopped = false
+        var fraction: Double { total == 0 ? 1 : Double(done) / Double(total) }
+    }
+
+    /// What it has cost so far (this device's handwriting requests since it started).
+    var handwritingScanCost: Double {
+        guard let scan = handwritingScan else { return 0 }
+        let me = config?.deviceId ?? ""
+        return AIUsage.Total(aiCalls.filter { $0.purpose == .handwriting && $0.at >= scan.started && $0.device == me }).cost
+    }
+
+    /// Items your AI hasn't read yet: sketches with ink, and GoodNotes notebooks, PDFs and pictures.
+    func unreadHandwriting() async -> [Item] {
+        guard let library else { return [] }
+        var out: [Item] = []
+        for item in await library.items() where item.aiAllowed {
+            let ink = await library.inkSignature(item.id)
+            if item.kind == .sketch {
+                if !ink.hasPrefix("0-"), item.record[Handwriting.signatureField]?.string != ink + "|ai" { out.append(item) }
+            } else if Handwriting.wantsFileRead(item), item.record[Handwriting.filesField]?.string != Handwriting.fileSignature(item, ink: ink) {
+                out.append(item)
+            }
+        }
+        return out
+    }
+
+    /// Reads every item your AI hasn't, one at a time, until done or stopped.
+    func scanAllHandwriting() {
+        guard handwritingScanTask == nil, let library, let ai = ownAI else { return }
+        handwritingScanTask = Task { [weak self] in
+            guard let self else { return }
+            let items = await self.unreadHandwriting()
+            var scan = HandwritingScan(total: items.count)
+            self.handwritingScan = scan
+            for item in items {
+                if Task.isCancelled { break }
+                scan.current = item.displayTitle
+                self.handwritingScan = scan
+                if item.kind == .sketch {
+                    scan.pages += await Handwriting.read(item.id, library: library, ai: ai)
+                } else {
+                    scan.pages += await Handwriting.readFiles(item.id, library: library, ai: ai)
+                }
+                scan.done += 1
+                self.handwritingScan = scan
+            }
+            scan.current = nil
+            scan.stopped = Task.isCancelled
+            scan.finished = true
+            self.handwritingScan = scan
+            self.handwritingScanTask = nil
+            await self.reload()
+            Task { await self.syncNow() }
+        }
+    }
+
+    func stopHandwritingScan() {
+        handwritingScanTask?.cancel()
     }
 }

@@ -120,6 +120,9 @@ final class AppModel {
     /// Your AI's requests this month on every device, newest first (live: this device's are added as
     /// they happen), for the costs in Ask and Settings → AI → Activity.
     var aiCalls: [AIUsage.Call] = []
+    /// Read all past handwriting (Settings → AI): progress, and the run itself (Stop cancels it).
+    var handwritingScan: HandwritingScan?
+    @ObservationIgnored var handwritingScanTask: Task<Void, Never>?
     /// When this run of the app began ("This session").
     @ObservationIgnored let aiSessionStart = Date()
     /// Saved chats with your AI, newest first.
@@ -1387,7 +1390,7 @@ final class AppModel {
     func ask(_ question: String, tier: AISettings.Tier = .fast) async -> (answer: String, sources: [Item], by: String) {
         guard let library else { return ("", [], "") }
         let semanticScores = await semantic.scores(for: question)
-        let hits = await library.search(question, semantic: semanticScores, limit: ownAI == nil ? 8 : 12)
+        let hits = await library.search(question, semantic: semanticScores, limit: 30).filter(\.aiAllowed).prefix(ownAI == nil ? 8 : 12).map { $0 }
         let sources = hits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? "", $0.inkText ?? ""].joined(separator: "\n")) }
         guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", [], "") }
         func cited(_ ids: [String]) -> [Item] { hits.filter { ids.contains($0.id) }.nilIfEmpty ?? hits }

@@ -110,19 +110,27 @@ actor EnrichmentService {
         var sketches = 0
         for item in all where item.kind == .sketch && sketches < allowance {
             if Task.isCancelled || PowerMonitor.tooHot { break }
-            let sig = await library.inkSignature(item.id) + (ai == nil ? "" : "|ai")
+            let ink = await library.inkSignature(item.id)
+            // Your AI reads what's new since live reading was turned on (older sketches wait for Read
+            // all past handwriting); kept from your AI or older, Vision reads it on this device.
+            let itemAI = ai.flatMap { a in item.aiAllowed && a.settings.isLive(item.record, inkSignature: ink) ? a : nil }
+            let sig = ink + (itemAI == nil ? "" : "|ai")
             guard item.record[Handwriting.signatureField]?.string != sig else { continue }
-            round.visionPages += await Handwriting.read(item.id, library: library, fast: fast, ai: ai)
+            // Read by your AI before: keep that reading rather than redo it with Vision.
+            if itemAI == nil, item.record[Handwriting.signatureField]?.string == ink + "|ai" { continue }
+            round.visionPages += await Handwriting.read(item.id, library: library, fast: fast, ai: itemAI)
             sketches += 1
             round.changed += 1
-            if ai != nil, await library.item(item.id)?.record[Handwriting.signatureField]?.string != sig { pauseAI(); break }
+            if itemAI != nil, await library.item(item.id)?.record[Handwriting.signatureField]?.string != sig { pauseAI(); break }
             if let r = ai, r.settings.monthlyLimit > 0, await library.backgroundAISpend() >= r.settings.monthlyLimit { aiLimitReached = true; break }
         }
         if let ai = reader, !aiLimitReached {
             var files = 0
-            for item in all where files < 10 && Handwriting.wantsFileRead(item) {
+            for item in all where files < 10 && item.aiAllowed && Handwriting.wantsFileRead(item) {
                 if Task.isCancelled { break }
-                let sig = Handwriting.fileSignature(item, ink: await library.inkSignature(item.id))
+                let ink = await library.inkSignature(item.id)
+                guard ai.settings.isLive(item.record, inkSignature: ink) else { continue }
+                let sig = Handwriting.fileSignature(item, ink: ink)
                 guard item.record[Handwriting.filesField]?.string != sig else { continue }
                 round.requests += await Handwriting.readFiles(item.id, library: library, ai: ai)
                 files += 1

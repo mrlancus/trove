@@ -818,6 +818,9 @@ struct ItemMenu: View {
                 Button { Task { await model.unpublish(item) } } label: { Label("Remove public link", systemImage: "eye.slash") }
             }
         }
+        Button { Task { await model.setAIAllowed(item, !item.aiAllowed) } } label: {
+            Label(item.aiAllowed ? "Hide from AI" : "Let AI see this", systemImage: item.aiAllowed ? "eye.slash" : "eye")
+        }
         Menu {
             FolderPicker(current: item.folder) { folder in Task { await model.move(item.id, to: folder) } }
         } label: { Label("Move to folder", systemImage: "folder") }

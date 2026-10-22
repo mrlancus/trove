@@ -203,3 +203,71 @@ extension Handwriting {
         return try? await ai.readPage(jpeg, mime: "image/jpeg", about: about)
     }
 }
+
+// MARK: Pages for Ask (view)
+
+extension Handwriting {
+    /// Long side of a page shown to your AI in Ask: legible handwriting at about 1,500 tokens a page
+    /// (a picture costs width × height / 750 tokens; a PDF page would cost its picture and its text).
+    static let viewLongSide = 1280.0
+
+    /// Draws pages `first..<first + count` of an item as JPEGs, with the ink written on them, and
+    /// says how many pages it has: a sketch's pages, every page of a GoodNotes notebook or
+    /// whiteboard, PDFs and pictures.
+    static func pageImages(_ item: Item, library: Library, first: Int, count: Int) async -> (images: [Data], total: Int) {
+        enum Source { case sketch(InkPageSpec), notebook(GoodNotesInk.Notebook, Int), file(Attachment, Data, InkPageSpec) }
+        var pages: [Source] = []
+        if item.kind == .sketch {
+            pages = InkRenderer.sketchPages(item).map { .sketch($0) }
+        }
+        for att in item.attachments.prefix(3) where readable(att) {
+            guard let data = try? await library.attachmentData(att) else { continue }
+            if att.name.lowercased().hasSuffix(".goodnotes") {
+                if let book = await Task.detached(priority: .userInitiated, operation: { try? GoodNotesInk.read(data) }).value {
+                    pages += book.pages.indices.map { .notebook(book, $0) }
+                }
+            } else {
+                let name = att.name, mime = att.mime
+                let specs = await Task.detached(priority: .userInitiated, operation: { InkRenderer.pages(for: data, mime: mime, name: name) }).value
+                pages += specs.map { .file(att, data, $0) }
+            }
+        }
+        var images: [Data] = []
+        for source in pages.dropFirst(max(0, first)).prefix(max(0, count)) {
+            let image: CGImage?
+            switch source {
+            case .sketch(let spec):
+                let strokes = await library.strokes(on: item.id, pageKey: spec.key)
+                var area: InkGeometry.Rect?
+                if spec.infinite, let b = await library.inkBounds(on: item.id, pageKey: spec.key) {
+                    area = InkGeometry.Rect(x: b.x - 16, y: b.y - 16, width: b.width + 32, height: b.height + 32)
+                }
+                let content = InkContent(strokes: strokes.map(InkLine.init))
+                let width = viewWidth(area?.width ?? spec.width, area?.height ?? spec.height), box = area
+                image = await Task.detached(priority: .userInitiated) {
+                    InkRenderer.render(spec, content: content, pixelWidth: width, area: box).map(InkImage.init)
+                }.value?.image
+            case .notebook(let book, let i):
+                let page = book.pages[i]
+                let width = CGFloat(viewWidth(Double(page.width), Double(page.height)))
+                image = await Task.detached(priority: .userInitiated) {
+                    NotebookRenderer.render(page, of: book, width: width, scale: 1).map { InkImage(image: $0.cgImage) }
+                }.value?.image
+            case .file(let att, _, let spec):
+                let strokes = await library.strokes(on: item.id, layer: att.id, pageKey: spec.key)
+                let content = InkContent(strokes: strokes.map(InkLine.init))
+                let width = viewWidth(spec.width, spec.height)
+                image = await Task.detached(priority: .userInitiated) {
+                    InkRenderer.render(spec, content: content, pixelWidth: width).map(InkImage.init)
+                }.value?.image
+            }
+            if let image, let jpeg = InkRenderer.jpeg(image, quality: 0.8) { images.append(jpeg) }
+        }
+        return (images, pages.count)
+    }
+
+    static func viewWidth(_ width: Double, _ height: Double) -> Int {
+        let long = max(1, width, height)
+        return max(200, Int((width * viewLongSide / long).rounded()))
+    }
+}

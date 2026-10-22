@@ -235,6 +235,18 @@ struct AIProviderTests {
         #expect(await lib.item(secret)?.aiAllowed == true)
     }
 
+    @Test func liveReadingTakesOnlyWhatsNew() {
+        var s = AISettings()
+        s.liveSince = Date(timeIntervalSince1970: 2_000)
+        let old = Record(id: "a", kind: "item", createdHLC: "0000001000000-0000-D", updatedHLC: "0000003000000-0000-D")
+        #expect(!s.isLive(old, inkSignature: "0-"))
+        #expect(!s.isLive(old, inkSignature: "4-0000001500000-0001-D"))
+        #expect(s.isLive(old, inkSignature: "5-0000002500000-0000-D")) // written on since
+        let new = Record(id: "b", kind: "item", createdHLC: "0000002100000-0000-D", updatedHLC: "0000002100000-0000-D")
+        #expect(s.isLive(new, inkSignature: "0-"))
+        #expect(AISettings(fields: s.fields).liveSince == s.liveSince)
+    }
+
     @Test func chatsAreSaved() async {
         let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
         var chat = AIChat()
