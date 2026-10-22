@@ -283,7 +283,14 @@ Speed claims need numbers, or they come back.
 - A GitHub Actions job runs them on every push and fails if anything is more than 20 % slower than
   the stored baseline (`bench-baseline.json`).
 
-### 3.7 Battery on iPad and iPhone **M** (apps first)
+### 3.7 Battery on iPad and iPhone **M** (apps first) ✅ done (items 1, 8, 9, 11 still open)
+**Done** (NOTES.md "Battery round"): items 2–7, 10, 12, the `PowerPolicy`, Settings → Battery with
+counters, MetricKit report, signposts, and the simulated 3-hour session (67 pushes; the old rule
+modelled faithfully makes 200, not ~900). **Open:** 1, 8, 9, 11 (editor reloads, per-stroke work,
+close-time rendering, overlay redraws) wait for another session's sketch-editor changes to reach
+`main`; also a sketch page change should call `AppModel.sketchPageChanged()`, and no automatic
+clipboard picture capture in Low Power Mode.
+
 The iPad is used for hours of note-taking, so battery and heat matter more than raw speed. Commit
 4887684 already holds back lists, meaning search, Spotlight, widget, clipboard, inbox, enrichment and
 AI while a sketch is open on iPhone/iPad. These gaps remain (found in an audit of the code):

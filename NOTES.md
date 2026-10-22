@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights) | ✅ Done | 137 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy) | ✅ Done | 148 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -34,7 +34,7 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Battery round (ROADMAP §3.7, branch `battery`, merged into main)
+## Battery round (ROADMAP §3.7, branch `battery`, merged into main; user: "build 3.7")
 Written on Linux; TroveCore tested on Linux, the apps build on GitHub Actions; **not yet run on a device**.
 - **TroveCore** (`Sync/PowerPolicy.swift`, tests in `PowerPolicyTests.swift`): `PowerState` (Settings
   mode, Low Power Mode, charger, heat, sketch open) → `PowerPolicy` (push rule, ping window, minimum
@@ -73,7 +73,16 @@ Written on Linux; TroveCore tested on Linux, the apps build on GitHub Actions; *
   still updates; Low Power Mode → "Right now" says so; an item saved on the iPad gets its AI title on
   battery, items from the Mac wait for the charger.
 - **Not done here**: no automatic clipboard picture capture in Low Power Mode (the clipboard reads
-  belong to the other session's paste-permission work). ITEMS_1_8_9_11
+  belong to the other session's paste-permission work).
+- **Still open (§3.7 items 1, 8, 9, 11)**: editor ink reloads, per-stroke signing in
+  `PencilCanvas`, close-time preview rendering, overlay redraws. They touch the sketch editor, which
+  another session was changing (on `wip/ipad-fixes`, not on `main` when this round merged), so they
+  wait for that to land. When doing them: in `AppModel.reload()` bump `inkRevision` only when a sync
+  pulled ink while a sketch is open, and update `InkEditorModel.inkSig` after its own writes; call
+  `app.sketchPageChanged()` when the editor's page changes; count `inkReloads` in `reloadInk()` via
+  `app.power.count { $0.inkReloads += 1 }` and wrap it in `Perf.begin("Reload ink")`.
+- CI: the Apple build of `battery` (267ba50) passed for macOS and iOS. The `ci-logs` branch is
+  shared by every run: check `RESULT` names your commit before reading the errors.
 
 ## Current round: the roadmap (user: "Bridges", iPad Air M3 + Pencil Pro; later "session ran out, continue; renaming clips doesn't work")
 Built from `docs/ROADMAP.md` with parallel workers on branches, merged into `main` one by one after
