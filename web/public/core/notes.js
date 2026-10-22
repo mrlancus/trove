@@ -123,14 +123,20 @@ export function dailyNote(items, p) {
 const CHECKBOX = /^([ \t]*[-*•][ \t]+\[)( |x|X)\]([ \t]|$)/;
 const isFence = (line) => line.trim().startsWith("```");
 
+/** A checklist line's `{done, text}`, or null. */
+export function checkbox(line) {
+  const m = CHECKBOX.exec(line);
+  return m ? { done: m[2] !== " ", text: line.slice(m[0].length) } : null;
+}
+
 /** The checklist lines outside code blocks, in order: `{line (from 0), done, text}`. */
 export function checkboxes(body) {
   const out = [];
   let fence = false;
   String(body).split("\n").forEach((line, i) => {
     if (isFence(line)) { fence = !fence; return; }
-    const m = !fence && CHECKBOX.exec(line);
-    if (m) out.push({ line: i, done: m[2] !== " ", text: line.slice(m[0].length) });
+    const box = !fence && checkbox(line);
+    if (box) out.push({ line: i, ...box });
   });
   return out;
 }

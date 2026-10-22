@@ -1,5 +1,6 @@
 // Safe Markdown preview: everything is escaped first, then a small subset is turned into tags.
-// Same rules as the relay's published pages (server/src/publish.ts).
+// Same rules as the relay's published pages (server/src/publish.ts); checklists as core/notes.js.
+import { checkbox } from "./core/notes.js";
 
 export function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -28,9 +29,13 @@ function inline(escaped) {
     .replace(/(^|\s)#([\p{L}\p{N}_][\p{L}\p{N}_/-]*)/gu, '$1<a href="#" class="tag" data-tag="$2">#$2</a>');
 }
 
-export function renderMarkdown(markdown) {
+/**
+ * With `checkboxes`, checklist boxes can be ticked: each has `data-box` (its number from 0, as
+ * core/notes.js `toggleCheckbox` counts them).
+ */
+export function renderMarkdown(markdown, { checkboxes = false } = {}) {
   const out = [];
-  let list = null, code = null;
+  let list = null, code = null, boxes = 0;
   const closeList = () => { if (list) out.push(`</${list}>`); list = null; };
   for (const raw of markdown.replace(/\r\n/g, "\n").split("\n")) {
     if (raw.trim().startsWith("```")) {
@@ -38,15 +43,19 @@ export function renderMarkdown(markdown) {
       continue;
     }
     if (code) { code.push(raw); continue; }
+    const box = checkbox(raw);
+    if (box) {
+      if (list !== "ul") { closeList(); out.push('<ul class="tasks">'); list = "ul"; }
+      const n = boxes++;
+      out.push(`<li${box.done ? ' class="done"' : ""}><input type="checkbox"${checkboxes ? ` data-box="${n}"` : " disabled"}${box.done ? " checked" : ""}> ${inline(escapeHtml(box.text))}</li>`);
+      continue;
+    }
     const line = raw.trim();
     if (!line) { closeList(); continue; }
     let m;
     if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
       closeList();
       out.push(`<h${m[1].length + 1}>${inline(escapeHtml(m[2]))}</h${m[1].length + 1}>`);
-    } else if ((m = line.match(/^[-*•]\s+\[( |x|X)\]\s+(.*)$/))) {
-      if (list !== "ul") { closeList(); out.push('<ul class="tasks">'); list = "ul"; }
-      out.push(`<li><input type="checkbox" disabled${m[1] === " " ? "" : " checked"}> ${inline(escapeHtml(m[2]))}</li>`);
     } else if ((m = line.match(/^[-*•]\s+(.*)$/))) {
       if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; }
       out.push(`<li>${inline(escapeHtml(m[1]))}</li>`);

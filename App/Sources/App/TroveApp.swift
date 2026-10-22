@@ -48,6 +48,7 @@ struct TroveApp: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Capture…") { model.showCapture = true }.keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Today's Note") { Task { await model.openToday() } }
                 Button("Sync Now") { Task { await model.syncNow() } }.keyboardShortcut("r", modifiers: .command)
             }
             #if os(macOS)

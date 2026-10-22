@@ -23,6 +23,7 @@ export const CHECKPOINT_AFTER_OPS = 5000;
 /** …and the newest on the relay is at least this old, so devices don't all write one at once. */
 export const CHECKPOINT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 import { cleanQuote, fieldElementId, fieldValue, HIGHLIGHT_COLORS, highlightGeometry } from "./pdfmarks.js";
+import { allTemplates, dailyNote, dailyNoteId, fromTemplate, TEMPLATE_TAG, toggleCheckbox } from "./notes.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
@@ -504,6 +505,51 @@ export class Vault {
     if (item && tags.length && !tags.every((t) => item.tags.includes(t))) {
       this.update(id, { [Field.tags]: [...new Set([...item.tags, ...tags])].sort() });
     }
+  }
+
+  // ---------- the daily note, templates and checklists (PROTOCOL.md §12) ----------
+
+  /** Today's note (`parts` from notes.js `dateParts`): opens it if it's there, else makes it (again, if deleted). Returns its id. */
+  openDaily(parts) {
+    const id = dailyNoteId(parts), existing = this.store.records.get(id);
+    if (existing && existing.fields._deleted !== true) return id;
+    const made = dailyNote(this.items(), parts);
+    if (existing) {
+      this.set({ _deleted: false, [Field.title]: made.note.title, [Field.tags]: made.note.tags }, id, "item");
+      this.setBody(id, made.note.body);
+    } else {
+      this.addNote({ id, title: made.note.title, body: made.note.body, tags: made.note.tags });
+    }
+    this.update(id, { daily: made.date });
+    return id;
+  }
+
+  /** Your templates (notes tagged `template`), then the built-in ones. */
+  templates() { return allTemplates(this.items()); }
+
+  /** A new note from a template. Returns its id. */
+  addNoteFromTemplate(template, parts, { clipboard = "" } = {}) {
+    const note = fromTemplate(template, parts, { clipboard });
+    const id = this.addNote({ title: note.title, body: note.body, tags: note.tags });
+    if (note.category) this.update(id, { [Field.category]: note.category });
+    return id;
+  }
+
+  /** Makes a note one of your templates (or stops it being one). */
+  setTemplate(id, on) {
+    const item = this.item(id);
+    if (!item) return;
+    const tags = new Set(item.tags);
+    if (on) tags.add(TEMPLATE_TAG); else tags.delete(TEMPLATE_TAG);
+    this.update(id, { [Field.tags]: [...tags].sort() });
+  }
+
+  /** Ticks or unticks the `index`th checkbox in a note's body. */
+  toggleCheckbox(id, index) {
+    const item = this.item(id);
+    if (!item) return;
+    const body = toggleCheckbox(item.body, index);
+    if (body !== item.body) this.editText(Field.body, body, id, "item");
   }
 
   setPinned(id, pinned) { this.update(id, { [Field.pinned]: pinned }); }

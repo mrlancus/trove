@@ -132,7 +132,10 @@ struct ItemDetailView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                MarkdownText(markdown: body_)
+                MarkdownText(markdown: body_) { index in
+                    body_ = Notes.toggle(body_, at: index)
+                    scheduleSave()
+                }
             }
         }
         .padding(16)
