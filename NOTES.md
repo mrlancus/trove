@@ -47,6 +47,10 @@ Builds on CI; not yet run on a device.
   from the vectors at the screen's real resolution, kept until the view moves past it or zooms in
   further. Power: one render per settle, nothing per frame. Ink was already vector (PencilKit on
   iPad, a screen-resolution cache on the Mac); GoodNotes' editable handwriting is ink.
+- **GoodNotes notebooks in the item view and the reader** draw from their vectors in 512 px tiles
+  (`InkTiledPage`, Core Animation's tiled layer): only tiles on screen, off the main thread, kept
+  until the size changes. The reader's pinch scales what's drawn and redraws once at the end
+  (it used to redraw the whole page, capped at 58 M pixels, on every frame).
 - **Previews** (sketch pages and inked PDFs in the item view) are drawn as wide as they show at the
   screen's scale (in 160 px steps, up to 4096); card thumbnails are 800 px (were 480).
 - **Check**: open a GoodNotes whiteboard, zoom right in on its background; it should sharpen a
