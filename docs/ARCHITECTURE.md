@@ -63,6 +63,9 @@
 | PDFs: text for search, highlight geometry, page boxes, form ids (PROTOCOL.md §10; port: `Drawing/PDFMarks.swift`) / website viewer / export as annotations | `web/public/core/pdfmarks.js` (`Fixtures/pdf-cases.json`) / `web/public/pdfviewer.js` / `web/public/pdfannots.js` |
 | Website AI function API (drawing hook: `pageAction`) / UI (Ask Trove, note AI menu, AI settings, Look back) | `web/public/aiactions.js` / `web/public/ai.js` |
 | Apps: note AI (Apple Intelligence, else cloud), digest, overnight iPad worker | `App/Sources/Model/AppModel+AI.swift`, `Views/NoteAIMenu.swift`, `Enrichment/OnDeviceAI.swift`, `Services/BackgroundTasks.swift` |
+| Your own AI (`settings.ai`: provider, key, Fast/Smarter/Best models; Claude natively, others OpenAI-style; ask, read a page, actions, list models) | `Packages/TroveCore/Sources/TroveCore/Enrich/AIProvider.swift` (tests `AIProviderTests.swift`) |
+| Apps: your AI (Settings → AI `OwnAISection`, Ask's model picker, note and page actions) | `App/Sources/Model/AppModel+OwnAI.swift`, `Views/SettingsView.swift`, `Views/CaptureView.swift` (`AskView`) |
+| Handwriting read by your AI (sketch pages, GoodNotes, scanned/inked PDFs, photos), else Vision | `App/Sources/Drawing/Handwriting.swift`, `Enrichment/EnrichmentService.swift` |
 
 ## Bridges and Trove for Claude
 | Concern | File |
@@ -128,12 +131,12 @@
 | UI state and actions | `App/Sources/Model/AppModel.swift` |
 | Vault creation/joining, folder access, Keychain | `App/Sources/Services/VaultStore.swift` |
 | Enrichment | `App/Sources/Enrichment/*` |
-| Obsidian / Apple Notes / screenshots | `App/Sources/Integrations/*` |
+| Obsidian / Apple Notes (any Mac, after each sync, JXA through `osascript`: `AppModel.importAppleNotes`, `AppleNotesBridge`) / screenshots | `App/Sources/Integrations/*` |
 | Folders line, files + versions, history, connections | `App/Sources/Views/ItemExtras.swift` |
 | Connections graph | `App/Sources/Views/GraphView.swift` |
 | PDF reader (find, highlights, quotes, links, forms, Trove ink drawn by `TrovePDFPage`, export with annotations) | `App/Sources/Drawing/PDFReader.swift` |
 | Today's note, templates, checklists | `App/Sources/Model/AppModel+Notes.swift`, `Views/MainView.swift` (`TemplatesMenu`), `Views/MarkdownEditor.swift` |
-| Drawing editor: model (tools, lasso actions, shapes, guides, text, library) / toolbar and panels / iPad canvas (PencilKit) / Mac canvas | `App/Sources/Drawing/InkEditorModel.swift` / `InkEditorView.swift`, `InkEditingViews.swift`, `InkEditorPanels.swift` / `PencilCanvas.swift` / `MouseInkCanvas.swift` |
+| Drawing editor: model (tools, lasso actions, shapes, guides and drawing along them, text, library, laser, tape) / toolbar and panels / iPad canvas (PencilKit, plus Trove's gestures: tools, Pencil on a guide, finger grab, finger tap on tape) / Mac canvas | `App/Sources/Drawing/InkEditorModel.swift` / `InkEditorView.swift`, `InkEditingViews.swift`, `InkEditorPanels.swift` / `PencilCanvas.swift` / `MouseInkCanvas.swift` |
 | Ink maths shared with the website: geometry, outlines, shapes, editing, elements library, vault ops | `Packages/TroveCore/Sources/TroveCore/Drawing/` (`InkEditing.swift`, `InkStickers.swift`, `InkArrange.swift`, …) |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
 | Share sheet | `App/ShareExtension/ShareViewController.swift` (seals via `CaptureDrop`) |

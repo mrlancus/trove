@@ -442,6 +442,14 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`). A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
+- **Your own AI:** one synced record, id `settings.ai`, kind `setting` (`AISettings`), end-to-end
+  encrypted like every record: `provider` (`anthropic`, `openai`, `gemini`, `openrouter` or
+  `custom`), `apiKey`, `customURL` (the base URL for `custom`, OpenAI-compatible), `model.fast`,
+  `model.smart`, `model.best` (`""` = the provider's default; Anthropic's are
+  `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`) and `readHandwriting` (bool,
+  default true: sketch pages, GoodNotes notebooks, scanned or inked PDFs and photos are read by
+  it; the result goes in `inkText`, and `aiReadSig` on the item says what was read). Claude is
+  called natively (`/v1/messages`); the others through `/chat/completions`.
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
   (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
   `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,
@@ -688,10 +696,22 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   points' main direction (principal axis) from the nearest of level or upright.
 - **Shapes**: `InkShapes.swift` / `recognizeShape` in ink.js. Open drawings: a line if no point is
   further than 8 % of the ends' distance from it, else up to 3 straight pieces (Ramer–Douglas–Peucker
-  at 8 % of the diagonal). Closed ones (ends within 20 % of the diagonal): an ellipse (a circle when
-  the radii are within 12 %) or the polygon through the corners (RDP at 10 %), whichever fits closer;
-  a near-upright quadrilateral snaps to its box. The geometry is checked by both sides against
-  `Fixtures/ink-geometry.json` (made by `web/test/make-ink-fixture.mjs`).
+  at 8 % of the diagonal); each piece within 8° of level or upright is made exactly so. Closed ones
+  (ends within 20 % of the diagonal) are cut where they come back nearest their start (in the last
+  fifth of the points). Corners first: the polygon through the corners (RDP at 10 %) wins whenever
+  every corner is sharp: the most the pen turns within 3.5 % of the loop's length either side of
+  the corner is at least 35° and at least twice the average turn half way along the sides beside
+  it (the polygon's mean distance from the points under 10 % of the diagonal). Otherwise an
+  ellipse (mean error under 0.18), if it fits at least as closely as the polygon, else the polygon
+  when it fits within 5 %. Then the standard shape: an ellipse whose radii are within 18 % is a
+  circle; three to eight corners with sides within 25 % (triangles; 40 % for more) and angles
+  within 15° (20°) of a regular polygon's become that regular polygon, standing level (a corner
+  straight up or an edge along the top, within 10°); four near-right angles (within 15°) become a
+  rectangle along the edges' average direction (level or upright within 12°), a square when its
+  sides are within 15 %; a triangle with a near-right angle (12°) gets an exact one, else two
+  sides within 10 % are made equal, then it is turned level if an edge is within 7°. The
+  geometry is checked by both sides against `Fixtures/ink-geometry.json` (made by
+  `web/test/make-ink-fixture.mjs`).
 - **The file under the ink never changes.** Ink on a new version of a file (a new attachment id) starts
   empty; the old version keeps its ink.
 - **GoodNotes notebooks** (`.goodnotes`, docs/GOODNOTES.md) can be drawn on like files, page n being
