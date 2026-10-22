@@ -682,7 +682,7 @@ export function simplifyClosed(pts, epsilon) {
 
 export const ElementField = { on: "on", layer: "layer", page: "page", type: "type", x: "x", y: "y", w: "w", h: "h", text: "text", size: "size",
   color: "color", image: "image", createdAt: "createdAt", device: "device", rotate: "rotate", flip: "flip", font: "font", bold: "bold", italic: "italic",
-  group: "group" };
+  group: "group", quote: "quote", rects: "rects", name: "name", value: "value" };
 /** Text box typefaces (`font`; unknown or unset is `sans`). */
 export const TEXT_FONTS = ["sans", "serif", "mono", "rounded"];
 
@@ -696,6 +696,9 @@ export function elementView(record) {
     rotate: typeof f.rotate === "number" && Number.isFinite(f.rotate) ? f.rotate : 0, flip: f.flip === true,
     font: TEXT_FONTS.includes(f.font) ? f.font : "sans", bold: f.bold === true, italic: f.italic === true,
     group: typeof f.group === "string" ? f.group : "",
+    // Text highlights and form values on a PDF (core/pdfmarks.js).
+    quote: typeof f.quote === "string" ? f.quote : "", rects: Array.isArray(f.rects) ? f.rects : null,
+    name: typeof f.name === "string" ? f.name : "", value: f.value ?? null,
   };
 }
 
@@ -713,8 +716,8 @@ export function wrapText(ctx, text, width) {
   return out;
 }
 
-/** Text boxes, pictures and tape (a strip that hides what's under it until tapped). */
-export const ELEMENT_TYPES = ["text", "image", "tape"];
+/** Text boxes, pictures, tape (a strip that hides what's under it until tapped), text highlights and form values (PDFs). */
+export const ELEMENT_TYPES = ["text", "image", "tape", "highlight", "field"];
 export const TAPE_COLORS = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5", "#b0b0b5"];
 
 /**
