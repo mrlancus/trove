@@ -163,7 +163,10 @@ final class InkNSView: NSView {
     var width = 2.5
     private(set) var page: InkPageSpec?
     private(set) var shownKey = ""
-    private var background: CGImage?
+    /// The page under the ink: a whole-page picture, and what's on screen drawn sharp once zooming settles.
+    private let backdrop = InkBackdrop()
+    /// The page as the backdrop draws it (dark paper on the dark page).
+    private var backdropSpec: InkPageSpec?
     private var points: [InkPoint] = []
     private var started: TimeInterval = 0
     private var pressure = 0.5
@@ -200,17 +203,17 @@ final class InkNSView: NSView {
         if spec.key != page?.key { points = [] }
         shownKey = key
         page = spec
-        background = nil
+        backdrop.reset()
+        backdropSpec = nil
         setFrameSize(NSSize(width: spec.width, height: spec.height))
         guard !spec.infinite else { needsDisplay = true; return }
-        let pixels = Int(min(4096, spec.width * 2.5))
         let drawn = darkHere ? InkDark.spec(spec) : spec
-        Task { @MainActor [weak self] in
-            let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(drawn, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
+        backdropSpec = drawn
+        backdrop.changed = { [weak self] in
             guard let self, self.shownKey == key else { return }
-            self.background = rendered?.image
             self.needsDisplay = true
         }
+        backdrop.prepare(drawn)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -220,8 +223,11 @@ final class InkNSView: NSView {
         if page.infinite {
             let area = InkGeometry.Rect(x: dirtyRect.minX - origin, y: dirtyRect.minY - origin, width: dirtyRect.width, height: dirtyRect.height)
             InkRenderer.drawBackground(darkHere ? InkDark.spec(page) : page, area: area, in: ctx)
-        } else if let background {
-            InkRenderer.drawImage(background, in: CGRect(x: 0, y: 0, width: page.width, height: page.height), ctx: ctx)
+        } else if let spec = backdropSpec, backdrop.hasWhole(spec.key) {
+            backdrop.draw(spec.key, size: CGSize(width: page.width, height: page.height), in: ctx)
+            // What's on screen, sharp at this zoom, a moment after it settles.
+            let density = CGFloat(scale) * (window?.backingScaleFactor ?? 2)
+            backdrop.refine([(spec, visibleRect.offsetBy(dx: -origin, dy: -origin))], density: density)
         } else {
             ctx.setFillColor(darkHere ? NSColor.black.cgColor : NSColor.white.cgColor)
             ctx.fill(CGRect(x: 0, y: 0, width: page.width, height: page.height))

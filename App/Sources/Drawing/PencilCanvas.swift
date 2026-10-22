@@ -341,9 +341,8 @@ struct PencilCanvas: UIViewRepresentable {
         private var handingOver: Set<String> = []
         /// A Trove tool's gesture stays on the page it started on.
         private var toolSlot: Slot?
-        /// File pages (PDF, image) as pictures, made for pages on or near the screen.
-        private var bitmaps: [String: CGImage] = [:]
-        private var rendering: Set<String> = []
+        /// File pages (PDF, image, GoodNotes) as pictures, made for pages on or near the screen.
+        let backdrop = InkBackdrop()
         static let gap: CGFloat = 24, margin: CGFloat = 24
         /// The dark page is on (`InkDark`).
         private(set) var dark = false
@@ -361,6 +360,7 @@ struct PencilCanvas: UIViewRepresentable {
             overlayView.painter = { [weak self] ctx, area, scale in self?.drawOver(ctx, area: area, scale: scale) }
             boxesView.painter = { [weak self] ctx, area, scale in self?.drawBoxes(ctx, area: area) }
             editor.overlayListener = { [weak self] in self?.overlayView.setNeedsDisplay() }
+            backdrop.changed = { [weak self] in self?.paperView.setNeedsDisplay() }
             textTouches.shouldReceive = { touch in !(touch.view is UITextView) }
             textDelegate.changed = { [weak self] text in
                 guard let self else { return }
@@ -429,7 +429,7 @@ struct PencilCanvas: UIViewRepresentable {
                 ids = [:]
                 shownStamps = [:]
                 shownVersion = -1
-                bitmaps = bitmaps.filter { k, _ in pages.contains { $0.key == k } }
+                backdrop.keep(only: Set(pages.map(\.key)))
                 if previous.isEmpty || isEndless != wasEndless { fittedSize = .zero }
                 paperZoom = 0
                 resize(canvas)
@@ -588,7 +588,8 @@ struct PencilCanvas: UIViewRepresentable {
             if isEndless, let slot = slots.first {
                 editor.visibleCenter = InkPoint(x: visible.midX / z - slot.offset.x, y: visible.midY / z - slot.offset.y)
             }
-            prepareBitmaps(visible: CGRect(x: visible.minX / z, y: visible.minY / z, width: visible.width / z, height: visible.height / z))
+            let density = z * max(1, canvas.traitCollection.displayScale)
+            prepareBitmaps(visible: CGRect(x: visible.minX / z, y: visible.minY / z, width: visible.width / z, height: visible.height / z), density: density)
         }
 
         /// The page under a canvas point (at 100 %), or the nearest one.
@@ -640,9 +641,7 @@ struct PencilCanvas: UIViewRepresentable {
                 case .paper:
                     InkRenderer.drawBackground(darkSlot ? InkDark.spec(slot.spec) : slot.spec, area: local, in: ctx)
                 case .pdf, .image, .goodnotes:
-                    if let image = bitmaps[slot.spec.key] {
-                        InkRenderer.drawImage(image, in: CGRect(x: 0, y: 0, width: slot.spec.width, height: slot.spec.height), ctx: ctx)
-                    }
+                    backdrop.draw(slot.spec.key, size: CGSize(width: slot.spec.width, height: slot.spec.height), in: ctx)
                 }
                 // Pictures the lasso is dragging are drawn over the ink while they move (`drawOver`).
                 let c = editor.display(slot.spec.key, lifted: true)
@@ -702,28 +701,24 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
 
-        /// File pages near the screen are made into pictures (once each); far ones are let go.
-        private func prepareBitmaps(visible: CGRect) {
+        /// File pages near the screen get their whole-page picture (once each), and what's on screen a
+        /// sharp one at the screen's resolution after a pinch or scroll settles; far ones are let go.
+        private func prepareBitmaps(visible: CGRect, density: CGFloat) {
             let near = visible.insetBy(dx: -visible.width, dy: -visible.height)
+            var seen: [(spec: InkPageSpec, rect: CGRect)] = []
             for slot in slots {
-                let key = slot.spec.key
                 switch slot.spec.background {
                 case .paper:
                     continue
                 case .pdf, .image, .goodnotes:
-                    guard slot.frame.intersects(near) else { bitmaps[key] = nil; continue }
-                    guard bitmaps[key] == nil, !rendering.contains(key) else { continue }
-                    rendering.insert(key)
-                    let spec = slot.spec
-                    let pixels = Int(min(2400, spec.width * 2.5))
-                    Task { [weak self] in
-                        let rendered = await Task.detached(priority: .userInitiated) { InkRenderer.render(spec, content: InkContent(), pixelWidth: pixels).map(InkImage.init) }.value
-                        guard let self else { return }
-                        self.rendering.remove(key)
-                        if let rendered { self.bitmaps[key] = rendered.image; self.paperView.setNeedsDisplay() }
+                    guard slot.frame.intersects(near) else { backdrop.drop(slot.spec.key); continue }
+                    backdrop.prepare(slot.spec)
+                    if slot.frame.intersects(visible) {
+                        seen.append((slot.spec, visible.offsetBy(dx: -slot.offset.x, dy: -slot.offset.y)))
                     }
                 }
             }
+            backdrop.refine(seen, density: density)
         }
 
         // MARK: Ink
