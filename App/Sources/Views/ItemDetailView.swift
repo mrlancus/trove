@@ -41,9 +41,13 @@ struct ItemDetailView: View {
         }
         .toolbar {
             ToolbarItemGroup {
-                if item.kind == .sketch || item.attachments.contains(where: AppModel.canInk) {
+                if item.kind == .sketch {
                     Button { model.draw(on: item) } label: { Label("Draw", systemImage: "pencil.tip.crop.circle") }
                         .help("Draw with Apple Pencil, a finger, the trackpad or the mouse")
+                } else if let file = item.attachments.first {
+                    // Drawing on a file is the viewer's Edit.
+                    Button { model.openFile(item, file) } label: { Label("Open", systemImage: "arrow.up.left.and.arrow.down.right") }
+                        .help("Open full screen; Edit there to draw, highlight or fill in")
                 }
                 Button { Task { await model.togglePin(item) } } label: { Image(systemName: item.isPinned ? "pin.fill" : "pin") }
                 if let url = item.url { ShareLink(item: url) }

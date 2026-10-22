@@ -51,24 +51,11 @@ struct FilesSection: View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(item.attachments.enumerated()), id: \.element.id) { index, attachment in
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(attachment.name).font(.headline).lineLimit(1)
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)).font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        if AppModel.canInk(attachment) {
-                            Button { model.inkTarget = InkTarget(itemId: item.id, layer: attachment.id, title: attachment.name) } label: {
-                                Label("Draw on it", systemImage: "pencil.tip.crop.circle")
-                            }
-                            .help("Write or draw on this file. The file itself doesn't change.")
-                        }
-                        Button { Task { quickLook = await model.temporaryFile(attachment) } } label: { Label("Quick Look", systemImage: "eye") }
-                        if index == 0 {
-                            Button { chooseVersion() } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
-                                .help("Replace with an edited copy; the current file is kept as a version")
-                        }
+                    // One line: the name and size, Open, and New version (in "⋯" when there's no room).
+                    ViewThatFits(in: .horizontal) {
+                        fileRow(attachment, index: index, compact: false)
+                        fileRow(attachment, index: index, compact: true)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                     AttachmentView(attachment: attachment, item: item)
                 }
             }
@@ -95,6 +82,35 @@ struct FilesSection: View {
             }
         }
         .quickLookPreview($quickLook)
+    }
+
+    private func fileRow(_ attachment: Attachment, index: Int, compact: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(attachment.name).font(.headline).lineLimit(1).truncationMode(.middle)
+            Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file))
+                .font(.caption).foregroundStyle(.secondary).fixedSize()
+            Spacer(minLength: 4)
+            Button { model.openFile(item, attachment) } label: { Label("Open", systemImage: "arrow.up.left.and.arrow.down.right") }
+                .buttonStyle(.borderedProminent)
+                .fixedSize()
+                .help("Open full screen. Edit there to draw, highlight, fill in or mark up.")
+            if index == 0 {
+                if compact {
+                    Menu {
+                        Button { chooseVersion() } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .accessibilityLabel("More")
+                } else {
+                    Button { chooseVersion() } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
+                        .fixedSize()
+                        .help("Replace with an edited copy; the current file is kept as a version")
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     /// Through the window's one file picker (`ImportPickers`).

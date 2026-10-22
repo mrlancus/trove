@@ -24,12 +24,13 @@ struct AttachmentView: View {
             if let data {
                 if let item, attachment.mime == "application/pdf" {
                     // Find, highlights, quotes, links, the form and Trove's ink (ROADMAP S5).
-                    PDFReaderView(item: item, attachment: attachment, data: data)
+                    PDFReaderView(item: item, attachment: attachment, data: data) { model.openFile(item, attachment) }
                 } else if let item, AppModel.canInk(attachment),
                    model.inkedLayers[item.id]?.contains(attachment.id) == true || item.goodnotesInk.contains(attachment.id) {
                     InkedFileView(item: item, attachment: attachment, data: data)
                 } else if attachment.mime.hasPrefix("image/"), let image = PlatformImage(data: data) {
                     Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14))
+                        .onTapGesture { open() }
                 } else if attachment.mime == "application/pdf" {
                     PDFKitView(data: data).frame(minHeight: 420).clipShape(RoundedRectangle(cornerRadius: 14))
                 } else if attachment.mime.hasPrefix("audio/") {
@@ -39,6 +40,7 @@ struct AttachmentView: View {
                 } else if ["pages", "key", "numbers"].contains((attachment.name as NSString).pathExtension.lowercased()),
                           let preview = FilePreview.iworkPreview(data), let image = PlatformImage(data: preview) {
                     Image(platformImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14))
+                        .onTapGesture { open() }
                 } else {
                     FileRow(attachment: attachment, data: data)
                 }
@@ -51,6 +53,11 @@ struct AttachmentView: View {
         .task(id: attachment.id) {
             do { data = try await model.library?.attachmentData(attachment) } catch { failed = true }
         }
+    }
+
+    /// A tap on the preview opens the file in the viewer (an item's own files only).
+    private func open() {
+        if let item { model.openFile(item, attachment) }
     }
 }
 

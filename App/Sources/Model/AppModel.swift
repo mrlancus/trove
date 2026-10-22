@@ -124,6 +124,8 @@ final class AppModel {
     var showCapture = false
     /// The drawing editor, when it's open.
     var inkTarget: InkTarget?
+    /// A file open in Trove's viewer (Open): full screen on iPhone/iPad, its own window on the Mac.
+    var fileViewer: FileTarget?
     /// Bumped when ink changes or a sync brings changes, so drawings redraw.
     private(set) var inkRevision = 0
     /// Bumped only when a sync pulled ink from another device: the open editor reloads on this, not on
@@ -435,12 +437,18 @@ final class AppModel {
         inkTarget = InkTarget(itemId: id, layer: "", title: "Sketch")
     }
 
+    /// A sketch opens in the editor; a file opens in the viewer (drawing on it is its Edit).
     func draw(on item: Item, page: Int = 0) {
         if item.kind == .sketch {
             inkTarget = InkTarget(itemId: item.id, layer: "", title: item.displayTitle, startPage: page)
-        } else if let att = item.attachments.first(where: Self.canInk) {
-            inkTarget = InkTarget(itemId: item.id, layer: att.id, title: att.name, startPage: page)
+        } else if let att = item.attachments.first(where: Self.canInk) ?? item.attachments.first {
+            openFile(item, att, page: page)
         }
+    }
+
+    /// Opens a file in Trove's viewer, view-only (`edit`: straight into Edit).
+    func openFile(_ item: Item, _ attachment: Attachment, page: Int = 0, edit: Bool = false) {
+        fileViewer = FileTarget(itemId: item.id, attachmentId: attachment.id, title: attachment.name, startPage: page, edit: edit)
     }
 
     /// Files that can be drawn on: PDFs and images.

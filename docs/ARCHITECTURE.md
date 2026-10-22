@@ -136,6 +136,7 @@
 | Connections graph | `App/Sources/Views/GraphView.swift` |
 | PDF reader (find, highlights, quotes, links, forms, Trove ink drawn by `TrovePDFPage`, export with annotations) | `App/Sources/Drawing/PDFReader.swift` |
 | Today's note, templates, checklists | `App/Sources/Model/AppModel+Notes.swift`, `Views/MainView.swift` (`TemplatesMenu`), `Views/MarkdownEditor.swift` |
+| File viewer (Open): view-only, Edit (pen, highlights, form, Markup), Print; Mac window `file` | `App/Sources/Views/FileViewer.swift`, `Drawing/PDFReader.swift` (`PDFReaderView(fullScreen:editable:)`) |
 | Drawing editor: model (tools, lasso actions, shapes, guides and drawing along them, text, library, laser, tape) / toolbar and panels / iPad canvas (PencilKit, plus Trove's gestures: tools, Pencil on a guide, finger grab, finger tap on tape) / Mac canvas | `App/Sources/Drawing/InkEditorModel.swift` / `InkEditorView.swift`, `InkEditingViews.swift`, `InkEditorPanels.swift` / `PencilCanvas.swift` / `MouseInkCanvas.swift` |
 | Ink maths shared with the website: geometry, outlines, shapes, editing, elements library, vault ops | `Packages/TroveCore/Sources/TroveCore/Drawing/` (`InkEditing.swift`, `InkStickers.swift`, `InkArrange.swift`, …) |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
