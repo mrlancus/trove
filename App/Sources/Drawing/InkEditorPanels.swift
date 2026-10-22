@@ -132,57 +132,82 @@ struct PaperThumb: View {
 /// size, undo and redo.
 struct InkPalette: View {
     let editor: InkEditorModel
-    static let width: CGFloat = 272
-    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .highlighter, .eraser, .lasso]
+    static let width: CGFloat = 316
+    static let height: CGFloat = 206
+    /// Where the arcs are centred, in the palette: on the Pencil's tip (InkEditorView places it so).
+    static let centre = CGPoint(x: width / 2, y: 178)
+    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .highlighter, .eraser, .lasso]
+    private static let toolRadius: CGFloat = 124, colourRadius: CGFloat = 76
 
-    /// Small and quick, like Apple Pencil's own palette: a row of tools, a row of colours and sizes.
-    /// Picking a tool or colour closes it.
+    /// Curved round the Pencil's tip, like Apple's own: the tools on the outer arc, colours on the
+    /// inner one, undo, sizes and redo in the middle. Picking leaves it open; squeezing again or
+    /// tapping anywhere else closes it.
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 2) {
-                ForEach(Self.tools) { t in
-                    Button { editor.select(t); editor.palette = nil } label: {
-                        Image(systemName: t.symbol).font(.body).frame(width: 34, height: 32)
-                            .foregroundStyle(editor.tool == t ? Color.accentColor : Color.primary)
-                            .background(editor.tool == t ? Color.accentColor.opacity(0.18) : .clear, in: Circle())
-                            .inkTapArea()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(t.label)
-                }
-                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body).frame(width: 34, height: 32).inkTapArea() }
-                    .buttonStyle(.plain)
-                    .disabled(!editor.canUndo)
-                    .accessibilityLabel("Undo")
-            }
-            if !editor.inkSettings.favourites.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    InkFavouritesRow(editor: editor) { editor.palette = nil }
-                }
+        ZStack {
+            arc(radius: Self.toolRadius, width: 50)
+            if editor.tool.hasColor { arc(radius: Self.colourRadius, width: 38) }
+            ForEach(Array(Self.tools.enumerated()), id: \.element) { i, t in
+                toolButton(t).position(Self.point(i, of: Self.tools.count, radius: Self.toolRadius, from: 172, to: 8))
             }
             if editor.tool.hasColor {
-                HStack(spacing: 5) {
-                    ForEach(InkEditorModel.colors.prefix(5), id: \.self) { c in
-                        Button { editor.color = c; editor.palette = nil } label: {
-                            Circle().fill(Color(inkHex: c)).frame(width: 20, height: 20)
-                                .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.35), lineWidth: editor.color == c ? 2 : 1).padding(-2))
-                                .frame(width: 26, height: 26)
-                                .inkTapArea()
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Colour \(c)")
-                    }
-                    Divider().frame(height: 18)
-                    InkSizePresets(editor: editor).scaleEffect(0.85)
+                let colours = Array(InkEditorModel.colors.prefix(6))
+                ForEach(Array(colours.enumerated()), id: \.element) { i, c in
+                    colourButton(c).position(Self.point(i, of: colours.count, radius: Self.colourRadius, from: 160, to: 20))
                 }
-            } else if editor.tool.hasSize {
-                InkSizePresets(editor: editor)
             }
+            HStack(spacing: 6) {
+                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body.weight(.medium)).frame(width: 32, height: 32).inkTapArea() }
+                    .buttonStyle(.plain).disabled(!editor.canUndo).accessibilityLabel("Undo")
+                if editor.tool.hasSize { InkSizePresets(editor: editor) }
+                Button { editor.redo() } label: { Image(systemName: "arrow.uturn.forward").font(.body.weight(.medium)).frame(width: 32, height: 32).inkTapArea() }
+                    .buttonStyle(.plain).disabled(!editor.canRedo).accessibilityLabel("Redo")
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            .position(x: Self.centre.x, y: Self.centre.y - 4)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(width: Self.width)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+        .frame(width: Self.width, height: Self.height)
+    }
+
+    /// The i-th of n spots along an arc from one angle to another (degrees, 0 = right, 90 = up).
+    static func point(_ i: Int, of n: Int, radius: CGFloat, from: Double, to: Double) -> CGPoint {
+        let t = n > 1 ? Double(i) / Double(n - 1) : 0.5
+        let a = (from + (to - from) * t) * .pi / 180
+        return CGPoint(x: centre.x + radius * cos(a), y: centre.y - radius * sin(a))
+    }
+
+    private func arc(radius: CGFloat, width: CGFloat) -> some View {
+        Path { p in p.addArc(center: Self.centre, radius: radius, startAngle: .degrees(-180), endAngle: .degrees(0), clockwise: false) }
+            .stroke(.regularMaterial, style: StrokeStyle(lineWidth: width, lineCap: .round))
+            .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
+    }
+
+    private func toolButton(_ t: InkEditorTool) -> some View {
+        Button { editor.select(t) } label: {
+            Image(systemName: t.symbol).font(.title3)
+                .frame(width: 40, height: 40)
+                .foregroundStyle(editor.tool == t ? Color.white : Color.primary)
+                .background(editor.tool == t ? Color.accentColor : .clear, in: Circle())
+                .overlay(alignment: .bottom) {
+                    if t.ink != nil, editor.tool != t { Capsule().fill(Color(inkHex: editor.color(for: t))).frame(width: 12, height: 3).offset(y: -3) }
+                }
+                .inkTapArea()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(t.label)
+    }
+
+    private func colourButton(_ c: String) -> some View {
+        Button { editor.color = c } label: {
+            Circle().fill(Color(inkHex: c)).frame(width: 22, height: 22)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.35), lineWidth: editor.color == c ? 2.5 : 1).padding(-2.5))
+                .frame(width: 32, height: 32)
+                .inkTapArea()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Colour \(c)")
     }
 }

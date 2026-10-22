@@ -50,9 +50,10 @@ struct InkEditorView: View {
                     GeometryReader { geo in
                         // Tap anywhere else to close it.
                         Color.black.opacity(0.001).onTapGesture { editor.palette = nil }
+                        // The arcs' centre on the Pencil's tip, kept on screen.
                         InkPalette(editor: editor)
                             .position(x: min(max(p.x, InkPalette.width / 2 + 8), geo.size.width - InkPalette.width / 2 - 8),
-                                      y: min(max(p.y - 70, 60), geo.size.height - 60))
+                                      y: min(max(p.y - (InkPalette.centre.y - InkPalette.height / 2), InkPalette.height / 2 + 8), geo.size.height - InkPalette.height / 2 - 8))
                     }
                     .transition(.opacity)
                 }
