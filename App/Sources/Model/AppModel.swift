@@ -206,6 +206,10 @@ final class AppModel {
     @ObservationIgnored private var widgetShown: SharedConfig.WidgetSnapshot?
     @ObservationIgnored private var widgetTask: Task<Void, Never>?
     private var mirroring = false
+    /// The last Apple Notes import: how it went, or what's wrong (Settings shows it).
+    var appleNotesStatus: String?
+    @ObservationIgnored private var appleNotesBusy = false
+    @ObservationIgnored private var lastAppleNotes: TimeInterval = -.infinity
     private var searchTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var live: LiveConnection?
@@ -756,6 +760,7 @@ final class AppModel {
         await enrichSoon()
         await afterSyncAI()
         await mirrorIfOwner()
+        await importAppleNotes()
     }
 
     // MARK: Settings that follow you (PROTOCOL.md §8, `settings.app`)
@@ -997,6 +1002,38 @@ final class AppModel {
         return "Basic (text recognition, dates, places, search by meaning). Smart summaries come from your iPad."
     }
 
+    // MARK: Apple Notes (Mac)
+
+    /// Reads Apple Notes into Trove on any Mac where it's turned on (it used to run only on the Mac
+    /// that made the vault, so a vault made on the website never imported). Every few minutes at
+    /// most, or now when `force` (turning it on, Import now).
+    func importAppleNotes(force: Bool = false) async {
+        #if os(macOS)
+        guard vault.config?.appleNotesImport == true, let library, !appleNotesBusy else { return }
+        let now = Self.clock
+        guard force || now - lastAppleNotes >= 300 else { return }
+        appleNotesBusy = true
+        lastAppleNotes = now
+        defer { appleNotesBusy = false }
+        appleNotesStatus = "Reading Apple Notes…"
+        do {
+            let result = try await AppleNotesBridge.importAll(into: library)
+            let changed = result.added + result.updated
+            appleNotesStatus = "\(result.total) notes in Apple Notes; \(result.added) new, \(result.updated) updated (\(Date().formatted(date: .omitted, time: .shortened)))"
+            if changed > 0 {
+                await reload()
+                if force || result.added > 0 { toast = result.added > 0 ? "\(result.added) notes from Apple Notes" : "Apple Notes up to date" }
+                await syncNow()
+            } else if force {
+                toast = "Apple Notes up to date"
+            }
+        } catch {
+            appleNotesStatus = error.localizedDescription
+            if force { toast = error.localizedDescription }
+        }
+        #endif
+    }
+
     // MARK: Mirror (Mac)
 
     private func mirrorIfOwner() async {
@@ -1010,7 +1047,6 @@ final class AppModel {
         if let custom = config.obsidianFolder {
             await ObsidianMirrorService.shared.sync(items: items, folder: URL(fileURLWithPath: custom), library: library)
         }
-        if config.appleNotesImport { await AppleNotesBridge.importAll(into: library) }
         #endif
     }
 

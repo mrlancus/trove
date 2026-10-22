@@ -350,7 +350,15 @@ private struct IntegrationsSection: View {
             #if os(macOS)
             Toggle("Mirror Apple Notes into Trove search", isOn: Binding(
                 get: { model.config?.appleNotesImport ?? false },
-                set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.syncNow() } } }))
+                set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.importAppleNotes(force: true) } } }))
+            if model.config?.appleNotesImport == true {
+                HStack {
+                    Text(model.appleNotesStatus ?? "Checks Apple Notes every few minutes while Trove is open.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Import now") { Task { await model.importAppleNotes(force: true) } }
+                }
+            }
             Button { choosingObsidian = true } label: {
                 Label(model.config?.obsidianFolder.map { "Obsidian vault: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Sync with an Obsidian vault…", systemImage: "point.3.connected.trianglepath.dotted")
             }
