@@ -17,10 +17,23 @@ struct CaptureView: View {
             HStack {
                 Label("Capture", systemImage: "tray.and.arrow.down").font(.headline)
                 Spacer()
+                #if os(iOS)
+                // Reading the clipboard here asked "Allow Paste?" every time Capture opened. Only
+                // whether something is there is checked (no question); the system Paste button
+                // reads it when tapped, which never asks.
+                if text.isEmpty, Pasteboard.hasText {
+                    PasteButton(payloadType: String.self) { strings in
+                        if let first = strings.first { text = first }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .buttonBorderShape(.capsule)
+                }
+                #else
                 if let url = Pasteboard.url, text.isEmpty {
                     Button { text = url.absoluteString } label: { Label("Paste link", systemImage: "doc.on.clipboard") }
                         .buttonStyle(.bordered)
                 }
+                #endif
             }
             TextEditor(text: $text)
                 .focused($focused)
@@ -124,27 +137,23 @@ struct VoiceNoteButton: View {
 }
 
 #if os(iOS)
-/// Scans paper documents into a searchable PDF.
+/// Scans paper documents into a searchable PDF. The scanner is the window's (`ImportPickers`):
+/// one attached to a button in a menu never opened, since the menu closes first.
 struct ScanDocumentButton: View {
-    @Environment(AppModel.self) private var model
-    @State private var scanning = false
+    @Environment(\.scanDocument) private var scanDocument
 
     var body: some View {
-        Button { scanning = true } label: { Label("Scan document", systemImage: "doc.viewfinder") }
+        Button { scanDocument() } label: { Label("Scan document", systemImage: "doc.viewfinder") }
             .disabled(!VNDocumentCameraViewController.isSupported)
-            .fullScreenCover(isPresented: $scanning) {
-                DocumentScanner { pdf in
-                    scanning = false
-                    guard let pdf, let library = model.library else { return }
-                    Task {
-                        _ = try? await library.addFile(pdf, name: "Scan.pdf", mime: "application/pdf", kind: .pdf, source: .scan,
-                                                       title: "Scan \(Date().formatted(date: .abbreviated, time: .shortened))")
-                        await model.reload()
-                        await model.enrichSoon()
-                    }
-                }
-                .ignoresSafeArea()
-            }
+    }
+}
+
+/// Photos and videos from the photo library, imported like files.
+struct PhotosImportButton: View {
+    @Environment(\.pickPhotos) private var pickPhotos
+
+    var body: some View {
+        Button { pickPhotos() } label: { Label("Import from Photos…", systemImage: "photo.on.rectangle") }
     }
 }
 

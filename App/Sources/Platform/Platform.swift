@@ -32,6 +32,18 @@ extension PlatformImage {
 
 @MainActor
 enum Pasteboard {
+    /// Whether there's text or a link to paste. Never shows iOS's "Allow Paste?" question (only
+    /// reading the contents does), so it's safe to check while drawing the screen.
+    static var hasText: Bool {
+        #if canImport(UIKit)
+        UIPasteboard.general.hasStrings || UIPasteboard.general.hasURLs
+        #else
+        NSPasteboard.general.string(forType: .string) != nil
+        #endif
+    }
+
+    /// Reads the contents: on iPhone and iPad only after the person asked for it (iOS asks
+    /// "Allow Paste?" unless they allowed it in Settings).
     static var string: String? {
         #if canImport(UIKit)
         UIPasteboard.general.string

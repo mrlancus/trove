@@ -99,6 +99,9 @@ private struct AboutSection: View {
     var body: some View {
         Section("About") {
             LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
+            // Whether the share sheet, widgets and keyboard can reach the app (they share an App Group).
+            LabeledContent("Share sheet and widgets", value: SharedConfig.appGroupFound.map { "Connected (\($0))" } ?? "Can't share storage on this install")
+                .textSelection(.enabled)
             Link("How Trove works (docs)", destination: URL(string: "https://github.com/mrlancus/trove/blob/main/docs/RESEARCH.md")!)
         }
         Section {
@@ -452,8 +455,7 @@ private struct ClipboardSection: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             #else
-            Toggle("Save what I copied when I open Trove", isOn: shared(.saveCopiesOnOpen))
-            Text("iOS asks “Allow Paste?” each time unless you choose Settings → Apps → Trove → Paste from Other Apps → Allow.")
+            Text("On iPhone and iPad Trove doesn't read your clipboard by itself (iOS would ask “Allow Paste?” each time). Tap Paste in Clipboard to save what you copied, or use the Save Clipboard to Trove shortcut.")
                 .font(.caption).foregroundStyle(.secondary)
             Text("For your clipboard in any app, add the Trove keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Trove, then turn on Allow Full Access (it only reads clips Trove saved on this device; it never sends anything).")
                 .font(.caption).foregroundStyle(.secondary)

@@ -405,13 +405,19 @@ struct ClipsView: View {
     private var list: some View {
         List {
             Section {
-                PasteButton(payloadType: String.self) { strings in
-                    Task { for s in strings { await store.capture(text: s, sourceApp: nil) } }
+                HStack {
+                    PasteButton(payloadType: String.self) { strings in
+                        store.copyWaiting = false
+                        Task { for s in strings { await store.capture(text: s, sourceApp: nil) } }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .buttonBorderShape(.capsule)
+                    if store.copyWaiting {
+                        Text("Something new was copied").font(.callout).foregroundStyle(.secondary)
+                    }
                 }
-                .labelStyle(.titleAndIcon)
-                .buttonBorderShape(.capsule)
             } footer: {
-                Text("What you copy is saved each time you open Trove (iOS asks “Allow Paste?” unless you allow it in Settings → Apps → Trove → Paste from Other Apps). Copies on your other devices appear here by themselves.")
+                Text("Tap Paste to save what you copied (Trove doesn't read your clipboard by itself, so iOS never asks “Allow Paste?”). Copies on your other devices appear here by themselves, and the Trove keyboard saves what you paste with it.")
             }
             Section {
                 filterChips

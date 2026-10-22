@@ -31,7 +31,8 @@ struct PencilCanvas: UIViewRepresentable {
     let color: String
     let width: Double
     let zoomRequest: InkZoomRequest?
-    /// Dark mode: the canvas around the pages is a darker shade (it's light grey otherwise).
+    /// The sketch's dark page (`InkDark`): black pages, black and white ink swapped, a dark grey
+    /// around the pages. Light grey around white pages otherwise, whatever the system's appearance.
     var dark = false
     /// The text box being typed in (a text field on the page).
     var textEdit: InkTextEdit?
@@ -40,10 +41,10 @@ struct PencilCanvas: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(editor: editor) }
 
-    /// The canvas around the pages: a shade apart from the white paper, light grey or (dark mode) near black.
+    /// The canvas around the pages: a shade apart from the paper, light grey or (dark page) dark grey.
     /// Fixed colours, since the canvas itself stays in light mode to keep ink colours true.
     static func outside(dark: Bool) -> UIColor {
-        if dark { return UIColor(red: 28 / 255.0, green: 28 / 255.0, blue: 30 / 255.0, alpha: 1) } // #1c1c1e
+        if dark { return UIColor(red: 44 / 255.0, green: 44 / 255.0, blue: 46 / 255.0, alpha: 1) } // #2c2c2e
         return UIColor(red: 217 / 255.0, green: 217 / 255.0, blue: 222 / 255.0, alpha: 1) // #d9d9de
     }
 
@@ -53,7 +54,9 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.delegate = c
         canvas.backgroundColor = Self.outside(dark: dark)
         canvas.isOpaque = true
-        canvas.overrideUserInterfaceStyle = .light // keep ink colours true on white paper
+        // Always light: in dark mode PencilKit would turn dark ink light by itself. The dark page swaps
+        // black and white ink itself (`InkDark`), leaving every other colour as it is.
+        canvas.overrideUserInterfaceStyle = .light
         canvas.drawingPolicy = UIDevice.current.userInterfaceIdiom == .pad ? .default : .anyInput
         canvas.showsVerticalScrollIndicator = true
         canvas.showsHorizontalScrollIndicator = true
@@ -138,13 +141,16 @@ struct PencilCanvas: UIViewRepresentable {
         defer { c.updating = false }
         let outside = Self.outside(dark: dark)
         if canvas.backgroundColor != outside { canvas.backgroundColor = outside }
+        if canvas.overrideUserInterfaceStyle != .light { canvas.overrideUserInterfaceStyle = .light }
+        if c.dark != dark { c.setDark(dark) }
         c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)
         c.apply(version: revision, to: canvas)
         if overlayRevision != c.shownOverlay { c.shownOverlay = overlayRevision; c.overlayView.setNeedsDisplay() }
         let pen = tool.ink != nil
         // Setting PencilKit's tool resets its state: only when it really changes.
-        let toolKey = "\(tool.rawValue)|\(color)|\(width)"
-        if let ink = tool.ink, toolKey != c.shownTool { c.shownTool = toolKey; canvas.tool = Self.pkTool(ink, color: color, width: width) }
+        let shownColor = c.darkInk ? InkDark.swap(color) : color
+        let toolKey = "\(tool.rawValue)|\(shownColor)|\(width)"
+        if let ink = tool.ink, toolKey != c.shownTool { c.shownTool = toolKey; canvas.tool = Self.pkTool(ink, color: shownColor, width: width) }
         // Only what changes is set: this runs on every stroke and lasso move, and setting a gesture's
         // touch types or turning it on again while a touch is in flight can drop that touch (a Pencil
         // tap or drag that "didn't register").
@@ -226,7 +232,7 @@ struct PencilCanvas: UIViewRepresentable {
         return PKStroke(ink: PKInk(type, color: uiColor(s.color)), path: PKStrokePath(controlPoints: points, creationDate: Date()))
     }
 
-    static func convert(_ s: PKStroke, offset: CGPoint, current: InkTool? = nil) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
+    static func convert(_ s: PKStroke, offset: CGPoint, current: InkTool? = nil, dark: Bool = false) -> (tool: InkTool, color: String, width: Double, points: [InkPoint]) {
         let tool = Self.inkTool(for: s.ink.inkType, current: current)
         let raw = Array(s.path)
         let sizes = raw.map { Double(max($0.size.width, $0.size.height)) }
@@ -236,7 +242,9 @@ struct PencilCanvas: UIViewRepresentable {
             let pressure = tool.usesPressure ? min(1, max(0, (size / width - 0.35) / 0.65)) : 0.5
             return InkPoint(x: at.x - offset.x, y: at.y - offset.y, pressure: pressure, t: p.timeOffset * 1000)
         }
-        return (tool, hex(s.ink.color), width, points)
+        // On a dark page the pen's colour is shown swapped: stored as the colour that was picked.
+        let color = dark ? InkDark.swap(hex(s.ink.color)) : hex(s.ink.color)
+        return (tool, color, width, points)
     }
 
     /// PencilKit strokes have no ids, so they're matched by their points.
@@ -294,7 +302,6 @@ struct PencilCanvas: UIViewRepresentable {
         private(set) var slots: [Slot] = []
         private var layoutMode: InkPageLayout = .vertical
         private var shownSig = ""
-        private var fittedWidth: CGFloat = 0
         private var zoomedByHand = false
         /// The page index this canvas last showed as current (so a jump from the page list scrolls there).
         private var shownCurrent = -1
@@ -322,6 +329,13 @@ struct PencilCanvas: UIViewRepresentable {
         private var bitmaps: [String: CGImage] = [:]
         private var rendering: Set<String> = []
         static let gap: CGFloat = 24, margin: CGFloat = 24
+        /// The dark page is on (`InkDark`).
+        private(set) var dark = false
+        /// The size the zoom was last fitted to (zero until the view has a usable size).
+        private var fittedSize: CGSize = .zero
+        /// A view smaller than this is still being laid out (SwiftUI can hand over a provisional size
+        /// first): fitting to it gave 10 % and left the page tiny, so the fit waits for the real size.
+        static let usable: CGFloat = 120
 
         init(editor: InkEditorModel) {
             self.editor = editor
@@ -336,6 +350,27 @@ struct PencilCanvas: UIViewRepresentable {
         }
 
         private var isEndless: Bool { slots.first?.spec.infinite ?? false }
+
+        /// Whether a page shows dark (paper only; PDFs and pictures keep their look).
+        func isDark(_ slot: Slot) -> Bool { dark && InkDark.applies(to: slot.spec) }
+        /// The pen's colour is shown swapped (the dark page is on and the pages are paper).
+        var darkInk: Bool { dark && slots.contains { InkDark.applies(to: $0.spec) } }
+
+        /// The dark page turned on or off: everything is drawn again in its colours.
+        func setDark(_ on: Bool) {
+            dark = on
+            shownVersion = -1
+            shownTool = ""
+            textLook = ""
+            paperZoom = 0
+            paperView.setNeedsDisplay()
+            overlayView.setNeedsDisplay()
+            if let tv = textView { tv.backgroundColor = Self.textFieldBackground(dark: on) }
+        }
+
+        static func textFieldBackground(dark: Bool) -> UIColor {
+            (dark ? UIColor.black : UIColor.white).withAlphaComponent(0.35)
+        }
 
         // MARK: Pages on the canvas
 
@@ -375,14 +410,14 @@ struct PencilCanvas: UIViewRepresentable {
                 shownStamps = [:]
                 shownVersion = -1
                 bitmaps = bitmaps.filter { k, _ in pages.contains { $0.key == k } }
-                if previous.isEmpty || isEndless != wasEndless { fittedWidth = 0 }
+                if previous.isEmpty || isEndless != wasEndless { fittedSize = .zero }
                 paperZoom = 0
                 resize(canvas)
                 if turned {
                     UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
                 }
             }
-            if fittedWidth == 0 || canvas.bounds.width != fittedWidth { self.layout(canvas) }
+            if needsFit(canvas.bounds.size) { self.layout(canvas) }
             if current != shownCurrent {
                 let first = shownCurrent < 0
                 shownCurrent = current
@@ -390,12 +425,23 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
 
-        /// Fits the page in view (and again on rotation), unless zoomed by hand.
+        /// Whether the zoom should be fitted again: the first time the view has a usable size, when
+        /// its width changes (rotation, Split View, Stage Manager), or when the last fit was made
+        /// while the view was still too short (its height comes later than its width at times).
+        private func needsFit(_ size: CGSize) -> Bool {
+            guard size.width >= Self.usable, size.height >= Self.usable else { return false }
+            if fittedSize == .zero { return true }
+            return size.width != fittedSize.width || (fittedSize.height < Self.usable * 2 && size.height != fittedSize.height)
+        }
+
+        /// Fits the page in view once the view has its real size (and again on rotation), unless
+        /// zoomed by hand. It opens at the top of the page it starts on.
         func layout(_ canvas: TroveCanvasView) {
-            guard !slots.isEmpty, canvas.bounds.width > 0 else { return }
-            if fittedWidth != canvas.bounds.width {
-                let first = fittedWidth == 0
-                fittedWidth = canvas.bounds.width
+            guard !slots.isEmpty else { return }
+            let size = canvas.bounds.size
+            if needsFit(size) {
+                let first = fittedSize == .zero
+                fittedSize = size
                 if isEndless {
                     if first {
                         canvas.zoomScale = 1
@@ -404,7 +450,9 @@ struct PencilCanvas: UIViewRepresentable {
                     }
                 } else if first || !zoomedByHand {
                     canvas.zoomScale = fit(editor.fitWholePage, in: canvas)
-                    if let slot = slots.first(where: { $0.index == editor.page }) ?? slots.first { scroll(to: slot, in: canvas, animated: false) }
+                    // The insets centring the page depend on the zoom: set before scrolling to it.
+                    resize(canvas)
+                    if let slot = slots.first(where: { $0.index == editor.page }) ?? slots.first { scroll(to: slot, in: canvas, animated: false, centred: true) }
                 }
                 let z = Double(canvas.zoomScale)
                 DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
@@ -432,10 +480,16 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
 
-        private func scroll(to slot: Slot, in canvas: UIScrollView, animated: Bool) {
+        /// Scrolls the page's top (or, across, its left edge) into view. `centred` also centres the
+        /// other way (after fitting the zoom, when the old offset means nothing).
+        private func scroll(to slot: Slot, in canvas: UIScrollView, animated: Bool, centred: Bool = false) {
             let z = canvas.zoomScale
-            let x = layoutMode == .horizontal ? slot.frame.minX * z - Self.margin : canvas.contentOffset.x
-            let y = layoutMode == .horizontal ? canvas.contentOffset.y : slot.frame.minY * z - Self.margin
+            let midX = (canvas.contentSize.width - canvas.bounds.width) / 2
+            let midY = (canvas.contentSize.height - canvas.bounds.height) / 2
+            let acrossX = centred ? midX : canvas.contentOffset.x
+            let acrossY = centred ? midY : canvas.contentOffset.y
+            let x = layoutMode == .horizontal ? slot.frame.minX * z - Self.margin : acrossX
+            let y = layoutMode == .horizontal ? acrossY : slot.frame.minY * z - Self.margin
             let maxX = max(-canvas.contentInset.left, canvas.contentSize.width - canvas.bounds.width + canvas.contentInset.right)
             let maxY = max(-canvas.contentInset.top, canvas.contentSize.height - canvas.bounds.height + canvas.contentInset.bottom)
             canvas.setContentOffset(CGPoint(x: min(maxX, max(-canvas.contentInset.left, x)), y: min(maxY, max(-canvas.contentInset.top, y))), animated: animated)
@@ -517,12 +571,14 @@ struct PencilCanvas: UIViewRepresentable {
             for slot in visibleSlots(area) {
                 let o = slot.offset
                 ctx.saveGState()
+                let darkSlot = isDark(slot)
                 if !slot.spec.infinite {
                     // A thin edge under the page: a blurred shadow is redrawn on every scroll frame and costs battery.
                     let edge = 1 / scale
-                    ctx.setFillColor(UIColor.black.withAlphaComponent(0.08).cgColor)
+                    let edgeColor = darkSlot ? UIColor.white.withAlphaComponent(0.12) : UIColor.black.withAlphaComponent(0.08)
+                    ctx.setFillColor(edgeColor.cgColor)
                     ctx.fill(slot.frame.insetBy(dx: -edge, dy: -edge).offsetBy(dx: 0, dy: edge))
-                    ctx.setFillColor(UIColor.white.cgColor)
+                    ctx.setFillColor((darkSlot ? UIColor.black : UIColor.white).cgColor)
                     ctx.fill(slot.frame)
                     ctx.clip(to: slot.frame)
                 }
@@ -530,7 +586,7 @@ struct PencilCanvas: UIViewRepresentable {
                 let local = InkGeometry.Rect(x: area.x - o.x, y: area.y - o.y, width: area.width, height: area.height)
                 switch slot.spec.background {
                 case .paper:
-                    InkRenderer.drawBackground(slot.spec, area: local, in: ctx)
+                    InkRenderer.drawBackground(darkSlot ? InkDark.spec(slot.spec) : slot.spec, area: local, in: ctx)
                 case .pdf, .image, .goodnotes:
                     if let image = bitmaps[slot.spec.key] {
                         InkRenderer.drawImage(image, in: CGRect(x: 0, y: 0, width: slot.spec.width, height: slot.spec.height), ctx: ctx)
@@ -557,13 +613,15 @@ struct PencilCanvas: UIViewRepresentable {
                 let o = slot.offset
                 ctx.saveGState()
                 ctx.translateBy(x: o.x, y: o.y)
-                let shown = editor.display(slot.spec.key, lifted: true)
+                let darkSlot = isDark(slot)
+                let stored = editor.display(slot.spec.key, lifted: true)
+                let shown = darkSlot ? InkDark.content(stored) : stored
                 InkRenderer.drawTexts(shown.elements, in: ctx)
                 // Tape covers the ink (PencilKit's, underneath this view) too.
                 InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
                 // What the lasso is dragging: lifted off PencilKit's drawing while it moves, so a move
                 // redraws just this instead of replacing the whole drawing on every frame.
-                if let moving = editor.dragPreview(slot.spec.key) { InkRenderer.drawContent(moving, in: ctx) }
+                if let moving = editor.dragPreview(slot.spec.key) { InkRenderer.drawContent(darkSlot ? InkDark.content(moving) : moving, in: ctx) }
                 InkRenderer.drawOverlay(editor.overlay(slot.spec.key), scale: scale, in: ctx)
                 ctx.restoreGState()
             }
@@ -606,8 +664,12 @@ struct PencilCanvas: UIViewRepresentable {
             for slot in slots {
                 // What the lasso is dragging is left out while it moves (the overlay draws it).
                 let shown = editor.display(slot.spec.key, lifted: true)
+                let darkSlot = isDark(slot)
                 for line in shown.strokes where !line.points.isEmpty && wanted.insert(line.id).inserted {
-                    want.append((line.id, line.stamp, line, slot.offset))
+                    // On a dark page the stroke is put on the canvas in its shown colour (and stamped
+                    // with it, so turning the dark page on or off replaces it).
+                    let drawn = darkSlot ? InkDark.line(line) : line
+                    want.append((line.id, darkSlot ? line.stamp + "|dark" : line.stamp, drawn, slot.offset))
                 }
                 for e in shown.elements where e.kind == .image {
                     let ready = e.image.map { shown.pictures[$0.id] != nil } ?? false
@@ -707,7 +769,8 @@ struct PencilCanvas: UIViewRepresentable {
             var strokes: [(signature: String, id: String, key: String, ink: (tool: InkTool, color: String, width: Double, points: [InkPoint]))] = []
             for s in added {
                 guard let start = Array(s.path).first?.location.applying(s.transform), let slot = slot(at: start) else { continue }
-                strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, PencilCanvas.convert(s, offset: slot.offset, current: inHand)))
+                let ink = PencilCanvas.convert(s, offset: slot.offset, current: inHand, dark: isDark(slot))
+                strokes.append((PencilCanvas.signature(s), UUID().uuidString.lowercased(), slot.spec.key, ink))
             }
             for s in strokes { ids[s.signature, default: []].append(s.id); handingOver.insert(s.id) }
             Task { @MainActor [weak self] in
@@ -853,7 +916,7 @@ struct PencilCanvas: UIViewRepresentable {
             if textView == nil || textViewFor != edit.id {
                 textView?.removeFromSuperview()
                 let tv = UITextView()
-                tv.backgroundColor = UIColor.white.withAlphaComponent(0.35)
+                tv.backgroundColor = Self.textFieldBackground(dark: dark)
                 tv.layer.borderColor = UIColor.systemBlue.cgColor
                 tv.layer.borderWidth = 1
                 tv.textContainerInset = .zero
@@ -881,13 +944,14 @@ struct PencilCanvas: UIViewRepresentable {
             let size = CGFloat(edit.size) * z
             let ct = InkRenderer.font(size: Double(size), style: edit.style)
             let font = UIFont(name: CTFontCopyPostScriptName(ct) as String, size: size) ?? UIFont.systemFont(ofSize: size)
-            let look = "\(edit.id)|\(size)|\(edit.color)|\(edit.style.font.rawValue)|\(edit.style.bold)|\(edit.style.italic)"
+            let textColor = isDark(slot) ? InkDark.swap(edit.color) : edit.color
+            let look = "\(edit.id)|\(size)|\(textColor)|\(edit.style.font.rawValue)|\(edit.style.bold)|\(edit.style.italic)"
             if look != textLook {
                 textLook = look
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.minimumLineHeight = size * 1.25
                 paragraph.maximumLineHeight = size * 1.25
-                let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: PencilCanvas.uiColor(edit.color), .paragraphStyle: paragraph]
+                let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: PencilCanvas.uiColor(textColor), .paragraphStyle: paragraph]
                 tv.typingAttributes = attributes
                 let all = NSRange(location: 0, length: tv.textStorage.length)
                 tv.textStorage.setAttributes(attributes, range: all)

@@ -44,7 +44,7 @@ struct FolderLine: View {
 struct FilesSection: View {
     let item: Item
     @Environment(AppModel.self) private var model
-    @State private var choosingVersion = false
+    @Environment(\.pickFiles) private var pickFiles
     @State private var quickLook: URL?
 
     var body: some View {
@@ -63,7 +63,7 @@ struct FilesSection: View {
                         }
                         Button { Task { quickLook = await model.temporaryFile(attachment) } } label: { Label("Quick Look", systemImage: "eye") }
                         if index == 0 {
-                            Button { choosingVersion = true } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
+                            Button { chooseVersion() } label: { Label("New version", systemImage: "square.and.arrow.down.on.square") }
                                 .help("Replace with an edited copy; the current file is kept as a version")
                         }
                     }
@@ -95,9 +95,14 @@ struct FilesSection: View {
             }
         }
         .quickLookPreview($quickLook)
-        .fileImporter(isPresented: $choosingVersion, allowedContentTypes: [.item]) { result in
-            if case .success(let url) = result { Task { await model.replaceFile(item, with: url) } }
-        }
+    }
+
+    /// Through the window's one file picker (`ImportPickers`).
+    private func chooseVersion() {
+        let model = model, item = item
+        pickFiles(FilePick(types: [.item], multiple: false) { urls in
+            if let url = urls.first { Task { await model.replaceFile(item, with: url) } }
+        })
     }
 }
 

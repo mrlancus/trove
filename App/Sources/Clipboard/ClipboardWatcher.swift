@@ -80,10 +80,13 @@ final class ClipboardWatcher {
 import UIKit
 import TroveCore
 
-/// iOS doesn't let apps watch the clipboard in the background, so this saves whatever was copied
-/// since last time whenever Trove comes to the front (and copies made inside Trove). The change
-/// count is free to read; reading the contents shows iOS's "Allow Paste" question unless the user
-/// chose Settings → Apps → Trove → Paste from Other Apps → Allow.
+/// iOS doesn't let apps watch the clipboard in the background, and reading what another app (or
+/// another device, through Universal Clipboard) copied asks "Allow Paste?". Trove used to read it
+/// whenever it came to the front, so the question came up on every launch and at random while it
+/// was open. Now this only notices, without reading, that something new is there (the change count
+/// and `hasStrings`/`hasURLs`/`hasImages` never ask); the clipboard screen then offers the system
+/// Paste button, which reads it when tapped and never asks. The Trove keyboard and the Save
+/// Clipboard shortcut still save copies; the Mac's clipboard history is unchanged.
 @MainActor
 final class ClipboardWatcher {
     private let store: ClipboardStore
@@ -108,12 +111,8 @@ final class ClipboardWatcher {
         let pb = UIPasteboard.general
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
-        guard store.enabled, store.captureOnOpen, pb.changeCount != ClipPasteboard.ownChangeCount else { return }
-        if pb.hasImages, !pb.hasURLs, let image = pb.image, let png = image.pngData() {
-            Task { await store.capture(image: png, mime: "image/png", sourceApp: nil) }
-        } else if let text = pb.string ?? pb.url?.absoluteString {
-            Task { await store.capture(text: text, sourceApp: nil) }
-        }
+        guard store.enabled, pb.changeCount != ClipPasteboard.ownChangeCount else { store.copyWaiting = false; return }
+        store.copyWaiting = pb.hasStrings || pb.hasURLs || pb.hasImages
     }
 }
 #endif

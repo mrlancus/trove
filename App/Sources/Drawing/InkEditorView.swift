@@ -200,6 +200,12 @@ struct InkEditorView: View {
                         } label: { Label("Settings", systemImage: "gearshape") }
                         .menuIndicator(.hidden)
                         .fixedSize()
+                        if editor.isSketch {
+                            Button { editor.darkPage.toggle() } label: {
+                                Label(editor.darkPage ? "Light page" : "Dark page", systemImage: editor.darkPage ? "sun.max" : "moon")
+                            }
+                            .help(editor.darkPage ? "Show the page light" : "Show the page dark (black page, black and white ink swapped; only on this device)")
+                        }
                         Button { editor.exportPDF() } label: { Label("Export PDF", systemImage: "square.and.arrow.up") }
                             .disabled(editor.exporting)
                     }
@@ -406,20 +412,19 @@ struct InkEditorView: View {
 /// The drawing surface. Only this view watches the ink's revisions, so drawing doesn't redraw the toolbar.
 struct InkCanvasHost: View {
     let editor: InkEditorModel
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         #if os(iOS)
         PencilCanvas(editor: editor, pages: editor.pages, current: editor.page, layout: editor.isInfinite ? .vertical : editor.layout,
                      pagesRevision: editor.pagesRevision, revision: editor.revision, overlayRevision: editor.overlayRevision,
-                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest, dark: scheme == .dark,
+                     tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest, dark: editor.darkPage && editor.isSketch,
                      textEdit: editor.textEdit, rulerOn: editor.ruler != nil)
             .ignoresSafeArea(edges: .bottom)
         #else
         if let page = editor.currentPage {
             MouseInkCanvas(editor: editor, page: page, pageIndex: editor.page, pagesRevision: editor.pagesRevision, revision: editor.revision,
                            overlayRevision: editor.overlayRevision, tool: editor.tool, color: editor.color, width: editor.width, zoomRequest: editor.zoomRequest,
-                           textEdit: editor.textEdit)
+                           textEdit: editor.textEdit, dark: editor.darkPage && editor.isSketch)
         }
         #endif
     }

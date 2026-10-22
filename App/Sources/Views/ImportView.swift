@@ -1,14 +1,17 @@
 import SwiftUI
 import TroveCore
 import UniformTypeIdentifiers
+#if os(iOS)
+import VisionKit
+#endif
 
 /// The Import screen: one big drop zone that takes anything (files, folders, zips, exports from
 /// other apps), then shows things arriving as they're added.
 struct ImportView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.showImporter) private var showImporter
+    @Environment(\.pickFiles) private var pickFiles
     @State private var targeted = false
-    @State private var choosing = false
-    @State private var choosingPaste = false
 
     private struct Format: Identifiable {
         let symbol: String
@@ -35,7 +38,7 @@ struct ImportView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-                DropZone(targeted: targeted, run: model.importRun, choose: { choosing = true })
+                DropZone(targeted: targeted, run: model.importRun, choose: showImporter)
                     .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $targeted) { DropHandler.handle($0, model: model) }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 10)], spacing: 10) {
@@ -50,20 +53,22 @@ struct ImportView: View {
                 Text("You can also drop things anywhere on the Trove window.")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                PasteImportCard(choose: { choosingPaste = true })
+                PasteImportCard(choose: choosePaste)
             }
             .padding(32)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("Import")
-        .fileImporter(isPresented: $choosing, allowedContentTypes: [.item, .folder], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { Task { await model.importFiles(urls) } }
-        }
-        .fileImporter(isPresented: $choosingPaste, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result, let db = urls.first(where: { !$0.lastPathComponent.hasSuffix("-wal") && !$0.lastPathComponent.hasSuffix("-shm") }) else { return }
+    }
+
+    /// Paste's db.sqlite (and its -wal), through the window's one file picker (`ImportPickers`).
+    private func choosePaste() {
+        let model = model
+        pickFiles(FilePick(types: [.item], multiple: true) { urls in
+            guard let db = urls.first(where: { !$0.lastPathComponent.hasSuffix("-wal") && !$0.lastPathComponent.hasSuffix("-shm") }) else { return }
             Task { await model.importFromPaste(db: db, wal: urls.first { $0.lastPathComponent.hasSuffix("-wal") }) }
-        }
+        })
     }
 }
 
@@ -115,12 +120,36 @@ private struct DropZone: View {
                 .contentTransition(.symbolEffect(.replace))
             Text(targeted ? "Let go to add it" : "Drop anything here").font(.title2.weight(.semibold))
             Text("or").foregroundStyle(.secondary)
+            #if os(iOS)
+            // Files (iCloud Drive, On My iPad, other apps' storage), Photos, or the camera.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { pickButtons }
+                VStack(spacing: 10) { pickButtons }
+            }
+            .controlSize(.large)
+            #else
             Button(action: choose) { Label("Choose files or folders…", systemImage: "folder") }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+            #endif
         }
         .multilineTextAlignment(.center)
     }
+
+    #if os(iOS)
+    @Environment(\.pickPhotos) private var pickPhotos
+    @Environment(\.scanDocument) private var scanDocument
+
+    @ViewBuilder private var pickButtons: some View {
+        Button(action: choose) { Label("Files…", systemImage: "folder") }
+            .buttonStyle(.borderedProminent)
+        Button(action: pickPhotos) { Label("Photos…", systemImage: "photo.on.rectangle") }
+            .buttonStyle(.borderedProminent)
+        Button(action: scanDocument) { Label("Scan", systemImage: "doc.viewfinder") }
+            .buttonStyle(.bordered)
+            .disabled(!VNDocumentCameraViewController.isSupported)
+    }
+    #endif
 
     private func progress(_ run: AppModel.ImportRun) -> some View {
         VStack(spacing: 18) {
