@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 166 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 172 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -36,7 +36,48 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: Open replaces Quick Look and Draw on it (user: "replace Quick Look with Open … view-only by default, Edit turns editing on … Print … one button")
+## Latest round: AI costs and activity, Ask over everything, and fixes (user: "it used 7p on a couple of simple questions", "it can only see 12 files", "show how many tokens and the cost", "view all conversations", "see exactly what AI is doing in the background", plus screenshots per device, password options, Apple Notes, Accessibility, relay conflict, greyed Settings button)
+Not yet built on CI when written; not yet run on a device.
+- **Where the money went:** almost certainly the background reading of handwriting (every sketch
+  page, GoodNotes page, inked or scanned PDF and photo, each a ~1,600-token image, read at medium
+  effort with its thinking billed as output), not the questions. Now: pages are read at **low
+  effort**; background reading has a **monthly limit** (Settings → AI, default **$1**, 0 = none,
+  across every device; at the limit Vision takes over until next month).
+- **Every request is metered** (`AIUsage`, `aiusage.<device>.<day>` records, PROTOCOL.md §8): tokens
+  in/out/cached, cost from Claude's list prices (Haiku 5.5 $0.10/$0.50 per M; Sonnet 5.5 $2/$10;
+  Opus 5.5 $4/$20; other providers only when they report a cost), purpose (Ask, Reading handwriting,
+  Note actions, Test) and what it was about. **Settings → AI → Activity and costs** lists every
+  request from every device, with totals per period and per kind of work.
+- **Ask** (`Views/AskView.swift`): a centred chat with a glowing orb, each step shown live ("Searched
+  “icarus”: 3 found", "Opened “Icarus costume”") with the running tokens and cost, follow-up
+  questions, saved chats (**Chats** button; `aiChat` records, synced), Fast/Smarter/Best menu, and a
+  usage pill (tap: this session → today → this week → this month). It now answers with **tools over
+  the whole library** (`AskTools`: overview, search with filters, browse, read up to 6 items) instead
+  of being handed the top 12 hits, so it can reach any item but only opens what it needs (Claude
+  tool use with prompt caching; OpenAI-style function calling for the others).
+- **Sync conflict** ("relay push …: conflict … a different segment with this start already exists"):
+  an upload that went through before the device recorded it was sealed again with new bytes and
+  refused for ever. The relay's 409 now includes `last`; the apps and the website count those ops
+  as sent and upload the rest. **Needs the relay redeployed** (done with this merge if the token
+  works; see below).
+- **Apple Notes** ("Couldn't read what Apple Notes sent back"): osascript wrote non-UTF-8 for an app
+  opened from Finder, so accents and emoji broke the JSON. The script now returns ASCII-only JSON,
+  osascript runs with a UTF-8 locale, a bad note is skipped, and the message says what came back.
+- **Accessibility** still saying not allowed: macOS often tells an app only after it restarts.
+  Settings → Clipboard has **Restart Trove**, also accepts the event-posting permission, and warns
+  when Trove runs from Downloads (App Translocation), where the permission never reaches it.
+- **Settings button greyed out** (Mac): `SettingsLink` in the toolbar; now a plain button with
+  `openSettings`.
+- **Screenshots per device** (Settings → Integrations → Screenshots; `settings.screenshots`): each
+  device's row has Notes (library) and Clipboard (clipboard history) checkboxes, settable from any
+  device; each device imports its own. The old switch becomes this device's Notes.
+- **Passwords and codes** (Settings → Clipboard): Don't keep them / Keep for 2 minutes, this device
+  only (as before) / Keep like any other copy (`saveSensitive`, shared).
+- **Check:** Ask "what's in my Handwritten folder?" and watch the steps and cost; open Activity and
+  costs; Apple Notes → Import now; Restart Trove after allowing Accessibility; take a screenshot
+  with Clipboard ticked for that device.
+
+## Round before: Open replaces Quick Look and Draw on it (user: "replace Quick Look with Open … view-only by default, Edit turns editing on … Print … one button")
 Builds on CI (7ba494d); not yet run on a device.
 - **Open** (`FileViewer`, `Views/FileViewer.swift`): a file's row in the item view now shows only
   its name, size, **Open** and **New version** (in "⋯" when there's no room), on one line. Draw on
