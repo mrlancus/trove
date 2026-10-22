@@ -93,7 +93,9 @@ describe("journal segments", () => {
     const again = await put(v.deviceId, 1, 5, body);
     expect(again.status).toBe(200);
     expect(((await again.json()) as { cursor: number }).cursor).toBe(cursor);
-    expect((await put(v.deviceId, 1, 5, enc.encode("different"))).status).toBe(409);
+    const clash = await put(v.deviceId, 1, 5, enc.encode("different"));
+    expect(clash.status).toBe(409);
+    expect(((await clash.json()) as { last: number }).last).toBe(5);
     expect((await put("SOMEONE-ELSE", 1, 1, body)).status).toBe(403);
     expect((await put(v.deviceId, 0, 1, body)).status).toBe(400);
     await put(v.deviceId, 6, 9, enc.encode("second"));

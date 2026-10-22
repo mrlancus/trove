@@ -285,6 +285,9 @@ struct ToastView: View {
 // MARK: - Sidebar
 
 struct SidebarView: View {
+    #if os(macOS)
+    @Environment(\.openSettings) private var openSettings
+    #endif
     @Environment(AppModel.self) private var model
     @Binding var showSettings: Bool
     /// On iPhone each row pushes its screen instead of filling a column.
@@ -370,7 +373,10 @@ struct SidebarView: View {
         .toolbar {
             ToolbarItem {
                 #if os(macOS)
-                SettingsLink { Label("Settings", systemImage: "gearshape") }
+                // A plain button: SettingsLink in a toolbar was sometimes left greyed out (disabled)
+                // after the Settings window had been open.
+                Button { openSettings() } label: { Label("Settings", systemImage: "gearshape") }
+                    .help("Settings (⌘,)")
                 #else
                 Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                 #endif

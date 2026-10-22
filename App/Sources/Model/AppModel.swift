@@ -117,6 +117,14 @@ final class AppModel {
     /// Your own AI provider and key (Settings → AI; the `settings.ai` record, on every device).
     var aiSettings = AISettings()
     @ObservationIgnored var aiSettingsLoaded = false
+    /// Your AI's requests this month on every device, newest first (live: this device's are added as
+    /// they happen), for the costs in Ask and Settings → AI → Activity.
+    var aiCalls: [AIUsage.Call] = []
+    /// When this run of the app began ("This session").
+    @ObservationIgnored let aiSessionStart = Date()
+    /// Saved chats with your AI, newest first.
+    var aiChats: [AIChat] = []
+    @ObservationIgnored var aiStamp = ""
     /// Last week's digest was checked this launch (AppModel+AI.swift).
     var digestChecked = false
     /// The relay's AI status was asked for this launch (AppModel+AI.swift).
@@ -178,6 +186,8 @@ final class AppModel {
     var screenshotWatcher: ScreenshotWatcher?
     var screenshotImport: Task<Void, Never>?
     var screenshotsAgain = false
+    /// Where each device's screenshots go (Settings → Integrations → Screenshots), synced.
+    var screenshotRoutes: [String: ScreenshotRoute] = [:]
     #if os(macOS)
     private(set) var clipboardPalette: ClipboardPaletteController?
     #endif
@@ -378,6 +388,7 @@ final class AppModel {
         }
         await applySharedSettings()
         await loadAISettings()
+        await loadScreenshotRoutes()
         let inkStamp = await library.stamp(of: ["stroke", "element"])
         if inkStamp != shownInkStamp {
             shownInkStamp = inkStamp
@@ -787,6 +798,7 @@ final class AppModel {
         switch key {
         case .clipboardHistory: return clipboard.enabled
         case .holdSensitive: return clipboard.keepSensitive
+        case .saveSensitive: return clipboard.saveSensitive
         case .saveCopiesOnOpen: return clipboard.captureOnOpen
         case .cloudAI: return config?.cloudAI ?? false
         case .recordPlaces: return clipboard.recordPlaces
@@ -814,6 +826,7 @@ final class AppModel {
         switch key {
         case .clipboardHistory: if clipboard.enabled != on { clipboard.enabled = on }
         case .holdSensitive: if clipboard.keepSensitive != on { clipboard.keepSensitive = on }
+        case .saveSensitive: if clipboard.saveSensitive != on { clipboard.saveSensitive = on }
         case .saveCopiesOnOpen: if clipboard.captureOnOpen != on { clipboard.captureOnOpen = on }
         case .cloudAI: if config?.cloudAI != on { updateConfig { $0.cloudAI = on } }
         case .recordPlaces: if clipboard.recordPlaces != on { clipboard.recordPlaces = on }

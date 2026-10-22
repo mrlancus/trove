@@ -372,11 +372,12 @@ export class VaultObject extends DurableObject<Env> {
     if (body.length > MAX_SEGMENT_BYTES) return error(413, "segment too large");
     const digest = await sha256Hex(body);
     const existing = this.sql
-      .exec<{ cursor: number; digest: string }>("SELECT cursor, digest FROM segments WHERE device = ? AND first = ?", device, first)
+      .exec<{ cursor: number; digest: string; last: number }>("SELECT cursor, digest, last FROM segments WHERE device = ? AND first = ?", device, first)
       .toArray()[0];
     if (existing) {
       if (existing.digest === digest) return json({ cursor: existing.cursor });
-      return error(409, "a different segment with this start already exists");
+      // `last` lets a device that lost track of an upload see which of its ops are already here.
+      return json({ error: "a different segment with this start already exists", last: existing.last }, 409);
     }
     const row = this.sql
       .exec<{ cursor: number }>(

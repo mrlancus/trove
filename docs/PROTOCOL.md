@@ -162,7 +162,7 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `GET /vaults/:v/devices` | device | → `{devices:[{deviceId,name,kind,createdAt,lastSeenAt,revoked}]}` |
 | `DELETE /vaults/:v/devices/:id` | device | revoke → `204` |
 | `POST /vaults/:v/inbox-tokens` | device | → `{inboxToken}` (for the extension / GoodNotes / email) |
-| `PUT /vaults/:v/segments/:device/:first/:last` | device (must be `:device`) | TRV1 bytes → `{cursor}`. Idempotent: an identical re-upload returns the same cursor |
+| `PUT /vaults/:v/segments/:device/:first/:last` | device (must be `:device`) | TRV1 bytes → `{cursor}`. Idempotent: an identical re-upload returns the same cursor; different bytes at the same start → 409 `{error, last}` (the held segment's end: the device counts ops up to `last` as sent and uploads the rest from `last + 1`) |
 | `GET /vaults/:v/segments?after=<cursor>&limit=<n>` | device | → `{segments:[{cursor,device,first,last,size}], more}` |
 | `GET /vaults/:v/segments/:device/:first/:last` | device | → TRV1 bytes |
 | `PUT /vaults/:v/blobs/:blobId` | device | TRV1 bytes → `201` (or `200` if it already exists) |
@@ -438,8 +438,9 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   history to keep (numbers; 0 = no limit; missing = 30 days and 1,000 clips).
 - **Shared app settings:** one synced record, id `settings.app`, kind `setting`, booleans that
   every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
-  never leave the device), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
-  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`). A device whose
+  never leave the device), `saveSensitive` (default false: passwords and codes saved like any
+  clip instead), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
+  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI` and `saveSensitive`). A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
 - **Your own AI:** one synced record, id `settings.ai`, kind `setting` (`AISettings`), end-to-end
@@ -449,7 +450,22 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`) and `readHandwriting` (bool,
   default true: sketch pages, GoodNotes notebooks, scanned or inked PDFs and photos are read by
   it; the result goes in `inkText`, and `aiReadSig` on the item says what was read). Claude is
-  called natively (`/v1/messages`); the others through `/chat/completions`.
+  called natively (`/v1/messages`); the others through `/chat/completions`. `limit.background`
+  (number, US dollars a month, default 1, 0 = none) caps what reading handwriting may spend,
+  counted from the usage records below across every device.
+- **Screenshots:** one synced record, id `settings.screenshots`, kind `setting`: for each device
+  (id uppercased) `<DEVICE>.notes` (its screenshots become library items) and `<DEVICE>.clipboard`
+  (they go into clipboard history as image clips, `sourceApp: "Screenshot"`). Any device may set
+  any row; each device imports only its own screenshots.
+- **AI usage:** one record per device per day, id `aiusage.<device>.<YYYY-MM-DD>` (local date),
+  kind `aiUsage`, fields `device`, `day`, and one `log.<unix ms>-<4 digits>` per request:
+  `{at, purpose ("ask", "handwriting", "action" or "test"), about (≤160 chars), model, in, out,
+  cacheRead?, cacheWrite?, cost? (US dollars, from Claude's prices or the provider's own figure)}`.
+  Written only by its device; totals are sums of the entries.
+- **AI chats:** kind `aiChat`, id `aichat-<uuid>`, fields `title` (`""` = the first question) and
+  `turns`: `[{q, a (Markdown), sources: [item ids], steps: [what it looked up], model, tokens,
+  cost?, at}]`. Ask answers with tools over the library (overview, search, browse, read) rather
+  than a fixed set of notes.
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
   (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
   `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,

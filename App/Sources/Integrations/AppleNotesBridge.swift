@@ -35,7 +35,9 @@ enum AppleNotesBridge {
             out.push({ id: ids[i], name: names[i] || '', modified: mods[i].toISOString(), folder: folder, html: bodies[i] || '' });
           }
         }
-        JSON.stringify(out);
+        // Plain ASCII: osascript writes its result in the system's default encoding, which isn't
+        // UTF-8 for an app started from Finder, so accents and emoji broke the JSON.
+        JSON.stringify(out).replace(/[\\u007f-\\uffff]/g, c => '\\\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4));
         """
         let data = try await run(script, language: "JavaScript")
         let decoder = JSONDecoder()
@@ -45,10 +47,18 @@ enum AppleNotesBridge {
             iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return iso.date(from: text) ?? ISO8601DateFormatter().date(from: text) ?? Date()
         }
+        // Whatever came before the JSON (a warning on stdout) is skipped; a note that doesn't decode
+        // is left out rather than failing the whole import.
+        let text = String(decoding: data, as: UTF8.self)
+        guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]") else {
+            let shown = text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)
+            throw Failure(message: shown.isEmpty ? "Apple Notes sent nothing back. Open Notes once, then press Import now." : "Couldn't read what Apple Notes sent back: “\(shown)”")
+        }
+        struct Loose: Decodable { let note: Note? ; init(from d: Decoder) throws { note = try? Note(from: d) } }
         do {
-            return try decoder.decode([Note].self, from: data)
+            return try decoder.decode([Loose].self, from: Data(text[start...end].utf8)).compactMap(\.note)
         } catch {
-            throw Failure(message: "Couldn't read what Apple Notes sent back.")
+            throw Failure(message: "Couldn't read what Apple Notes sent back (\(data.count) bytes): \(error.localizedDescription)")
         }
     }
 
@@ -58,6 +68,10 @@ enum AppleNotesBridge {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
             process.arguments = ["-l", language, "-e", script]
+            var env = ProcessInfo.processInfo.environment
+            env["LANG"] = "en_US.UTF-8"
+            env["LC_ALL"] = "en_US.UTF-8"
+            process.environment = env
             let out = Pipe(), err = Pipe()
             process.standardOutput = out
             process.standardError = err

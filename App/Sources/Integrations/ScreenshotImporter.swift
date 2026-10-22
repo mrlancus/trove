@@ -10,7 +10,7 @@ enum ScreenshotImporter {
     }
 
     /// Imports screenshots taken after `since`; returns the newest date imported.
-    static func importNew(since: Date?, into library: Library, limit: Int = 50) async -> Date? {
+    static func importNew(since: Date?, into library: Library, route: ScreenshotRoute, limit: Int = 50) async -> Date? {
         guard PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized else { return nil }
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "(mediaSubtypes & %d) != 0 AND creationDate > %@",
@@ -25,7 +25,8 @@ enum ScreenshotImporter {
             guard let (original, data) = await imageData(for: asset) else { continue }
             // With iCloud Photos the other devices see this screenshot too: keyed by its time and
             // bytes, so it's saved once (`Library.addScreenshot`).
-            _ = try? await library.addScreenshot(data, original: original, takenAt: asset.creationDate ?? Date())
+            if route.notes { _ = try? await library.addScreenshot(data, original: original, takenAt: asset.creationDate ?? Date()) }
+            if route.clipboard { _ = try? await library.addScreenshotClip(data, device: DeviceInfo.name) }
             newest = asset.creationDate ?? newest
         }
         await library.removeDuplicateScreenshots()

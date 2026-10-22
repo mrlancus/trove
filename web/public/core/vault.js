@@ -1391,6 +1391,14 @@ export class Vault {
         this.journal.pending = this.journal.pending.filter((op) => op.s > last);
         report.pushed++;
       } catch (e) {
+        // The relay already has a segment of ours starting here (an upload that went through before
+        // this copy saved that it had): the ops it holds are sent; the rest go next time.
+        const held = e.status === 409 ? Number(/"last":\s*(\d+)/.exec(e.message)?.[1]) : NaN;
+        if (Number.isInteger(held) && held >= first) {
+          this.applied.add(`${this.journal.device}/${first}`);
+          this.journal.pending = this.journal.pending.filter((op) => op.s > held);
+          break;
+        }
         report.errors.push(`push ${first}: ${e.message}`);
         break;
       }

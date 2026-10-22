@@ -342,9 +342,11 @@ public enum SharedSetting: String, CaseIterable, Sendable {
     case clipboardHistory, holdSensitive, saveCopiesOnOpen, recordPages, autoUpdate, cloudAI
     /// Keep where you were (the device's location) with each copy and paste.
     case recordPlaces
+    /// Passwords and codes saved like any other copy (synced, kept), instead of held briefly.
+    case saveSensitive
 
     /// The value before anyone has changed it.
-    public var standard: Bool { self != .cloudAI }
+    public var standard: Bool { self != .cloudAI && self != .saveSensitive }
 }
 
 extension Library {

@@ -39,3 +39,42 @@ extension Library {
         return removed
     }
 }
+
+/// Where one device's screenshots go (PROTOCOL.md §8 `settings.screenshots`): into the library as
+/// items, into clipboard history, both, or nowhere. Set from any device; each device imports its own.
+public struct ScreenshotRoute: Sendable, Equatable {
+    public var notes: Bool
+    public var clipboard: Bool
+    public init(notes: Bool = false, clipboard: Bool = false) { self.notes = notes; self.clipboard = clipboard }
+    public var isOn: Bool { notes || clipboard }
+}
+
+extension Library {
+    public static let screenshotSettingsId = "settings.screenshots"
+
+    /// Every device's choice, by device id (uppercased). A device with no entry hasn't chosen yet.
+    public func screenshotRoutes() async -> [String: ScreenshotRoute] {
+        guard let r = await engine.record(Self.screenshotSettingsId), !r.isDeleted else { return [:] }
+        var out: [String: ScreenshotRoute] = [:]
+        for (key, value) in r.fields {
+            let parts = key.split(separator: ".")
+            guard parts.count == 2, let on = value.bool else { continue }
+            let device = String(parts[0]).uppercased()
+            var route = out[device] ?? ScreenshotRoute()
+            if parts[1] == "notes" { route.notes = on } else if parts[1] == "clipboard" { route.clipboard = on } else { continue }
+            out[device] = route
+        }
+        return out
+    }
+
+    public func setScreenshotRoute(_ route: ScreenshotRoute, for device: String) async {
+        let d = device.uppercased()
+        await engine.set(["\(d).notes": .bool(route.notes), "\(d).clipboard": .bool(route.clipboard)], record: Self.screenshotSettingsId, kind: "setting")
+    }
+
+    /// A screenshot into clipboard history (kept once however many devices see it, by its bytes).
+    @discardableResult
+    public func addScreenshotClip(_ data: Data, mime: String = "image/jpeg", device: String? = nil) async throws -> String? {
+        try await addClip(image: data, mime: mime, sourceApp: "Screenshot", sourceDevice: device)
+    }
+}

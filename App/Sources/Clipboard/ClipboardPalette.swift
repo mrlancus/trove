@@ -281,8 +281,10 @@ final class ClipboardPaletteController {
 
     /// Pasting into another app means sending it ⌘V, which needs Accessibility permission.
     nonisolated static func canPostKeystrokes(prompt: Bool) -> Bool {
-        if AXIsProcessTrusted() { return true }
+        // Either answer will do: sending ⌘V needs the event-posting right, which Accessibility grants.
+        if AXIsProcessTrusted() || CGPreflightPostEventAccess() { return true }
         if prompt {
+            _ = CGRequestPostEventAccess()
             // "AXTrustedCheckOptionPrompt" is kAXTrustedCheckOptionPrompt (a C global Swift 6 won't touch).
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)

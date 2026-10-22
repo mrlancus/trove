@@ -54,7 +54,8 @@ enum Handwriting {
             }).value else { continue }
             var text = ""
             var stamp = pageSig
-            if let ai, let jpeg = InkRenderer.jpeg(image.image, quality: 0.85), let read = try? await ai.readPage(jpeg, mime: "image/jpeg") {
+            if let ai, let jpeg = InkRenderer.jpeg(image.image, quality: 0.85),
+               let read = try? await ai.readPage(jpeg, mime: "image/jpeg", about: item.displayTitle) {
                 text = read
             } else {
                 text = await AppleEnricher.recognizeText(in: image.image, fast: fast).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -168,7 +169,7 @@ extension Handwriting {
                     guard let image = await Task.detached(priority: .utility, operation: {
                         NotebookRenderer.render(page, of: notebook, width: width, scale: 1).map { InkImage(image: $0.cgImage) }
                     }).value else { continue }
-                    if let text = await readImage(image.image, ai: ai) { if !text.isEmpty { parts.append(text) } } else { failed += 1 }
+                    if let text = await readImage(image.image, ai: ai, about: item.displayTitle) { if !text.isEmpty { parts.append(text) } } else { failed += 1 }
                     read += 1
                 }
                 continue
@@ -186,7 +187,7 @@ extension Handwriting {
                 guard let image = await Task.detached(priority: .utility, operation: {
                     InkRenderer.render(spec, content: content, pixelWidth: width).map(InkImage.init)
                 }).value else { continue }
-                if let text = await readImage(image.image, ai: ai) { if !text.isEmpty { parts.append(text) } } else { failed += 1 }
+                if let text = await readImage(image.image, ai: ai, about: item.displayTitle) { if !text.isEmpty { parts.append(text) } } else { failed += 1 }
                 read += 1
             }
         }
@@ -197,8 +198,8 @@ extension Handwriting {
         return read
     }
 
-    private static func readImage(_ image: CGImage, ai: AIClient) async -> String? {
+    private static func readImage(_ image: CGImage, ai: AIClient, about: String) async -> String? {
         guard let jpeg = InkRenderer.jpeg(image, quality: 0.85) else { return nil }
-        return try? await ai.readPage(jpeg, mime: "image/jpeg")
+        return try? await ai.readPage(jpeg, mime: "image/jpeg", about: about)
     }
 }
