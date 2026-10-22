@@ -203,6 +203,8 @@ enum InkRenderer {
         ctx.translateBy(x: 0, y: CGFloat(pxH))
         ctx.scaleBy(x: k, y: -k)
         ctx.translateBy(x: -box.x, y: -box.y)
+        // Only what's in the box gets rasterised (a part of a big GoodNotes whiteboard or PDF page).
+        if area != nil { ctx.clip(to: CGRect(x: box.x, y: box.y, width: box.width, height: box.height)) }
         if background { drawBackground(page, area: area, in: ctx) }
         drawContent(content, in: ctx)
         return ctx.makeImage()
@@ -590,7 +592,7 @@ enum InkRenderer {
             let b = bounds ?? InkGeometry.Rect(x: 0, y: 0, width: 768, height: 1024)
             area = InkGeometry.Rect(x: b.x - 24, y: b.y - 24, width: max(200, b.width + 48), height: min(max(150, b.height + 48), max(200, b.width + 48) * 1.5))
         }
-        guard let image = render(page, content: content, pixelWidth: 480, area: area) else { return nil }
+        guard let image = render(page, content: content, pixelWidth: 800, area: area) else { return nil }
         return jpeg(image)
     }
 

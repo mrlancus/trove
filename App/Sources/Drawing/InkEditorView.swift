@@ -609,8 +609,12 @@ struct SketchSection: View {
     @State private var images: [String: InkImage] = [:]
     /// What each page's picture was drawn from: only pages whose ink changed are drawn again.
     @State private var drawn: [String: String] = [:]
+    /// How wide a page shows (points): pictures are drawn for that at the screen's resolution.
+    @State private var shownWidth: CGFloat = 0
+    @Environment(\.displayScale) private var displayScale
 
     private var pages: [InkPageSpec] { InkRenderer.sketchPages(item) }
+    private var pixelWidth: Int { InkPreviewSize.pixels(shownWidth, scale: displayScale) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -626,9 +630,10 @@ struct SketchSection: View {
                         VStack(spacing: 4) {
                             ZStack {
                                 Color.white
-                                if let image = images[page.key] { Image(decorative: image.image, scale: 2).resizable().scaledToFit() }
+                                if let image = images[page.key] { Image(decorative: image.image, scale: displayScale).resizable().scaledToFit() }
                             }
                             .aspectRatio(page.infinite ? 4 / 3 : page.width / page.height, contentMode: .fit)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { shownWidth = max(shownWidth, $0) }
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                             .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                             if pages.count > 1 { Text("\(index + 1)").font(.caption).foregroundStyle(.secondary) }
@@ -644,14 +649,16 @@ struct SketchSection: View {
         }
         .padding(16)
         .card(cornerRadius: 16)
-        .task(id: "\(model.inkRevision)-\(item.record.updatedHLC)-\(model.inkTarget == nil)") { await render() }
+        .task(id: "\(model.inkRevision)-\(item.record.updatedHLC)-\(model.inkTarget == nil)-\(pixelWidth)") { await render() }
     }
 
     private func render() async {
         // Behind the open editor nobody sees these: redraw once it closes.
         guard model.inkTarget == nil, let library = model.library else { return }
+        let width = pixelWidth
         for page in pages {
-            let (content, sig) = await Self.page(library, itemId: item.id, layer: "", spec: page)
+            let (content, made) = await Self.page(library, itemId: item.id, layer: "", spec: page)
+            let sig = "\(made)@\(width)"
             guard drawn[page.key] != sig || images[page.key] == nil else { continue }
             var area: InkGeometry.Rect?
             if page.infinite {
@@ -659,7 +666,7 @@ struct SketchSection: View {
                 area = InkGeometry.Rect(x: b.x - 24, y: b.y - 24, width: max(300, b.width + 48), height: max(225, b.height + 48))
             }
             let box = area
-            images[page.key] = await Task.detached(priority: .utility) { InkRenderer.render(page, content: content, pixelWidth: 480, area: box).map(InkImage.init) }.value
+            images[page.key] = await Task.detached(priority: .utility) { InkRenderer.render(page, content: content, pixelWidth: width, area: box).map(InkImage.init) }.value
             drawn[page.key] = sig
         }
     }
@@ -682,6 +689,16 @@ struct SketchSection: View {
     }
 }
 
+/// How many pixels wide a preview is drawn: as wide as it shows on this screen (sharp, not one
+/// size for all), in steps so a small resize doesn't draw it again.
+enum InkPreviewSize {
+    static func pixels(_ points: CGFloat, scale: CGFloat) -> Int {
+        let wanted = max(320, points * max(1, scale))
+        let stepped = (wanted / 160).rounded(.up) * 160
+        return Int(min(4096, stepped))
+    }
+}
+
 /// A PDF or image with ink on it, page by page.
 struct InkedFileView: View {
     let item: Item
@@ -691,21 +708,26 @@ struct InkedFileView: View {
     @State private var pages: [InkPageSpec] = []
     @State private var images: [String: InkImage] = [:]
     @State private var drawn: [String: String] = [:]
+    @State private var shownWidth: CGFloat = 0
+    @Environment(\.displayScale) private var displayScale
+
+    private var pixelWidth: Int { InkPreviewSize.pixels(shownWidth, scale: displayScale) }
 
     var body: some View {
         VStack(spacing: 12) {
             ForEach(Array(pages.enumerated()), id: \.element.key) { index, page in
                 ZStack {
                     Color.white
-                    if let image = images[page.key] { Image(decorative: image.image, scale: 2).resizable() } else { ProgressView() }
+                    if let image = images[page.key] { Image(decorative: image.image, scale: displayScale).resizable() } else { ProgressView() }
                 }
                 .aspectRatio(page.width / page.height, contentMode: .fit)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { shownWidth = max(shownWidth, $0) }
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                 .onTapGesture { model.inkTarget = InkTarget(itemId: item.id, layer: attachment.id, title: attachment.name, startPage: index) }
             }
         }
-        .task(id: "\(model.inkRevision)-\(model.inkTarget == nil)") { await render() }
+        .task(id: "\(model.inkRevision)-\(model.inkTarget == nil)-\(pixelWidth)") { await render() }
     }
 
     private func render() async {
@@ -714,9 +736,10 @@ struct InkedFileView: View {
         let data = data, mime = attachment.mime, name = attachment.name
         if pages.isEmpty { pages = await Task.detached(priority: .userInitiated) { InkRenderer.pages(for: data, mime: mime, name: name) }.value }
         for page in pages {
-            let (content, sig) = await SketchSection.page(library, itemId: item.id, layer: attachment.id, spec: page)
+            let width = pixelWidth
+            let (content, made) = await SketchSection.page(library, itemId: item.id, layer: attachment.id, spec: page)
+            let sig = "\(made)@\(width)"
             guard drawn[page.key] != sig || images[page.key] == nil else { continue }
-            let width = Int(min(2400, page.width * 2))
             // The first picture is waited for; redraws after an edit can take their time.
             let priority: TaskPriority = images[page.key] == nil ? .userInitiated : .utility
             images[page.key] = await Task.detached(priority: priority) { InkRenderer.render(page, content: content, pixelWidth: width).map(InkImage.init) }.value

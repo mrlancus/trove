@@ -70,24 +70,17 @@ struct NotebookView: View {
     struct ReaderPage: Identifiable { let index: Int; var id: Int { index } }
 }
 
-/// One page, drawn to an image at the size it's shown (again when that changes).
+/// One page, drawn from its vectors in tiles at the size it shows (sharp at any zoom, no work while still).
 struct NotebookPageView: View {
     let notebook: GoodNotesInk.Notebook
     let page: GoodNotesInk.Page
-    @Environment(\.displayScale) private var displayScale
-    @State private var image: RenderedPage?
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.white
-                if let image { Image(decorative: image.cgImage, scale: image.scale).resizable() } else { ProgressView() }
-            }
-            .task(id: Int(geo.size.width)) {
-                guard geo.size.width > 1 else { return }
-                let (notebook, page, width, scale) = (notebook, page, geo.size.width, displayScale)
-                image = await Task.detached(priority: .userInitiated) { NotebookRenderer.render(page, of: notebook, width: width, scale: scale) }.value
-            }
+        let (notebook, page) = (notebook, page)
+        InkTiledPage(token: "\(page.width)x\(page.height)-\(page.layers.count)") { ctx, size in
+            let k = size.width / max(1, page.width)
+            ctx.scaleBy(x: k, y: k)
+            NotebookRenderer.draw(page, of: notebook, layers: page.layers, size: CGSize(width: page.width, height: page.height), in: ctx)
         }
         .aspectRatio(page.width / page.height, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -113,11 +106,13 @@ struct NotebookReader: View {
                         LazyVStack(spacing: 16) {
                             ForEach(Array(notebook.pages.enumerated()), id: \.offset) { index, page in
                                 NotebookPageView(notebook: notebook, page: page)
-                                    .frame(width: max(200, (geo.size.width - 24) * zoom * pinch))
+                                    .frame(width: max(200, (geo.size.width - 24) * zoom))
                                     .id(index)
                             }
                         }
                         .padding(12)
+                        // While pinching the drawn pages just scale; they're drawn sharp at the new size when it ends.
+                        .scaleEffect(pinch, anchor: .top)
                     }
                     .onAppear { proxy.scrollTo(start, anchor: .top) }
                 }

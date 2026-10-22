@@ -36,7 +36,27 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: sketching feedback (blank grey sketches, squeeze palette that turns, preset sizes and colours, tape, laser)
+## Latest round: sharp at every zoom (user: "lots of stuff is very low quality, especially GoodNotes whiteboards; should be vectors at max quality, without using much power")
+Builds on CI; not yet run on a device.
+- **Why it was blurry**: file pages (GoodNotes whiteboards, PDFs, pictures) were drawn once as one
+  picture at most 2400 px wide (4096 on the Mac, which did the same for paper pages too); a GoodNotes
+  whiteboard thousands of points wide got well under a pixel per point. Sketch previews in the item
+  view were 480 px whatever their size.
+- **Now** (`InkBackdrop`, iPad/iPhone and Mac): the whole-page picture stays for overviews and while
+  pinching, and ~0.16 s after a pinch or scroll settles what's on screen (plus 15 %) is drawn again
+  from the vectors at the screen's real resolution, kept until the view moves past it or zooms in
+  further. Power: one render per settle, nothing per frame. Ink was already vector (PencilKit on
+  iPad, a screen-resolution cache on the Mac); GoodNotes' editable handwriting is ink.
+- **GoodNotes notebooks in the item view and the reader** draw from their vectors in 512 px tiles
+  (`InkTiledPage`, Core Animation's tiled layer): only tiles on screen, off the main thread, kept
+  until the size changes. The reader's pinch scales what's drawn and redraws once at the end
+  (it used to redraw the whole page, capped at 58 M pixels, on every frame).
+- **Previews** (sketch pages and inked PDFs in the item view) are drawn as wide as they show at the
+  screen's scale (in 160 px steps, up to 4096); card thumbnails are 800 px (were 480).
+- **Check**: open a GoodNotes whiteboard, zoom right in on its background; it should sharpen a
+  moment after you stop.
+
+## Round before: sketching feedback (blank grey sketches, squeeze palette that turns, preset sizes and colours, tape, laser)
 Builds on CI; not yet run on a device.
 - **Sketches all grey, bits showing only when zoomed far out**: the real cause. PencilKit's canvas
   was made opaque grey (for the shade round the pages), so it painted its tiles grey over the paper
