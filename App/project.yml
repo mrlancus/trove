@@ -99,6 +99,9 @@ targets:
         com.apple.security.application-groups: [$(TROVE_APP_GROUP)]
         # The hardened runtime needs this for the clipboard's places (Services/PlaceFinder.swift).
         com.apple.security.personal-information.location: true
+        # And this to control other apps (Apple Notes through osascript): without it macOS refuses
+        # the Apple Events silently, with no permission prompt, and Notes sends nothing back.
+        com.apple.security.automation.apple-events: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove
