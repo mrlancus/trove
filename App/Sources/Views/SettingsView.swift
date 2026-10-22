@@ -509,29 +509,84 @@ private struct IntegrationsSection: View {
                 Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
             }
             #endif
-            Toggle("Import new screenshots", isOn: Binding(
-                get: { model.config?.screenshotsImport ?? false },
-                set: { on in
-                    Task {
-                        #if os(iOS)
-                        let ok = on ? await ScreenshotImporter.requestAccess() : true
-                        #else
-                        let ok = true
-                        #endif
-                        model.updateConfig { $0.screenshotsImport = on && ok }
-                        model.watchScreenshots()
-                    }
-                }))
-            #if os(iOS)
-            Text("Screenshots only, not other photos: as soon as you take one while Trove is open, otherwise when you come back to Trove.").font(.caption).foregroundStyle(.secondary)
-            #else
-            Text("Screenshots only, as soon as you take them.").font(.caption).foregroundStyle(.secondary)
-            #endif
+            ScreenshotRoutesView()
         } header: {
             Text("Other apps")
         } footer: {
             FormFooter("To bring in files, folders, zips and exports, use Import in the sidebar or drop them on the Trove window.")
         }
+    }
+}
+
+/// Screenshots: for every device, whether its screenshots go into the library, into clipboard
+/// history, or both. Any device can set any row; each device imports its own screenshots.
+private struct ScreenshotRoutesView: View {
+    @Environment(AppModel.self) private var model
+    @State private var devices: [(id: String, name: String, kind: String)] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Screenshots").font(.headline)
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow {
+                    Text("Device").font(.caption).foregroundStyle(.secondary)
+                    Text("Notes").font(.caption).foregroundStyle(.secondary)
+                    Text("Clipboard").font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(devices, id: \.id) { d in
+                    GridRow {
+                        Label(d.name + (isMe(d.id) ? " (this one)" : ""), systemImage: d.kind == "mac" ? "laptopcomputer" : d.kind == "ipad" ? "ipad" : "iphone")
+                            .lineLimit(1)
+                        toggle(d.id, \.notes)
+                        toggle(d.id, \.clipboard)
+                    }
+                }
+            }
+            #if os(iOS)
+            Text("Screenshots only, never other photos. Notes puts each one in your library (its text becomes searchable); Clipboard adds it to clipboard history so you can paste it anywhere. Each device brings in its own as soon as you take them (iPhone and iPad when Trove is open or next opened).")
+                .font(.caption).foregroundStyle(.secondary)
+            #else
+            Text("Screenshots only. Notes puts each one in your library (its text becomes searchable); Clipboard adds it to clipboard history so you can paste it anywhere. Each device brings in its own as soon as they're taken (iPhone and iPad when Trove is open or next opened).")
+                .font(.caption).foregroundStyle(.secondary)
+            #endif
+        }
+        .task { await load() }
+    }
+
+    private func isMe(_ id: String) -> Bool { id == model.config?.deviceId.uppercased() }
+
+    private func route(_ id: String) -> ScreenshotRoute {
+        isMe(id) ? model.myScreenshotRoute : (model.screenshotRoutes[id] ?? ScreenshotRoute())
+    }
+
+    private func toggle(_ id: String, _ key: WritableKeyPath<ScreenshotRoute, Bool>) -> some View {
+        Toggle("", isOn: Binding(get: { route(id)[keyPath: key] }, set: { on in
+            var r = route(id)
+            r[keyPath: key] = on
+            Task {
+                #if os(iOS)
+                // This iPhone or iPad needs Photos access to see its screenshots.
+                if on, isMe(id), !(await ScreenshotImporter.requestAccess()) { return }
+                #endif
+                await model.setScreenshotRoute(r, for: id)
+            }
+        }))
+        .labelsHidden()
+        #if os(macOS)
+        .toggleStyle(.checkbox)
+        #endif
+    }
+
+    private func load() async {
+        let me = (model.config?.deviceId ?? "").uppercased()
+        var list: [(id: String, name: String, kind: String)] = [(me, DeviceInfo.name, DeviceInfo.kind)]
+        for d in (try? await model.vault.relayClient?.devices()) ?? [] where !d.revoked && d.kind != "web" && d.deviceId.uppercased() != me {
+            list.append((d.deviceId.uppercased(), d.name, d.kind))
+        }
+        for id in model.screenshotRoutes.keys.sorted() where !list.contains(where: { $0.id == id }) {
+            list.append((id, "Device \(id.prefix(6))", ""))
+        }
+        devices = list
     }
 }
 
@@ -585,14 +640,39 @@ private struct ClipboardSection: View {
     /// The usual choices, plus whatever another device set if it isn't one of them.
     static func choices(_ list: [Int], current: Int) -> [Int] { list.contains(current) ? list : list + [current] }
     #if os(macOS)
-    @State private var trusted = AXIsProcessTrusted()
+    @State private var trusted = ClipboardPaletteController.canPostKeystrokes(prompt: false)
+
+    /// Opened straight from Downloads, macOS runs a randomised copy ("App Translocation").
+    static var translocated: Bool { Bundle.main.bundlePath.contains("/AppTranslocation/") }
+
+    /// Quits and opens Trove again once it has gone, so it picks up new permissions.
+    static func relaunch() {
+        let script = "while /bin/kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do /bin/sleep 0.2; done; /usr/bin/open \"\(Bundle.main.bundlePath)\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", script]
+        if (try? process.run()) != nil { NSApp.terminate(nil) }
+    }
     #endif
 
     var body: some View {
         @Bindable var clipboard = model.clipboard
         Section {
             Toggle("Keep clipboard history", isOn: shared(.clipboardHistory))
-            Toggle("Hold passwords and codes briefly (never synced)", isOn: shared(.holdSensitive))
+            Picker("Passwords and codes", selection: Binding(
+                get: { model.isOn(.saveSensitive) ? 2 : model.isOn(.holdSensitive) ? 1 : 0 },
+                set: { v in
+                    model.setShared(.saveSensitive, v == 2)
+                    model.setShared(.holdSensitive, v >= 1)
+                })) {
+                Text("Don't keep them").tag(0)
+                Text("Keep for 2 minutes, this device only").tag(1)
+                Text("Keep like any other copy").tag(2)
+            }
+            if model.isOn(.saveSensitive) {
+                Text("Passwords, keys and one-time codes you copy are saved in clipboard history, synced to your devices (end-to-end encrypted) and kept like everything else, with no extra protection.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
             #if os(macOS)
             if clipboard.enabled {
                 LabeledContent("Last copy recorded") {
@@ -613,10 +693,18 @@ private struct ClipboardSection: View {
                     }
                 }
             }
-            .task { while !Task.isCancelled { trusted = AXIsProcessTrusted(); try? await Task.sleep(for: .seconds(2)) } }
+            .task { while !Task.isCancelled { trusted = ClipboardPaletteController.canPostKeystrokes(prompt: false); try? await Task.sleep(for: .seconds(2)) } }
             if !trusted {
-                Text("Until this is allowed, picking a clip copies it and you press ⌘V. If Trove is already switched on in Accessibility but this still says so, select Trove there, remove it with −, then allow it again: macOS treats each new download as a different app.")
-                    .font(.caption).foregroundStyle(.secondary)
+                if Self.translocated {
+                    Text("Trove is running from a temporary copy macOS made of the download, so the permission doesn't reach it. Quit Trove, drag it into Applications, open it from there, then allow it.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                HStack {
+                    Text("Until this is allowed, picking a clip copies it and you press ⌘V. Already switched on in Accessibility? macOS often only tells Trove after it restarts. If it still says this afterwards, select Trove there, remove it with −, add it again with +, and restart.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Restart Trove") { Self.relaunch() }
+                }
             }
             #else
             Text("On iPhone and iPad Trove doesn't read your clipboard by itself (iOS would ask “Allow Paste?” each time). Tap Paste in Clipboard to save what you copied, or use the Save Clipboard to Trove shortcut.")

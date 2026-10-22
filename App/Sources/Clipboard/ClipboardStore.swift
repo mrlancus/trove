@@ -24,6 +24,8 @@ final class ClipboardStore {
     var enabled: Bool { didSet { UserDefaults.standard.set(enabled, forKey: "clipboard.enabled") } }
     /// Keep sensitive copies for two minutes on this device (off: ignore them entirely).
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
+    /// Save sensitive copies like any other (synced and kept, no protection), when you'd rather.
+    var saveSensitive: Bool { didSet { UserDefaults.standard.set(saveSensitive, forKey: "clipboard.saveSensitive") } }
     /// iPhone/iPad: something new was copied that isn't saved yet (seen without reading it, so iOS
     /// doesn't ask "Allow Paste?"; the Paste button saves it).
     var copyWaiting = false
@@ -62,6 +64,7 @@ final class ClipboardStore {
     init() {
         enabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
         keepSensitive = UserDefaults.standard.object(forKey: "clipboard.keepSensitive") as? Bool ?? true
+        saveSensitive = UserDefaults.standard.object(forKey: "clipboard.saveSensitive") as? Bool ?? false
         captureOnOpen = UserDefaults.standard.object(forKey: "clipboard.captureOnOpen") as? Bool ?? true
     }
 
@@ -191,7 +194,7 @@ final class ClipboardStore {
 
     func capture(text: String, sourceApp: String?, source: ClipSource = ClipSource()) async {
         guard enabled, let library, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if SensitiveDetector.isSensitive(text) {
+        if !saveSensitive, SensitiveDetector.isSensitive(text) {
             guard keepSensitive else { return }
             ephemeral.removeAll { $0.text == text }
             ephemeral.insert(EphemeralClip(text: text, sourceApp: sourceApp, expires: Date().addingTimeInterval(Self.sensitiveLifetime)), at: 0)

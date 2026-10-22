@@ -438,8 +438,9 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   history to keep (numbers; 0 = no limit; missing = 30 days and 1,000 clips).
 - **Shared app settings:** one synced record, id `settings.app`, kind `setting`, booleans that
   every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
-  never leave the device), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
-  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`). A device whose
+  never leave the device), `saveSensitive` (default false: passwords and codes saved like any
+  clip instead), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
+  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI` and `saveSensitive`). A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
 - **Your own AI:** one synced record, id `settings.ai`, kind `setting` (`AISettings`), end-to-end
@@ -452,6 +453,10 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   called natively (`/v1/messages`); the others through `/chat/completions`. `limit.background`
   (number, US dollars a month, default 1, 0 = none) caps what reading handwriting may spend,
   counted from the usage records below across every device.
+- **Screenshots:** one synced record, id `settings.screenshots`, kind `setting`: for each device
+  (id uppercased) `<DEVICE>.notes` (its screenshots become library items) and `<DEVICE>.clipboard`
+  (they go into clipboard history as image clips, `sourceApp: "Screenshot"`). Any device may set
+  any row; each device imports only its own screenshots.
 - **AI usage:** one record per device per day, id `aiusage.<device>.<YYYY-MM-DD>` (local date),
   kind `aiUsage`, fields `device`, `day`, and one `log.<unix ms>-<4 digits>` per request:
   `{at, purpose ("ask", "handwriting", "action" or "test"), about (≤160 chars), model, in, out,

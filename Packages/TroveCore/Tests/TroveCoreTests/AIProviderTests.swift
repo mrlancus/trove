@@ -211,3 +211,17 @@ struct AIProviderTests {
         #expect(await lib.aiChats().isEmpty)
     }
 }
+
+struct ScreenshotRouteTests {
+    @Test func routesPerDevice() async throws {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        #expect(await lib.screenshotRoutes().isEmpty)
+        await lib.setScreenshotRoute(ScreenshotRoute(notes: true, clipboard: false), for: "mac1")
+        await lib.setScreenshotRoute(ScreenshotRoute(notes: false, clipboard: true), for: "IPAD")
+        let routes = await lib.screenshotRoutes()
+        #expect(routes["MAC1"] == ScreenshotRoute(notes: true) && routes["IPAD"] == ScreenshotRoute(clipboard: true))
+        let a = try await lib.addScreenshotClip(Data([1, 2, 3]), device: "iPad")
+        let b = try await lib.addScreenshotClip(Data([1, 2, 3]), device: "iPhone")
+        #expect(a != nil && a == b) // the same screenshot seen by two devices is one clip
+    }
+}
