@@ -14,6 +14,7 @@ import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
+import { pdfMarks } from "./pdfviewer.js";
 import { drawLoaded, loadDraw, openInkEditor, preloadWhenIdle, renderSketchPage, sketchThumbnail } from "./lazy.js";
 import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
@@ -443,8 +444,14 @@ async function applyImport(action) {
     return [1, action.title || "Note"];
   }
   if (action.bytes.length > MAX_UPLOAD) { toast(`${action.name} is over 100 MB`); return [0, action.name]; }
-  await vault.addFile(action.bytes, action.name, action.mime, { source: "import", folder: action.folder });
+  const id = await vault.addFile(action.bytes, action.name, action.mime, { source: "import", folder: action.folder });
+  if (action.mime === "application/pdf") indexPdfText(id, action.bytes);
   return [1, action.name];
+}
+
+/** A PDF added here is searchable straight away: its text as the apps would write it (PROTOCOL.md §10). */
+function indexPdfText(itemId, bytes) {
+  import("./pdfviewer.js").then(({ pdfText }) => pdfText(bytes)).then((text) => { if (text) { state.vault.setPdfText(itemId, text); syncSoon(); } }).catch(() => {});
 }
 
 function renderImport() {
@@ -1821,7 +1828,9 @@ const select_ = (folderId) => { if (matchMedia("(max-width: 760px)").matches) cl
 function filesSection(item) {
   const vault = state.vault;
   const section = h("section", { class: "files" });
+  const firstPdf = item.attachments.slice(0, 3).find((a) => previewKind(a.name, a.mime) === "pdf");
   item.attachments.forEach((att, index) => {
+    const isPdf = previewKind(att.name, att.mime) === "pdf";
     const upload = h("input", { type: "file", hidden: true });
     upload.addEventListener("change", async () => {
       const file = upload.files[0];
@@ -1854,8 +1863,16 @@ function filesSection(item) {
         eager: !att.size || att.size < 60e6 || index === 0 && att.size < 150e6,
         ink: canInk(att) ? (page) => vault.strokes(item.id, att.id, page) : null,
         elements: (page) => vault.elements(item.id, att.id, page), inkEdited,
+        marks: isPdf ? pdfMarks(vault, item.id, att, {
+          changed: syncSoon, notify: toast,
+          saveVersion: index === 0 ? async (bytes) => { await vault.replaceFile(item.id, bytes, { name: att.name, mime: att.mime }); thumbTried.delete(att.id); syncSoon(); toast("Saved as a new version. The old one is under Versions."); } : null,
+          // The apps read PDFs' text for search; a PDF added here gets it now (PROTOCOL.md §10).
+          indexText: !item.ocrText && att === firstPdf ? (text) => { vault.setPdfText(item.id, text); syncSoon(); } : null,
+        }) : null,
       });
       panelCache.previews.set(cacheKey, preview);
+    } else {
+      preview.querySelector(".pdf-viewer")?.refreshMarks?.();
     }
     section.append(head, preview);
   });

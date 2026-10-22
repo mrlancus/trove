@@ -28,17 +28,21 @@ export async function openPdf(bytes) {
 export async function pdfText(bytes) {
   const doc = await openPdf(bytes);
   try {
-    const pages = [];
-    let total = 0;
-    for (let n = 1; n <= doc.numPages && total <= PDF_TEXT_MAX; n++) {
-      const text = pageTextFromItems((await (await doc.getPage(n)).getTextContent()).items);
-      pages.push(text);
-      total += Array.from(normalizePdfPage(text)).length + 2;
-    }
-    return joinPdfText(pages);
+    return await documentText(doc);
   } finally {
     doc.destroy();
   }
+}
+
+async function documentText(doc) {
+  const pages = [];
+  let total = 0;
+  for (let n = 1; n <= doc.numPages && total <= PDF_TEXT_MAX; n++) {
+    const text = pageTextFromItems((await (await doc.getPage(n)).getTextContent()).items);
+    pages.push(text);
+    total += Array.from(normalizePdfPage(text)).length + 2;
+  }
+  return joinPdfText(pages);
 }
 
 const COLOUR_NAMES = { "#ffd60a": "yellow", "#34c759": "green", "#0a84ff": "blue", "#ff6fae": "pink", "#ff9500": "orange" };
@@ -418,6 +422,11 @@ export async function pdfViewer(bytes, { onExpand, ink, marks = null, fileName =
   const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
   const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
   observeAll();
+  // A PDF with no text for search yet (added on the website): read it once the pages are showing.
+  if (marks?.indexText) {
+    const idle = globalThis.requestIdleCallback ?? ((fn) => setTimeout(fn, 1500));
+    idle(() => { documentText(doc).then((text) => { if (text) marks.indexText(text); }).catch(() => {}); }, { timeout: 4000 });
+  }
 
   root.append(bar, findRow, exportMenu, pages, selbar);
   root.addEventListener("keydown", (e) => {
@@ -442,12 +451,13 @@ export async function pdfViewer(bytes, { onExpand, ink, marks = null, fileName =
 /**
  * What the viewer saves to the vault for a PDF on an item: highlights, quotes and form values on
  * the file's layer. `changed()` runs after each edit (to sync), `notify(text)` shows a message,
- * `saveVersion(bytes)` (optional) saves an exported file as the item's new version.
+ * `saveVersion(bytes)` (optional) saves an exported file as the item's new version, `indexText(text)`
+ * (optional) saves the PDF's text for search when it has none.
  */
-export function pdfMarks(vault, itemId, att, { changed = () => {}, notify = () => {}, saveVersion = null } = {}) {
+export function pdfMarks(vault, itemId, att, { changed = () => {}, notify = () => {}, saveVersion = null, indexText = null } = {}) {
   const on = itemId, layer = att.id;
   return {
-    notify, saveVersion,
+    notify, saveVersion, indexText,
     elements: (page) => vault.elements(on, layer, page),
     fields: () => vault.pdfFields(on, layer),
     highlight: ({ page, boxes, quote, color }) => { const id = vault.addHighlight({ on, layer, page, boxes, quote, color }); changed(); return id; },
