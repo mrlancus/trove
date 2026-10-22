@@ -22,6 +22,21 @@ function along(corners, perSide, wobble, closed) {
   out.push(pt(last[0] + noise(wobble), last[1] + noise(wobble), out.length));
   return out;
 }
+// A closed polygon whose sides bow outwards by `bow` of their length.
+function bowed(corners, bow, perSide, wobble) {
+  const out = [];
+  const cx = corners.reduce((n, c) => n + c[0], 0) / corners.length, cy = corners.reduce((n, c) => n + c[1], 0) / corners.length;
+  corners.forEach((a, k) => {
+    const b = corners[(k + 1) % corners.length];
+    const mx = (a[0] + b[0]) / 2 - cx, my = (a[1] + b[1]) / 2 - cy, ml = Math.hypot(mx, my), len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (let i = 0; i < perSide; i++) {
+      const f = i / perSide, s = Math.sin(Math.PI * f) * bow * len;
+      out.push(pt(a[0] + (b[0] - a[0]) * f + (mx / ml) * s + noise(wobble), a[1] + (b[1] - a[1]) * f + (my / ml) * s + noise(wobble), out.length));
+    }
+  });
+  out.push(pt(corners[0][0], corners[0][1], out.length));
+  return out;
+}
 const loop = (cx, cy, rx, ry, n, wobble, overshoot = 0.05) =>
   Array.from({ length: n + 1 }, (_, i) => { const a = (i / n) * 2 * Math.PI * (1 + overshoot); return pt(cx + rx * Math.cos(a) + noise(wobble), cy + ry * Math.sin(a) + noise(wobble), i); });
 
@@ -37,6 +52,13 @@ const drawings = {
   ellipse: loop(300, 300, 160, 80, 60, 2),
   scribble: Array.from({ length: 40 }, (_, i) => pt(200 + 80 * Math.sin(i * 1.7) + noise(10), 200 + 60 * Math.cos(i * 2.3) + noise(10), i)),
   tiny: along([[10, 10], [14, 12]], 4, 0.2, false),
+  // Standard shapes win when near: a square, an equilateral triangle, a circle; corners beat curves.
+  roughSquare: along([[100, 100], [290, 108], [296, 300], [104, 292]], 20, 3, true),
+  equilateral: along([[200, 100], [310, 290], [85, 285]], 20, 3, true),
+  rightTriangle: along([[100, 100], [104, 300], [300, 296]], 20, 3, true),
+  nearCircle: loop(300, 300, 120, 104, 60, 3),
+  bowedSquare: bowed([[100, 100], [300, 100], [300, 300], [100, 300]], 0.12, 18, 2),
+  levelLine: along([[100, 100], [400, 112]], 30, 2, false),
 };
 const shapes = Object.entries(drawings).map(([name, points]) => ({ name, points: points.map((p) => [p.x, p.y, p.p, p.t]), expect: recognizeShape(points) }))
   .map((c) => ({ ...c, expect: c.expect && { shape: c.expect.shape, points: c.expect.points.map((p) => [p.x, p.y, p.p, p.t]) } }));

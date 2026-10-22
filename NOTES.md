@@ -6,12 +6,12 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 161 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 166 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
 | `web/` web app (any browser, served by the relay): create vault, recovery, add devices, inbox import, folders, viewer, connections, select mode, sources, GoodNotes viewer, drawing, sketch tools, clip editor | ✅ Done | 28 unit/interop tests; 9 e2e (relay + real Chromium, incl. `draw.e2e.mjs`) passing locally. Deployed (version 3d43d4ca, at f01c8a3) |
-| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 3cb7fcd, sketching/clipboard places/Paste round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
+| `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: e0d46ae, your AI / Apple Notes / sketching feedback round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
 | **Notes: Today's note, templates, checklists** (PROTOCOL.md §12) | 🟡 Core + website tested; apps build on CI, not yet run on a device | 4 Swift + 3 JS unit tests on `notes-cases.json`, Chromium e2e (`notes.e2e.mjs`, desktop + phone width) |
@@ -36,7 +36,53 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: sharp at every zoom (user: "lots of stuff is very low quality, especially GoodNotes whiteboards; should be vectors at max quality, without using much power")
+## Latest round: your own AI, Apple Notes on any Mac, and sketching feedback (user: "laser should glow, line or dot; the second bar moves the sketch; snap inside the ruler/protractor; tape with a finger; two-row lasso menu; zoom pill in the corner; dragging things shouldn't pan; eraser and tape; the top bar's ends fixed; shapes should prioritise corners and regular shapes")
+Builds on CI (e0d46ae; the shapes commit after it changes only TroveCore, the website and docs); not yet run on a device.
+- **Apple Notes import** used to run only on the Mac that made the vault (`mirrorOwner`); this vault
+  was made on the website, so it never ran. Now any Mac imports after each sync (at most every
+  5 minutes, `AppModel.importAppleNotes(force:)`), reading notes in bulk with JavaScript for
+  Automation through `osascript` off the main thread. Errors, results and **Import now** are in
+  Settings → Integrations. **Check:** the first run asks for permission (System Settings → Privacy &
+  Security → Automation → Trove → Notes).
+- **Your own AI** (`settings.ai`, PROTOCOL.md §8, synced end-to-end encrypted): Settings → AI → Your
+  AI: provider (Claude, OpenAI, Gemini, OpenRouter, any OpenAI-style URL), key, a model per tier
+  (Fast/Smarter/Best, with Load models), Test, and "Read handwriting". Ask uses your AI first, then
+  Apple Intelligence, then the relay, with a Fast/Smarter/Best picker and the answering model shown.
+  Handwriting (sketch pages, GoodNotes notebooks, scanned or inked PDFs, photos; not screenshots) is
+  read by your AI as soon as it arrives (not waiting for the charger), up to 10 items a round,
+  falling back to Vision; a failure pauses AI reading for 15 minutes. **Check:** paste a key, Test,
+  then Ask with each tier; draw a page and search for a word written on it.
+- **Laser**: drawn like light (a faint wide haze, a soft coloured glow and a white-hot core along a
+  smoothed line, with a round glow at the tip); the options row picks **Line** (fades over 1.1 s) or
+  **Dot** (only a glowing dot where the pen is, fading in 0.35 s). Per device.
+- **Options row** lies over the top of the canvas: showing or hiding it (tap the chosen tool again)
+  no longer resizes the canvas, so the sketch doesn't move.
+- **Ruler and protractor** are Trove's own on the iPad too (PencilKit's only followed a line
+  started at its edge). The Pencil put down anywhere on the ruler draws along its nearer edge, live;
+  inside the protractor, along its arc. Knobs turn them; a finger moves them (on the Mac, ⌥-drag,
+  or any tool that isn't a pen).
+- **Tape** opens or covers with a **finger** tap (the Pencil no longer does it; a Pencil tap on tape
+  leaves nothing). On the iPhone with the lasso, a finger tap still picks the tape. The Mac clicks.
+- **Lasso menu**: two compact rows (count, turn, flip, front/back, straighten, group, duplicate,
+  deselect; then Copy, Image, Text, AI, Save, Cut, delete), above the zoom pill.
+- **Zoom pill** sits in the real bottom-left corner.
+- **A finger on the selection** (box, corners, knob, handles) or on a guide moves it instead of
+  scrolling; anywhere else, ink included, a finger still scrolls (iPad with "Only draw with Apple
+  Pencil"; on the iPhone a finger already works the tools).
+- **Eraser** rubs out tape too (undone with the ink); **Protect tape** in its options keeps it (off by default).
+- **Top bar**: undo/redo on the left and page, pages, settings, dark page, export and Done on the
+  right stay put; only the tools between them scroll.
+- **Shapes** (TroveCore `InkShapes` and ink.js, same fixture): corners first, so a loop whose
+  corners are all sharp becomes a polygon even when an ellipse fits (bowed or wobbly sides, rounded
+  corners); then the standard shape when near: square, rectangle level or upright, equilateral,
+  isosceles or right-angled triangle, regular pentagon/hexagon standing level, circle; straight
+  lines and polyline pieces within 8° of level or upright made exact. The loop is cut where it comes
+  back to its start (an overshoot used to add a corner). In 300 random wobbly drawings each, circles,
+  ellipses, squares, triangles, pentagons and hexagons all come out right; squares with sides bowed
+  12 % are squares now (were circles). **Check:** draw a square, triangle and circle quickly with
+  Shapes on, and hold the pen at the end of one.
+
+## Round before: sharp at every zoom (user: "lots of stuff is very low quality, especially GoodNotes whiteboards; should be vectors at max quality, without using much power")
 Builds on CI; not yet run on a device.
 - **Why it was blurry**: file pages (GoodNotes whiteboards, PDFs, pictures) were drawn once as one
   picture at most 2400 px wide (4096 on the Mac, which did the same for paper pages too); a GoodNotes
@@ -730,6 +776,11 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
    - Notion and Readwise import UI (parsers exist in TroveCore)
 
 ## Manual steps for the user
+- **Your own AI (Claude):** create an API key at https://console.anthropic.com/settings/keys, add
+  credit (about $5) and set a monthly spend limit there, then paste the key into Trove → Settings →
+  AI → Your AI (never into a chat). It syncs to your other devices end-to-end encrypted.
+- **Apple Notes import (Mac):** allow Trove to control Notes when asked (System Settings → Privacy &
+  Security → Automation → Trove → Notes), then Settings → Integrations → Import now.
 - **Start on the website:** https://trove-relay.lancus.workers.dev → New vault → save the recovery code in a password manager.
 - **iPhone/iPad now:** open the site in Safari → Setup code tab, using a code from Devices & extension on the computer. Then Share → Add to Home Screen.
 - **Chrome extension:** load `extensions/browser` unpacked (chrome://extensions → Developer mode), then paste the extension code from Devices & extension.

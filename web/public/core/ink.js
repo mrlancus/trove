@@ -579,7 +579,12 @@ export function brushTaper(index, count) {
 
 export const SHAPES = ["line", "polyline", "triangle", "rectangle", "polygon", "circle", "ellipse", "curve", "diamond", "star", "heart", "bubble"];
 
-/** A rough drawing as a clean shape, {shape, points}, or null when it isn't one. */
+/**
+ * A rough drawing as a clean shape, {shape, points}, or null when it isn't one. Corners come first:
+ * a loop whose corners are sharp becomes a polygon, not an ellipse. Then the standard shape wins
+ * whenever the drawing is near one: a square, an equilateral, isosceles or right-angled triangle, a
+ * regular polygon, a circle, edges exactly level or upright (InkShapes.swift does the same).
+ */
 export function recognizeShape(raw) {
   if (raw.length < 2) return null;
   const box = bounds(raw);
@@ -592,21 +597,26 @@ export function recognizeShape(raw) {
 
   if (ends > 0.2 * diag) {
     const deviation = Math.max(...raw.map((p) => segmentDistance(p, first, last)));
-    if (deviation <= 0.08 * ends) return finish("line", [first, last], pressure, duration);
+    if (deviation <= 0.08 * ends) return finish("line", levelPath([first, last]), pressure, duration);
     const corners = simplify(raw, 0.08 * diag);
-    return corners.length <= 4 ? finish("polyline", corners, pressure, duration) : null;
+    return corners.length <= 4 ? finish("polyline", levelPath(corners), pressure, duration) : null;
   }
 
+  // Closed: the loop up to where it comes back nearest its start (an overshoot past it would add a corner).
+  const loop = closedLoop(raw);
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
   const rx = Math.max(box.w / 2, 0.5), ry = Math.max(box.h / 2, 0.5);
-  const error = raw.reduce((n, p) => n + Math.abs(Math.hypot((p.x - cx) / rx, (p.y - cy) / ry) - 1), 0) / raw.length;
-  let corners = simplifyClosed(raw, 0.1 * diag);
-  // Whichever fits closer: the ellipse, or the polygon through the corners.
+  const error = loop.reduce((n, p) => n + Math.abs(Math.hypot((p.x - cx) / rx, (p.y - cy) / ry) - 1), 0) / loop.length;
+  const corners = simplifyClosed(loop, 0.1 * diag);
   const polygonFit = corners.length >= 3 && corners.length <= 8
-    ? raw.reduce((n, p) => n + polygonDistance(p, corners), 0) / raw.length / diag : Infinity;
+    ? loop.reduce((n, p) => n + polygonDistance(p, corners), 0) / loop.length / diag : Infinity;
   const ellipseFit = (error * (rx + ry)) / 2 / diag;
-  if (error < 0.16 && ellipseFit <= polygonFit) {
-    const round = Math.abs(rx - ry) <= 0.12 * Math.max(rx, ry);
+  // Every corner sharp: a polygon, even where an ellipse would fit as well (rounded corners, bowed or
+  // uneven sides). Sharp: the pen turns much more round the corner than along the sides beside it.
+  const contrast = polygonFit < 0.1 ? cornerContrast(loop, corners) : [];
+  const sharp = contrast.length >= 3 && Math.min(...contrast) >= SHARP;
+  if (!sharp && error < 0.18 && ellipseFit <= polygonFit) {
+    const round = Math.abs(rx - ry) <= 0.18 * Math.max(rx, ry);
     const r = (rx + ry) / 2;
     const points = Array.from({ length: 65 }, (_, i) => {
       const a = (i / 64) * 2 * Math.PI;
@@ -614,17 +624,197 @@ export function recognizeShape(raw) {
     });
     return finish(round ? "circle" : "ellipse", points, pressure, duration);
   }
-  if (polygonFit >= 0.05) return null;
-  if (corners.length === 3) return finish("triangle", [...corners, corners[0]], pressure, duration);
-  if (corners.length === 4) {
-    if ([0, 1, 2, 3].every((i) => axisAligned(corners[i], corners[(i + 1) % 4]))) {
-      const b = bounds(corners);
-      corners = [{ x: b.x, y: b.y }, { x: b.x + b.w, y: b.y }, { x: b.x + b.w, y: b.y + b.h }, { x: b.x, y: b.y + b.h }];
-    }
-    return finish("rectangle", [...corners, corners[0]], pressure, duration);
-  }
-  if (corners.length >= 5 && corners.length <= 8 && polygonFit < 0.05) return finish("polygon", [...corners, corners[0]], pressure, duration);
+  if (!sharp && polygonFit >= 0.05) return null;
+  const n = corners.length;
+  if (n === 3) return finish("triangle", closeLoop(cleanTriangle(corners)), pressure, duration);
+  if (n === 4) return finish("rectangle", closeLoop(cleanQuad(corners)), pressure, duration);
+  if (n >= 5 && n <= 8) return finish("polygon", closeLoop(regular(corners) ?? corners), pressure, duration);
   return null;
+}
+
+const DEG = Math.PI / 180;
+/** A corner is sharp when the pen turns at least this many times as much round it as along the sides beside it. */
+const SHARP = 2;
+/** How far either side of a point its turn is measured, as a share of the loop's length. */
+const SHARP_WINDOW = 0.035;
+const closeLoop = (c) => [...c, c[0]];
+
+/** A closed drawing up to the point in its last fifth nearest its start. */
+function closedLoop(raw) {
+  let end = raw.length - 1, near = Infinity;
+  for (let i = Math.floor(0.8 * raw.length); i < raw.length; i++) {
+    const d = Math.hypot(raw[i].x - raw[0].x, raw[i].y - raw[0].y);
+    if (d < near) { near = d; end = i; }
+  }
+  return raw.slice(0, end + 1);
+}
+
+/**
+ * How sharp each of a loop's corners is: the most the pen turns near it (over a short stretch either
+ * side), over how much it turns half way along the sides before and after it. About 1 round a circle
+ * or an ellipse's sides; several times that at a real corner, even a rounded one or between bowed sides.
+ */
+function cornerContrast(raw, corners) {
+  const loop = [...raw, raw[0]];
+  const at = [0];
+  for (let i = 1; i < loop.length; i++) at.push(at[i - 1] + Math.hypot(loop[i].x - loop[i - 1].x, loop[i].y - loop[i - 1].y));
+  const total = at.at(-1);
+  const n = corners.length;
+  if (!(total > 0) || n < 3) return [];
+  const pointAt = (s) => {
+    const d = ((s % total) + total) % total;
+    let j = 0;
+    while (j < loop.length - 2 && at[j + 1] < d) j++;
+    const span = at[j + 1] - at[j], f = span > 0 ? (d - at[j]) / span : 0;
+    return { x: loop[j].x + (loop[j + 1].x - loop[j].x) * f, y: loop[j].y + (loop[j + 1].y - loop[j].y) * f };
+  };
+  const window = SHARP_WINDOW * total;
+  const turnAt = (s) => turn(pointAt(s - window), pointAt(s), pointAt(s + window));
+  // Where along the loop each corner is (its nearest point).
+  const place = corners.map((c) => {
+    let index = 0, best = Infinity;
+    for (let i = 0; i < raw.length; i++) { const d = Math.hypot(raw[i].x - c.x, raw[i].y - c.y); if (d < best) { best = d; index = i; } }
+    return at[index];
+  });
+  return corners.map((_, k) => {
+    // The sharpest turn near the corner (it's seldom exactly where the corner was found).
+    let most = 0;
+    for (let i = 0; i < raw.length; i++) {
+      let gap = Math.abs(at[i] - place[k]);
+      gap = Math.min(gap, total - gap);
+      if (gap <= window) most = Math.max(most, turnAt(at[i]));
+    }
+    // A real corner turns at least 35° (round a circle with many soft corners each turns less).
+    if (most < 35 * DEG) return 0;
+    // Along each side beside it: the average turn over the same stretch round its middle.
+    const middle = (from, to) => from + ((((to - from) % total) + total) % total) / 2;
+    const along = (s) => [-1, -0.5, 0, 0.5, 1].reduce((sum, f) => sum + turnAt(s + f * window), 0) / 5;
+    const sides = (along(middle(place[(k + n - 1) % n], place[k])) + along(middle(place[k], place[(k + 1) % n]))) / 2;
+    return most / Math.max(sides, 2 * DEG);
+  });
+}
+
+/** How far the direction turns going a → b → c, 0 to π. */
+function turn(a, b, c) {
+  let d = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
+  if (d > Math.PI) d = 2 * Math.PI - d;
+  return d;
+}
+
+/** The angle inside a corner, 0 to π. */
+const inner = (prev, c, next) => Math.PI - turn(prev, c, next);
+
+/** A level or upright edge stays so: the nearer of the two when within `limit`, else null. */
+function levelTurn(a, b, limit) {
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  const snapped = Math.floor(angle / (Math.PI / 2) + 0.5) * (Math.PI / 2);
+  return Math.abs(angle - snapped) <= limit ? snapped - angle : null;
+}
+
+/** An open line's pieces: each one within 8° of level or upright made exactly so (what follows moves with it). */
+function levelPath(pts) {
+  const out = [{ x: pts[0].x, y: pts[0].y }];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], from = out[i - 1];
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const t = levelTurn(a, b, 8 * DEG);
+    if (t !== null) {
+      const c = Math.cos(t), s = Math.sin(t);
+      [dx, dy] = [dx * c - dy * s, dx * s + dy * c];
+    }
+    out.push({ x: from.x + dx, y: from.y + dy });
+  }
+  return out;
+}
+
+/** Turns corners about their middle by `t` radians. */
+function turned(corners, t) {
+  const cx = corners.reduce((n, p) => n + p.x, 0) / corners.length, cy = corners.reduce((n, p) => n + p.y, 0) / corners.length;
+  const c = Math.cos(t), s = Math.sin(t);
+  return corners.map((p) => ({ x: cx + (p.x - cx) * c - (p.y - cy) * s, y: cy + (p.x - cx) * s + (p.y - cy) * c }));
+}
+
+/** The polygon turned so its edge nearest level or upright is exactly so (within 7°). */
+function levelled(corners) {
+  let best = null;
+  corners.forEach((a, i) => {
+    const t = levelTurn(a, corners[(i + 1) % corners.length], 7 * DEG);
+    if (t !== null && (best === null || Math.abs(t) < Math.abs(best))) best = t;
+  });
+  return best === null ? corners : turned(corners, best);
+}
+
+/** A regular polygon near the corners (sides and angles all close to equal), standing level; else null. */
+function regular(corners) {
+  const n = corners.length;
+  const sides = corners.map((a, i) => { const b = corners[(i + 1) % n]; return Math.hypot(b.x - a.x, b.y - a.y); });
+  const target = ((n - 2) * Math.PI) / n;
+  const worst = Math.max(...corners.map((c, i) => Math.abs(inner(corners[(i + n - 1) % n], c, corners[(i + 1) % n]) - target)));
+  const [ratio, limit] = n === 3 ? [1.25, 15] : [1.4, 20];
+  if (Math.max(...sides) > ratio * Math.min(...sides) || worst > limit * DEG) return null;
+  const cx = corners.reduce((s, p) => s + p.x, 0) / n, cy = corners.reduce((s, p) => s + p.y, 0) / n;
+  const r = corners.reduce((s, p) => s + Math.hypot(p.x - cx, p.y - cy), 0) / n;
+  let area = 0;
+  corners.forEach((a, i) => { const b = corners[(i + 1) % n]; area += a.x * b.y - b.x * a.y; });
+  const step = ((area >= 0 ? 1 : -1) * 2 * Math.PI) / n;
+  let sx = 0, sy = 0;
+  corners.forEach((p, i) => { const a = Math.atan2(p.y - cy, p.x - cx) - i * step; sx += Math.cos(a); sy += Math.sin(a); });
+  let phase = Math.atan2(sy, sx);
+  // Standing level: a corner straight up or an edge along the top, when within 10°.
+  const snapped = -Math.PI / 2 + Math.floor((phase + Math.PI / 2) / (Math.PI / n) + 0.5) * (Math.PI / n);
+  if (Math.abs(phase - snapped) <= 10 * DEG) phase = snapped;
+  return corners.map((_, i) => ({ x: cx + r * Math.cos(phase + i * step), y: cy + r * Math.sin(phase + i * step) }));
+}
+
+/** A triangle: equilateral if near one; else a right angle made exact, two near-equal sides made equal; standing level. */
+function cleanTriangle(corners) {
+  const even = regular(corners);
+  if (even) return even;
+  let c = corners.map((p) => ({ x: p.x, y: p.y }));
+  const right = [0, 1, 2].find((i) => Math.abs(inner(c[(i + 2) % 3], c[i], c[(i + 1) % 3]) - Math.PI / 2) <= 12 * DEG);
+  if (right !== undefined) {
+    const b = c[right], a = c[(right + 2) % 3], k = (right + 1) % 3, o = c[k];
+    const la = Math.hypot(a.x - b.x, a.y - b.y), lo = Math.hypot(o.x - b.x, o.y - b.y);
+    const ux = (a.x - b.x) / la, uy = (a.y - b.y) / la;
+    const side = (o.x - b.x) * -uy + (o.y - b.y) * ux >= 0 ? 1 : -1;
+    c[k] = { x: b.x - uy * side * lo, y: b.y + ux * side * lo };
+  } else {
+    for (let i = 0; i < 3; i++) {
+      const v = c[i], p = c[(i + 2) % 3], q = c[(i + 1) % 3];
+      const lp = Math.hypot(p.x - v.x, p.y - v.y), lq = Math.hypot(q.x - v.x, q.y - v.y);
+      if (Math.abs(lp - lq) > 0.1 * Math.max(lp, lq)) continue;
+      // The apex over the middle of the base.
+      const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2, bl = Math.hypot(q.x - p.x, q.y - p.y);
+      const nx = -(q.y - p.y) / bl, ny = (q.x - p.x) / bl, h = (v.x - mx) * nx + (v.y - my) * ny;
+      c[i] = { x: mx + nx * h, y: my + ny * h };
+      break;
+    }
+  }
+  return levelled(c);
+}
+
+/** Four corners: a rectangle (a square when its sides are near equal) when the angles are near right, level or upright when near; else as drawn. */
+function cleanQuad(corners) {
+  const right = corners.every((c, i) => Math.abs(inner(corners[(i + 3) % 4], c, corners[(i + 1) % 4]) - Math.PI / 2) <= 15 * DEG);
+  if (!right) return regular(corners) ?? corners;
+  // The rectangle's direction: the edges' average, a quarter turn counting as the same.
+  let sx = 0, sy = 0;
+  corners.forEach((a, i) => { const b = corners[(i + 1) % 4], t = 4 * Math.atan2(b.y - a.y, b.x - a.x); sx += Math.cos(t); sy += Math.sin(t); });
+  let phase = Math.atan2(sy, sx) / 4;
+  if (Math.abs(phase) <= 12 * DEG) phase = 0;
+  const ux = Math.cos(phase), uy = Math.sin(phase);
+  const cx = corners.reduce((s, p) => s + p.x, 0) / 4, cy = corners.reduce((s, p) => s + p.y, 0) / 4;
+  const across = corners.map((p) => ({ u: (p.x - cx) * ux + (p.y - cy) * uy, v: -(p.x - cx) * uy + (p.y - cy) * ux }));
+  let w = across.reduce((s, q) => s + Math.abs(q.u), 0) / 2, h = across.reduce((s, q) => s + Math.abs(q.v), 0) / 2;
+  if (Math.abs(w - h) <= 0.15 * Math.max(w, h)) w = h = (w + h) / 2;
+  // Each corner keeps its side of the middle (so the order it was drawn in); two on one side: as drawn.
+  const signs = across.map((q) => `${q.u >= 0 ? 1 : -1},${q.v >= 0 ? 1 : -1}`);
+  if (new Set(signs).size < 4) return corners;
+  return across.map((q) => {
+    const su = q.u >= 0 ? 1 : -1, sv = q.v >= 0 ? 1 : -1;
+    const u = (su * w) / 2, v = (sv * h) / 2;
+    return { x: cx + u * ux - v * uy, y: cy + u * uy + v * ux };
+  });
 }
 
 /** Distance from p to the closed polygon's edges. */
@@ -632,12 +822,6 @@ function polygonDistance(p, corners) {
   let best = Infinity;
   for (let i = 0; i < corners.length; i++) best = Math.min(best, segmentDistance(p, corners[i], corners[(i + 1) % corners.length]));
   return best;
-}
-
-function axisAligned(a, b) {
-  const angle = Math.abs(Math.atan2(b.y - a.y, b.x - a.x)) % (Math.PI / 2);
-  const limit = (12 * Math.PI) / 180;
-  return angle <= limit || angle >= Math.PI / 2 - limit;
 }
 
 function finish(shape, points, pressure, duration) {

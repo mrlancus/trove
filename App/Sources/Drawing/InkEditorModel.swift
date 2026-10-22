@@ -329,8 +329,20 @@ final class InkEditorModel {
     private(set) var guidesKey: String?
     /// Where the pen or pointer is, for the protractor's angle reading.
     private(set) var protractorReading: InkPoint?
-    /// The iPad uses PencilKit's own ruler (it draws along it as you write), so Trove's isn't drawn there.
+    /// Trove's ruler is used everywhere now (a pen put down anywhere on it draws along its nearer
+    /// edge, which PencilKit's own ruler doesn't); kept for a canvas that turns PencilKit's back on.
     @ObservationIgnored var nativeRuler = false
+    /// A pen line being drawn along a guide (the iPad's Pencil started on the ruler or protractor).
+    private(set) var ruledDraft: (key: String, line: InkLine)?
+    /// Tape the eraser rubbed out in this stroke of it (undone together with the ink).
+    @ObservationIgnored private var tapeErased: [String] = []
+    /// A tap on tape opens or covers it: a click on the Mac; on the iPad and iPhone a finger does it
+    /// (`PencilCanvas`), not the Pencil.
+    #if os(macOS)
+    static let penTapsTape = true
+    #else
+    static let penTapsTape = false
+    #endif
     /// A clean shape being reshaped by one of its handles (lifted off the page meanwhile).
     private(set) var shapeEdit: (key: String, line: InkLine)?
     /// A shape being dragged out with the shape tool.
@@ -344,6 +356,10 @@ final class InkEditorModel {
     private(set) var stickers: [InkSticker] = []
     var eraserMode: InkEraserMode { didSet { UserDefaults.standard.set(eraserMode.rawValue, forKey: "ink.eraserMode") } }
     var highlighterOnly: Bool { didSet { UserDefaults.standard.set(highlighterOnly, forKey: "ink.highlighterOnly") } }
+    /// The eraser rubs out tape too (on unless "Protect tape" is turned on).
+    var eraseTape: Bool { didSet { UserDefaults.standard.set(!eraseTape, forKey: "ink.protectTape") } }
+    /// The laser pointer shows only a glowing dot where the pen is, not a line behind it.
+    var laserDot: Bool { didSet { UserDefaults.standard.set(laserDot, forKey: "ink.laserDot") } }
     var shapeMode: Bool { didSet { UserDefaults.standard.set(shapeMode, forKey: "ink.shapes") } }
     /// Scratching back and forth over strokes deletes them (off unless turned on).
     var scribbleToErase: Bool { didSet { UserDefaults.standard.set(scribbleToErase, forKey: "ink.scribble") } }
@@ -423,6 +439,7 @@ final class InkEditorModel {
         case handle(key: String, id: String, index: Int)
         case shape(key: String, start: InkPoint, end: InkPoint, from: String)
         case guide(kind: InkGuideKind, turn: Int, start: InkPoint, origin: InkEditing.Guide, grab: Double)
+        case ruled(key: String, snap: InkGuideSnap)
     }
     private var gesture: Gesture?
     /// Strokes drawn here that the library hasn't stored yet, and ones erased here it hasn't
@@ -447,6 +464,8 @@ final class InkEditorModel {
         tool = InkEditorTool(rawValue: d.string(forKey: "ink.tool") ?? "") ?? .pen
         eraserMode = InkEraserMode(rawValue: d.string(forKey: "ink.eraserMode") ?? "") ?? .stroke
         highlighterOnly = d.bool(forKey: "ink.highlighterOnly")
+        eraseTape = !d.bool(forKey: "ink.protectTape")
+        laserDot = d.bool(forKey: "ink.laserDot")
         shapeMode = d.bool(forKey: "ink.shapes")
         scribbleToErase = d.bool(forKey: "ink.scribble")
         layout = InkPageLayout(rawValue: d.string(forKey: "ink.layout") ?? "") ?? .vertical
@@ -782,7 +801,8 @@ final class InkEditorModel {
         var o = InkOverlay(eraser: eraserAt, eraserRadius: eraserRadius)
         let now = Date()
         o.lasers = lasers.filter { $0.key == key }.map { l in
-            (points: l.points, color: l.color, width: l.width, alpha: l.ended.map { max(0, 1 - now.timeIntervalSince($0) / Self.laserFade) } ?? 1)
+            (points: l.dot ? Array(l.points.suffix(1)) : l.points, color: l.color, width: l.width,
+             alpha: l.ended.map { max(0, 1 - now.timeIntervalSince($0) / (l.dot ? Self.laserDotFade : Self.laserFade)) } ?? 1, dot: l.dot)
         }
         if case .lasso(let k)? = gesture, k == key { o.lasso = lassoPath }
         if selection?.pageKey == key {
@@ -795,6 +815,7 @@ final class InkEditorModel {
             }
         }
         if let d = shapeDraft, d.key == key { o.preview = d.line }
+        if let d = ruledDraft, d.key == key { o.preview = d.line }
         if let e = shapeEdit, e.key == key { o.preview = e.line }
         if guidesKey == key {
             if !nativeRuler { o.ruler = ruler }
@@ -841,9 +862,9 @@ final class InkEditorModel {
             }
             return true
         }
-        // A tap on tape opens or covers it instead of leaving a dot.
+        // A tap on tape doesn't leave a dot; on the Mac it opens or covers the tape (elsewhere a finger does that).
         if let first = points.first, let b = InkGeometry.bounds(points), max(b.width, b.height) * zoom < 4, let strip = tape(at: first, key: key) {
-            togglePeek(strip.id)
+            if Self.penTapsTape { togglePeek(strip.id) }
             return true
         }
         // Put down on the ruler's edge or the protractor's arc: the line runs along it.
@@ -1015,7 +1036,7 @@ final class InkEditorModel {
             gesture = .tape(key: key, start: p, end: p)
             overlayChanged()
         case .laser:
-            lasers.append(LaserLine(key: key, points: [p], color: color(for: .laser), width: width(for: .laser), ended: nil))
+            lasers.append(LaserLine(key: key, points: [p], color: color(for: .laser), width: width(for: .laser), dot: laserDot, ended: nil))
             gesture = .laser(key: key)
             overlayChanged()
         case .eraser:
@@ -1039,7 +1060,13 @@ final class InkEditorModel {
             gesture = .tape(key: key, start: start, end: p)
             overlayChanged()
         case .laser:
-            if !lasers.isEmpty { lasers[lasers.count - 1].points.append(p) }
+            if !lasers.isEmpty {
+                // The dot only needs where the pen is now.
+                if lasers[lasers.count - 1].dot { lasers[lasers.count - 1].points = [p] } else { lasers[lasers.count - 1].points.append(p) }
+            }
+            overlayChanged()
+        case .ruled(_, let snap):
+            if var d = ruledDraft { d.line.points.append(along(snap, p)); ruledDraft = d }
             overlayChanged()
         case .drag(_, let start, let corner, let box):
             let t: InkGeometry.Transform
@@ -1086,13 +1113,39 @@ final class InkEditorModel {
         }
     }
 
+    /// Whether a finger put down at `p` takes hold of something (the selection, its corners, knob or
+    /// handles, or a guide) instead of scrolling the page. Pens leave guides to the canvas's own pan.
+    func grabs(_ p: InkPoint, pageKey key: String, scale: Double) -> Bool {
+        guard tool.ink == nil else { return false }
+        let s = max(0.05, scale)
+        if guideHit(p, pageKey: key, scale: s) != nil { return true }
+        guard tool == .lasso, let sel = selection, sel.pageKey == key, let box = selectionBox() else { return false }
+        if shapeHandleIndex(at: p, scale: s) != nil { return true }
+        let knob = InkRenderer.rotateHandle(box, scale: s)
+        if hypot(knob.x - p.x, knob.y - p.y) <= 16 / s { return true }
+        let r = 20 / s
+        return p.x >= box.x - r && p.x <= box.maxX + r && p.y >= box.y - r && p.y <= box.maxY + r
+    }
+
+    /// The Pencil put down on the ruler or protractor with a pen in hand: the line runs along the
+    /// nearer edge (or the arc) as it's drawn. False when `p` isn't on one (PencilKit draws then).
+    func beginRuled(_ p: InkPoint, pageKey key: String, scale: Double) -> Bool {
+        guard let ink = tool.ink, let snap = guideSnap(p, pageKey: key, scale: scale) else { return false }
+        clearSelection()
+        let line = InkLine(id: "ruled", tool: ink, color: color(for: tool), width: width(for: tool), points: [along(snap, p)], shape: nil, style: InkStrokeStyle())
+        ruledDraft = (key, line)
+        gesture = .ruled(key: key, snap: snap)
+        overlayChanged()
+        return true
+    }
+
     func pointerUp() {
         let g = gesture
         gesture = nil
         switch g {
         case .erase(_, _, let removed):
             eraserAt = nil
-            if !removed.isEmpty { record(Action(remove: removed.map { Ref(id: $0, kind: "stroke") })) }
+            if !removed.isEmpty || !tapeErased.isEmpty { record(erased(removed)) }
             overlayChanged()
         case .partial:
             eraserAt = nil
@@ -1107,7 +1160,7 @@ final class InkEditorModel {
             overlayChanged()
             // A tap opens or covers the strip under it; a drag lays a new one.
             if hypot(end.x - start.x, end.y - start.y) * zoom < 4 {
-                if let strip = tape(at: start, key: key) { togglePeek(strip.id) }
+                if Self.penTapsTape, let strip = tape(at: start, key: key) { togglePeek(strip.id) }
             } else {
                 layTape(key, from: start, to: end)
             }
@@ -1117,6 +1170,12 @@ final class InkEditorModel {
             commitHandle()
         case .shape(let key, let start, let end, let from):
             finishShape(key: key, from: start, to: end, fromId: from)
+        case .ruled(let key, _):
+            if let d = ruledDraft, d.line.points.count > 1 {
+                addStroke(points: d.line.points, tool: d.line.tool, color: d.line.color, width: d.line.width, id: nil, pageKey: key, held: false, nib: nil)
+            }
+            ruledDraft = nil
+            overlayChanged()
         case .guide:
             overlayChanged()
         case nil:
@@ -1131,9 +1190,11 @@ final class InkEditorModel {
         var points: [InkPoint]
         var color: String
         var width: Double
+        var dot: Bool
         var ended: Date?
     }
     static let laserFade: TimeInterval = 1.1
+    static let laserDotFade: TimeInterval = 0.35
     private(set) var lasers: [LaserLine] = []
 
     /// The line fades out over a second; it's never saved.
@@ -1143,7 +1204,7 @@ final class InkEditorModel {
             while let self, !self.lasers.isEmpty {
                 try? await Task.sleep(for: .milliseconds(33))
                 let now = Date()
-                self.lasers.removeAll { $0.ended.map { now.timeIntervalSince($0) > Self.laserFade } ?? false }
+                self.lasers.removeAll { l in l.ended.map { now.timeIntervalSince($0) > (l.dot ? Self.laserDotFade : Self.laserFade) } ?? false }
                 self.overlayChanged()
                 if self.lasers.allSatisfy({ $0.ended == nil }) { break }
             }
@@ -1158,9 +1219,10 @@ final class InkEditorModel {
         case .laser: endLaser()
         case .handle: shapeEdit = nil
         case .shape: shapeDraft = nil
+        case .ruled: ruledDraft = nil
         default: break
         }
-        if case .erase(_, _, let removed) = gesture, !removed.isEmpty { record(Action(remove: removed.map { Ref(id: $0, kind: "stroke") })) }
+        if case .erase(_, _, let removed) = gesture, !removed.isEmpty || !tapeErased.isEmpty { record(erased(removed)) }
         gesture = nil
         eraserAt = nil
         revision += 1
@@ -1177,6 +1239,28 @@ final class InkEditorModel {
 
     /// The eraser's radius in screen points: the precise one exactly its size, the others a little bigger to be easy to hit.
     private var eraserSize: Double { eraserMode == .precise ? max(0.25, width(for: .eraser) / 2) : width(for: .eraser) / 2 + 4 }
+
+    /// The undo step for one stroke of the eraser: the ink and tape it rubbed out.
+    private func erased(_ strokes: Set<String>) -> Action {
+        defer { tapeErased = [] }
+        return Action(remove: strokes.map { Ref(id: $0, kind: "stroke") } + tapeErased.map { Ref(id: $0, kind: "element") })
+    }
+
+    /// Tape under the eraser goes too, unless "Protect tape" is on (or only highlighter is erased).
+    private func rubOutTape(key: String, along path: [InkPoint]) -> Bool {
+        guard eraseTape, !highlighterOnly, let library = app?.library else { return false }
+        let r = eraserRadius
+        let probes = path.flatMap { q in [q, InkPoint(x: q.x - r, y: q.y), InkPoint(x: q.x + r, y: q.y), InkPoint(x: q.x, y: q.y - r), InkPoint(x: q.x, y: q.y + r)] }
+        let gone = (content[key]?.elements ?? []).filter { e in e.kind == .tape && probes.contains { e.contains($0) } }.map(\.id)
+        guard !gone.isEmpty else { return false }
+        content[key]?.elements.removeAll { gone.contains($0.id) }
+        tapeErased += gone
+        Task {
+            await library.deleteElements(gone)
+            app?.inkChanged()
+        }
+        return true
+    }
 
     private func eraseTo(_ p: InkPoint) {
         eraserAt = p
@@ -1200,9 +1284,11 @@ final class InkEditorModel {
                     app?.inkChanged()
                 }
             }
+            if rubOutTape(key: key, along: path) { inkTouched = true }
             gesture = .erase(key: key, last: p, removed: removed)
         case .partial(let key, let last):
             let path = [last, p]
+            if rubOutTape(key: key, along: path) { inkTouched = true }
             for line in strokes(near: InkGeometry.bounds(path, pad: eraserRadius), key: key) where only == nil || only!.contains(line.tool) {
                 let current = erasePreview[line.id] ?? [line.points]
                 var changed = false
@@ -1224,9 +1310,12 @@ final class InkEditorModel {
     /// The partial eraser lifts: each stroke it cut becomes its pieces, in its place.
     private func commitPartialErase() {
         let preview = erasePreview
-        guard !preview.isEmpty, let library = app?.library else { erasePreview = [:]; revision += 1; return }
+        guard !preview.isEmpty, let library = app?.library else {
+            if !tapeErased.isEmpty { record(erased([])) }
+            erasePreview = [:]; revision += 1; return
+        }
         Task {
-            var action = Action()
+            var action = erased([])
             for (id, pieces) in preview {
                 let added = await library.replaceStroke(id, with: pieces)
                 action.remove.append(Ref(id: id, kind: "stroke"))
@@ -1693,7 +1782,8 @@ final class InkEditorModel {
         }
         // Only the pages written on are read again; `.fast` in Low Power Mode or when hot.
         let fast = app?.policy.recognition == .fast
-        let pagesRead = await Handwriting.read(target.itemId, library: library, fast: fast)
+        let ai = app?.aiSettings.readHandwriting == true ? app?.ownAI : nil
+        let pagesRead = await Handwriting.read(target.itemId, library: library, fast: fast, ai: ai)
         app?.power.count { $0.visionPages += pagesRead }
         app?.inkChanged(now: true)
     }
@@ -1745,7 +1835,8 @@ extension InkEditorModel {
     @discardableResult
     func beginGuideDrag(_ p: InkPoint, pageKey key: String, scale: Double, pen: Bool) -> Bool {
         guard let hit = guideHit(p, pageKey: key, scale: scale) else { return false }
-        if pen, guideSnap(p, pageKey: key, scale: scale) != nil { return false }
+        // A pen on the body draws along it; its knobs still turn it.
+        if pen, hit.turn == 0, guideSnap(p, pageKey: key, scale: scale) != nil { return false }
         let found: InkEditing.Guide? = hit.kind == .ruler ? ruler : protractor
         guard let g = found else { return false }
         gesture = .guide(kind: hit.kind, turn: hit.turn, start: p, origin: g, grab: atan2(p.y - g.y, p.x - g.x))
@@ -1765,15 +1856,21 @@ extension InkEditorModel {
         overlayChanged()
     }
 
-    /// The guide a pen put down at `p` draws along (within 14 screen points of a ruler edge or the protractor's arc).
+    /// The guide a pen put down at `p` draws along: anywhere on the ruler (its nearer edge) or within
+    /// 14 screen points of an edge, and anywhere inside the protractor or near its arc (the arc).
     func guideSnap(_ p: InkPoint, pageKey key: String, scale: Double) -> InkGuideSnap? {
         guard guidesKey == key else { return nil }
         let tolerance = 14 / max(0.05, scale)
         if let r = ruler, !nativeRuler {
             let edge = InkEditing.rulerEdge(r, p, tolerance: tolerance)
             if edge != 0 { return .ruler(edge) }
+            if InkEditing.onRuler(r, p) { return .ruler(r.local(p).v < 0 ? -1 : 1) }
         }
-        if let pro = protractor, InkEditing.onProtractorArc(pro, p, tolerance: tolerance) { return .arc }
+        if let pro = protractor {
+            if InkEditing.onProtractorArc(pro, p, tolerance: tolerance) { return .arc }
+            let (u, v) = pro.local(p)
+            if v <= 0, hypot(u, v) <= pro.radius { return .arc }
+        }
         return nil
     }
 
