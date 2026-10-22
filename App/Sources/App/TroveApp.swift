@@ -35,14 +35,6 @@ struct TroveApp: App {
                 BackgroundTasks.scheduleRefresh()
                 BackgroundTasks.scheduleEnrichment()
             }
-            if phase == .active, model.config?.screenshotsImport == true, let library = model.library {
-                Task {
-                    if let newest = await ScreenshotImporter.importNew(since: model.config?.lastScreenshotImport, into: library) {
-                        model.updateConfig { $0.lastScreenshotImport = newest }
-                        await model.reload()
-                    }
-                }
-            }
             #endif
         }
         .commands {

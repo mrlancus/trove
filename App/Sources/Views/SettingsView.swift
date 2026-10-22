@@ -361,15 +361,23 @@ private struct IntegrationsSection: View {
                 Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
             }
             #endif
-            #if os(iOS)
             Toggle("Import new screenshots", isOn: Binding(
                 get: { model.config?.screenshotsImport ?? false },
                 set: { on in
                     Task {
+                        #if os(iOS)
                         let ok = on ? await ScreenshotImporter.requestAccess() : true
+                        #else
+                        let ok = true
+                        #endif
                         model.updateConfig { $0.screenshotsImport = on && ok }
+                        model.watchScreenshots()
                     }
                 }))
+            #if os(iOS)
+            Text("Screenshots only, not other photos: as soon as you take one while Trove is open, otherwise when you come back to Trove.").font(.caption).foregroundStyle(.secondary)
+            #else
+            Text("Screenshots only, as soon as you take them.").font(.caption).foregroundStyle(.secondary)
             #endif
         } header: {
             Text("Other apps")

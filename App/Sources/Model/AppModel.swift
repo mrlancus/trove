@@ -169,6 +169,10 @@ final class AppModel {
     let semantic = SemanticIndex()
     let clipboard = ClipboardStore()
     private var clipboardWatcher: ClipboardWatcher?
+    /// New screenshots straight into Trove (Settings → Import new screenshots).
+    var screenshotWatcher: ScreenshotWatcher?
+    var screenshotImport: Task<Void, Never>?
+    var screenshotsAgain = false
     #if os(macOS)
     private(set) var clipboardPalette: ClipboardPaletteController?
     #endif
@@ -240,6 +244,7 @@ final class AppModel {
         await reload()
         await clipboard.attach(library)
         startClipboard()
+        watchScreenshots()
         startSyncLoop()
         connectLive()
         if !openedFiles.isEmpty {
@@ -859,6 +864,8 @@ final class AppModel {
         #endif
         inboxWanted = true
         if !sync.live { connectLive() }
+        // Screenshots taken while Trove was in the background (iOS can't watch Photos then).
+        importScreenshots()
         await syncNow()
     }
 
