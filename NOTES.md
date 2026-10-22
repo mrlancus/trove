@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 160 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 161 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -36,7 +36,33 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: iPad feedback (sync 413, duplicate screenshots, share sheet, ⌘C, blank sketch at 10 %, Pen options, squeeze palette)
+## Latest round: sketching feedback (blank grey sketches, squeeze palette that turns, preset sizes and colours, tape, laser)
+Builds on CI; not yet run on a device.
+- **Sketches all grey, bits showing only when zoomed far out**: the real cause. PencilKit's canvas
+  was made opaque grey (for the shade round the pages), so it painted its tiles grey over the paper
+  underneath; while zoomed far out the tiles came late and the page flashed through. The canvas is
+  clear again and the grey is the paper view's background (`PencilCanvas.makeUIView`). **Check:**
+  open several sketches; pages and ink show at once.
+- **Squeeze palette**: every tool on the outer arc and all the tool's preset colours on a smaller
+  inner arc (clear of the undo row); drag along either arc to turn it (`InkArcDial`, snaps to an
+  item, fades at the ends, opens turned to what's chosen). The tools' arc kept its size.
+- **Preset sizes** (three per tool, every device, `settings.ink` `sizes.<tool>`): tap one to use it;
+  tap it again (or hold any) for a bar in steps of 0.05 mm (1 pt = 25.4/72 mm; text in pt), with
+  − / + for single steps, then **Set**. The options row shows the size in mm.
+- **Preset colours** (per group: pens/text/shapes/laser, highlighter, tape; `colors.<group>`): tap
+  the colour in use again (or hold any) to change or delete it; **+** opens a picker (a grid of
+  colours, any colour from the system picker, or a hex code) and adds it. Your older "your colours"
+  start in the pens' row; recent colours no longer crowd the row.
+- **Options row**: every tool's name is the same width, then a divider, so the options always start
+  in one place.
+- **Tape like GoodNotes**: laid along the pen's line and turned with it (level or upright within 3°),
+  as wide as the tape's size (preset sizes too), torn ends; a tap makes it see-through (30 %), the
+  next tap covers again (this device only, as before). The website draws turned tape already.
+- **Laser** glows: wide soft halo, brighter band, white-hot core (`InkRenderer.drawLaser`).
+- **Ask the user**: how the turning arcs feel with the Pencil; whether tape should also follow a
+  curved line (it's straight, like GoodNotes').
+
+## Round before: iPad feedback (sync 413, duplicate screenshots, share sheet, ⌘C, blank sketch at 10 %, Pen options, squeeze palette)
 Builds on CI; not yet run on a device.
 - **"relay push …: http(413, segment too large)"**: a real sync bug. After a restart the app rebuilt
   each unpushed segment from its first op through *every* later op, so one grew past the relay's
@@ -60,8 +86,7 @@ Builds on CI; not yet run on a device.
   every item's menu.
 - **Sketch opens at 10 % showing nothing until a pinch**: the fit now waits for a real size (280 pt),
   fits again when the height settles (unless zoomed by hand), and nudges the zoom after fitting so
-  PencilKit and the paper draw. **Check on the iPad** (the video didn't come through to the session,
-  so this is from reading the code): open several sketches, rotate, open/close the options row.
+  PencilKit and the paper draw. That wasn't the cause (see the latest round: the canvas was opaque).
 - **Pen options** popover sized to show everything; **the options row** is one height for every tool.
 - **Squeeze palette**: curved round the Pencil's tip (tools outer arc, colours inner arc, undo /
   sizes / redo in the middle); picking keeps it open; squeeze again or tap elsewhere closes it.
