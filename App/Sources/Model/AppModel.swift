@@ -123,6 +123,11 @@ final class AppModel {
     var inkTarget: InkTarget?
     /// Bumped when ink changes or a sync brings changes, so drawings redraw.
     private(set) var inkRevision = 0
+    /// Bumped only when a sync pulled ink from another device: the open editor reloads on this, not on
+    /// its own writes (it shows those as they're made; ROADMAP §3.7 item 1).
+    private(set) var inkPulledRevision = 0
+    /// A sync pulled something since the last `reload()`.
+    @ObservationIgnored private var pulledSinceReload = false
     /// Which items have ink, and on which files ("" = a sketch's own pages).
     private(set) var inkedLayers: [String: Set<String>] = [:]
     /// How many drawing editors are open. While one is, saving and pushing wait longer between
@@ -366,16 +371,25 @@ final class AppModel {
                 index.inked = Set(inkedLayers.keys)
             }
             inkRevision += 1
+            if pulledSinceReload { inkPulledRevision += 1 }
         }
+        pulledSinceReload = false
     }
 
-    /// The sketch closed: what waited for it (see `sketchCovers`), with a full sync.
+    /// The sketch closed: what waited for it (see `sketchCovers`), with a full sync. Spread out
+    /// (ROADMAP §3.7 item 9): the strokes go out first, then the screens behind the sketch catch up a
+    /// moment later, so the card picture and handwriting reading of `finish()` don't all run at once.
     private func catchUpAfterSketch() async {
         guard let library, !sketchCovers else { return }
-        inkedLayers = await library.inkedLayers()
+        pingHeld = false
+        await syncNow()
+        try? await Task.sleep(for: .seconds(2))
+        guard !sketchCovers else { sketchDeferred = true; return }
+        let layers = await Task(priority: .utility) { await library.inkedLayers() }.value
+        inkedLayers = layers
         index.inked = Set(inkedLayers.keys)
         inkRevision += 1
-        await syncNow()
+        await reload()
     }
 
     // MARK: Drawing
@@ -698,6 +712,7 @@ final class AppModel {
             let report = await library.sync()
             if report.wroteCheckpoint != nil { Perf.event("Checkpoint") }
             if report.pulled > 0 || report.pushed > 0 { changed = true }
+            if report.pulled > 0 || report.loadedCheckpoint != nil { pulledSinceReload = true }
             if pusher.hasPending, !(await library.engine.hasUnsentChanges) { pusher.pushed(at: Self.clock) }
             power.count { c in
                 c.syncRounds += 1

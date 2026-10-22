@@ -33,6 +33,9 @@ public struct RecordStore: Sendable {
     private var newestByKind: [String: String] = [:]
     /// Ink (strokes and elements) by the item it's on.
     private var inkByItem: [String: Set<String>] = [:]
+    /// The latest `createdAt` any ink on an item has had (never lowered, so a deleted stroke may keep
+    /// it high): new ink goes after it without scanning the item's ink (docs/ROADMAP.md §3.7 item 8).
+    private var newestInk: [String: Double] = [:]
     /// The checkpoint this store starts from, if any (PROTOCOL.md §3 "Checkpoints").
     public private(set) var base: Checkpoint.Base?
 
@@ -69,6 +72,7 @@ public struct RecordStore: Sendable {
         byKind = [:]
         newestByKind = [:]
         inkByItem = [:]
+        newestInk = [:]
         lastApplied = ""
         if base != nil { applyBase() }
         for op in ops { applyOne(op) }
@@ -105,7 +109,10 @@ public struct RecordStore: Sendable {
             let record = Record(id: b.id, kind: b.kind, fields: b.fields, createdHLC: b.created, updatedHLC: b.updated)
             byKind[record.kind, default: []].insert(b.id)
             if (newestByKind[record.kind] ?? "") < b.updated { newestByKind[record.kind] = b.updated }
-            if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string { inkByItem[on, default: []].insert(b.id) }
+            if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string {
+                inkByItem[on, default: []].insert(b.id)
+                noteInkTime(record, on: on)
+            }
             records[b.id] = record
         }
         lastApplied = max(lastApplied, base.frontier)
@@ -122,6 +129,8 @@ public struct RecordStore: Sendable {
     public func all(kind: String) -> [Record] { (byKind[kind] ?? []).compactMap { records[$0] } }
 
     /// Strokes and elements on an item that aren't deleted.
+    public func newestInkTime(on itemId: String) -> Double? { newestInk[itemId] }
+
     public func ink(on itemId: String) -> [Record] {
         (inkByItem[itemId] ?? []).compactMap { id in records[id].flatMap { $0.isDeleted ? nil : $0 } }
     }
@@ -184,7 +193,15 @@ public struct RecordStore: Sendable {
             }
             history[key] = versions
         }
-        if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string { inkByItem[on, default: []].insert(op.record) }
+        if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string {
+            inkByItem[on, default: []].insert(op.record)
+            noteInkTime(record, on: on)
+        }
         records[op.record] = record
+    }
+
+    private mutating func noteInkTime(_ record: Record, on itemId: String) {
+        guard let t = record.fields["createdAt"]?.number, t.isFinite, t > (newestInk[itemId] ?? -.infinity) else { return }
+        newestInk[itemId] = t
     }
 }

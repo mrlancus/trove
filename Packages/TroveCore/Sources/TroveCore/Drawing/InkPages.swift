@@ -123,10 +123,10 @@ extension Library {
         return id
     }
 
-    /// A later time than anything drawn on the item, so new ink draws on top.
+    /// A later time than anything drawn on the item, so new ink draws on top. The store keeps the
+    /// newest time per item, so this no longer reads every stroke on each new one.
     func nextInkTime(on itemId: String) async -> Double {
-        let latest = await engine.ink(on: itemId)
-            .compactMap { $0[InkStroke.Field.createdAt]?.number }.max() ?? 0
+        let latest = await engine.newestInkTime(on: itemId) ?? 0
         return max((now().timeIntervalSince1970 * 1000).rounded(), latest + 1)
     }
 

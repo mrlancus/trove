@@ -144,6 +144,7 @@ public actor SyncEngine {
     public func records(kind: String) -> [Record] { store.visible(kind: kind) }
     /// Strokes and elements on an item (not deleted).
     public func ink(on itemId: String) -> [Record] { store.ink(on: itemId) }
+    public func newestInkTime(on itemId: String) -> Double? { store.newestInkTime(on: itemId) }
     public func record(_ id: String) -> Record? { store.record(id) }
 
     public func addTransport(_ t: any SyncTransport) { transports.append(t) }

@@ -298,7 +298,10 @@ final class InkEditorModel {
     private(set) var pages: [InkPageSpec] = []
     private(set) var content: [String: InkContent] = [:]
     private(set) var pictures: [String: CGImage] = [:]
-    var page = 0
+    var page = 0 {
+        // A new page sends what's waiting as soon as the push batching allows (ROADMAP §3.7 item 2).
+        didSet { if oldValue != page, loaded { app?.sketchPageChanged() } }
+    }
     var tool: InkEditorTool {
         didSet {
             UserDefaults.standard.set(tool.rawValue, forKey: "ink.tool")
@@ -363,6 +366,14 @@ final class InkEditorModel {
     private(set) var revision = 0
     /// Bumped when only what's drawn over the ink changes: the lasso's loop, the selection, the eraser's circle.
     private(set) var overlayRevision = 0
+    /// The iPad/iPhone canvas redraws its overlay itself when told here, so a lasso or eraser move (or a
+    /// hovering Pencil) no longer goes through SwiftUI, which re-evaluated the editor on every move
+    /// (ROADMAP §3.7 item 11). Without one (the Mac), `overlayRevision` is bumped as before.
+    @ObservationIgnored var overlayListener: (@MainActor () -> Void)?
+
+    func overlayChanged() {
+        if let overlayListener { overlayListener() } else { overlayRevision += 1 }
+    }
     /// Bumped when the pages change (added, moved, new paper).
     private(set) var pagesRevision = 0
     /// Bumped when a tool's colour or size changes (they're kept in UserDefaults, which isn't observed).
@@ -370,7 +381,7 @@ final class InkEditorModel {
 
     var selection: InkSelection? {
         didSet {
-            overlayRevision += 1
+            overlayChanged()
             // A selection dropped mid-drag puts what was lifted back on the page.
             if dragTransform != nil { revision += 1 }
         }
@@ -616,6 +627,9 @@ final class InkEditorModel {
         // Nothing new since the last load (our own writes are already shown as made).
         if sig == inkSig, loaded { return }
         inkSig = sig
+        let signpost = Perf.begin("Reload ink")
+        defer { Perf.end("Reload ink", signpost) }
+        app?.power.count { $0.inkReloads += 1 }
         let strokes = await library.strokes(on: target.itemId, layer: target.layer)
         let elements = await library.elements(on: target.itemId, layer: target.layer)
         var next: [String: InkContent] = [:]
@@ -732,7 +746,7 @@ final class InkEditorModel {
     func pencilHover(_ p: InkPoint?, pageKey key: String?, scale: Double) {
         if tool == .eraser { hover(p, scale: scale); return }
         if let p, let key { hoverTip = (key, p) } else if hoverTip == nil { return } else { hoverTip = nil }
-        overlayRevision += 1
+        overlayChanged()
     }
 
     // MARK: Pens
@@ -815,7 +829,7 @@ final class InkEditorModel {
     func togglePeek(_ id: String) {
         if peeked.contains(id) { peeked.remove(id) } else { peeked.insert(id) }
         revision += 1
-        overlayRevision += 1
+        overlayChanged()
     }
 
     private func layTape(_ key: String, from a: InkPoint, to b: InkPoint) {
@@ -921,14 +935,14 @@ final class InkEditorModel {
             lassoPath = [p]
             lassoTap = p
             gesture = .lasso(key: key)
-            overlayRevision += 1
+            overlayChanged()
         case .tape:
             gesture = .tape(key: key, start: p, end: p)
-            overlayRevision += 1
+            overlayChanged()
         case .laser:
             lasers.append(LaserLine(key: key, points: [p], color: color(for: .laser), width: width(for: .laser), ended: nil))
             gesture = .laser(key: key)
-            overlayRevision += 1
+            overlayChanged()
         case .eraser:
             eraserRadius = eraserSize / s
             eraserAt = p
@@ -945,13 +959,13 @@ final class InkEditorModel {
             eraseTo(p)
         case .lasso:
             lassoPath.append(p)
-            overlayRevision += 1
+            overlayChanged()
         case .tape(let key, let start, _):
             gesture = .tape(key: key, start: start, end: p)
-            overlayRevision += 1
+            overlayChanged()
         case .laser:
             if !lasers.isEmpty { lasers[lasers.count - 1].points.append(p) }
-            overlayRevision += 1
+            overlayChanged()
         case .drag(_, let start, let corner, let box):
             let t: InkGeometry.Transform
             if let corner, (0..<4).contains(corner) {
@@ -968,7 +982,7 @@ final class InkEditorModel {
             // Lifting the selection off the page redraws the page once; after that only the overlay moves.
             if dragTransform == nil { revision += 1 }
             dragTransform = t
-            overlayRevision += 1
+            overlayChanged()
         case .turn(_, let c, let start):
             let a = atan2(p.y - c.y, p.x - c.x) - atan2(start.y - c.y, start.x - c.x)
             let r = InkEditing.snapRotation(a)
@@ -977,7 +991,7 @@ final class InkEditorModel {
             if dragTransform == nil { revision += 1 }
             dragTransform = t
             turning = r * 180 / Double.pi
-            overlayRevision += 1
+            overlayChanged()
         case .handle(let key, let id, let index):
             guard let line = content[key]?.strokes.first(where: { $0.id == id }) else { return }
             let moved = InkEditing.moveShapeHandle(shape: line.shape, points: line.points, index: index, to: p)
@@ -985,11 +999,11 @@ final class InkEditorModel {
             reshaped.shape = moved.shape
             reshaped.points = moved.points
             shapeEdit = (key, reshaped)
-            overlayRevision += 1
+            overlayChanged()
         case .shape(let key, let start, _, let from):
             gesture = .shape(key: key, start: start, end: p, from: from)
             if let line = shapeLine(key: key, from: start, to: p, fromId: from) { shapeDraft = (key, line) } else { shapeDraft = nil }
-            overlayRevision += 1
+            overlayChanged()
         case .guide(let kind, let turn, let start, let origin, let grab):
             moveGuide(kind, turn: turn, start: start, origin: origin, grab: grab, to: p)
         case nil:
@@ -1004,7 +1018,7 @@ final class InkEditorModel {
         case .erase(_, _, let removed):
             eraserAt = nil
             if !removed.isEmpty { record(Action(remove: removed.map { Ref(id: $0, kind: "stroke") })) }
-            overlayRevision += 1
+            overlayChanged()
         case .partial:
             eraserAt = nil
             commitPartialErase()
@@ -1015,7 +1029,7 @@ final class InkEditorModel {
         case .drag:
             commitDrag()
         case .tape(let key, let start, let end):
-            overlayRevision += 1
+            overlayChanged()
             // A tap opens or covers the strip under it; a drag lays a new one.
             if hypot(end.x - start.x, end.y - start.y) * zoom < 4 {
                 if let strip = tape(at: start, key: key) { togglePeek(strip.id) }
@@ -1029,7 +1043,7 @@ final class InkEditorModel {
         case .shape(let key, let start, let end, let from):
             finishShape(key: key, from: start, to: end, fromId: from)
         case .guide:
-            overlayRevision += 1
+            overlayChanged()
         case nil:
             break
         }
@@ -1055,7 +1069,7 @@ final class InkEditorModel {
                 try? await Task.sleep(for: .milliseconds(33))
                 let now = Date()
                 self.lasers.removeAll { $0.ended.map { now.timeIntervalSince($0) > Self.laserFade } ?? false }
-                self.overlayRevision += 1
+                self.overlayChanged()
                 if self.lasers.allSatisfy({ $0.ended == nil }) { break }
             }
         }
@@ -1075,15 +1089,15 @@ final class InkEditorModel {
         gesture = nil
         eraserAt = nil
         revision += 1
-        overlayRevision += 1
+        overlayChanged()
     }
 
     /// The eraser's circle under a hovering pen or mouse.
     func hover(_ p: InkPoint?, scale: Double) {
-        guard tool == .eraser, gesture == nil else { if eraserAt != nil && gesture == nil { eraserAt = nil; overlayRevision += 1 }; return }
+        guard tool == .eraser, gesture == nil else { if eraserAt != nil && gesture == nil { eraserAt = nil; overlayChanged() }; return }
         eraserRadius = eraserSize / max(0.05, scale)
         eraserAt = p
-        overlayRevision += 1
+        overlayChanged()
     }
 
     /// The eraser's radius in screen points: the precise one exactly its size, the others a little bigger to be easy to hit.
@@ -1129,7 +1143,7 @@ final class InkEditorModel {
             break
         }
         if inkTouched { edited = true; revision += 1 }
-        overlayRevision += 1
+        overlayChanged()
     }
 
     /// The partial eraser lifts: each stroke it cut becomes its pieces, in its place.
@@ -1157,7 +1171,7 @@ final class InkEditorModel {
         let loop = lassoPath
         lassoPath = []
         let extent = InkGeometry.bounds(loop).map { max($0.width, $0.height) * max(0.05, zoom) } ?? 0
-        guard loop.count >= 3, extent >= 8 else { overlayRevision += 1; return false }
+        guard loop.count >= 3, extent >= 8 else { overlayChanged(); return false }
         let c = content[key] ?? InkContent()
         let kinds = lassoKinds
         let near: [InkLine] = kinds.picksInk ? self.strokes(near: InkGeometry.bounds(loop), key: key) : []
@@ -1219,7 +1233,7 @@ final class InkEditorModel {
         turning = nil
         guard let t = dragTransform, t.isUsable, t != InkGeometry.Transform(), let sel = selection else {
             if dragTransform != nil { dragTransform = nil; revision += 1 }
-            overlayRevision += 1
+            overlayChanged()
             return
         }
         dragTransform = nil
@@ -1602,7 +1616,10 @@ final class InkEditorModel {
         if let jpeg = await Task.detached(priority: .utility, operation: { InkRenderer.thumbnailJPEG(first, content: c, bounds: bounds) }).value {
             try? await library.setThumbnail(target.itemId, jpeg: jpeg)
         }
-        await Handwriting.read(target.itemId, library: library)
+        // Only the pages written on are read again; `.fast` in Low Power Mode or when hot.
+        let fast = app?.policy.recognition == .fast
+        let pagesRead = await Handwriting.read(target.itemId, library: library, fast: fast)
+        app?.power.count { $0.visionPages += pagesRead }
         app?.inkChanged(now: true)
     }
 }
@@ -1624,7 +1641,7 @@ extension InkEditorModel {
         }
         protractorReading = nil
         if ruler == nil && protractor == nil { guidesKey = nil }
-        overlayRevision += 1
+        overlayChanged()
     }
 
     private func guideCentre() -> InkPoint {
@@ -1670,7 +1687,7 @@ extension InkEditorModel {
             g.y = origin.y + p.y - start.y
         }
         if kind == .ruler { ruler = g } else { protractor = g }
-        overlayRevision += 1
+        overlayChanged()
     }
 
     /// The guide a pen put down at `p` draws along (within 14 screen points of a ruler edge or the protractor's arc).
@@ -1706,7 +1723,7 @@ extension InkEditorModel {
         if let p, key == guidesKey, hypot(p.x - pro.x, p.y - pro.y) <= pro.radius * 1.6 { next = p }
         if next == nil && protractorReading == nil { return }
         protractorReading = next
-        overlayRevision += 1
+        overlayChanged()
     }
 
     // MARK: Shapes: the picker, handles and connectors
@@ -1771,7 +1788,7 @@ extension InkEditorModel {
     /// The shape tool lifts: the shape it dragged out (a tap adds nothing).
     private func finishShape(key: String, from a: InkPoint, to b: InkPoint, fromId: String) {
         shapeDraft = nil
-        overlayRevision += 1
+        overlayChanged()
         guard hypot(b.x - a.x, b.y - a.y) * max(0.05, zoom) >= 6, var line = shapeLine(key: key, from: a, to: b, fromId: fromId),
               let library = app?.library else { return }
         let id = UUID().uuidString.lowercased()
