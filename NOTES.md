@@ -58,8 +58,7 @@ Not yet built on CI when written; not yet run on a device.
 - **Sync conflict** ("relay push …: conflict … a different segment with this start already exists"):
   an upload that went through before the device recorded it was sealed again with new bytes and
   refused for ever. The relay's 409 now includes `last`; the apps and the website count those ops
-  as sent and upload the rest. **Needs the relay redeployed** (done with this merge if the token
-  works; see below).
+  as sent and upload the rest. Relay and website redeployed (version b7255461).
 - **Apple Notes** ("Couldn't read what Apple Notes sent back"): osascript wrote non-UTF-8 for an app
   opened from Finder, so accents and emoji broke the JSON. The script now returns ASCII-only JSON,
   osascript runs with a UTF-8 locale, a bad note is skipped, and the message says what came back.
