@@ -69,12 +69,13 @@ targets:
         # apps ("Copy to Trove"), which works even when sideloading dropped the App Group the share
         # extension needs. iOS copies the file into Documents/Inbox and opens trove with its URL
         # (TroveApp.handle → AppModel.openFile). Alternate rank: never the default app for a file.
+        # LSSupportsOpeningDocumentsInPlace is left out: iOS then copies (the default), and Xcode
+        # refuses NO for the Mac in this shared Info.plist.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Any file
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.data, public.content]
-        LSSupportsOpeningDocumentsInPlace: false
         BGTaskSchedulerPermittedIdentifiers: [com.mrlancus.trove.enrich, com.mrlancus.trove.refresh]
         UIBackgroundModes: [fetch, processing]
         NSCameraUsageDescription: Trove uses the camera to scan pairing QR codes and documents.
