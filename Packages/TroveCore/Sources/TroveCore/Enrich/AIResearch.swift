@@ -240,6 +240,7 @@ extension AIClient {
         public var steps: [String] = []
         public var usage = AIUsage.Total()
         public var model = ""
+        public init() {}
     }
 
     public struct Answer: Sendable, Equatable {

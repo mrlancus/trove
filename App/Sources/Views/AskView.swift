@@ -27,60 +27,15 @@ struct AskView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 22) {
-                            if turns.isEmpty && pending == nil && fallback == nil {
-                                AskWelcome { idea in
-                                    // "Find my notes about…" waits for you to finish it.
-                                    if idea.hasSuffix("…") { question = String(idea.dropLast()) + " "; focused = true } else { question = idea; ask() }
-                                }
-                                    .padding(.top, 40)
-                                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                            }
-                            ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
-                                AskTurnView(turn: turn, open: open)
-                                    .id(i)
-                                    .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)), removal: .opacity))
-                            }
-                            if let fallback {
-                                AskTurnView(turn: AIChat.Turn(question: question, answer: fallback.answer, sources: fallback.sources.map(\.id), model: fallback.by), open: open)
-                            }
-                            if let pending {
-                                AskWorking(question: pending, progress: progress)
-                                    .id("pending")
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                            }
-                        }
-                        .frame(maxWidth: 680)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 18)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .onChange(of: turns.count) { withAnimation(.smooth) { proxy.scrollTo(turns.count - 1, anchor: .bottom) } }
-                    .onChange(of: progress.steps.count) { withAnimation(.smooth) { proxy.scrollTo("pending", anchor: .bottom) } }
-                }
+                conversation
                 composer
             }
             .background(AskBackground().ignoresSafeArea())
-            .navigationTitle(chat.map { $0.displayTitle } ?? "Ask Trove")
+            .navigationTitle(chat?.displayTitle ?? "Ask Trove")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-                if ownAI {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { showHistory = true } label: { Label("Chats", systemImage: "clock.arrow.circlepath") }
-                            .help("Your chats")
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { newChat() } label: { Label("New chat", systemImage: "square.and.pencil") }
-                            .disabled(turns.isEmpty || pending != nil)
-                            .help("New chat")
-                    }
-                }
-            }
+            .toolbar { toolbar }
             .sheet(isPresented: $showHistory) {
                 AskHistory(current: chat?.id) { picked in
                     withAnimation(.smooth) { chat = picked; fallback = nil }
@@ -89,6 +44,74 @@ struct AskView: View {
         }
         .sheetSize(width: 780, height: 680)
         .onAppear { focused = true }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+        if ownAI {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showHistory = true } label: { Label("Chats", systemImage: "clock.arrow.circlepath") }
+                    .help("Your chats")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { newChat() } label: { Label("New chat", systemImage: "square.and.pencil") }
+                    .disabled(turns.isEmpty || pending != nil)
+                    .help("New chat")
+            }
+        }
+    }
+
+    private var conversation: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                messages
+                    .frame(maxWidth: 680)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity)
+            }
+            .onChange(of: turns.count) { withAnimation(.smooth) { proxy.scrollTo(turns.count - 1, anchor: .bottom) } }
+            .onChange(of: progress.steps.count) { withAnimation(.smooth) { proxy.scrollTo("pending", anchor: .bottom) } }
+        }
+    }
+
+    private var messages: some View {
+        VStack(spacing: 22) {
+            if turns.isEmpty && pending == nil && fallback == nil {
+                AskWelcome(pick: pickIdea)
+                    .padding(.top, 40)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+            ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
+                AskTurnView(turn: turn, open: open)
+                    .id(i)
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)), removal: .opacity))
+            }
+            if let fallback {
+                AskTurnView(turn: fallbackTurn(fallback), open: open)
+            }
+            if let pending {
+                AskWorking(question: pending, progress: progress)
+                    .id("pending")
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+    }
+
+    private func fallbackTurn(_ f: (answer: String, sources: [Item], by: String)) -> AIChat.Turn {
+        AIChat.Turn(question: question, answer: f.answer, sources: f.sources.map(\.id), model: f.by)
+    }
+
+    /// "Find my notes about…" waits for you to finish it; the others are asked at once.
+    private func pickIdea(_ idea: String) {
+        if idea.hasSuffix("…") {
+            question = String(idea.dropLast()) + " "
+            focused = true
+        } else {
+            question = idea
+            ask()
+        }
     }
 
     // MARK: Composer and costs
