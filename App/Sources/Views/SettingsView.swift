@@ -317,10 +317,125 @@ private struct RelaySection: View {
     }
 }
 
+/// Your own AI: provider, key and the three models (`AISettings`), saved for every device.
+private struct OwnAISection: View {
+    @Environment(AppModel.self) private var model
+    @State private var draft = AISettings()
+    @State private var loaded = false
+    @State private var available: [String] = []
+    @State private var status: String?
+    @State private var busy = false
+
+    var body: some View {
+        Section {
+            // Another provider has other models: the ones chosen are cleared.
+            Picker("Provider", selection: Binding(get: { draft.provider }, set: { p in
+                guard p != draft.provider else { return }
+                draft.provider = p
+                draft.models = [:]
+                available = []
+            })) {
+                ForEach(AISettings.Provider.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            SecureField(draft.provider == .custom ? "API key (if it needs one)" : "API key", text: $draft.apiKey)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+            if draft.provider == .custom {
+                TextField("API address, e.g. http://localhost:11434/v1", text: $draft.customURL)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    #endif
+            }
+            if let page = URL(string: draft.provider.keyPage), !draft.provider.keyPage.isEmpty {
+                Link("Get a key from \(draft.provider.label)…", destination: page)
+            }
+            ForEach(AISettings.Tier.allCases, id: \.self) { tier in
+                HStack {
+                    Text(tier.label).frame(width: 74, alignment: .leading)
+                    TextField(draft.provider.defaultModels[tier] ?? (tier == .fast ? "model name" : "same as Fast"), text: Binding(
+                        get: { draft.models[tier] ?? "" },
+                        set: { draft.models[tier] = $0.isEmpty ? nil : $0 }))
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                    if !available.isEmpty {
+                        Menu {
+                            ForEach(available, id: \.self) { m in Button(m) { draft.models[tier] = m } }
+                        } label: { Image(systemName: "chevron.up.chevron.down") }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .accessibilityLabel("Choose the \(tier.label) model")
+                    }
+                }
+            }
+            Toggle("Read handwriting with your AI", isOn: $draft.readHandwriting)
+            HStack {
+                Button("Save") {
+                    Task {
+                        await model.saveAISettings(draft)
+                        status = draft.isReady ? "Saved. Every device uses it now." : "Saved. Add a key and a Fast model to use it."
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(draft == model.aiSettings)
+                Button("Test") { test() }.disabled(!draft.isReady || busy)
+                Button("Load models") { loadModels() }.disabled(busy || (draft.apiKey.isEmpty && draft.provider != .custom))
+                if busy { ProgressView().controlSize(.small) }
+            }
+            if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+        } header: {
+            Text("Your AI")
+        } footer: {
+            FormFooter("Paste an API key from Claude, OpenAI, Gemini, OpenRouter or any OpenAI-compatible service (a local Ollama or LM Studio too). Fast does everything by default: Ask, note and page actions, and reading handwriting as soon as a sketch, GoodNotes notebook, inked or scanned PDF or photo of a page arrives. Pick Smarter or Best per question in Ask. All at medium effort. The key is kept in your vault, end-to-end encrypted, and reaches your other devices; requests go straight from this device to the provider with only what each one needs. The provider bills you for what you use, so set a monthly limit on their site.")
+        }
+        .onAppear {
+            guard !loaded else { return }
+            draft = model.aiSettings
+            loaded = true
+        }
+    }
+
+    private func test() {
+        busy = true
+        status = nil
+        let client = AIClient(settings: draft)
+        Task {
+            do {
+                let reply = try await client.complete([.text("Reply with just the word OK.")], tier: .fast, maxTokens: 1000)
+                status = "Works: \(reply.model) said “\(reply.text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))”."
+            } catch {
+                status = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    private func loadModels() {
+        busy = true
+        status = nil
+        let client = AIClient(settings: draft)
+        Task {
+            do {
+                available = try await client.listModels()
+                status = available.isEmpty ? "No models listed." : "\(available.count) models: choose them with the arrows."
+            } catch {
+                status = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+}
+
 private struct AISection: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        OwnAISection()
         Section {
             LabeledContent("This device", value: OnDeviceAI.isAvailable ? "Apple Intelligence" : "Basic")
             if !OnDeviceAI.isAvailable {
@@ -350,7 +465,15 @@ private struct IntegrationsSection: View {
             #if os(macOS)
             Toggle("Mirror Apple Notes into Trove search", isOn: Binding(
                 get: { model.config?.appleNotesImport ?? false },
-                set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.syncNow() } } }))
+                set: { on in model.updateConfig { $0.appleNotesImport = on }; if on { Task { await model.importAppleNotes(force: true) } } }))
+            if model.config?.appleNotesImport == true {
+                HStack {
+                    Text(model.appleNotesStatus ?? "Checks Apple Notes every few minutes while Trove is open.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Import now") { Task { await model.importAppleNotes(force: true) } }
+                }
+            }
             Button { choosingObsidian = true } label: {
                 Label(model.config?.obsidianFolder.map { "Obsidian vault: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Sync with an Obsidian vault…", systemImage: "point.3.connected.trianglepath.dotted")
             }

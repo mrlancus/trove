@@ -114,6 +114,9 @@ final class AppModel {
     var toast: String?
     /// The relay's cloud AI state and this month's use (AppModel+AI.swift); nil without a relay.
     var cloudAIStatus: RelayClient.AIStatus?
+    /// Your own AI provider and key (Settings → AI; the `settings.ai` record, on every device).
+    var aiSettings = AISettings()
+    @ObservationIgnored var aiSettingsLoaded = false
     /// Last week's digest was checked this launch (AppModel+AI.swift).
     var digestChecked = false
     /// The relay's AI status was asked for this launch (AppModel+AI.swift).
@@ -206,6 +209,10 @@ final class AppModel {
     @ObservationIgnored private var widgetShown: SharedConfig.WidgetSnapshot?
     @ObservationIgnored private var widgetTask: Task<Void, Never>?
     private var mirroring = false
+    /// The last Apple Notes import: how it went, or what's wrong (Settings shows it).
+    var appleNotesStatus: String?
+    @ObservationIgnored private var appleNotesBusy = false
+    @ObservationIgnored private var lastAppleNotes: TimeInterval = -.infinity
     private var searchTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var live: LiveConnection?
@@ -239,6 +246,7 @@ final class AppModel {
         await semantic.useCache(vault.semanticURL)
         let config = vault.config!
         enrichment = EnrichmentService(library: library, deviceId: config.deviceId, relay: vault.relayClient, cloudEnabled: config.cloudAI)
+        aiSettingsLoaded = false
         vault.publishCaptureSettings()
         await engine.observe { Task { @MainActor [weak self] in self?.scheduleSave() } }
         await reload()
@@ -367,6 +375,7 @@ final class AppModel {
             SpotlightIndexer.index(items)
         }
         await applySharedSettings()
+        await loadAISettings()
         let inkStamp = await library.stamp(of: ["stroke", "element"])
         if inkStamp != shownInkStamp {
             shownInkStamp = inkStamp
@@ -756,6 +765,7 @@ final class AppModel {
         await enrichSoon()
         await afterSyncAI()
         await mirrorIfOwner()
+        await importAppleNotes()
     }
 
     // MARK: Settings that follow you (PROTOCOL.md §8, `settings.app`)
@@ -988,6 +998,7 @@ final class AppModel {
     }
 
     var aiStatus: String {
+        if aiSettings.isReady { return "Your AI: \(aiSettings.provider.label), \(aiSettings.model(.fast))" }
         if OnDeviceAI.isAvailable { return "Apple Intelligence on this device" }
         if vault.config?.cloudAI == true, vault.relayClient != nil {
             guard let s = cloudAIStatus else { return "Cloud AI (opt-in) via your relay" }
@@ -995,6 +1006,38 @@ final class AppModel {
             return "Cloud AI (opt-in) via your relay: \(s.used) of \(s.limit) tokens used this month"
         }
         return "Basic (text recognition, dates, places, search by meaning). Smart summaries come from your iPad."
+    }
+
+    // MARK: Apple Notes (Mac)
+
+    /// Reads Apple Notes into Trove on any Mac where it's turned on (it used to run only on the Mac
+    /// that made the vault, so a vault made on the website never imported). Every few minutes at
+    /// most, or now when `force` (turning it on, Import now).
+    func importAppleNotes(force: Bool = false) async {
+        #if os(macOS)
+        guard vault.config?.appleNotesImport == true, let library, !appleNotesBusy else { return }
+        let now = Self.clock
+        guard force || now - lastAppleNotes >= 300 else { return }
+        appleNotesBusy = true
+        lastAppleNotes = now
+        defer { appleNotesBusy = false }
+        appleNotesStatus = "Reading Apple Notes…"
+        do {
+            let result = try await AppleNotesBridge.importAll(into: library)
+            let changed = result.added + result.updated
+            appleNotesStatus = "\(result.total) notes in Apple Notes; \(result.added) new, \(result.updated) updated (\(Date().formatted(date: .omitted, time: .shortened)))"
+            if changed > 0 {
+                await reload()
+                if force || result.added > 0 { toast = result.added > 0 ? "\(result.added) notes from Apple Notes" : "Apple Notes up to date" }
+                await syncNow()
+            } else if force {
+                toast = "Apple Notes up to date"
+            }
+        } catch {
+            appleNotesStatus = error.localizedDescription
+            if force { toast = error.localizedDescription }
+        }
+        #endif
     }
 
     // MARK: Mirror (Mac)
@@ -1010,7 +1053,6 @@ final class AppModel {
         if let custom = config.obsidianFolder {
             await ObsidianMirrorService.shared.sync(items: items, folder: URL(fileURLWithPath: custom), library: library)
         }
-        if config.appleNotesImport { await AppleNotesBridge.importAll(into: library) }
         #endif
     }
 
@@ -1307,20 +1349,30 @@ final class AppModel {
         await reload()
     }
 
-    func ask(_ question: String) async -> (answer: String, sources: [Item]) {
-        guard let library else { return ("", []) }
+    /// Ask Trove: search finds the closest items, then your AI (the tier you pick), Apple
+    /// Intelligence or the relay's cloud AI answers from them.
+    func ask(_ question: String, tier: AISettings.Tier = .fast) async -> (answer: String, sources: [Item], by: String) {
+        guard let library else { return ("", [], "") }
         let semanticScores = await semantic.scores(for: question)
-        let hits = await library.search(question, semantic: semanticScores, limit: 8)
-        let fallbackHits = hits
-        let sources = fallbackHits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? ""].joined(separator: "\n")) }
-        guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", []) }
+        let hits = await library.search(question, semantic: semanticScores, limit: ownAI == nil ? 8 : 12)
+        let sources = hits.map { (id: $0.id, text: [$0.title, $0.summary ?? "", $0.body, $0.ocrText ?? "", $0.inkText ?? ""].joined(separator: "\n")) }
+        guard !sources.isEmpty else { return ("Nothing in your Trove seems to match that yet.", [], "") }
+        func cited(_ ids: [String]) -> [Item] { hits.filter { ids.contains($0.id) }.nilIfEmpty ?? hits }
+        if let ai = ownAI {
+            do {
+                let answer = try await ai.ask(question, sources: sources, tier: tier)
+                return (answer.answer, cited(answer.citations), answer.model)
+            } catch {
+                return ("Your AI didn't answer: \(error.localizedDescription)", hits, "")
+            }
+        }
         if let answer = try? await OnDeviceAI.ask(question, sources: sources) {
-            return (answer.answer, fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
+            return (answer.answer, cited(answer.citations), "Apple Intelligence")
         }
         if vault.config?.cloudAI == true, let relay = vault.relayClient, let answer = try? await relay.ask(question, sources: sources) {
-            return (answer.answer + "\n\n(Answered in the cloud)", fallbackHits.filter { answer.citations.contains($0.id) }.nilIfEmpty ?? fallbackHits)
+            return (answer.answer, cited(answer.citations), "Cloud AI")
         }
-        return ("Here are the closest matches. (Turn on Apple Intelligence or cloud AI for written answers.)", fallbackHits)
+        return ("Here are the closest matches. (Add your AI in Settings → AI for written answers.)", hits, "")
     }
 
     // MARK: Settings helpers

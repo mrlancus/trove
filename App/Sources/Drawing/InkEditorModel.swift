@@ -1693,7 +1693,8 @@ final class InkEditorModel {
         }
         // Only the pages written on are read again; `.fast` in Low Power Mode or when hot.
         let fast = app?.policy.recognition == .fast
-        let pagesRead = await Handwriting.read(target.itemId, library: library, fast: fast)
+        let ai = app?.aiSettings.readHandwriting == true ? app?.ownAI : nil
+        let pagesRead = await Handwriting.read(target.itemId, library: library, fast: fast, ai: ai)
         app?.power.count { $0.visionPages += pagesRead }
         app?.inkChanged(now: true)
     }

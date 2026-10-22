@@ -11,6 +11,10 @@ actor EnrichmentService {
     let deviceId: String
     var relay: RelayClient?
     var cloudEnabled: Bool
+    /// Your own AI (Settings → AI), when it reads handwriting.
+    private var ownAI: AIClient?
+    /// After your AI fails to read (offline, out of credit), it's left alone for a while.
+    private var aiPausedUntil = Date.distantPast
     private var running = false
 
     init(library: Library, deviceId: String, relay: RelayClient?, cloudEnabled: Bool) {
@@ -23,6 +27,17 @@ actor EnrichmentService {
     func configure(relay: RelayClient?, cloudEnabled: Bool) {
         self.relay = relay
         self.cloudEnabled = cloudEnabled
+    }
+
+    func setOwnAI(_ ai: AIClient?) {
+        ownAI = ai
+        aiPausedUntil = .distantPast
+    }
+
+    /// Your AI, when it should read handwriting now.
+    private var reader: AIClient? {
+        guard let ownAI, ownAI.settings.readHandwriting, Date() >= aiPausedUntil else { return nil }
+        return ownAI
     }
 
     /// The best tier this device can produce right now.
@@ -77,16 +92,37 @@ actor EnrichmentService {
         await library.engine.release()
         // Handwriting in sketches, wherever they were drawn (it's read again only when the ink changed).
         // On battery it waits for the charger: the editor reads this device's own sketches when it closes.
+        // With your AI the reading happens on its servers, so it doesn't wait for the charger: whatever
+        // arrives (a GoodNotes notebook, a sketch from another device, a photo of a page) is read now.
+        let ai = reader
+        let allowance = ai != nil ? max(budget.handwriting, 10) : budget.handwriting
+        let all = await library.items()
         var sketches = 0
-        for item in await library.items() where item.kind == .sketch && sketches < budget.handwriting {
+        for item in all where item.kind == .sketch && sketches < allowance {
             if Task.isCancelled || PowerMonitor.tooHot { break }
-            guard item.record[Handwriting.signatureField]?.string != (await library.inkSignature(item.id)) else { continue }
-            round.visionPages += await Handwriting.read(item.id, library: library, fast: fast)
+            let sig = await library.inkSignature(item.id) + (ai == nil ? "" : "|ai")
+            guard item.record[Handwriting.signatureField]?.string != sig else { continue }
+            round.visionPages += await Handwriting.read(item.id, library: library, fast: fast, ai: ai)
             sketches += 1
             round.changed += 1
+            if ai != nil, await library.item(item.id)?.record[Handwriting.signatureField]?.string != sig { pauseAI(); break }
+        }
+        if let ai = reader {
+            var files = 0
+            for item in all where files < 10 && Handwriting.wantsFileRead(item) {
+                if Task.isCancelled { break }
+                let sig = Handwriting.fileSignature(item, ink: await library.inkSignature(item.id))
+                guard item.record[Handwriting.filesField]?.string != sig else { continue }
+                round.requests += await Handwriting.readFiles(item.id, library: library, ai: ai)
+                files += 1
+                round.changed += 1
+                if await library.item(item.id)?.record[Handwriting.filesField]?.string != sig { pauseAI(); break }
+            }
         }
         return round
     }
+
+    private func pauseAI() { aiPausedUntil = Date().addingTimeInterval(15 * 60) }
 
     /// Clips (PROTOCOL.md §8): read the text in images, then name, summarise and tag with the best
     /// tier here. Short copies get the rules only: AI has nothing to add to a phone number.

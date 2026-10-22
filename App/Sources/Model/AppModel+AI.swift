@@ -61,7 +61,7 @@ enum NoteAI {
 
 extension AppModel {
     /// Note AI shows when this device has Apple Intelligence or the relay says cloud AI is on.
-    var noteAIAvailable: Bool { OnDeviceAI.isAvailable || cloudAIStatus?.enabled == true }
+    var noteAIAvailable: Bool { ownAI != nil || OnDeviceAI.isAvailable || cloudAIStatus?.enabled == true }
 
     func refreshAIStatus() async {
         guard let relay = vault.relayClient else { cloudAIStatus = nil; return }
@@ -71,6 +71,8 @@ extension AppModel {
     /// Runs a note action: on this device first, then in the cloud when it's on. Nil (with a toast) on failure.
     func runNoteAI(_ action: NoteAI.Action, text: String, language: String = "") async -> NoteAI.Result? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { toast = "Write something first"; return nil }
+        // Your AI first when it's set up (it's the one you chose).
+        if ownAI != nil { return await runOwnNoteAI(action, text: text, language: language) }
         if OnDeviceAI.isAvailable {
             do {
                 if action == .flashcards {
@@ -106,6 +108,7 @@ extension AppModel {
     /// (`image`, PNG) when it's on. Nil (with a toast) when neither can.
     func runInkAI(_ action: InkAIAction, image: Data, text: String) async -> NoteAI.Result? {
         let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ownAI != nil { return await runOwnInkAI(action, image: image) }
         if OnDeviceAI.isAvailable, !words.isEmpty {
             do {
                 if action == .flashcards {

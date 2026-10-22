@@ -812,7 +812,7 @@ struct ItemMenu: View {
             }
         }
         #if os(macOS)
-        Button { try? AppleNotesBridge.save(item) } label: { Label("Save to Apple Notes", systemImage: "note.text.badge.plus") }
+        Button { Task { try? await AppleNotesBridge.save(item) } } label: { Label("Save to Apple Notes", systemImage: "note.text.badge.plus") }
         #endif
         Divider()
         if !model.selecting {
