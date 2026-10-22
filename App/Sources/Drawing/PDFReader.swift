@@ -327,11 +327,16 @@ final class PDFReaderModel {
         let saved = await library.pdfFields(on: itemId, layer: layer)
         for (_, a) in Self.widgets(document) {
             guard let name = a.fieldName, let e = saved[name], let v = e.fieldValue else { continue }
+            // Unchanged since we last saw it: leave what's being typed alone.
             if fieldsLoaded, fieldValues[name] == v { continue }
             Self.apply(v, to: a)
         }
-        fieldValues = currentValues().mapValues(\.value)
-        fieldsLoaded = true
+        for (name, e) in saved { if let v = e.fieldValue { fieldValues[name] = v } }
+        if !fieldsLoaded {
+            // The file's own values count as seen, so only edits are saved.
+            for (name, now) in currentValues() where fieldValues[name] == nil { fieldValues[name] = now.value }
+            fieldsLoaded = true
+        }
     }
 
     /// Each field's value now, with the widget that shows it. A radio group is the button that's on
