@@ -62,6 +62,12 @@ Not yet built on CI when written; not yet run on a device.
 - **Apple Notes** ("Couldn't read what Apple Notes sent back"): osascript wrote non-UTF-8 for an app
   opened from Finder, so accents and emoji broke the JSON. The script now returns ASCII-only JSON,
   osascript runs with a UTF-8 locale, a bad note is skipped, and the message says what came back.
+- **Apple Notes, second fix** ("Apple Notes sent nothing back"): the Mac app had no
+  `com.apple.security.automation.apple-events` entitlement, which the hardened runtime needs to
+  control other apps (osascript's Apple Events count as Trove's); macOS refused them without asking.
+  Added (project.yml), and the script now writes the notes to a UTF-8 temp file instead of printing
+  them. Built at cb20097. **Check:** after updating, Import now should bring up macOS's "Trove wants
+  to control Notes" prompt.
 - **Accessibility** still saying not allowed: macOS often tells an app only after it restarts.
   Settings → Clipboard has **Restart Trove**, also accepts the event-posting permission, and warns
   when Trove runs from Downloads (App Translocation), where the permission never reaches it.
