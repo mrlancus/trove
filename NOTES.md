@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 158 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 160 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -36,7 +36,38 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: notes (daily note, templates, checklists) and PDFs like a PDF app (user: "do all that and the pdf viewer")
+## Latest round: iPad feedback (sync 413, duplicate screenshots, share sheet, ⌘C, blank sketch at 10 %, Pen options, squeeze palette)
+Builds on CI; not yet run on a device.
+- **"relay push …: http(413, segment too large)"**: a real sync bug. After a restart the app rebuilt
+  each unpushed segment from its first op through *every* later op, so one grew past the relay's
+  1 MiB limit and was refused on every sync (those edits never went out). Now each runs to the next
+  unpushed segment and at most 512 KiB (`SyncEngine.rebuildOutbox`, `OutboxTests` reproduces it).
+  **Check:** the cloud icon's error goes away after updating and opening Trove once.
+- **Duplicate screenshots** (iPhone and iPad both imported each one via iCloud Photos): the id comes
+  from when it was taken and its bytes (`Library.addScreenshot`), so the second device finds it there;
+  copies already saved twice with the same time and the very same file are removed once per launch
+  (`removeDuplicateScreenshots`). Same picture at another time, or another at the same time, stays.
+- **Screenshots straight into Trove**: Mac (new: Settings → Other apps → Import new screenshots) via
+  Spotlight's live query for screen captures, within seconds, stored as JPEG; iPhone/iPad as soon as
+  Photos has it while Trove is open, else when Trove comes to the front (iOS can't watch Photos in
+  the background). Each import syncs at once. Screenshots only.
+- **Share sheet "can't reach Trove's shared storage"**: the install lost its App Group (Sideloadly).
+  Code can't restore it, so now: Trove → Settings → About → **Copy share sheet code**, then in the
+  share sheet tap **Paste code** once; saves go straight to the relay inbox from then on (needs the
+  relay). The code holds the public key, relay address and inbox token only.
+- **⌘C copies the selected item** (picture as picture, link, note text, file; several picked items
+  together): Mac when no text field has the keyboard; iPad/iPhone with a keyboard. Also "Copy" in
+  every item's menu.
+- **Sketch opens at 10 % showing nothing until a pinch**: the fit now waits for a real size (280 pt),
+  fits again when the height settles (unless zoomed by hand), and nudges the zoom after fitting so
+  PencilKit and the paper draw. **Check on the iPad** (the video didn't come through to the session,
+  so this is from reading the code): open several sketches, rotate, open/close the options row.
+- **Pen options** popover sized to show everything; **the options row** is one height for every tool.
+- **Squeeze palette**: curved round the Pencil's tip (tools outer arc, colours inner arc, undo /
+  sizes / redo in the middle); picking keeps it open; squeeze again or tap elsewhere closes it.
+  **Ask the user** how it feels and what to add (favourites?).
+
+## Round before: notes (daily note, templates, checklists) and PDFs like a PDF app (user: "do all that and the pdf viewer")
 Picked up the two unfinished branches (`wip/notes`, `wip/pdfs`, both merged in). Shared code is tested
 on Linux (Swift + JS on the same fixtures); the website is checked in Chromium (`notes.e2e.mjs`,
 `pdf.e2e.mjs`); the apps build on CI for macOS and iOS but **haven't run on a device**.
