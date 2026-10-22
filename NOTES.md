@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy) | ✅ Done | 148 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy) | ✅ Done | 149 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -130,16 +130,29 @@ Written on Linux; TroveCore tested on Linux, the apps build on GitHub Actions; *
   you wrote on; strokes reach the Mac within ~3 min (instantly on closing the sketch); the widget
   still updates; Low Power Mode → "Right now" says so; an item saved on the iPad gets its AI title on
   battery, items from the Mac wait for the charger.
-- **Not done here**: no automatic clipboard picture capture in Low Power Mode (the clipboard reads
-  belong to the other session's paste-permission work).
-- **Still open (§3.7 items 1, 8, 9, 11)**: editor ink reloads, per-stroke signing in
-  `PencilCanvas`, close-time preview rendering, overlay redraws. They touch the sketch editor, which
-  another session was changing (on `wip/ipad-fixes`, not on `main` when this round merged), so they
-  wait for that to land. When doing them: in `AppModel.reload()` bump `inkRevision` only when a sync
-  pulled ink while a sketch is open, and update `InkEditorModel.inkSig` after its own writes; call
-  `app.sketchPageChanged()` when the editor's page changes; count `inkReloads` in `reloadInk()` via
-  `app.power.count { $0.inkReloads += 1 }` and wrap it in `Perf.begin("Reload ink")`.
-- CI: the Apple build of `battery` (267ba50) passed for macOS and iOS. The `ci-logs` branch is
+- **Not done here**: no Low Power Mode rule for clipboard pictures: since the iPad fixes iPhone/iPad never read the clipboard by themselves (the clipboard reads
+  belong to the iPad-fixes work, and none happen automatically now).
+- **Sketch editor (§3.7 items 1, 8, 9, 11; done after the iPad fixes reached `main`)**:
+  - The open editor reloads only when a sync pulled ink (`AppModel.inkPulledRevision`), not after
+    its own saves (it reloaded and re-sorted every stroke about every 4 s while writing). Reloads are
+    counted ("ink reloads") and signposted ("Reload ink"); an hour of writing alone should show ~0.
+  - iPad canvas: the ids of the strokes on the canvas are kept in order (`canvasOrder`), so a new
+    pen stroke and the update after it no longer sign every stroke; signatures remain the fallback.
+    TroveCore keeps the newest ink time per item (`RecordStore.newestInkTime`), so adding a stroke
+    no longer reads every stroke of the notebook.
+  - Closing a sketch: previews (sketch pages, inked PDFs/pictures) redraw only pages whose ink
+    changed; the catch-up pushes first and refreshes lists 2 s later at utility priority; handwriting
+    reads only changed pages (`.fast` when saving).
+  - Text boxes and tape have their own layer (drawn past the screen's edges, redrawn when they change);
+    lasso, eraser and hover moves redraw the overlay straight from the model
+    (`InkEditorModel.overlayListener`) instead of re-evaluating the SwiftUI editor on every move. The
+    Mac canvas is unchanged. Not done: per-shape `CAShapeLayer`s (the overlay still redraws its own
+    area, now without the text).
+  - A page change asks the push batching to send soon (`sketchPageChanged`).
+  - **Check on the iPad**: text boxes and tape still show over the ink, move with the lasso, hide
+    while typed in, and peek; the eraser circle follows the Pencil; strokes drawn fast never vanish
+    or double; a stroke from the Mac still appears in an open sketch.
+- CI: the Apple builds of `battery` (267ba50, then 99f609b with items 1, 8, 9, 11) passed for macOS and iOS. The `ci-logs` branch is
   shared by every run: check `RESULT` names your commit before reading the errors.
 
 ## Current round: the roadmap (user: "Bridges", iPad Air M3 + Pencil Pro; later "session ran out, continue; renaming clips doesn't work")
