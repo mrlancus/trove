@@ -1074,17 +1074,20 @@ final class AppModel {
         appleNotesStatus = "Reading Apple Notes…"
         do {
             // On the Import screen: how far it's got, and each note dropping into the box.
-            let progress: (@MainActor @Sendable (Int, Int, String?) -> Void)? = !visible ? nil : { [weak self] done, total, added in
-                guard let self, var run = self.importRun, !run.finished else { return }
-                run.total = max(1, total)
-                run.done = done
-                run.current = done < total ? "Apple Notes" : nil
-                if let added {
-                    run.added += 1
-                    run.recent.insert(.init(label: added.isEmpty ? "Note" : added, symbol: "note.text"), at: 0)
-                    run.recent = Array(run.recent.prefix(8))
+            var progress: (@MainActor @Sendable (Int, Int, String?) -> Void)?
+            if visible {
+                progress = { [weak self] (done: Int, total: Int, added: String?) in
+                    guard let self, var run = self.importRun, !run.finished else { return }
+                    run.total = max(1, total)
+                    run.done = done
+                    run.current = done < total ? "Apple Notes" : nil
+                    if let added {
+                        run.added += 1
+                        run.recent.insert(ImportRun.Arrival(label: added.isEmpty ? "Note" : added, symbol: "note.text"), at: 0)
+                        run.recent = Array(run.recent.prefix(8))
+                    }
+                    self.importRun = run
                 }
-                self.importRun = run
             }
             let result = try await AppleNotesBridge.importAll(into: library, progress: progress)
             if visible, var run = importRun {
