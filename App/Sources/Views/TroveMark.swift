@@ -26,7 +26,7 @@ struct TroveMark: View, Animatable {
     // In the icon's units (a 1024 canvas, cropped to the box): lid, body and latch.
     static let size = CGSize(width: 615, height: 575)
     static let lid = CGRect(x: 0, y: 0, width: 615, height: 133)
-    static let body = CGRect(x: 20, y: 163, width: 575, height: 412)
+    static let box = CGRect(x: 20, y: 163, width: 575, height: 412)
     static let latch = CGRect(x: 245, y: 113, width: 123, height: 163)
 
     var body: some View {
@@ -35,8 +35,8 @@ struct TroveMark: View, Animatable {
             let lift = -150 * open * s, tilt = Angle.degrees(-14 * open)
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 70 * s, style: .continuous)
-                    .frame(width: Self.body.width * s, height: Self.body.height * s)
-                    .offset(x: Self.body.minX * s, y: Self.body.minY * s)
+                    .frame(width: Self.box.width * s, height: Self.box.height * s)
+                    .offset(x: Self.box.minX * s, y: Self.box.minY * s)
                 // The lid and the latch hanging from it move together.
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 60 * s, style: .continuous)
@@ -71,14 +71,16 @@ extension TroveMark {
     /// The menu bar icon: the same box as a template image (macOS tints it), 18 points high.
     @MainActor static let menuBarImage: NSImage = {
         let side = 18.0
+        let s = 16 / size.width, dx = (side - size.width * s) / 2, dy = (side - size.height * s) / 2
+        func rect(_ r: CGRect) -> NSRect { NSRect(x: dx + r.minX * s, y: dy + r.minY * s, width: r.width * s, height: r.height * s) }
+        // Worked out here, so the drawing (which may run anywhere) uses only plain values.
+        let lidRect = rect(lid), boxRect = rect(box), latchRect = rect(latch)
         let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
-            let s = 16 / size.width, dx = (side - size.width * s) / 2, dy = (side - size.height * s) / 2
-            func rect(_ r: CGRect) -> NSRect { NSRect(x: dx + r.minX * s, y: dy + r.minY * s, width: r.width * s, height: r.height * s) }
             NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect(lid), xRadius: 60 * s, yRadius: 60 * s).fill()
-            NSBezierPath(roundedRect: rect(body), xRadius: 70 * s, yRadius: 70 * s).fill()
+            NSBezierPath(roundedRect: lidRect, xRadius: 60 * s, yRadius: 60 * s).fill()
+            NSBezierPath(roundedRect: boxRect, xRadius: 70 * s, yRadius: 70 * s).fill()
             NSGraphicsContext.current?.compositingOperation = .clear
-            NSBezierPath(roundedRect: rect(latch), xRadius: 30 * s, yRadius: 30 * s).fill()
+            NSBezierPath(roundedRect: latchRect, xRadius: 30 * s, yRadius: 30 * s).fill()
             return true
         }
         image.isTemplate = true
