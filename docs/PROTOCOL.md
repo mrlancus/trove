@@ -452,7 +452,13 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   it; the result goes in `inkText`, and `aiReadSig` on the item says what was read). Claude is
   called natively (`/v1/messages`); the others through `/chat/completions`. `limit.background`
   (number, US dollars a month, default 1, 0 = none) caps what reading handwriting may spend,
-  counted from the usage records below across every device.
+  counted from the usage records below across every device. `live.since` (unix ms, optional): with
+  `readHandwriting` on, only items added or written on since then are read as they arrive (an
+  item's `createdHLC`, or its newest ink record); older ones are read only when the user runs
+  "Read all past handwriting". Missing = since the app opened.
+- **Keeping an item from your AI:** `aiHidden: true` on an item means no AI request ever includes
+  it: Ask's tools don't list, search, open or show it, and its handwriting is read on the device
+  (Vision) instead. Missing or false = visible (the default).
 - **Screenshots:** one synced record, id `settings.screenshots`, kind `setting`: for each device
   (id uppercased) `<DEVICE>.notes` (its screenshots become library items) and `<DEVICE>.clipboard`
   (they go into clipboard history as image clips, `sourceApp: "Screenshot"`). Any device may set
@@ -464,8 +470,8 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   Written only by its device; totals are sums of the entries.
 - **AI chats:** kind `aiChat`, id `aichat-<uuid>`, fields `title` (`""` = the first question) and
   `turns`: `[{q, a (Markdown), sources: [item ids], steps: [what it looked up], model, tokens,
-  cost?, at}]`. Ask answers with tools over the library (overview, search, browse, read) rather
-  than a fixed set of notes.
+  cost?, at}]`. Ask answers with tools over the library (overview, index, search, browse, read, and
+  view, which sends pages as JPEGs about 1280 px on the long side) rather than a fixed set of notes.
 - **Tags with colours:** one synced record, id `settings.tags`, kind `setting`. Each field is a tag
   (lowercase, no `#`, spaces turned into `-`, never starting with `_`) and its value a colour name:
   `red`, `orange`, `yellow`, `green`, `mint`, `teal`, `blue`, `indigo`, `purple`, `pink`, `brown`,

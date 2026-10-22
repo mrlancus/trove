@@ -36,7 +36,58 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: AI costs and activity, Ask over everything, and fixes (user: "it used 7p on a couple of simple questions", "it can only see 12 files", "show how many tokens and the cost", "view all conversations", "see exactly what AI is doing in the background", plus screenshots per device, password options, Apple Notes, Accessibility, relay conflict, greyed Settings button)
+## Latest round: Trove's look for Ask, the box, AI access, and smoothness (user: "make everything properly centred", "colours should fit the app, no AI logo", "laggy", "screenshots aren't saved to clipboard", "AI can't read GoodNotes whiteboards", "option to disable AI access per note", "buttons greyed out", "Apple Notes in the import area with the box opening", "menu bar icon is a generic box", "total cost lower than the console", "medium effort for Haiku", "Settings buttons move around", "scan all past handwriting with progress and stop, and a live toggle")
+Not yet run on a device.
+- **Dates**: an imported file now keeps the date it was made (older of creation and last change),
+  so asking about a past day finds it. Items imported before this carry their import day (the AI is
+  told so). Re-importing doesn't move existing ones.
+- **Ask** (`AskView`): no orb or sparkles. Trove's box (`TroveMark`) whose lid lifts as you type;
+  while it works the lid is open and what it searches or opens rises out of it. Trove's orange
+  (`Brand`, from the icon) for the send button, question bubbles and chips; a faint warm light at the
+  top; composer items all 34 pt so a one-line question is centred. Nothing animates on its own
+  (the 30 fps orb and shimmer were costly); answers' Markdown is parsed once.
+- **What the AI can see** (`aiHidden`, PROTOCOL.md §8): an eye on every item (beside the folder line,
+  and Hide from AI / Let AI see this in its menu), and Settings → AI → What your AI can see: Allow
+  everything / Hide everything. Default: everything visible. Hidden items don't exist for Ask's tools
+  and are read with Vision on the device instead.
+- **Ask's tools** (`AskTools`): `index` (every title, ~15 tokens each, 300 a page) so it knows what
+  exists, and `view`: pages of a GoodNotes notebook or whiteboard, sketch, PDF or picture sent as
+  JPEGs 1280 px on the long side (~1,500 tokens a page; a PDF page would cost its picture and its
+  text), at most 4 at a time, only when `read` found little text. Drawn by `Handwriting.pageImages`.
+- **Reading handwriting**: "Read new handwriting as it arrives" (live) now takes only what's added
+  or written on since it was turned on (`live.since`); everything older waits for **Read all past
+  handwriting** (Settings → AI), which shows a progress bar, pages and cost so far, and Stop.
+- **Haiku always at medium effort** (the user's choice; it was low for reading pages).
+- **Costs lower than the console**: prices were right (cache reads on Opus 5.5 and Fable 5.1 are
+  now priced lower, as they are). Likely gaps: spending before metering began, devices still on an
+  older Trove, other apps on the same key, and requests given up after 2 minutes (still billed): the
+  timeout is now 10 minutes. Activity and costs says when counting began and that the console counts
+  UTC days.
+- **Import**: the box opens, each thing that arrives drops into it, a progress bar runs under it, and
+  the lid shuts with a burst when it's done. **Apple Notes** has its own card there (Import from
+  Apple Notes, plus "Keep checking for new notes"); Settings' Import now uses it too.
+- **Menu bar** (Mac): Trove's box as a template image (`TroveMark.menuBarImage`), not
+  `shippingbox`. Onboarding shows it too.
+- **Greyed-out buttons** (Mac): AppKit draws an inactive window's toolbar greyed; after a sheet, the
+  Settings window or a sketch or file window closed, the library window was sometimes left in front
+  but not key. `WindowFocus` makes the frontmost Trove window key again after any of those (not after
+  the clipboard palette, which hands the keyboard back to the app you paste into).
+- **Settings rows that moved**: the "Organising…" row came and went with background work (now always
+  there); buttons that turned into spinners shrank (`BusyLabel` keeps their size); Copy/Copied, Check
+  Now, Import now and Restart keep their place while their text changes.
+- **Lag**: `reload()` worked out the link graph and the sidebar counts on the main thread every time
+  anything changed (enrichment and handwriting reading change things often): now off it.
+  Connections on an item (Mentioned in, Maybe related) read every other item's text on every redraw:
+  now in the background when the item or library changes. Untitled notes split their whole text to
+  find the first line for the title: now just the first line.
+- **Screenshots to clipboard**: the code path looks right and I couldn't find the fault without a
+  device. Settings → Screenshots now says what happened to the last one ("went to Notes and
+  Clipboard", or the exact error), and only screenshots taken after it's ticked come in.
+- **Check:** Ask anything and watch the box; Import from Apple Notes; take a screenshot with
+  Clipboard ticked and read the line under the grid; Read all past handwriting then Stop; close a
+  sheet and see that the toolbar stays dark.
+
+## Round before: AI costs and activity, Ask over everything, and fixes (user: "it used 7p on a couple of simple questions", "it can only see 12 files", "show how many tokens and the cost", "view all conversations", "see exactly what AI is doing in the background", plus screenshots per device, password options, Apple Notes, Accessibility, relay conflict, greyed Settings button)
 Not yet built on CI when written; not yet run on a device.
 - **Where the money went:** almost certainly the background reading of handwriting (every sketch
   page, GoodNotes page, inked or scanned PDF and photo, each a ~1,600-token image, read at medium
