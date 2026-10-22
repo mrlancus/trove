@@ -35,6 +35,15 @@ extension AppModel {
         Task { await syncNow() }
     }
 
+    /// What happened to the last screenshot, for Settings (so a route that isn't working says why).
+    func noteScreenshot(at: Date, went: [String], failed: [String]) {
+        let time = at.formatted(date: .omitted, time: .shortened)
+        screenshotProblem = !failed.isEmpty
+        screenshotStatus = failed.isEmpty
+            ? "Last screenshot (\(time)) went to \(went.joined(separator: " and "))."
+            : "Last screenshot (\(time)): " + (went.isEmpty ? "" : "went to \(went.joined(separator: " and ")); ") + failed.joined(separator: "; ")
+    }
+
     /// Starts or stops watching for screenshots, as the setting says.
     func watchScreenshots() {
         if myScreenshotRoute.isOn, library != nil {
@@ -60,21 +69,34 @@ extension AppModel {
                 let since = self.config?.lastScreenshotImport
                 var newest: Date?
                 #if os(iOS)
-                newest = await ScreenshotImporter.importNew(since: since, into: library, route: route)
+                newest = await ScreenshotImporter.importNew(since: since, into: library, route: route) { [weak self] at, went, failed in
+                    self?.noteScreenshot(at: at, went: went, failed: failed)
+                }
                 #else
                 for (url, takenAt) in self.screenshotWatcher?.screenshots(since: since) ?? [] {
                     // Spotlight lists it before the file is complete now and then: wait for the bytes.
                     guard let original = try? Data(contentsOf: url), !original.isEmpty else { continue }
                     let name = url.deletingPathExtension().lastPathComponent + ".jpg"
                     let stored = await Task.detached(priority: .utility) { ScreenshotWatcher.jpeg(original) }.value
+                    var went: [String] = [], failed: [String] = []
                     if route.notes {
-                        _ = try? await library.addScreenshot(stored ?? original, original: original, takenAt: takenAt,
-                                                             name: stored == nil ? url.lastPathComponent : name,
-                                                             mime: stored == nil ? "image/png" : "image/jpeg")
+                        do {
+                            _ = try await library.addScreenshot(stored ?? original, original: original, takenAt: takenAt,
+                                                                name: stored == nil ? url.lastPathComponent : name,
+                                                                mime: stored == nil ? "image/png" : "image/jpeg")
+                            went.append("Notes")
+                        } catch { failed.append("Notes: \(error.localizedDescription)") }
                     }
                     if route.clipboard {
-                        _ = try? await library.addScreenshotClip(stored ?? original, mime: stored == nil ? "image/png" : "image/jpeg", device: DeviceInfo.name)
+                        do {
+                            if try await library.addScreenshotClip(stored ?? original, mime: stored == nil ? "image/png" : "image/jpeg", device: DeviceInfo.name) != nil {
+                                went.append("Clipboard")
+                            } else {
+                                failed.append("Clipboard: the picture couldn't be read")
+                            }
+                        } catch { failed.append("Clipboard: \(error.localizedDescription)") }
                     }
+                    self.noteScreenshot(at: takenAt, went: went, failed: failed)
                     newest = takenAt
                 }
                 #endif

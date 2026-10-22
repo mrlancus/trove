@@ -79,7 +79,7 @@ struct AskView: View {
     private var messages: some View {
         VStack(spacing: 22) {
             if turns.isEmpty && pending == nil && fallback == nil {
-                AskWelcome(pick: pickIdea)
+                AskWelcome(typing: !question.isEmpty, pick: pickIdea)
                     .padding(.top, 40)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
@@ -119,6 +119,8 @@ struct AskView: View {
     private var composer: some View {
         VStack(spacing: 8) {
             if ownAI { usagePill }
+            // Everything 34 points high, so a one-line question sits centred with the model and send
+            // buttons; a longer one grows upwards from the same line.
             HStack(alignment: .bottom, spacing: 10) {
                 if ownAI {
                     Menu {
@@ -130,9 +132,10 @@ struct AskView: View {
                     } label: {
                         Label(tier.label, systemImage: tier == .fast ? "hare" : tier == .smart ? "brain" : "sparkles")
                             .font(.callout.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(.tint.opacity(0.12), in: Capsule())
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 12)
+                            .frame(height: 34)
+                            .background(.quaternary.opacity(0.6), in: Capsule())
                     }
                     .menuIndicator(.hidden)
                     .fixedSize()
@@ -144,22 +147,22 @@ struct AskView: View {
                     .lineLimit(1...5)
                     .focused($focused)
                     .onSubmit(ask)
-                    .padding(.vertical, 6)
+                    .frame(minHeight: 34)
                 Button(action: ask) {
                     Image(systemName: pending == nil ? "arrow.up" : "ellipsis")
                         .font(.body.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(canSend ? AnyShapeStyle(.tint) : AnyShapeStyle(.gray.opacity(0.4))))
+                        .background(Circle().fill(canSend || pending != nil ? AnyShapeStyle(Brand.gradient) : AnyShapeStyle(.gray.opacity(0.35))))
                         .symbolEffect(.pulse, isActive: pending != nil)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: .command)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .glass(cornerRadius: 26)
+            .glass(cornerRadius: 25)
             if !ownAI {
                 Text(model.aiStatus + " Add your own AI in Settings → AI for chats that search everything.")
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -239,8 +242,10 @@ struct AskView: View {
     }
 }
 
-/// The first screen: what you can ask.
+/// The first screen: what you can ask. No AI mascot: just Trove's box, its lid lifting a little
+/// as you start typing.
 private struct AskWelcome: View {
+    let typing: Bool
     let pick: (String) -> Void
     @State private var appeared = false
 
@@ -253,12 +258,15 @@ private struct AskWelcome: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            AskOrb(active: false).frame(width: 84, height: 84)
+            TroveMark(open: typing ? 0.35 : 0)
+                .frame(width: 54)
+                .animation(.spring(duration: 0.45, bounce: 0.35), value: typing)
             VStack(spacing: 6) {
                 Text("Ask your Trove").font(.title.weight(.semibold))
-                Text("It searches everything you've saved and opens only what it needs.")
-                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text("It looks through everything you've saved and opens only what it needs.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
+            .multilineTextAlignment(.center)
             VStack(spacing: 8) {
                 ForEach(Array(ideas.enumerated()), id: \.offset) { i, idea in
                     Button { pick(idea) } label: {
@@ -267,12 +275,13 @@ private struct AskWelcome: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .frame(maxWidth: 360)
-                            .background(.thinMaterial, in: Capsule())
+                            .background(Brand.orange.opacity(0.09), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Brand.orange.opacity(0.18), lineWidth: 0.5))
                     }
                     .buttonStyle(.plain)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 8)
-                    .animation(.smooth.delay(0.08 * Double(i) + 0.1), value: appeared)
+                    .animation(.smooth.delay(0.06 * Double(i) + 0.08), value: appeared)
                 }
             }
         }
@@ -281,45 +290,18 @@ private struct AskWelcome: View {
     }
 }
 
-/// A slowly turning, glowing orb: Trove's AI (faster and brighter while it works).
-struct AskOrb: View {
-    var active: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: false)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate * (active ? 1.6 : 0.5)
-            ZStack {
-                Circle()
-                    .fill(AngularGradient(colors: [.pink, .purple, .blue, .teal, .pink], center: .center, angle: .radians(t)))
-                    .blur(radius: active ? 14 : 10)
-                    .opacity(active ? 0.9 : 0.6)
-                    .scaleEffect(1 + (active ? 0.06 : 0.03) * sin(t * 2))
-                Circle()
-                    .fill(AngularGradient(colors: [.white.opacity(0.9), .pink.opacity(0.7), .blue.opacity(0.7), .white.opacity(0.9)], center: .center, angle: .radians(-t * 1.3)))
-                    .padding(10)
-                    .blur(radius: 2)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .purple.opacity(0.6), radius: 6)
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// A faint coloured wash behind the chat.
+/// A faint warm light at the top, in Trove's orange: drawn once, never animated.
 private struct AskBackground: View {
     var body: some View {
         ZStack {
             Rectangle().fill(.background)
-            RadialGradient(colors: [.purple.opacity(0.10), .clear], center: .topLeading, startRadius: 0, endRadius: 520)
-            RadialGradient(colors: [.pink.opacity(0.08), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 520)
+            RadialGradient(colors: [Brand.amber.opacity(0.08), .clear], center: .top, startRadius: 0, endRadius: 560)
         }
     }
 }
 
-/// The question being answered: each step as it happens and the running cost.
+/// The question being answered: Trove's box open, what it looks at rising out of it, each step as
+/// it happens and the running cost.
 private struct AskWorking: View {
     let question: String
     let progress: AIClient.Progress
@@ -328,11 +310,13 @@ private struct AskWorking: View {
         VStack(alignment: .leading, spacing: 14) {
             QuestionBubble(text: question)
             HStack(alignment: .top, spacing: 14) {
-                AskOrb(active: true).frame(width: 40, height: 40)
+                BoxLooking(open: 1, step: progress.steps.last.map { .init(id: "\(progress.steps.count)", symbol: Self.symbol($0)) }, size: 34)
                 VStack(alignment: .leading, spacing: 8) {
-                    ShimmerText(text: progress.steps.isEmpty ? "Thinking…" : "Working…")
+                    Text(progress.steps.isEmpty ? "Thinking…" : "Looking through your Trove…")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.secondary)
                     ForEach(Array(progress.steps.enumerated()), id: \.offset) { _, step in
-                        Label(step, systemImage: step.hasPrefix("Searched") ? "magnifyingglass" : step.hasPrefix("Opened") ? "doc.text" : step.hasPrefix("Browsed") ? "list.bullet" : "square.grid.2x2")
+                        Label(step, systemImage: Self.symbol(step))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .transition(.opacity.combined(with: .move(edge: .leading)))
@@ -348,27 +332,14 @@ private struct AskWorking: View {
             }
         }
     }
-}
 
-/// Text with a light sweeping across it.
-private struct ShimmerText: View {
-    let text: String
-    @State private var phase: CGFloat = -1
-
-    var body: some View {
-        Text(text)
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .overlay {
-                GeometryReader { g in
-                    LinearGradient(colors: [.clear, .white.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: g.size.width * 0.5)
-                        .offset(x: phase * g.size.width)
-                        .blendMode(.plusLighter)
-                }
-                .mask(Text(text).font(.callout.weight(.semibold)))
-            }
-            .onAppear { withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1.5 } }
+    static func symbol(_ step: String) -> String {
+        if step.hasPrefix("Searched") { return "magnifyingglass" }
+        if step.hasPrefix("Opened") { return "doc.text" }
+        if step.hasPrefix("Looked at") { return "eye" }
+        if step.hasPrefix("Browsed") { return "list.bullet" }
+        if step.hasPrefix("Looked through the index") { return "list.bullet.rectangle" }
+        return "square.grid.2x2"
     }
 }
 
@@ -382,7 +353,7 @@ private struct QuestionBubble: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Brand.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 }
@@ -392,13 +363,21 @@ private struct AskTurnView: View {
     @Environment(AppModel.self) private var model
     let turn: AIChat.Turn
     let open: (String) -> Void
+    /// Parsed once, not on every redraw (long answers made the chat stutter).
+    private let answer: AttributedString
     @State private var showSteps = false
+
+    init(turn: AIChat.Turn, open: @escaping (String) -> Void) {
+        self.turn = turn
+        self.open = open
+        answer = (try? AttributedString(markdown: turn.answer, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(turn.answer)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             QuestionBubble(text: turn.question)
             VStack(alignment: .leading, spacing: 12) {
-                Text(markdown(turn.answer))
+                Text(answer)
                     .font(.body)
                     .lineSpacing(3)
                     .textSelection(.enabled)
@@ -436,10 +415,6 @@ private struct AskTurnView: View {
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.separator.opacity(0.35), lineWidth: 0.5))
         }
     }
-
-    private func markdown(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
-    }
 }
 
 /// The items an answer drew on, as chips that open them.
@@ -457,7 +432,8 @@ private struct FlowChips: View {
                             .lineLimit(1)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(.tint.opacity(0.10), in: Capsule())
+                            .foregroundStyle(.primary)
+                            .background(Brand.orange.opacity(0.10), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }

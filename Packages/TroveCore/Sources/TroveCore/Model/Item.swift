@@ -73,7 +73,11 @@ public struct Item: Identifiable, Hashable, Sendable {
     public var title: String { record[Field.title]?.string ?? "" }
     public var displayTitle: String {
         if !title.isEmpty { return title }
-        if let firstLine = body.split(separator: "\n").first, !firstLine.isEmpty { return String(firstLine.prefix(80)) }
+        // Only the first line (splitting a long note into all its lines on every card was slow).
+        let body = self.body
+        let start = body.firstIndex { $0 != "\n" } ?? body.endIndex
+        let firstLine = body[start...].prefix { $0 != "\n" }
+        if !firstLine.isEmpty { return String(firstLine.prefix(80)) }
         if let url { return url.host ?? url.absoluteString }
         return kind == .sketch ? "Sketch" : "Untitled"
     }

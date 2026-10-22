@@ -111,25 +111,31 @@ enum AppleNotesBridge {
 
     /// Adds new notes and refreshes changed ones. Notes stay owned by Apple Notes (source .appleNotes).
     @discardableResult
-    static func importAll(into library: Library) async throws -> (added: Int, updated: Int, total: Int) {
+    static func importAll(into library: Library, progress: (@MainActor @Sendable (_ done: Int, _ total: Int, _ added: String?) -> Void)? = nil) async throws -> (added: Int, updated: Int, total: Int) {
         let notes = try await fetchAll()
+        await progress?(0, notes.count, nil)
         let existing = Dictionary(
             (await library.items()).compactMap { item in item.record[Field.origin]?.object?["appleNotesId"]?.string.map { ($0, item) } },
             uniquingKeysWith: { a, _ in a })
         var added = 0, updated = 0
-        for note in notes {
+        for (i, note) in notes.enumerated() {
             let markdown = AppleNotesHTML.markdown(note.html)
             let origin: JSONValue = ["appleNotesId": .string(note.id), "modified": JSONValue(note.modified), "folder": .string(note.folder)]
             if let item = existing[note.id] {
                 let lastSeen = item.record[Field.origin]?.object?["modified"]?.date ?? .distantPast
-                guard note.modified > lastSeen.addingTimeInterval(1) else { continue }
+                guard note.modified > lastSeen.addingTimeInterval(1) else {
+                    if i % 10 == 9 || i == notes.count - 1 { await progress?(i + 1, notes.count, nil) }
+                    continue
+                }
                 await library.setBody(item.id, markdown)
                 await library.update(item.id, [Field.title: .string(note.name), Field.origin: origin])
                 updated += 1
+                await progress?(i + 1, notes.count, note.name)
             } else {
                 let id = await library.addNote(title: note.name, body: markdown, source: .appleNotes)
                 await library.update(id, [Field.origin: origin, Field.createdAt: JSONValue(note.modified)])
                 added += 1
+                await progress?(i + 1, notes.count, note.name)
             }
         }
         return (added, updated, notes.count)

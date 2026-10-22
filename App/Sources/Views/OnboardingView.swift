@@ -40,9 +40,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(spacing: 20) {
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
+            TroveMark().frame(width: 76)
             Text("Welcome to Trove").font(.largeTitle.bold())
             Text("Save anything. It organises itself, syncs through your own iCloud, and stays encrypted.")
                 .multilineTextAlignment(.center)

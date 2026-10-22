@@ -568,6 +568,11 @@ private struct ScreenshotRoutesView: View {
                     }
                 }
             }
+            if let status = model.screenshotStatus {
+                Text(status).font(.caption).foregroundStyle(model.screenshotProblem ? Color.orange : Color.secondary)
+            } else if model.myScreenshotRoute.isOn {
+                Text("Waiting for the next screenshot on this device. Only ones taken from now on come in.").font(.caption).foregroundStyle(.secondary)
+            }
             #if os(iOS)
             Text("Screenshots only, never other photos. Notes puts each one in your library (its text becomes searchable); Clipboard adds it to clipboard history so you can paste it anywhere. Each device brings in its own as soon as you take them (iPhone and iPad when Trove is open or next opened).")
                 .font(.caption).foregroundStyle(.secondary)
@@ -616,8 +621,6 @@ private struct ScreenshotRoutesView: View {
     }
 }
 
-/// Section footnote. macOS right-aligns form footers by default; these are sentences, so they
-/// read from the left.
 /// Read all past handwriting: a button, then a progress bar with what it's cost and Stop.
 private struct HandwritingScanRow: View {
     @Environment(AppModel.self) private var model
@@ -671,6 +674,8 @@ struct BusyLabel: View {
     }
 }
 
+/// Section footnote. macOS right-aligns form footers by default; these are sentences, so they
+/// read from the left.
 struct FormFooter: View {
     let text: String
     init(_ text: String) { self.text = text }
