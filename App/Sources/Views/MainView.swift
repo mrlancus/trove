@@ -142,6 +142,8 @@ struct MainView: View {
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "pencil.tip.crop.circle.badge.plus") }
                 .help("New sketch (⇧⌘D): draw with the Pencil, a mouse or the trackpad")
+            Button { Task { await model.openToday() } } label: { Label("Today", systemImage: "calendar") }
+                .help("Today's note (⌘T)")
             Menu { AddMenu() } label: { Label("Add", systemImage: "ellipsis.circle") }
             Button { showAsk = true } label: { Label("Ask Trove", systemImage: "sparkles") }
                 .keyboardShortcut("j", modifiers: .command)
@@ -149,6 +151,37 @@ struct MainView: View {
                 .keyboardShortcut("v", modifiers: [.command, .shift])
                 .help("Clipboard history (⌥Space from anywhere on the Mac)")
             SyncIndicator()
+        }
+    }
+}
+
+/// "New from template": yours first, then the built-in ones (PROTOCOL.md §12).
+struct TemplatesMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu {
+            let templates = model.noteTemplates
+            ForEach(templates.filter(\.user)) { t in item(t) }
+            if templates.contains(where: \.user) { Divider() }
+            ForEach(templates.filter { !$0.user }) { t in item(t) }
+        } label: {
+            Label("New from template", systemImage: "doc.badge.plus")
+        }
+    }
+
+    private func item(_ t: Notes.Template) -> some View {
+        Button { Task { await model.newNote(from: t) } } label: { Label(t.name, systemImage: Self.symbol(t)) }
+    }
+
+    static func symbol(_ t: Notes.Template) -> String {
+        if t.user { return "doc.text" }
+        switch t.id {
+        case "daily": return "calendar"
+        case "meeting": return "person.2"
+        case "journal": return "book"
+        case "recipe": return "fork.knife"
+        default: return "doc.text"
         }
     }
 }
@@ -161,6 +194,9 @@ struct AddMenu: View {
     var body: some View {
         Button { Task { await model.newNote() } } label: { Label("New note", systemImage: "square.and.pencil") }
             .keyboardShortcut("n", modifiers: .command)
+        Button { Task { await model.openToday() } } label: { Label("Today's note", systemImage: "calendar") }
+            .keyboardShortcut("t", modifiers: .command)
+        TemplatesMenu()
         Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "scribble.variable") }
             .keyboardShortcut("d", modifiers: [.command, .shift])
         Button { showImporter() } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
@@ -744,6 +780,12 @@ struct ItemMenu: View {
             Button { Task { await model.setTracking(item, item.priceWatch == nil) } } label: {
                 Label(item.priceWatch == nil ? "Track price drops" : "Stop tracking price",
                       systemImage: item.priceWatch == nil ? "bell.badge" : "bell.slash")
+            }
+        }
+        if item.kind == .note && !Notes.isDaily(item) {
+            let isTemplate = item.tags.contains(Notes.templateTag)
+            Button { Task { await model.setTemplate(item, !isTemplate) } } label: {
+                Label(isTemplate ? "Stop using as template" : "Use as template", systemImage: isTemplate ? "doc.badge.ellipsis" : "doc.badge.plus")
             }
         }
         if item.kind == .note {

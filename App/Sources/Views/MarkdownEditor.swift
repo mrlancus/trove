@@ -1,4 +1,5 @@
 import SwiftUI
+import TroveCore
 
 /// Editor v1: a plain TextEditor with Markdown helpers. (Phase 6: replace with a TextKit 2 editor
 /// that styles Markdown live, like Bear; see RESEARCH.md §8.)
@@ -31,9 +32,11 @@ struct MarkdownEditor: View {
     }
 }
 
-/// Read mode: renders Markdown with checklists and headings.
+/// Read mode: renders Markdown with checklists and headings. With `onToggle`, tapping a checkbox
+/// calls it with that checkbox's number (from 0, as `Notes.toggle` counts them).
 struct MarkdownText: View {
     let markdown: String
+    var onToggle: ((Int) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -42,8 +45,13 @@ struct MarkdownText: View {
                 case .heading(let level, let text):
                     Text(inline(text)).font(level == 1 ? .title2.bold() : level == 2 ? .title3.bold() : .headline)
                         .padding(.top, 4)
-                case .task(let done, let text):
-                    Label { Text(inline(text)).strikethrough(done) } icon: { Image(systemName: done ? "checkmark.square.fill" : "square") }
+                case .task(let done, let text, let index):
+                    if let onToggle {
+                        Button { onToggle(index) } label: { task(done, text) }
+                            .buttonStyle(.plain)
+                    } else {
+                        task(done, text)
+                    }
                 case .bullet(let text):
                     HStack(alignment: .firstTextBaseline, spacing: 8) { Text("•"); Text(inline(text)) }
                 case .quote(let text):
@@ -61,13 +69,22 @@ struct MarkdownText: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func task(_ done: Bool, _ text: String) -> some View {
+        Label {
+            Text(inline(text)).strikethrough(done).foregroundStyle(done ? .secondary : .primary)
+        } icon: {
+            Image(systemName: done ? "checkmark.square.fill" : "square").foregroundStyle(.tint)
+        }
+    }
+
     enum Block {
-        case heading(Int, String), task(Bool, String), bullet(String), quote(String), code(String), paragraph(String)
+        case heading(Int, String), task(Bool, String, Int), bullet(String), quote(String), code(String), paragraph(String)
     }
 
     private var blocks: [Block] {
         var out: [Block] = []
         var code: [String]?
+        var tasks = 0
         for raw in markdown.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
@@ -75,12 +92,15 @@ struct MarkdownText: View {
                 continue
             }
             if code != nil { code!.append(raw); continue }
+            if let box = Notes.checkbox(raw[...]) {
+                out.append(.task(box.done, String(box.text), tasks))
+                tasks += 1
+                continue
+            }
             if line.isEmpty { continue }
             if line.hasPrefix("### ") { out.append(.heading(3, String(line.dropFirst(4)))) }
             else if line.hasPrefix("## ") { out.append(.heading(2, String(line.dropFirst(3)))) }
             else if line.hasPrefix("# ") { out.append(.heading(1, String(line.dropFirst(2)))) }
-            else if line.hasPrefix("- [ ] ") { out.append(.task(false, String(line.dropFirst(6)))) }
-            else if line.lowercased().hasPrefix("- [x] ") { out.append(.task(true, String(line.dropFirst(6)))) }
             else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") { out.append(.bullet(String(line.dropFirst(2)))) }
             else if line.hasPrefix("> ") { out.append(.quote(String(line.dropFirst(2)))) }
             else { out.append(.paragraph(line)) }

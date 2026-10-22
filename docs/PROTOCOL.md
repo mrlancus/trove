@@ -757,6 +757,50 @@ comes with built-in elements (ids `builtin.*`, not records, the same on every de
 (solid, dotted), a star, a heart and planner tags (Important, To do, Done, Due). All of this is
 checked against `Fixtures/ink-editing.json`. Apps that don't know `sticker` records ignore them.
 
+### PDF text, highlights and forms
+`web/public/core/pdfmarks.js` and `PDFMarks.swift`, both checked against `Fixtures/pdf-cases.json`
+(made by `web/test/make-pdf-fixture.mjs`).
+
+- **Page points on a PDF** are what pdf.js shows at scale 1 and the apps draw: the page's crop box
+  `[x1, y1, x2, y2]` turned by its `/Rotate`, origin top left, y down. From PDF space: 0° (x − x1,
+  y2 − y), 90° (y − y1, x − x1), 180° (x2 − x, y − y1), 270° (y2 − y, x2 − x) (`pdfPageBox` /
+  `PDFPageBox`).
+- **PDF text for search** (`ocrText` on the item, as for images): each page's text (pdf.js: the
+  text items' strings with a line break after each `hasEOL`; PDFKit: `PDFPage.string`) is tidied
+  (line breaks as `\n`; runs of whitespace (tab, VT, FF, space, U+0085, U+00A0, U+1680,
+  U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) as one space; lines trimmed;
+  empty lines dropped), blank pages are skipped and pages are joined by a blank line. 40 Unicode
+  code points or fewer counts as no text (a scan: the apps then read the pages with OCR); the text
+  keeps at most 50,000 code points (`joinPdfText` / `PDFText.join`). The website writes it for PDFs
+  that have no `ocrText` yet (the first PDF among an item's first three attachments), so PDFs added
+  on the website are searchable without an Apple device; an Apple device's enrichment later writes
+  the same text.
+- **Text highlights** are elements with `type: "highlight"`: `color`, `quote` (the highlighted
+  text, whitespace as single spaces, at most 5,000 characters), the box `x`, `y`, `w`, `h` round
+  all the pieces (to 1/100 point) and `rects`: each piece as `[x, y, w, h]` fractions of that box
+  (to 1/10,000), so moving or resizing the box moves the pieces. No `rects` means the whole box.
+  Pieces come from the selected text's boxes (`highlightGeometry` / `HighlightGeometry.make`): boxes
+  under half a point are dropped; a box joins the first line it overlaps by at least half the
+  smaller height (in order of their centres); on a line, pieces closer than a line's height join.
+  Drawn like the highlighter (35 %, multiplied) under the ink. The item's `sketchText` holds text
+  boxes' words and highlights' quotes (oldest first, one per line), so highlighted text is
+  searchable. A highlight can become a quote item: `kind: "highlight"`, `category: "quote"`,
+  `links: [the PDF's item]`, body `> quote` + blank line + `— <title> (p. n)`, filed in
+  Highlights › <title>.
+- **Form values** are elements with `type: "field"`, one per field: id
+  `pdffield:<item id>:<layer>:<field name>`, so two devices filling a field write the same record
+  (last writer wins). `name` (the field's full name, parts joined by `.`), `value` (text for text
+  fields, choices and the chosen radio button's export value; `true`/`false` for a check box; a list
+  of strings for a multiple choice), and `page` and the box of the widget that shows it. The file
+  never changes: viewers show the saved values over the PDF's own fields.
+- **Old readers** see both as text boxes with no `text`, so they draw nothing (like tape).
+- **Export as PDF annotations** writes a new file (saved as the item's new version, `fileVersions`,
+  or downloaded): the original bytes plus an incremental update with an Ink annotation per stroke
+  (its even width: markers and highlighters their width, pens at their average pressure; its
+  opacity), a Highlight annotation per highlight (a quadrilateral per piece), a FreeText annotation
+  per text box, and the saved form values in the form's fields. Pictures and tape stay in Trove.
+  Like any new version, the new file starts with no Trove ink; the old version keeps it.
+
 ## 11. Looking back and AI results
 
 All optional item fields; readers that don't know them ignore them, and nothing old changes.
@@ -794,3 +838,35 @@ duplicates"). Groups are listed newest first; ids in a group oldest first.
 to the cited items. **Flashcards** are a note tagged `flashcards` with `flashcards: [{front, back}]`
 (for a study view) and the same cards in the body as `**Q:** front` / `**A:** back` pairs, connected to
 the note or sketch they came from.
+
+## 12. Notes: the daily note, templates and checklists
+
+All built from ordinary note items (`kind: "note"`); readers that don't know these conventions see
+plain notes. `web/public/core/notes.js` and `Notes.swift`, both checked against
+`Fixtures/notes-cases.json` (made by `web/test/make-notes-fixture.mjs`).
+
+**Placeholders** in a template's title and body: `{date}` (2026-10-21), `{time}` (14:05, 24-hour),
+`{datetime}` (`{date} {time}`), `{longdate}` (Wednesday 21 October 2026), `{weekday}`, `{day}` (21),
+`{month}` (October), `{year}`, `{clipboard}` (the clipboard's text, read only when the template has
+this placeholder) and, in the body only, `{title}` (the new note's title). Times are the device's
+local clock. Anything else in braces (unknown names, capitals, spaces) stays as written.
+
+**Templates.** Built in (ids `daily`, `meeting`, `journal`, `recipe`; not records, the same on every
+device): Daily note, Meeting, Journal and Recipe (the recipe makes `category: "recipe"`). Any note
+tagged `template` is one of yours: its name is its title with the placeholders taken out and spaces
+collapsed (`Template` when that leaves nothing), its tags (minus `template`) and its category (unless
+`note` or `other`) go onto notes made from it. Yours are listed first, A to Z by lowercased name then
+id; one of yours with a built-in template's name (any case) hides that one. Daily notes are never
+templates. A note made from a template is a new note with the filled-in title, body and tags.
+
+**The daily note** has the id `daily-<yyyy-mm-dd>` (the device's local date), so every device writes
+the same note for a day. Fields: title `{longdate}`, `daily: "yyyy-mm-dd"`, tags those of the
+template plus `daily`, and the body of your template named "Daily note" if there is one, else the
+built-in one. "Today" opens it, making it if no record has that id, or again (`_deleted: false`,
+fresh title, tags and body) if it was deleted. Two devices that make the same day's note before
+syncing both write the template's body, so it can appear twice; the apps sync before making one.
+
+**Checklists**: a line `- [ ] text` or `- [x] text` (also `*` or `•` for `-`, `X` for `x`), with
+spaces or tabs before it, and a space, tab or the end of the line after `]`. Lines inside ``` code
+fences don't count. Ticking one writes the body with that one mark changed (`x` or a space), as an
+ordinary text edit, so it merges with other edits.

@@ -7,12 +7,14 @@ import { availableTransforms, clipQueryMatches, KEEP_COUNT_CHOICES, KEEP_DAY_CHO
 import { RelayError, Vault } from "./core/vault.js";
 import { importActions } from "./core/importer.js";
 import { renderMarkdown } from "./markdown.js";
+import { dateParts, isDaily, TEMPLATE_TAG, templateName, usesClipboard } from "./core/notes.js";
 import { $, ago, fileSize, h } from "./dom.js";
 import { fillIcons, icon } from "./icons.js";
 import { folderAndDescendants, folderPathOf, folderTree } from "./core/organize.js";
 import { linkGraph, mentions, neighbours, related, wikilinks } from "./core/links.js";
 import { isEditableText, previewKind, typeLabel } from "./core/files.js";
 import { attachmentPreview, canInk, inkPages, lightbox, makeThumbnail, wantsThumbnail } from "./viewer.js";
+import { pdfMarks } from "./pdfviewer.js";
 import { drawLoaded, loadDraw, openInkEditor, preloadWhenIdle, renderSketchPage, sketchThumbnail } from "./lazy.js";
 import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
@@ -205,6 +207,37 @@ function showMain(vault) {
     const id = vault.addSketch();
     syncSoon();
     openSketch(id, 0, () => openItem(id));
+  });
+  $("#today").addEventListener("click", () => {
+    const id = vault.openDaily(dateParts());
+    state.mode = "preview";
+    openItem(id);
+    syncSoon();
+  });
+  const templatePicker = $("#new-from-template");
+  const fillTemplates = () => {
+    const templates = vault.templates(), mine = templates.filter((t) => t.user), built = templates.filter((t) => !t.user);
+    const group = (label, list) => (list.length ? h("optgroup", { label }, list.map((t) => h("option", { value: t.id }, t.name))) : null);
+    templatePicker.replaceChildren(h("option", { value: "" }, "From template…"), group("Yours", mine), group("Built in", built));
+    return templates;
+  };
+  fillTemplates();
+  let templatesTimer = null;
+  vault.onChange(() => {
+    clearTimeout(templatesTimer);
+    templatesTimer = setTimeout(() => { if (document.activeElement !== templatePicker) fillTemplates(); }, 500);
+  });
+  templatePicker.addEventListener("focus", fillTemplates);
+  templatePicker.addEventListener("change", async () => {
+    const template = vault.templates().find((t) => t.id === templatePicker.value);
+    templatePicker.value = "";
+    if (!template) return;
+    let clipboard = "";
+    if (usesClipboard(template)) { try { clipboard = await navigator.clipboard.readText(); } catch { /* not allowed: left empty */ } }
+    const id = vault.addNoteFromTemplate(template, dateParts(), { clipboard });
+    state.mode = "edit";
+    openItem(id);
+    syncSoon();
   });
   $("#new-note").addEventListener("click", () => {
     const id = vault.addNote();
@@ -411,8 +444,14 @@ async function applyImport(action) {
     return [1, action.title || "Note"];
   }
   if (action.bytes.length > MAX_UPLOAD) { toast(`${action.name} is over 100 MB`); return [0, action.name]; }
-  await vault.addFile(action.bytes, action.name, action.mime, { source: "import", folder: action.folder });
+  const id = await vault.addFile(action.bytes, action.name, action.mime, { source: "import", folder: action.folder });
+  if (action.mime === "application/pdf") indexPdfText(id, action.bytes);
   return [1, action.name];
+}
+
+/** A PDF added here is searchable straight away: its text as the apps would write it (PROTOCOL.md §10). */
+function indexPdfText(itemId, bytes) {
+  import("./pdfviewer.js").then(({ pdfText }) => pdfText(bytes)).then((text) => { if (text) { state.vault.setPdfText(itemId, text); syncSoon(); } }).catch(() => {});
 }
 
 function renderImport() {
@@ -1560,6 +1599,9 @@ function renderDetail(force = false) {
   const bar = h("div", { class: "detail-bar" },
     h("button", { type: "button", class: "secondary", onclick: () => { vault.setPinned(item.id, !item.isPinned); syncSoon(); } }, item.isPinned ? "Unpin" : "Pin"),
     item.kind === "link" ? h("button", { type: "button", class: "secondary", onclick: () => { vault.markRead(item.id, item.readAt === null); syncSoon(); } }, item.readAt === null ? "Mark read" : "Mark unread") : null,
+    item.kind === "note" && !isDaily(item) ? h("button", { type: "button", class: "secondary", title: "Notes tagged template are offered under From template…",
+      onclick: () => { const on = !item.tags.includes(TEMPLATE_TAG); vault.setTemplate(item.id, on); toast(on ? `“${templateName(item.title)}” is now a template` : "No longer a template"); syncSoon(); } },
+      item.tags.includes(TEMPLATE_TAG) ? "Not a template" : "Use as template") : null,
     h("span", { class: "spacer" }),
     h("button", { type: "button", class: "icon-button only-wide", "aria-label": state.wide ? "Narrow panel" : "Widen panel", title: state.wide ? "Narrow" : "Widen",
       onclick: toggleWide }, state.wide ? "⤡" : "⤢"),
@@ -1608,11 +1650,17 @@ function renderDetail(force = false) {
   else if (state.mode === "edit") parts.push(bodyEditor(item, saved));
   else {
     const preview = h("div", { class: "preview" });
-    preview.innerHTML = item.body ? renderMarkdown(item.body) : `<p class="saved">${hasFiles ? "No notes yet. Use Edit to add some, and [[links]] to other things." : "No text yet."}</p>`; // escaped by renderMarkdown
+    preview.innerHTML = item.body ? renderMarkdown(item.body, { checkboxes: true }) : `<p class="saved">${hasFiles ? "No notes yet. Use Edit to add some, and [[links]] to other things." : "No text yet."}</p>`; // escaped by renderMarkdown
     preview.addEventListener("click", (e) => {
       const tag = e.target.closest("a.tag"), wiki = e.target.closest("a.wikilink");
       if (tag) { e.preventDefault(); searchFor(`tag:${tag.dataset.tag.toLowerCase()}`); }
       if (wiki) { e.preventDefault(); openByTitle(wiki.dataset.target); }
+    });
+    preview.addEventListener("change", (e) => {
+      const box = e.target.closest("input[data-box]");
+      if (!box) return;
+      vault.toggleCheckbox(item.id, Number(box.dataset.box));
+      syncSoon();
     });
     parts.push(preview);
   }
@@ -1780,7 +1828,9 @@ const select_ = (folderId) => { if (matchMedia("(max-width: 760px)").matches) cl
 function filesSection(item) {
   const vault = state.vault;
   const section = h("section", { class: "files" });
+  const firstPdf = item.attachments.slice(0, 3).find((a) => previewKind(a.name, a.mime) === "pdf");
   item.attachments.forEach((att, index) => {
+    const isPdf = previewKind(att.name, att.mime) === "pdf";
     const upload = h("input", { type: "file", hidden: true });
     upload.addEventListener("change", async () => {
       const file = upload.files[0];
@@ -1813,8 +1863,16 @@ function filesSection(item) {
         eager: !att.size || att.size < 60e6 || index === 0 && att.size < 150e6,
         ink: canInk(att) ? (page) => vault.strokes(item.id, att.id, page) : null,
         elements: (page) => vault.elements(item.id, att.id, page), inkEdited,
+        marks: isPdf ? pdfMarks(vault, item.id, att, {
+          changed: syncSoon, notify: toast,
+          saveVersion: index === 0 ? async (bytes) => { await vault.replaceFile(item.id, bytes, { name: att.name, mime: att.mime }); thumbTried.delete(att.id); syncSoon(); toast("Saved as a new version. The old one is under Versions."); } : null,
+          // The apps read PDFs' text for search; a PDF added here gets it now (PROTOCOL.md §10).
+          indexText: !item.ocrText && att === firstPdf ? (text) => { vault.setPdfText(item.id, text); syncSoon(); } : null,
+        }) : null,
       });
       panelCache.previews.set(cacheKey, preview);
+    } else {
+      preview.querySelector(".pdf-viewer")?.refreshMarks?.();
     }
     section.append(head, preview);
   });

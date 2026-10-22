@@ -6,7 +6,7 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy) | ✅ Done | 149 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 158 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -14,6 +14,8 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 | `App/` (macOS + iOS/iPadOS app, share ext, widgets, Safari ext) | 🟢 **Builds** on GitHub Actions (Xcode 26.3) for macOS (universal) and iOS (last: 3cb7fcd, sketching/clipboard places/Paste round); not yet run on a device | CI: `.github/workflows/apps.yml`; downloads at the `latest` release |
 | **Clipboard history** (Mac ⌥Space palette, iPhone/iPad screen + Trove keyboard, website view; synced clips, PROTOCOL.md §8): source app/page/window, insights, rule tags, AI names/summaries, OCR, editing, main search, auto-save | 🟡 Core + website tested; apps build on CI, not yet run on a device | 8 Swift + 3 JS unit tests, `clip-cases.json` (insights + rules), Chromium e2e |
 | **Folders + auto-filing, file previews, versions, connections/graph** (PROTOCOL.md §9) | 🟡 Core + website tested; apps written, building on CI, not yet run on a device | 9 Swift + 7 JS unit tests on shared fixtures, Chromium e2e (`organize.e2e.mjs`) |
+| **Notes: Today's note, templates, checklists** (PROTOCOL.md §12) | 🟡 Core + website tested; apps build on CI, not yet run on a device | 4 Swift + 3 JS unit tests on `notes-cases.json`, Chromium e2e (`notes.e2e.mjs`, desktop + phone width) |
+| **PDFs like a PDF app** (find, text highlights, quotes, links, forms, export as annotations; PROTOCOL.md §10) | 🟡 Core + website tested; apps (PDFKit reader) build on CI, not yet run on a device | `pdf-cases.json` (Swift + JS), pdf.js export test, Chromium e2e (`pdf.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search, editing (S3: lasso actions, shape tool, connectors, ruler/protractor, text on the page, elements library) | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | Swift + JS unit tests on `ink-cases.json`, `ink-geometry.json`, `ink-editing.json`; 3 Chromium e2e (incl. `editing.e2e.mjs`) |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version 28f6c644, at c5eb332, after the performance/GoodNotes-editing round) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
@@ -34,7 +36,50 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: iPad fixes (user, iPad Air M3 + Pencil Pro: "import does nothing", "sharing says open Trove once", "sketch opens partly hidden", page colours, a dark page, "Allow Paste" every launch)
+## Latest round: notes (daily note, templates, checklists) and PDFs like a PDF app (user: "do all that and the pdf viewer")
+Picked up the two unfinished branches (`wip/notes`, `wip/pdfs`, both merged in). Shared code is tested
+on Linux (Swift + JS on the same fixtures); the website is checked in Chromium (`notes.e2e.mjs`,
+`pdf.e2e.mjs`); the apps build on CI for macOS and iOS but **haven't run on a device**.
+- **Notes** (PROTOCOL.md §12; `Notes.swift` = `core/notes.js`, `Fixtures/notes-cases.json`):
+  - **Today's note**: Today button in the toolbar, ⌘T in the Add menu, Mac menu bar "Today's Note";
+    website: Today. Id `daily-yyyy-mm-dd`, so every device opens the same note; made from your
+    template named "Daily note" if you have one, else the built-in one. The apps sync first when
+    it's not there yet (so two devices don't both write the template).
+  - **Templates**: Add menu → New from template (Daily note, Meeting, Journal, Recipe, plus yours);
+    website: "From template…". Any note becomes one with "Use as template" (item ⋯ menu; website:
+    button on the note); it's a `template` tag. Placeholders: `{date}`, `{time}`, `{datetime}`,
+    `{longdate}`, `{weekday}`, `{day}`, `{month}`, `{year}`, `{clipboard}`, `{title}`. The clipboard is
+    read only for templates that use `{clipboard}` (iPhone/iPad ask "Allow Paste?" then).
+  - **Checklists**: tap a checkbox in Read mode (website: in the preview) to tick it.
+  - Left out of the draft for now: embeds (`![[…]]`), pasted-image names, folding headings (they
+    belong to the richer editor, ROADMAP "Notes").
+- **PDFs** (ROADMAP S5, PROTOCOL.md §10 "PDF text, highlights and forms"):
+  - **Apps** (`Drawing/PDFReader.swift`, PDFKit): find (every hit marked, ↑/↓), select text →
+    colour swatches to highlight, Quote (highlight + quote item in Quotes & Highlights), Copy; tap a
+    highlight to recolour, quote, copy or remove it. Links work (PDFKit). Forms fill in place and
+    the values are saved as `field` elements every 1.5 s and when the PDF closes (the file never
+    changes). Trove's ink, highlights and text boxes are drawn by the pages (`TrovePDFPage`), so
+    inked PDFs now open in the reader too ("Draw on it" still opens the editor). Export with
+    annotations (button on the PDF) → share, or Save as a new version.
+  - **Website** (`pdfviewer.js`): the same, with pdf.js's text layer. PDFs added on the website get
+    their text for search (`ocrText`) at once, so they're searchable without an Apple device.
+  - The apps' PDF text for search now matches the website's exactly (`PDFText.join`, page by page).
+  - **Check on the iPad/Mac**: (1) find "the" in a long PDF: hits marked, arrows step; (2) select a
+    line with the Pencil/finger → swatches appear at the bottom; highlight sits exactly on the text
+    (also on a rotated/landscape page); (3) Quote makes a card in Quotes & Highlights; (4) tap a
+    highlight → recolour/remove; (5) a PDF form: type, tick, choose; close and reopen: values back,
+    and on the website; radio buttons and nested field names (`parent.child`) are the least sure
+    part (PDFKit's `fieldName`); (6) a PDF with ink: the ink shows in the reader at the right place;
+    (7) Export with annotations → open in Files/Preview: ink, highlights and text editable there.
+  - Not done yet: a PDF's outline (bookmarks sidebar), highlights in the live drawing editor's own
+    layer on iPad (they show in previews and behind the page when rendered).
+- **The website changes go live when the user says "publish"** (not deployed: Today/templates,
+  ticking checkboxes, the new PDF viewer).
+- **Next**: notebooks (S4; design direction ❓8 still open), the file viewer for every type (§7,
+  shares the PDF viewer code), handwriting as text (S6), audio + study (S7), the richer note
+  editor (embeds, folding headings, slash menu).
+
+## Round before: iPad fixes (user, iPad Air M3 + Pencil Pro: "import does nothing", "sharing says open Trove once", "sketch opens partly hidden", page colours, a dark page, "Allow Paste" every launch)
 Written on Linux; builds on CI for macOS and iOS (run on `wip/ipad-fixes` at bdcaab7, no errors); not yet
 run on a device. **Check on the iPad** after installing the new build
 (SideStore update, or Sideloadly; reinstalling over the old one keeps the data).
@@ -285,14 +330,14 @@ user says "publish" (`cd server && npx wrangler deploy`).
       Apple Intelligence (iPadOS 26); Copy as image pastes into Notes; the Elements popover.
     - **Ask the user:** should Trove's own ruler replace PencilKit's on the iPad (same look as the
       Mac, but drawn along only after the stroke ends)? Should more built-in elements ship (which)?
-- **Not started (lost):** PDFs (S5) worker left no commits; start it fresh. (Back up worker commits
-  to `wip/*` branches on GitHub so a lost container doesn't lose them.)
+- **PDFs (S5)**: done later (see "Latest round"). (Back up worker commits to `wip/*` branches on
+  GitHub so a lost container doesn't lose them.)
 - **Published** (the user allowed it): `BRIDGE_KEY` set, relay + website deployed (version
   3f05d8e6, at 2f8bc9c). Against production: relay e2e 5/5 and the browser test that creates a
   vault pass; "set up with a code… live updates" failed once (it passes locally; likely live-update
   timing over the network). Not re-run: the session's permission rules block more test vaults on
   production. Check it next time a run against production is allowed.
-- **Next**: notebooks (S4; design direction ❓8 still open), PDFs (S5), handwriting and audio (S6,
+- **Next**: notebooks (S4; design direction ❓8 still open), handwriting and audio (S6,
   S7; a study view for flashcards), then the rest of the roadmap (§7). The website/relay changes of
   the editing round go live when the user says "publish".
 

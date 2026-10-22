@@ -26,6 +26,8 @@ const paths = {
   clipboard: ["M9 4h6v3H9z", "M9 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-3"],
   map: ["M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z", "M9 4v14", "M15 6v14"],
   location: ["M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z", "M12 10h.01"],
+  search: ["M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z", "M21 21l-5-5"],
+  quote: ["M7 7h4v4c0 3-2 5-4 6", "M14 7h4v4c0 3-2 5-4 6"],
 };
 
 /** An inline SVG icon. Decorative unless given a label (then it's announced as an image). */

@@ -7,21 +7,7 @@ import { docxParagraphs, goodnotesParts, iworkPreview, parseDelimited, pptxSlide
 import { backgroundLayers, GN_SCALE, isHighlighter, readNotebook, runPath, strokeOpacity, strokeWidth } from "./core/goodnotes.js";
 import { drawStrokes, drawTapeElement } from "./core/ink.js";
 import { renderMarkdown } from "./markdown.js";
-
-let pdfjs = null;
-async function loadPdfjs() {
-  if (!pdfjs) {
-    pdfjs = await import("/vendor/pdfjs-4.10.38/pdf.min.mjs");
-    pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs-4.10.38/pdf.worker.min.mjs";
-  }
-  return pdfjs;
-}
-
-async function openPdf(bytes) {
-  const lib = await loadPdfjs();
-  // pdf.js takes ownership of the buffer, so give it a copy.
-  return lib.getDocument({ data: bytes.slice(), isEvalSupported: false, useSystemFonts: true }).promise;
-}
+import { openPdf, pdfViewer } from "./pdfviewer.js";
 
 const objectURLs = new Set();
 function urlFor(bytes, mime) {
@@ -40,48 +26,6 @@ export function lightbox(src, alt = "") {
   img.addEventListener("dblclick", (e) => { e.stopPropagation(); img.classList.toggle("zoomed"); });
   addEventListener("keydown", onKey);
   document.body.append(box);
-}
-
-/** A scrolling PDF: pages render as they come into view; zoom buttons. */
-export async function pdfViewer(bytes, { onExpand, ink } = {}) {
-  const doc = await openPdf(bytes);
-  let zoom = 1;
-  const pages = h("div", { class: "pdf-pages" });
-  const label = h("span", { class: "saved", text: `${doc.numPages} page${doc.numPages === 1 ? "" : "s"}` });
-  const setZoom = (z) => { zoom = Math.min(4, Math.max(0.5, z)); pages.style.setProperty("--zoom", zoom); for (const p of pages.children) p.dataset.rendered = ""; observeAll(); };
-  const bar = h("div", { class: "viewer-bar" }, label, h("span", { class: "spacer" }),
-    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom out", onclick: () => setZoom(zoom / 1.25) }, "−"),
-    h("button", { type: "button", class: "secondary small", "aria-label": "Zoom in", onclick: () => setZoom(zoom * 1.25) }, "+"),
-    onExpand ? h("button", { type: "button", class: "secondary small", onclick: onExpand }, "⤢ Wide") : null);
-  const first = await doc.getPage(1);
-  const base = first.getViewport({ scale: 1 });
-  for (let n = 1; n <= doc.numPages; n++) {
-    pages.append(h("div", { class: "pdf-page", "data-page": n, style: `aspect-ratio: ${base.width} / ${base.height}` }));
-  }
-  const render = async (el) => {
-    const n = Number(el.dataset.page);
-    const width = el.clientWidth;
-    if (!width || el.dataset.rendered === String(width)) return;
-    el.dataset.rendered = String(width);
-    const page = await doc.getPage(n);
-    const vp1 = page.getViewport({ scale: 1 });
-    el.style.aspectRatio = `${vp1.width} / ${vp1.height}`;
-    const scale = (width / vp1.width) * Math.min(devicePixelRatio || 1, 2);
-    const vp = page.getViewport({ scale });
-    const canvas = h("canvas", { width: Math.floor(vp.width), height: Math.floor(vp.height), "aria-label": `Page ${n}` });
-    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
-    const strokes = ink?.(n - 1) ?? [];
-    if (strokes.length) {
-      const ctx = canvas.getContext("2d");
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      drawStrokes(ctx, strokes);
-    }
-    el.replaceChildren(canvas);
-  };
-  const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
-  const observeAll = () => { for (const p of pages.children) { io.unobserve(p); io.observe(p); } };
-  observeAll();
-  return h("div", { class: "pdf-viewer" }, bar, pages);
 }
 
 /** Pages to draw on for a PDF or an image: [{width, height, background(ctx, pxPerPoint)}], in PDF points or image pixels. */
@@ -288,14 +232,14 @@ function table(rows) {
  * The preview for one attachment. `load()` returns its decrypted bytes. `edit(bytes)` saves an
  * edited version (text files only). Returns an element that fills in as it loads.
  */
-export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink = null, elements = null, inkEdited = false }) {
+export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink = null, elements = null, inkEdited = false, marks = null }) {
   const kind = previewKind(att.name, att.mime);
   const box = h("div", { class: `viewer viewer-${kind}` });
   const start = async () => {
     box.replaceChildren(h("p", { class: "saved", text: `Decrypting ${att.name}…` }));
     try {
       const bytes = await load();
-      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited }));
+      box.replaceChildren(await build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited, marks }));
     } catch (e) {
       box.replaceChildren(h("p", { class: "danger", text: `Couldn't open ${att.name}: ${e.message}` }));
     }
@@ -305,7 +249,7 @@ export function attachmentPreview(att, { load, edit, onExpand, eager = true, ink
   return box;
 }
 
-async function build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited }) {
+async function build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdited, marks }) {
   switch (kind) {
     case "image": {
       const url = urlFor(bytes, att.mime);
@@ -325,7 +269,7 @@ async function build(kind, att, bytes, { edit, onExpand, ink, elements, inkEdite
       });
       return h("div", { class: "inked-image" }, img, overlay);
     }
-    case "pdf": return pdfViewer(bytes, { onExpand, ink });
+    case "pdf": return pdfViewer(bytes, { onExpand, ink, marks, fileName: att.name });
     case "audio": case "video": return h(kind, { src: urlFor(bytes, att.mime), controls: true, preload: "metadata" });
     case "goodnotes": {
       let notebook = null;

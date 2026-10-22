@@ -22,6 +22,8 @@ import { lastCoveredSeq, makeCheckpoint, MAX_CHECKPOINT_BYTES, openCheckpoint, p
 export const CHECKPOINT_AFTER_OPS = 5000;
 /** …and the newest on the relay is at least this old, so devices don't all write one at once. */
 export const CHECKPOINT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+import { cleanQuote, fieldElementId, fieldValue, HIGHLIGHT_COLORS, highlightGeometry } from "./pdfmarks.js";
+import { allTemplates, dailyNote, dailyNoteId, fromTemplate, TEMPLATE_TAG, toggleCheckbox } from "./notes.js";
 
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
@@ -505,6 +507,51 @@ export class Vault {
     }
   }
 
+  // ---------- the daily note, templates and checklists (PROTOCOL.md §12) ----------
+
+  /** Today's note (`parts` from notes.js `dateParts`): opens it if it's there, else makes it (again, if deleted). Returns its id. */
+  openDaily(parts) {
+    const id = dailyNoteId(parts), existing = this.store.records.get(id);
+    if (existing && existing.fields._deleted !== true) return id;
+    const made = dailyNote(this.items(), parts);
+    if (existing) {
+      this.set({ _deleted: false, [Field.title]: made.note.title, [Field.tags]: made.note.tags }, id, "item");
+      this.setBody(id, made.note.body);
+    } else {
+      this.addNote({ id, title: made.note.title, body: made.note.body, tags: made.note.tags });
+    }
+    this.update(id, { daily: made.date });
+    return id;
+  }
+
+  /** Your templates (notes tagged `template`), then the built-in ones. */
+  templates() { return allTemplates(this.items()); }
+
+  /** A new note from a template. Returns its id. */
+  addNoteFromTemplate(template, parts, { clipboard = "" } = {}) {
+    const note = fromTemplate(template, parts, { clipboard });
+    const id = this.addNote({ title: note.title, body: note.body, tags: note.tags });
+    if (note.category) this.update(id, { [Field.category]: note.category });
+    return id;
+  }
+
+  /** Makes a note one of your templates (or stops it being one). */
+  setTemplate(id, on) {
+    const item = this.item(id);
+    if (!item) return;
+    const tags = new Set(item.tags);
+    if (on) tags.add(TEMPLATE_TAG); else tags.delete(TEMPLATE_TAG);
+    this.update(id, { [Field.tags]: [...tags].sort() });
+  }
+
+  /** Ticks or unticks the `index`th checkbox in a note's body. */
+  toggleCheckbox(id, index) {
+    const item = this.item(id);
+    if (!item) return;
+    const body = toggleCheckbox(item.body, index);
+    if (body !== item.body) this.editText(Field.body, body, id, "item");
+  }
+
   setPinned(id, pinned) { this.update(id, { [Field.pinned]: pinned }); }
   markRead(id, read = true) { this.update(id, { [Field.readAt]: read ? this.now() : null }); }
   delete(id) { this.set({ _deleted: true }, id, this.store.records.get(id)?.kind); }
@@ -677,8 +724,10 @@ export class Vault {
     for (const id of elements) {
       const e = this.element(id);
       if (!e) continue;
+      if (e.type === "field") continue; // a form value belongs to its field
+      const extra = e.type === "highlight" ? { quote: e.quote, ...(e.rects ? { rects: e.rects } : {}) } : null;
       const copy = this.addElement({ on, layer, page, type: e.type, frame: transformRect(t, e), text: e.text, size: e.size * widthScale(t), color: e.color, image: e.image,
-        style: { ...e, group: groupOf(e.group) } });
+        style: { ...e, group: groupOf(e.group) }, extra });
       out.push(copy);
       ids.set(id, copy);
     }
@@ -754,17 +803,77 @@ export class Vault {
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
-  /** `style`: optional `rotate`, `flip` (pictures), `font`, `bold`, `italic` (text) and `group` (PROTOCOL.md §10). */
-  addElement({ on, layer = "", page, type, frame, text = "", size = 20, color = "#000000", image = null, style = null }) {
+  /**
+   * `style`: optional `rotate`, `flip` (pictures), `font`, `bold`, `italic` (text) and `group` (PROTOCOL.md §10).
+   * `extra`: more fields as they are (a highlight's `quote` and `rects`).
+   */
+  addElement({ on, layer = "", page, type, frame, text = "", size = 20, color = "#000000", image = null, style = null, extra = null }) {
     const id = newId();
     const fields = { on, layer, page, type, x: frame.x, y: frame.y, w: frame.w, h: frame.h, createdAt: this.nextInkTime(on), device: this.journal.device };
     if (type === "text") Object.assign(fields, { text, size, color });
-    if (type === "tape") fields.color = color;
+    if (type === "tape" || type === "highlight") fields.color = color;
     if (image) fields.image = image;
     if (style) Object.assign(fields, elementStyle(type, style));
+    if (extra) Object.assign(fields, extra);
     this.set(fields, id, "element");
-    if (type === "text") this.refreshSketchText(on);
+    if (type === "text" || type === "highlight") this.refreshSketchText(on);
     return id;
+  }
+
+  // ---------- PDFs: text highlights, form values and text (PROTOCOL.md §10, core/pdfmarks.js) ----------
+
+  /** Highlights text on a PDF page. `boxes`: the selected text's boxes in page points; `quote`: the text. */
+  addHighlight({ on, layer, page, boxes, quote = "", color = HIGHLIGHT_COLORS[0] }) {
+    const g = highlightGeometry(boxes);
+    if (!g) return null;
+    return this.addElement({ on, layer, page, type: "highlight", frame: g, color, extra: { rects: g.rects, quote: cleanQuote(quote) } });
+  }
+
+  /** Form values on a file, by field name: Map(name → element). */
+  pdfFields(on, layer) {
+    const out = new Map();
+    for (const e of this.elements(on, layer)) if (e.type === "field" && e.name && fieldValue(e.value) !== null) out.set(e.name, e);
+    return out;
+  }
+
+  /**
+   * Saves a form field's value (the file never changes). One record per field, so two devices
+   * filling it write the same one. `page` and `frame`: the widget that shows the value.
+   */
+  setPdfField({ on, layer, page, name, value, frame }) {
+    const v = fieldValue(value);
+    if (v === null || !name) return null;
+    const id = fieldElementId(on, layer, name);
+    const r = this.store.records.get(id);
+    const live = r && r.fields._deleted !== true;
+    if (live && JSON.stringify(r.fields.value) === JSON.stringify(v) && r.fields.page === page) return id;
+    const fields = { on, layer, page, type: "field", name, value: v, x: frame.x, y: frame.y, w: frame.w, h: frame.h, device: this.journal.device };
+    if (!live) Object.assign(fields, { createdAt: this.nextInkTime(on), _deleted: false });
+    this.set(fields, id, "element");
+    return id;
+  }
+
+  /** A quote item (Quotes & Highlights) from highlighted text, connected to the item it came from. */
+  addQuote({ text, from = null, page = null }) {
+    const quote = cleanQuote(text);
+    if (!quote) return null;
+    const source = from ? this.item(from) : null;
+    const title = source?.displayTitle ?? "";
+    const id = newId();
+    const fields = { ...this.baseFields("highlight", title), [Field.category]: "quote",
+      ...this.filing({ kind: "highlight", category: "quote", source: "web", collection: title || null }) };
+    if (source) fields[Field.links] = [source.id];
+    this.set(fields, id, "item");
+    const ref = typeof page === "number" ? ` (p. ${page + 1})` : "";
+    this.editText(Field.body, `> ${quote}\n\n— ${title || "PDF"}${ref}`, id, "item");
+    return id;
+  }
+
+  /** A PDF's text for search (`ocrText`, as the apps write it: core/pdfmarks.js joinPdfText). */
+  setPdfText(itemId, text) {
+    const item = this.item(itemId);
+    if (!item || !text || item.ocrText === text) return;
+    this.update(itemId, { [Field.ocrText]: text });
   }
 
   /** Picture bytes become an encrypted blob placed at `frame`. */
@@ -843,10 +952,10 @@ export class Vault {
     return out.filter(Boolean);
   }
 
-  /** The item's `sketchText`: every text box's words, for search. */
+  /** The item's `sketchText`: the words in its text boxes and highlights, for search. */
   refreshSketchText(on) {
-    const text = this.store.inkOn(on).filter((r) => r.kind === "element").map(elementView).filter((e) => e.type === "text")
-      .sort((a, b) => a.createdAt - b.createdAt).map((e) => e.text).filter(Boolean).join("\n");
+    const text = this.store.inkOn(on).filter((r) => r.kind === "element").map(elementView).filter((e) => e.type === "text" || e.type === "highlight")
+      .sort((a, b) => a.createdAt - b.createdAt).map((e) => (e.type === "text" ? e.text : e.quote)).filter(Boolean).join("\n");
     if ((this.item(on)?.sketchText ?? "") !== text) this.update(on, { sketchText: text });
   }
 

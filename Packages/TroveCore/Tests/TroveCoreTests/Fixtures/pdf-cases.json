@@ -1,0 +1,1252 @@
+{
+ "text": [
+  {
+   "name": "two pages",
+   "pages": [
+    "Hello world from Trove\nSecond line here",
+    "Page two has   some\twords in it"
+   ],
+   "expected": "Hello world from Trove\nSecond line here\n\nPage two has some words in it"
+  },
+  {
+   "name": "blank page skipped, CRLF, no-break spaces",
+   "pages": [
+    "  A title  \r\n\r\nBody  text with　wide space\r",
+    "   ",
+    "﻿Last page, last words. And a few more."
+   ],
+   "expected": "A title\nBody text with wide space\n\nLast page, last words. And a few more."
+  },
+  {
+   "name": "too short: a scan",
+   "pages": [
+    "Scan 1",
+    "",
+    "p. 2"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "exactly 40 is too short",
+   "pages": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": ""
+  },
+  {
+   "name": "41 is enough",
+   "pages": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "expected": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "name": "capped at 50,000 characters (emoji count once)",
+   "repeat": [
+    [
+     "😀",
+     30000
+    ],
+    [
+     "y",
+     30000
+    ]
+   ],
+   "expectedLength": 50000,
+   "expectedTail": "yyyyy"
+  }
+ ],
+ "quotes": [
+  {
+   "input": "  The quick\nbrown   fox\r\n jumps ",
+   "expected": "The quick brown fox jumps"
+  },
+  {
+   "input": " tab\there ",
+   "expected": "tab here"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "input": "",
+   "expected": ""
+  }
+ ],
+ "highlights": [
+  {
+   "name": "one line of words",
+   "boxes": [
+    {
+     "x": 72,
+     "y": 100,
+     "w": 40.5,
+     "h": 12
+    },
+    {
+     "x": 113,
+     "y": 100.4,
+     "w": 30.25,
+     "h": 11.6
+    },
+    {
+     "x": 144,
+     "y": 100,
+     "w": 20,
+     "h": 12
+    }
+   ],
+   "expected": {
+    "x": 72,
+    "y": 100,
+    "w": 92,
+    "h": 12,
+    "rects": [
+     [
+      0,
+      0,
+      1,
+      1
+     ]
+    ]
+   },
+   "absolute": [
+    {
+     "x": 72,
+     "y": 100,
+     "w": 92,
+     "h": 12
+    }
+   ]
+  },
+  {
+   "name": "three lines, ragged",
+   "boxes": [
+    {
+     "x": 200,
+     "y": 100,
+     "w": 300,
+     "h": 12
+    },
+    {
+     "x": 72,
+     "y": 114,
+     "w": 428,
+     "h": 12
+    },
+    {
+     "x": 72,
+     "y": 128,
+     "w": 150,
+     "h": 12
+    },
+    {
+     "x": 72,
+     "y": 114.5,
+     "w": 0.2,
+     "h": 11
+    }
+   ],
+   "expected": {
+    "x": 72,
+    "y": 100,
+    "w": 428,
+    "h": 40,
+    "rects": [
+     [
+      0.2991,
+      0,
+      0.7009,
+      0.3
+     ],
+     [
+      0,
+      0.35,
+      1,
+      0.3
+     ],
+     [
+      0,
+      0.7,
+      0.3505,
+      0.3
+     ]
+    ]
+   },
+   "absolute": [
+    {
+     "x": 200.01479999999998,
+     "y": 100,
+     "w": 299.98519999999996,
+     "h": 12
+    },
+    {
+     "x": 72,
+     "y": 114,
+     "w": 428,
+     "h": 12
+    },
+    {
+     "x": 72,
+     "y": 128,
+     "w": 150.01399999999998,
+     "h": 12
+    }
+   ]
+  },
+  {
+   "name": "two columns on one line stay apart",
+   "boxes": [
+    {
+     "x": 72,
+     "y": 300,
+     "w": 200,
+     "h": 10
+    },
+    {
+     "x": 320,
+     "y": 301,
+     "w": 180,
+     "h": 10
+    }
+   ],
+   "expected": {
+    "x": 72,
+    "y": 300,
+    "w": 428,
+    "h": 11,
+    "rects": [
+     [
+      0,
+      0,
+      0.4673,
+      0.9091
+     ],
+     [
+      0.5794,
+      0.0909,
+      0.4206,
+      0.9091
+     ]
+    ]
+   },
+   "absolute": [
+    {
+     "x": 72,
+     "y": 300,
+     "w": 200.0044,
+     "h": 10.0001
+    },
+    {
+     "x": 319.9832,
+     "y": 300.9999,
+     "w": 180.0168,
+     "h": 10.0001
+    }
+   ]
+  },
+  {
+   "name": "unsorted with a duplicate",
+   "boxes": [
+    {
+     "x": 90,
+     "y": 50,
+     "w": 50,
+     "h": 14
+    },
+    {
+     "x": 72,
+     "y": 20,
+     "w": 100,
+     "h": 14
+    },
+    {
+     "x": 90,
+     "y": 50,
+     "w": 50,
+     "h": 14
+    },
+    {
+     "x": 141,
+     "y": 50,
+     "w": 30,
+     "h": 14
+    }
+   ],
+   "expected": {
+    "x": 72,
+    "y": 20,
+    "w": 100,
+    "h": 44,
+    "rects": [
+     [
+      0,
+      0,
+      1,
+      0.3182
+     ],
+     [
+      0.18,
+      0.6818,
+      0.81,
+      0.3182
+     ]
+    ]
+   },
+   "absolute": [
+    {
+     "x": 72,
+     "y": 20,
+     "w": 100,
+     "h": 14.0008
+    },
+    {
+     "x": 90,
+     "y": 49.9992,
+     "w": 81,
+     "h": 14.0008
+    }
+   ]
+  },
+  {
+   "name": "nothing left",
+   "boxes": [
+    {
+     "x": 1,
+     "y": 1,
+     "w": 0.1,
+     "h": 10
+    },
+    {
+     "x": 5,
+     "y": 5,
+     "w": null,
+     "h": 3
+    }
+   ],
+   "expected": null,
+   "absolute": null
+  }
+ ],
+ "boxes": [
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": 0,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    612,
+    792
+   ],
+   "page": [
+    [
+     0,
+     792
+    ],
+    [
+     100,
+     742
+    ],
+    [
+     612,
+     0
+    ],
+    [
+     12.5,
+     758.75
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": 0,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    300,
+    400
+   ],
+   "page": [
+    [
+     -10,
+     420
+    ],
+    [
+     90,
+     370
+    ],
+    [
+     300,
+     0
+    ],
+    [
+     12.5,
+     366.75
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": 90,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    792,
+    612
+   ],
+   "page": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     100
+    ],
+    [
+     792,
+     612
+    ],
+    [
+     33.25,
+     12.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": 90,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    400,
+    300
+   ],
+   "page": [
+    [
+     -20,
+     -10
+    ],
+    [
+     30,
+     90
+    ],
+    [
+     400,
+     300
+    ],
+    [
+     33.25,
+     12.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": 180,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    612,
+    792
+   ],
+   "page": [
+    [
+     612,
+     0
+    ],
+    [
+     512,
+     50
+    ],
+    [
+     0,
+     792
+    ],
+    [
+     599.5,
+     33.25
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": 180,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    300,
+    400
+   ],
+   "page": [
+    [
+     310,
+     -20
+    ],
+    [
+     210,
+     30
+    ],
+    [
+     0,
+     400
+    ],
+    [
+     287.5,
+     33.25
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": 270,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    792,
+    612
+   ],
+   "page": [
+    [
+     792,
+     612
+    ],
+    [
+     742,
+     512
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     758.75,
+     599.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": 270,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    400,
+    300
+   ],
+   "page": [
+    [
+     420,
+     310
+    ],
+    [
+     370,
+     210
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     366.75,
+     287.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": -90,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    792,
+    612
+   ],
+   "page": [
+    [
+     792,
+     612
+    ],
+    [
+     742,
+     512
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     758.75,
+     599.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": -90,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    400,
+    300
+   ],
+   "page": [
+    [
+     420,
+     310
+    ],
+    [
+     370,
+     210
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     366.75,
+     287.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    0,
+    0,
+    612,
+    792
+   ],
+   "rotate": 450,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ],
+   "size": [
+    792,
+    612
+   ],
+   "page": [
+    [
+     0,
+     0
+    ],
+    [
+     50,
+     100
+    ],
+    [
+     792,
+     612
+    ],
+    [
+     33.25,
+     12.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     612,
+     792
+    ],
+    [
+     12.5,
+     33.25
+    ]
+   ]
+  },
+  {
+   "view": [
+    10,
+    20,
+    310,
+    420
+   ],
+   "rotate": 450,
+   "points": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ],
+   "size": [
+    400,
+    300
+   ],
+   "page": [
+    [
+     -20,
+     -10
+    ],
+    [
+     30,
+     90
+    ],
+    [
+     400,
+     300
+    ],
+    [
+     33.25,
+     12.5
+    ]
+   ],
+   "back": [
+    [
+     0,
+     0
+    ],
+    [
+     100,
+     50
+    ],
+    [
+     310,
+     420
+    ],
+    [
+     22.5,
+     53.25
+    ]
+   ]
+  }
+ ],
+ "fieldIds": [
+  {
+   "item": "item-1",
+   "layer": "blob-abc",
+   "name": "Applicant.Name",
+   "id": "pdffield:item-1:blob-abc:Applicant.Name"
+  }
+ ],
+ "elements": {
+  "records": [
+   {
+    "id": "e1",
+    "fields": {
+     "on": "s",
+     "layer": "a",
+     "page": 0,
+     "type": "text",
+     "text": "Typed note",
+     "x": 0,
+     "y": 0,
+     "w": 100,
+     "h": 20,
+     "createdAt": 3
+    }
+   },
+   {
+    "id": "e2",
+    "fields": {
+     "on": "s",
+     "layer": "a",
+     "page": 0,
+     "type": "highlight",
+     "quote": "Highlighted words",
+     "color": "#ffd60a",
+     "x": 10,
+     "y": 10,
+     "w": 100,
+     "h": 24,
+     "rects": [
+      [
+       0.5,
+       0,
+       0.5,
+       0.5
+      ],
+      [
+       0,
+       0.5,
+       0.4,
+       0.5
+      ]
+     ],
+     "createdAt": 2
+    }
+   },
+   {
+    "id": "e3",
+    "fields": {
+     "on": "s",
+     "layer": "a",
+     "page": 1,
+     "type": "field",
+     "name": "agree",
+     "value": true,
+     "x": 5,
+     "y": 5,
+     "w": 10,
+     "h": 10,
+     "createdAt": 1
+    }
+   },
+   {
+    "id": "e4",
+    "fields": {
+     "on": "s",
+     "layer": "a",
+     "page": 1,
+     "type": "highlight",
+     "quote": "",
+     "color": "#34c759",
+     "x": 0,
+     "y": 0,
+     "w": 50,
+     "h": 10,
+     "createdAt": 4
+    }
+   }
+  ],
+  "sketchText": "Highlighted words\nTyped note",
+  "absolute": {
+   "e2": [
+    {
+     "x": 60,
+     "y": 10,
+     "w": 50,
+     "h": 12
+    },
+    {
+     "x": 10,
+     "y": 22,
+     "w": 40,
+     "h": 12
+    }
+   ],
+   "e4": [
+    {
+     "x": 0,
+     "y": 0,
+     "w": 50,
+     "h": 10
+    }
+   ]
+  }
+ }
+}

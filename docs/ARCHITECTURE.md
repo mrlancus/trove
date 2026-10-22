@@ -59,6 +59,8 @@
 | Ask Trove retrieval (local search → best ~20 snippets) | `web/public/core/ask.js` |
 | Weekly digest (id per ISO week), on this day, possible duplicates (port: `Digest.swift`, `Library+Digest.swift`) | `web/public/core/digest.js` (`Fixtures/digest-cases.json`, `web/test/make-digest-fixture.mjs`) |
 | Suggest links (no AI) | `web/public/core/suggest.js` |
+| Notes: placeholders, daily note, templates, checklists (PROTOCOL.md §12; port: `Model/Notes.swift`, `Library+Notes.swift`) | `web/public/core/notes.js` (`Fixtures/notes-cases.json`, `web/test/make-notes-fixture.mjs`) |
+| PDFs: text for search, highlight geometry, page boxes, form ids (PROTOCOL.md §10; port: `Drawing/PDFMarks.swift`) / website viewer / export as annotations | `web/public/core/pdfmarks.js` (`Fixtures/pdf-cases.json`) / `web/public/pdfviewer.js` / `web/public/pdfannots.js` |
 | Website AI function API (drawing hook: `pageAction`) / UI (Ask Trove, note AI menu, AI settings, Look back) | `web/public/aiactions.js` / `web/public/ai.js` |
 | Apps: note AI (Apple Intelligence, else cloud), digest, overnight iPad worker | `App/Sources/Model/AppModel+AI.swift`, `Views/NoteAIMenu.swift`, `Enrichment/OnDeviceAI.swift`, `Services/BackgroundTasks.swift` |
 
@@ -129,6 +131,8 @@
 | Obsidian / Apple Notes / screenshots | `App/Sources/Integrations/*` |
 | Folders line, files + versions, history, connections | `App/Sources/Views/ItemExtras.swift` |
 | Connections graph | `App/Sources/Views/GraphView.swift` |
+| PDF reader (find, highlights, quotes, links, forms, Trove ink drawn by `TrovePDFPage`, export with annotations) | `App/Sources/Drawing/PDFReader.swift` |
+| Today's note, templates, checklists | `App/Sources/Model/AppModel+Notes.swift`, `Views/MainView.swift` (`TemplatesMenu`), `Views/MarkdownEditor.swift` |
 | Drawing editor: model (tools, lasso actions, shapes, guides, text, library) / toolbar and panels / iPad canvas (PencilKit) / Mac canvas | `App/Sources/Drawing/InkEditorModel.swift` / `InkEditorView.swift`, `InkEditingViews.swift`, `InkEditorPanels.swift` / `PencilCanvas.swift` / `MouseInkCanvas.swift` |
 | Ink maths shared with the website: geometry, outlines, shapes, editing, elements library, vault ops | `Packages/TroveCore/Sources/TroveCore/Drawing/` (`InkEditing.swift`, `InkStickers.swift`, `InkArrange.swift`, …) |
 | Shortcuts/Siri | `App/Sources/Intents/*` |
