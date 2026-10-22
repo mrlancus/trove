@@ -18,7 +18,7 @@ struct TroveMark: View, Animatable {
     /// The colour of the box; the latch is cut out of it.
     var fill: AnyShapeStyle = AnyShapeStyle(Brand.gradient)
 
-    var animatableData: Double {
+    nonisolated var animatableData: Double {
         get { open }
         set { open = newValue }
     }

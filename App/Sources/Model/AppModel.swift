@@ -1073,7 +1073,8 @@ final class AppModel {
         defer { appleNotesBusy = false }
         appleNotesStatus = "Reading Apple Notes…"
         do {
-            let result = try await AppleNotesBridge.importAll(into: library, progress: !visible ? nil : { [weak self] done, total, added in
+            // On the Import screen: how far it's got, and each note dropping into the box.
+            let progress: (@MainActor @Sendable (Int, Int, String?) -> Void)? = !visible ? nil : { [weak self] done, total, added in
                 guard let self, var run = self.importRun, !run.finished else { return }
                 run.total = max(1, total)
                 run.done = done
@@ -1084,7 +1085,8 @@ final class AppModel {
                     run.recent = Array(run.recent.prefix(8))
                 }
                 self.importRun = run
-            })
+            }
+            let result = try await AppleNotesBridge.importAll(into: library, progress: progress)
             if visible, var run = importRun {
                 run.done = run.total
                 run.current = nil
