@@ -22,15 +22,18 @@ enum ScreenshotImporter {
         var list: [PHAsset] = []
         assets.enumerateObjects { asset, _, _ in list.append(asset) }
         for asset in list {
-            guard let data = await imageData(for: asset) else { continue }
-            _ = try? await library.addFile(data, name: "Screenshot.jpg", mime: "image/jpeg", kind: .image, source: .screenshot,
-                                           title: "Screenshot", createdAt: asset.creationDate)
+            guard let (original, data) = await imageData(for: asset) else { continue }
+            // With iCloud Photos the other devices see this screenshot too: keyed by its time and
+            // bytes, so it's saved once (`Library.addScreenshot`).
+            _ = try? await library.addScreenshot(data, original: original, takenAt: asset.creationDate ?? Date())
             newest = asset.creationDate ?? newest
         }
+        await library.removeDuplicateScreenshots()
         return newest
     }
 
-    private static func imageData(for asset: PHAsset) async -> Data? {
+    /// The photo's own bytes and a JPEG of it.
+    private static func imageData(for asset: PHAsset) async -> (Data, Data)? {
         await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
             options.isNetworkAccessAllowed = true
@@ -38,7 +41,7 @@ enum ScreenshotImporter {
             options.version = .current
             PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
                 // Re-encode as JPEG (HEIC screenshots are rare, but keep one format for previews).
-                if let data, let image = UIImage(data: data) { continuation.resume(returning: image.jpegData(compressionQuality: 0.85)) }
+                if let data, let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.85) { continuation.resume(returning: (data, jpeg)) }
                 else { continuation.resume(returning: nil) }
             }
         }

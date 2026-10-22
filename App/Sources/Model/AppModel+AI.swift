@@ -177,7 +177,7 @@ extension AppModel {
     }
 
     /// After a sync: the relay's AI state (once per launch; Settings asks again when it opens), and
-    /// (once per launch) last week's digest if no device made it yet.
+    /// (once per launch) duplicate screenshots removed and last week's digest if no device made it yet.
     func afterSyncAI() async {
         if !aiStatusChecked {
             aiStatusChecked = true
@@ -186,6 +186,8 @@ extension AppModel {
         }
         guard !digestChecked, let library else { return }
         digestChecked = true
-        if await library.autoDigest() != nil { await reload() }
+        // Screenshots two devices both saved from iCloud Photos (same time, same file): once per launch.
+        let removed = await library.removeDuplicateScreenshots()
+        if await library.autoDigest() != nil || removed > 0 { await reload() }
     }
 }
