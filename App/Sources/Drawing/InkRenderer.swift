@@ -404,30 +404,24 @@ enum InkRenderer {
     private static let grainCache = GrainCache()
     static func grainImage(_ color: String) -> CGImage? { grainCache.image(color) }
 
-    /// Tape: an opaque strip with faint stripes, or (opened here) a faint dashed outline (ink.js `drawTapeElement`).
+    /// Tape, like GoodNotes: a strip with torn ends and faint stripes; tapped open (on this device)
+    /// it turns see-through so what's under it shows, and a tap covers it again.
     static func drawTape(_ f: InkGeometry.Rect, color: String, peeked: Bool, in ctx: CGContext) {
-        let rect = CGRect(x: f.x, y: f.y, width: f.width, height: f.height)
-        let r = max(0, min(4, f.width / 4, f.height / 4))
-        let path = CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil)
+        let path = tapePath(f)
         ctx.saveGState()
         defer { ctx.restoreGState() }
-        if peeked {
-            ctx.setFillColor(cgColor(color, alpha: 0.16))
-            ctx.addPath(path)
-            ctx.fillPath()
-            ctx.setStrokeColor(cgColor(color, alpha: 0.7))
-            ctx.setLineWidth(1)
-            ctx.setLineDash(phase: 0, lengths: [4, 3])
-            ctx.addPath(path)
-            ctx.strokePath()
-            return
-        }
-        ctx.setFillColor(cgColor(color))
+        ctx.setFillColor(cgColor(color, alpha: peeked ? 0.3 : 1))
         ctx.addPath(path)
         ctx.fillPath()
+        if peeked {
+            ctx.setStrokeColor(cgColor(color, alpha: 0.8))
+            ctx.setLineWidth(0.75)
+            ctx.addPath(path)
+            ctx.strokePath()
+        }
         ctx.addPath(path)
         ctx.clip()
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.1))
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: peeked ? 0.04 : 0.1))
         let step = 8.0
         var x = f.x - f.height
         while x < f.x + f.width {
@@ -439,6 +433,31 @@ enum InkRenderer {
             x += step * 2
         }
         ctx.fillPath()
+    }
+
+    /// The strip's outline: straight sides and zigzag (torn) ends.
+    static func tapePath(_ f: InkGeometry.Rect) -> CGPath {
+        let p = CGMutablePath()
+        let depth = min(3, f.width / 6)
+        let teeth = max(2, Int((f.height / 5).rounded()))
+        let tooth = f.height / Double(teeth)
+        p.move(to: CGPoint(x: f.x, y: f.y))
+        p.addLine(to: CGPoint(x: f.maxX, y: f.y))
+        // Right end, top to bottom.
+        for i in 0..<teeth {
+            let y = f.y + Double(i) * tooth
+            p.addLine(to: CGPoint(x: f.maxX - depth, y: y + tooth / 2))
+            p.addLine(to: CGPoint(x: f.maxX, y: y + tooth))
+        }
+        p.addLine(to: CGPoint(x: f.x, y: f.maxY))
+        // Left end, bottom to top.
+        for i in 0..<teeth {
+            let y = f.maxY - Double(i) * tooth
+            p.addLine(to: CGPoint(x: f.x + depth, y: y - tooth / 2))
+            p.addLine(to: CGPoint(x: f.x, y: y - tooth))
+        }
+        p.closeSubpath()
+        return p
     }
 
     /// Text highlights on a PDF: like the highlighter (35 %, multiplied), under the ink.
@@ -615,7 +634,7 @@ struct InkOverlay {
     /// Laser pointer lines: points, colour, width in screen points, and how faded (1 = solid).
     var lasers: [(points: [InkPoint], color: String, width: Double, alpha: Double)] = []
     /// Tape being laid.
-    var tape: (frame: InkGeometry.Rect, color: String)?
+    var tape: (frame: InkGeometry.Rect, rotate: Double, color: String)?
     /// A hovering Apple Pencil's tip: where, in the pen's colour and size.
     var tip: (point: InkPoint, color: String, width: Double)?
     /// The selection's turning handle (above its box), and the turn while it's dragged (degrees).
@@ -695,14 +714,16 @@ extension InkRenderer {
             }
         }
         if o.ruler != nil || o.protractor != nil { drawGuides(ruler: o.ruler, protractor: o.protractor, reading: o.reading, scale: scale, in: ctx) }
-        for l in o.lasers where l.alpha > 0 {
+        for l in o.lasers where l.alpha > 0 { drawLaser(l.points, color: l.color, width: l.width * Double(px), alpha: l.alpha, in: ctx) }
+        if let t = o.tape {
+            let cx = CGFloat(t.frame.x + t.frame.width / 2), cy = CGFloat(t.frame.y + t.frame.height / 2)
             ctx.saveGState()
-            ctx.setAlpha(l.alpha)
-            ctx.setShadow(offset: .zero, blur: 10, color: cgColor(l.color))
-            draw(tool: .marker, color: l.color, width: l.width * Double(px) * 1.5, points: l.points, in: ctx)
+            ctx.translateBy(x: cx, y: cy)
+            ctx.rotate(by: CGFloat(t.rotate))
+            ctx.translateBy(x: -cx, y: -cy)
+            drawTape(t.frame, color: t.color, peeked: false, in: ctx)
             ctx.restoreGState()
         }
-        if let t = o.tape { drawTape(t.frame, color: t.color, peeked: false, in: ctx) }
         if let tip = o.tip {
             // The pen's tip, its colour and size, with a thin ring so it shows on any paper.
             let r = max(1.5 * Double(px), tip.width / 2)
@@ -725,6 +746,39 @@ extension InkRenderer {
 }
 
 extension InkRenderer {
+    /// The laser pointer: a wide soft glow in its colour, a brighter band, and a near-white hot core,
+    /// so it reads like light on the page. `width` is in page points for the line's screen size.
+    static func drawLaser(_ points: [InkPoint], color: String, width: Double, alpha: Double, in ctx: CGContext) {
+        guard let first = points.first else { return }
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: first.x, y: first.y))
+        if points.count == 1 { path.addLine(to: CGPoint(x: first.x + 0.01, y: first.y)) }
+        for p in points.dropFirst() { path.addLine(to: CGPoint(x: p.x, y: p.y)) }
+        let glow = cgColor(color)
+        // (line width × width, colour, its alpha, blur in screen points)
+        let passes: [(Double, CGColor, Double, CGFloat)] = [
+            (3.2, glow, 0.22, 26),
+            (1.7, glow, 0.55, 14),
+            (1, glow, 1, 6),
+            (0.42, CGColor(red: 1, green: 1, blue: 1, alpha: 1), 0.92, 3),
+        ]
+        ctx.saveGState()
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        ctx.setLineDash(phase: 0, lengths: [])
+        for pass in passes {
+            ctx.saveGState()
+            ctx.setAlpha(alpha * pass.2)
+            ctx.setShadow(offset: .zero, blur: pass.3, color: glow)
+            ctx.setStrokeColor(pass.1)
+            ctx.setLineWidth(CGFloat(width * pass.0))
+            ctx.addPath(path)
+            ctx.strokePath()
+            ctx.restoreGState()
+        }
+        ctx.restoreGState()
+    }
+
     /// Where the selection's turning handle sits: above the middle of its top edge (26 screen points up).
     static func rotateHandle(_ b: InkGeometry.Rect, scale: Double) -> InkPoint {
         InkPoint(x: b.x + b.width / 2, y: b.y - 26 / max(0.05, scale))

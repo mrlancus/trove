@@ -52,8 +52,12 @@ struct PencilCanvas: UIViewRepresentable {
         let canvas = TroveCanvasView()
         let c = context.coordinator
         canvas.delegate = c
-        canvas.backgroundColor = Self.outside(dark: dark)
-        canvas.isOpaque = true
+        // PencilKit's canvas stays clear: when it was opaque it painted its tiles in its background
+        // colour over the paper underneath, so a sketch showed only grey (bits of the page flashed
+        // while zoomed far out, before the tiles came). The grey round the pages is the paper view's.
+        canvas.backgroundColor = .clear
+        canvas.isOpaque = false
+        c.paperView.backgroundColor = Self.outside(dark: dark)
         // Always light: in dark mode PencilKit would turn dark ink light by itself. The dark page swaps
         // black and white ink itself (`InkDark`), leaving every other colour as it is.
         canvas.overrideUserInterfaceStyle = .light
@@ -141,7 +145,7 @@ struct PencilCanvas: UIViewRepresentable {
         c.updating = true
         defer { c.updating = false }
         let outside = Self.outside(dark: dark)
-        if canvas.backgroundColor != outside { canvas.backgroundColor = outside }
+        if c.paperView.backgroundColor != outside { c.paperView.backgroundColor = outside }
         if canvas.overrideUserInterfaceStyle != .light { canvas.overrideUserInterfaceStyle = .light }
         if c.dark != dark { c.setDark(dark) }
         c.show(pages, current: current, layout: layout, revision: pagesRevision, in: canvas)

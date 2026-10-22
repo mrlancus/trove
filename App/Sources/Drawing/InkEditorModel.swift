@@ -270,6 +270,7 @@ struct InkClipboard {
 final class InkEditorModel {
     static let colors = ["#1c1c1e", "#8e8e93", "#0a84ff", "#ff3b30", "#34c759", "#ff9500", "#af52de", "#ffd60a"]
     static let tapeColors = ["#f2c94c", "#9ad0f5", "#f5a3b8", "#a8dba8", "#c7b8f5", "#b0b0b5"]
+    static let highlighterColors = ["#ffd60a", "#34c759", "#64d2ff", "#ff6fa8", "#ff9f0a", "#bf5af2"]
     /// The drawing settings every device follows (`settings.ink`): pen feel, favourites, your colours.
     private(set) var inkSettings = InkSettings()
     /// Tape strips opened on this device.
@@ -478,7 +479,7 @@ final class InkEditorModel {
         return w > 0 ? w : (widthKey(t) == "eraserPrecise" ? 3 : t.defaultWidth)
     }
     /// The precise eraser keeps its own, small size.
-    private func widthKey(_ t: InkEditorTool) -> String { t == .eraser && eraserMode == .precise ? "eraserPrecise" : t.rawValue }
+    func widthKey(_ t: InkEditorTool) -> String { t == .eraser && eraserMode == .precise ? "eraserPrecise" : t.rawValue }
     var color: String {
         get { color(for: tool.hasColor ? tool : .pen) }
         set {
@@ -540,18 +541,84 @@ final class InkEditorModel {
         Task { await library.setInkFavourites(list); app?.inkChanged() }
     }
 
-    func addToPalette(_ c: String) {
-        guard let library = app?.library, !inkSettings.palette.contains(c.lowercased()) else { return }
-        let list = Array((inkSettings.palette + [c.lowercased()]).suffix(InkSettings.maxPalette))
-        inkSettings.palette = list
-        Task { await library.setInkPalette(list); app?.inkChanged() }
+    // MARK: Preset colours and sizes (settings.ink, on every device), like GoodNotes
+
+    /// The highlighter and tape have their own preset colours; every other tool shares one row.
+    static func colorGroup(_ t: InkEditorTool) -> String { t == .highlighter ? "highlighter" : t == .tape ? "tape" : "ink" }
+
+    /// A tool's preset colours: yours, else the built-in ones (with the colours you kept before presets).
+    func presetColors(for t: InkEditorTool) -> [String] {
+        let group = Self.colorGroup(t)
+        if let mine = inkSettings.colors[group] { return mine }
+        switch group {
+        case "tape": return Self.tapeColors
+        case "highlighter": return Self.highlighterColors
+        default:
+            var out = Self.colors
+            for c in inkSettings.palette where !out.contains(c) { out.append(c) }
+            return out
+        }
     }
 
-    func removeFromPalette(_ c: String) {
+    func setPresetColors(_ list: [String], for t: InkEditorTool) {
         guard let library = app?.library else { return }
-        let list = inkSettings.palette.filter { $0 != c }
-        inkSettings.palette = list
-        Task { await library.setInkPalette(list); app?.inkChanged() }
+        let group = Self.colorGroup(t)
+        var clean: [String] = []
+        for c in list.map({ $0.lowercased() }) where InkSettings.isHex(c) && !clean.contains(c) { clean.append(c) }
+        let kept = Array(clean.prefix(InkSettings.maxPalette))
+        inkSettings.colors[group] = kept
+        Task { await library.setInkColors(group, kept); app?.inkChanged() }
+    }
+
+    /// The + button: a new preset colour at the end of the chosen tool's row, and it's picked.
+    func addPresetColor(_ c: String) {
+        let t = tool.hasColor ? tool : .pen
+        var list = presetColors(for: t).filter { $0 != c.lowercased() }
+        list.append(c.lowercased())
+        setPresetColors(list, for: t)
+        color = c.lowercased()
+    }
+
+    /// A preset colour edited in place (and picked).
+    func replacePresetColor(at i: Int, with c: String) {
+        let t = tool.hasColor ? tool : .pen
+        var list = presetColors(for: t)
+        guard list.indices.contains(i) else { return }
+        list[i] = c.lowercased()
+        setPresetColors(list, for: t)
+        color = c.lowercased()
+    }
+
+    func removePresetColor(at i: Int) {
+        let t = tool.hasColor ? tool : .pen
+        var list = presetColors(for: t)
+        guard list.indices.contains(i), list.count > 1 else { return }
+        list.remove(at: i)
+        setPresetColors(list, for: t)
+    }
+
+    /// The built-in three sizes (thin, medium, thick) for a tool.
+    static func defaultSizes(_ t: InkEditorTool, precise: Bool) -> [Double] {
+        if t == .eraser && precise { return [1, 3, 6] }
+        let d = t.defaultWidth
+        return [d * 0.5, d, d * 2].map { ($0 * 2).rounded() / 2 }
+    }
+
+    /// The chosen tool's three preset sizes: yours, else the built-in ones.
+    var presetSizes: [Double] {
+        inkSettings.sizes[widthKey(tool)] ?? Self.defaultSizes(tool, precise: eraserMode == .precise)
+    }
+
+    /// A preset size set for good (and picked).
+    func setPresetSize(_ i: Int, to w: Double) {
+        guard let library = app?.library else { return }
+        var list = presetSizes
+        guard list.indices.contains(i), w > 0, w <= 200 else { return }
+        list[i] = w
+        let key = widthKey(tool)
+        inkSettings.sizes[key] = list
+        width = w
+        Task { await library.setInkSizes(key, list); app?.inkChanged() }
     }
 
     func penSettings(_ t: InkTool) -> PenSettings { inkSettings.pen(t) }
@@ -734,7 +801,7 @@ final class InkEditorModel {
             o.protractor = protractor
             o.reading = protractorReading
         }
-        if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, color: color(for: .tape)) }
+        if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, rotate: t.rotate, color: color(for: .tape)) }
         if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
         return o
     }
@@ -823,7 +890,22 @@ final class InkEditorModel {
     // MARK: Tape
 
     func tape(at p: InkPoint, key: String) -> InkBox? {
-        (content[key]?.elements ?? []).last { $0.kind == .tape && p.x >= $0.frame.x && p.x <= $0.frame.maxX && p.y >= $0.frame.y && p.y <= $0.frame.maxY }
+        (content[key]?.elements ?? []).last { $0.kind == .tape && $0.contains(p) }
+    }
+
+    /// A strip of tape laid from `a` to `b`, like GoodNotes: as wide as the tape's size, along the
+    /// pen's line and turned with it (snapping level or upright within 3°).
+    static func tapeStrip(from a: InkPoint, to b: InkPoint, thick: Double) -> (frame: InkGeometry.Rect, rotate: Double) {
+        let dx = b.x - a.x, dy = b.y - a.y
+        var turn = atan2(dy, dx)
+        // Kept between −90° and 90°, so the strip's pattern never ends up upside down.
+        if turn > .pi / 2 { turn -= .pi } else if turn < -.pi / 2 { turn += .pi }
+        let snap = 3 * Double.pi / 180
+        for level in [-Double.pi / 2, 0, Double.pi / 2] where abs(turn - level) < snap { turn = level }
+        let length = max(thick, hypot(dx, dy))
+        let mid = InkPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+        let frame = InkGeometry.Rect(x: mid.x - length / 2, y: mid.y - thick / 2, width: length, height: thick)
+        return (frame, turn)
     }
 
     func togglePeek(_ id: String) {
@@ -834,14 +916,10 @@ final class InkEditorModel {
 
     private func layTape(_ key: String, from a: InkPoint, to b: InkPoint) {
         guard let library = app?.library else { return }
-        let thick = width(for: .tape)
-        var x = min(a.x, b.x), y = min(a.y, b.y), w = abs(b.x - a.x), h = abs(b.y - a.y)
-        if w < thick { x -= (thick - w) / 2; w = thick }
-        if h < thick { y -= (thick - h) / 2; h = thick }
-        let frame = InkGeometry.Rect(x: x, y: y, width: w, height: h)
+        let strip = Self.tapeStrip(from: a, to: b, thick: width(for: .tape))
         let itemId = target.itemId, layer = target.layer, color = color(for: .tape)
         Task {
-            let id = await library.addElement(on: itemId, layer: layer, pageKey: key, kind: .tape, frame: frame, color: color)
+            let id = await library.addElement(on: itemId, layer: layer, pageKey: key, kind: .tape, frame: strip.frame, color: color, rotate: strip.rotate)
             record(Action(add: [Ref(id: id, kind: "element")]))
             await reloadInk()
             app?.inkChanged()
@@ -849,13 +927,10 @@ final class InkEditorModel {
     }
 
     /// The tape being laid, to show while dragging.
-    var tapePreview: (key: String, frame: InkGeometry.Rect)? {
+    var tapePreview: (key: String, frame: InkGeometry.Rect, rotate: Double)? {
         guard case .tape(let key, let a, let b)? = gesture else { return nil }
-        let thick = width(for: .tape)
-        var x = min(a.x, b.x), y = min(a.y, b.y), w = abs(b.x - a.x), h = abs(b.y - a.y)
-        if w < thick { x -= (thick - w) / 2; w = thick }
-        if h < thick { y -= (thick - h) / 2; h = thick }
-        return (key, InkGeometry.Rect(x: x, y: y, width: w, height: h))
+        let strip = Self.tapeStrip(from: a, to: b, thick: width(for: .tape))
+        return (key, strip.frame, strip.rotate)
     }
 
     // MARK: The page grid

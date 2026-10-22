@@ -105,6 +105,22 @@ import Testing
         #expect(settings.favourites.first?.tool == .ballpoint && settings.pens[.ballpoint] != nil)
     }
 
+    @Test func presetColoursAndSizesFollowYou() async {
+        let lib = makeLibrary()
+        let fresh = await lib.inkSettings()
+        #expect(fresh.colors.isEmpty && fresh.sizes.isEmpty)
+        await lib.setInkColors("ink", ["#FF0000", "#00ff00", "red", "#ff0000", "#0000ff"])
+        await lib.setInkSizes("pen", [0.85, 2.5, 5])
+        await lib.setInkSizes("tape", [1, 2]) // not three: ignored
+        await lib.setInkSizes("eraser", [1, -2, 3]) // not above 0: ignored
+        let s = await lib.inkSettings()
+        #expect(s.colors["ink"] == ["#ff0000", "#00ff00", "#0000ff"])
+        #expect(s.sizes == ["pen": [0.85, 2.5, 5]])
+        // Read back as stored by another app: bad entries dropped, the rest kept.
+        let read = InkSettings(fields: ["colors.tape": .array([.string("#ABCDEF"), .number(3)]), "sizes.laser": .array([.number(1), .number(2), .number(300)])])
+        #expect(read.colors == ["tape": ["#abcdef"]] && read.sizes.isEmpty)
+    }
+
     @Test func reloadingAPageOfInkStaysCheap() async {
         let lib = makeLibrary()
         let id = await sketch(lib, strokes: 3000)

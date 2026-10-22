@@ -189,11 +189,6 @@ struct InkEditorView: View {
                                     }
                                 }
                             }
-                            if !editor.inkSettings.palette.isEmpty {
-                                Menu("Remove one of your colours") {
-                                    ForEach(editor.inkSettings.palette, id: \.self) { c in Button(c) { editor.removeFromPalette(c) } }
-                                }
-                            }
                             Picker("When a drawing opens", selection: $editor.fitWholePage) {
                                 Text("Show the whole page").tag(true)
                                 Text("Fit the page width").tag(false)
@@ -237,15 +232,6 @@ struct InkEditorView: View {
         }
     }
 
-    /// The tool's colours, then your colours (every device) and recent ones (this device).
-    private var colourChoices: [String] {
-        let base = editor.tool == .tape ? InkEditorModel.tapeColors : InkEditorModel.colors
-        var out = base
-        for c in editor.inkSettings.palette where !out.contains(c) { out.append(c) }
-        for c in editor.recentColors.prefix(5) where !out.contains(c) { out.append(c) }
-        return out
-    }
-
     private var hasOptions: Bool { editor.tool.hasColor || editor.tool.hasSize || editor.tool == .lasso }
 
     /// The shape tool's shapes.
@@ -269,33 +255,18 @@ struct InkEditorView: View {
 
     /// The chosen tool's colours, sizes and modes.
     static let optionsHeight: CGFloat = 48
+    static let toolNameWidth: CGFloat = 108
 
     private var optionsBar: some View {
         @Bindable var editor = editor
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
+                // Every tool's name takes the same room, so its options always start in one place.
                 Text(editor.tool.label).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
-                if editor.tool.hasColor {
-                    HStack(spacing: 6) {
-                        ForEach(colourChoices, id: \.self) { c in
-                            Button { editor.color = c } label: {
-                                Circle().fill(Color(inkHex: c)).frame(width: 22, height: 22)
-                                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                                    .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.4), lineWidth: editor.color == c ? 2 : 1).padding(-2))
-                                    .frame(width: 30, height: 32)
-                                    .inkTapArea()
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Colour \(c)")
-                        }
-                        ColorPicker("Any colour", selection: Binding(get: { Color(inkHex: editor.color) }, set: { editor.color = $0.inkHex }), supportsOpacity: false)
-                            .labelsHidden()
-                        Button { editor.addToPalette(editor.color) } label: { Image(systemName: "plus.circle") }
-                            .buttonStyle(.borderless)
-                            .help("Keep this colour in your colours (on every device)")
-                            .accessibilityLabel("Add to your colours")
-                    }
-                }
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(width: Self.toolNameWidth, alignment: .leading)
+                Divider().frame(height: 26)
+                if editor.tool.hasColor { InkColorPresets(editor: editor) }
                 if editor.tool == .shape { shapeKinds }
                 if editor.tool == .text || editor.textEdit != nil || editor.selectionHasText { InkTextStyleBar(editor: editor) }
                 if editor.tool.ink != nil || editor.tool == .shape {
@@ -315,8 +286,11 @@ struct InkEditorView: View {
                 }
                 if editor.tool.hasSize {
                     InkSizePresets(editor: editor)
-                    Slider(value: $editor.width, in: editor.tool == .eraser && editor.eraserMode == .precise ? 0.5...12 : 1...(editor.tool == .text ? 72 : 60))
+                    Slider(value: $editor.width, in: editor.sizeRange(editor.tool))
                         .frame(width: 110)
+                    Text(InkSizeUnit.label(editor.width, tool: editor.tool))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .frame(width: 62, alignment: .leading)
                 }
                 if editor.tool == .eraser {
                     Picker("Eraser", selection: $editor.eraserMode) {
@@ -459,35 +433,6 @@ struct InkUndoButtons: View {
         .buttonStyle(.borderless)
         .font(.title3)
         .frame(height: 34)
-    }
-}
-
-/// Three quick sizes for the chosen tool (small, medium, large), like GoodNotes.
-struct InkSizePresets: View {
-    let editor: InkEditorModel
-
-    static func sizes(_ tool: InkEditorTool, precise: Bool) -> [Double] {
-        if tool == .eraser && precise { return [1, 3, 6] }
-        let d = tool.defaultWidth
-        return [d * 0.5, d, d * 2].map { ($0 * 2).rounded() / 2 }
-    }
-
-    var body: some View {
-        let sizes = Self.sizes(editor.tool, precise: editor.eraserMode == .precise)
-        HStack(spacing: 4) {
-            ForEach(Array(sizes.enumerated()), id: \.offset) { i, w in
-                Button { editor.width = w } label: {
-                    Circle()
-                        .fill(editor.tool == .eraser ? Color.secondary : Color(inkHex: editor.color))
-                        .frame(width: CGFloat(6 + i * 5), height: CGFloat(6 + i * 5))
-                        .frame(width: 30, height: 30)
-                        .background(abs(editor.width - w) < 0.01 ? Color.accentColor.opacity(0.16) : .clear, in: Circle())
-                        .inkTapArea()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(["Thin", "Medium", "Thick"][i])
-            }
-        }
     }
 }
 

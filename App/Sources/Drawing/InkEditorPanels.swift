@@ -129,59 +129,45 @@ struct PaperThumb: View {
 }
 
 /// The palette squeezing Apple Pencil opens at its tip (like GoodNotes and Notes): tools, colours,
-/// size, undo and redo.
+/// sizes, undo and redo.
 struct InkPalette: View {
     let editor: InkEditorModel
     static let width: CGFloat = 316
     static let height: CGFloat = 206
     /// Where the arcs are centred, in the palette: on the Pencil's tip (InkEditorView places it so).
     static let centre = CGPoint(x: width / 2, y: 178)
-    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .highlighter, .eraser, .lasso]
-    private static let toolRadius: CGFloat = 124, colourRadius: CGFloat = 76
+    private static let tools: [InkEditorTool] = [.pen, .ballpoint, .pencil, .fountain, .brush, .marker, .highlighter, .eraser, .lasso, .shape, .text, .laser, .tape]
 
-    /// Curved round the Pencil's tip, like Apple's own: the tools on the outer arc, colours on the
-    /// inner one, undo, sizes and redo in the middle. Picking leaves it open; squeezing again or
-    /// tapping anywhere else closes it.
+    /// Curved round the Pencil's tip, like Apple's own: every tool on the outer arc and your colours
+    /// on the inner one (drag along either to turn it), undo, sizes and redo in the middle. Picking
+    /// leaves it open; squeezing again or tapping anywhere else closes it.
     var body: some View {
         ZStack {
-            arc(radius: Self.toolRadius, width: 50)
-            if editor.tool.hasColor { arc(radius: Self.colourRadius, width: 38) }
-            ForEach(Array(Self.tools.enumerated()), id: \.element) { i, t in
-                toolButton(t).position(Self.point(i, of: Self.tools.count, radius: Self.toolRadius, from: 172, to: 8))
+            InkArcDial(items: Self.tools, centre: Self.centre, radius: 124, band: 50, from: 172, to: 8, step: 27, selected: editor.tool) { t in
+                toolButton(t)
             }
             if editor.tool.hasColor {
-                let colours = Array(InkEditorModel.colors.prefix(6))
-                ForEach(Array(colours.enumerated()), id: \.element) { i, c in
-                    colourButton(c).position(Self.point(i, of: colours.count, radius: Self.colourRadius, from: 160, to: 20))
+                // Smaller than the tools' arc and clear of the undo row underneath.
+                InkArcDial(items: editor.presetColors(for: editor.tool), centre: Self.centre, radius: 80, band: 28, from: 144, to: 36, step: 21,
+                           selected: editor.color) { c in
+                    colourButton(c)
                 }
+                .id(InkEditorModel.colorGroup(editor.tool))
             }
-            HStack(spacing: 6) {
-                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body.weight(.medium)).frame(width: 32, height: 32).inkTapArea() }
+            HStack(spacing: 4) {
+                Button { editor.undo() } label: { Image(systemName: "arrow.uturn.backward").font(.body.weight(.medium)).frame(width: 30, height: 30).inkTapArea() }
                     .buttonStyle(.plain).disabled(!editor.canUndo).accessibilityLabel("Undo")
                 if editor.tool.hasSize { InkSizePresets(editor: editor) }
-                Button { editor.redo() } label: { Image(systemName: "arrow.uturn.forward").font(.body.weight(.medium)).frame(width: 32, height: 32).inkTapArea() }
+                Button { editor.redo() } label: { Image(systemName: "arrow.uturn.forward").font(.body.weight(.medium)).frame(width: 30, height: 30).inkTapArea() }
                     .buttonStyle(.plain).disabled(!editor.canRedo).accessibilityLabel("Redo")
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 2)
+            .padding(.vertical, 1)
             .background(.regularMaterial, in: Capsule())
             .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
-            .position(x: Self.centre.x, y: Self.centre.y - 4)
+            .position(x: Self.centre.x, y: Self.centre.y)
         }
         .frame(width: Self.width, height: Self.height)
-    }
-
-    /// The i-th of n spots along an arc from one angle to another (degrees, 0 = right, 90 = up).
-    static func point(_ i: Int, of n: Int, radius: CGFloat, from: Double, to: Double) -> CGPoint {
-        let t = n > 1 ? Double(i) / Double(n - 1) : 0.5
-        let a = (from + (to - from) * t) * .pi / 180
-        return CGPoint(x: centre.x + radius * cos(a), y: centre.y - radius * sin(a))
-    }
-
-    private func arc(radius: CGFloat, width: CGFloat) -> some View {
-        Path { p in p.addArc(center: Self.centre, radius: radius, startAngle: .degrees(-180), endAngle: .degrees(0), clockwise: false) }
-            .stroke(.regularMaterial, style: StrokeStyle(lineWidth: width, lineCap: .round))
-            .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
     }
 
     private func toolButton(_ t: InkEditorTool) -> some View {
@@ -201,10 +187,10 @@ struct InkPalette: View {
 
     private func colourButton(_ c: String) -> some View {
         Button { editor.color = c } label: {
-            Circle().fill(Color(inkHex: c)).frame(width: 22, height: 22)
-                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+            Circle().fill(Color(inkHex: c)).frame(width: 18, height: 18)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
                 .overlay(Circle().strokeBorder(editor.color == c ? Color.accentColor : .gray.opacity(0.35), lineWidth: editor.color == c ? 2.5 : 1).padding(-2.5))
-                .frame(width: 32, height: 32)
+                .frame(width: 26, height: 26)
                 .inkTapArea()
         }
         .buttonStyle(.plain)

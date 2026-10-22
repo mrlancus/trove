@@ -594,7 +594,11 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 - **Drawing settings** every device follows: one record, id `settings.ink`, kind `setting`
   (`inkSettingsOf` / `InkSettings`, fixture-checked): `pen.<tool>` = `{smoothing 0–100, curve
   "soft" | "normal" | "firm", minWidth 0–100}` per pen; `favourites` = up to 10 `{tool, color,
-  width}`; `palette` = up to 24 `"#rrggbb"`; `compactPoints` (above). Out-of-range values are
+  width}`; `palette` = up to 24 `"#rrggbb"`; `compactPoints` (above); `colors.<group>` = your
+  preset colours in order, up to 24 `"#rrggbb"`, no repeats (groups `ink`, `highlighter`, `tape`;
+  a group without one uses the app's built-in colours, plus `palette` for `ink`); `sizes.<tool>` =
+  exactly three widths in page points, each above 0 and at most 200 (tool keys as the editor's:
+  `pen`, `eraser`, `eraserPrecise`, `tape`…; shown in steps of 0.05 mm, 1 pt = 25.4/72 mm). Out-of-range values are
   clamped, bad entries dropped (a favourite with a tool the reader doesn't know, such as a
   `ballpoint` on an older app, is skipped there, and dropped if that device saves its favourites). Recent colours and the line options (dashes, arrows, fill) stay on
   the device.

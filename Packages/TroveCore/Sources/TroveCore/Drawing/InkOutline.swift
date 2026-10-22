@@ -292,6 +292,11 @@ public struct InkSettings: Sendable, Equatable {
     public var palette: [String] = []
     /// Write `points2` instead of `points` (only once every device reads them).
     public var compactPoints = false
+    /// Your preset colours, by group (`ink`, `highlighter`, `tape`), in order: `colors.<group>`.
+    /// A group without one uses the app's built-in colours.
+    public var colors: [String: [String]] = [:]
+    /// Your three preset sizes, by tool (`pen`, `eraser`, `eraserPrecise`, `tape`…): `sizes.<tool>`.
+    public var sizes: [String: [Double]] = [:]
 
     public init() {}
 
@@ -304,6 +309,22 @@ public struct InkSettings: Sendable, Equatable {
         }.prefix(Self.maxFavourites).map { $0 }
         palette = (fields["palette"]?.array ?? []).compactMap(\.string).filter(Self.isHex).map { $0.lowercased() }.prefix(Self.maxPalette).map { $0 }
         compactPoints = fields["compactPoints"]?.bool == true
+        for (k, v) in fields {
+            if k.hasPrefix("colors."), let list = v.array {
+                colors[String(k.dropFirst(7))] = Self.cleanColors(list.compactMap(\.string))
+            } else if k.hasPrefix("sizes."), let list = v.array {
+                let widths = list.compactMap(\.number)
+                if widths.count == Self.sizeCount, widths.allSatisfy({ $0.isFinite && $0 > 0 && $0 <= 200 }) { sizes[String(k.dropFirst(6))] = widths }
+            }
+        }
+    }
+
+    public static let sizeCount = 3
+
+    static func cleanColors(_ list: [String]) -> [String] {
+        var out: [String] = []
+        for c in list.map({ $0.lowercased() }) where isHex(c) && !out.contains(c) { out.append(c) }
+        return Array(out.prefix(maxPalette))
     }
 
     public func pen(_ tool: InkTool) -> PenSettings { pens[tool] ?? PenSettings() }
@@ -331,6 +352,17 @@ extension Library {
     public func setInkPalette(_ colors: [String]) async {
         let clean = colors.filter(InkSettings.isHex).map { $0.lowercased() }.prefix(InkSettings.maxPalette)
         await engine.set(["palette": .array(clean.map(JSONValue.string))], record: InkSettings.id, kind: "setting")
+    }
+
+    /// A group's preset colours, in order (at most 24, no repeats).
+    public func setInkColors(_ group: String, _ colors: [String]) async {
+        await engine.set(["colors.\(group)": .array(InkSettings.cleanColors(colors).map(JSONValue.string))], record: InkSettings.id, kind: "setting")
+    }
+
+    /// A tool's three preset sizes (each above 0 and at most 200 points).
+    public func setInkSizes(_ tool: String, _ widths: [Double]) async {
+        guard widths.count == InkSettings.sizeCount, widths.allSatisfy({ $0.isFinite && $0 > 0 && $0 <= 200 }) else { return }
+        await engine.set(["sizes.\(tool)": .array(widths.map(JSONValue.number))], record: InkSettings.id, kind: "setting")
     }
 
     /// Write `points2` (4× smaller): turn on once every device has a Trove that reads them.
