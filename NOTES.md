@@ -55,9 +55,13 @@ Not yet run on a device.
   per question (default 6, 0 = none; `AskTools.Budget` refuses more and tells the model to answer
   from what it has). Items and clips are named by 8-character handles instead of 36-character ids;
   lines are `handle | title | kind | date | folder | snippet`.
-- **Keywords**: the index gives each item three words that say what it's about, worked out on the
-  device (`KeywordCache`: frequent in the item, rare in the library, not in its title; cached until
-  it changes). No AI and no cost, and it stays current as notes change.
+- **Keywords**: the index gives each item the words that say what it's about, worked out on the
+  device (`KeywordCache`, no AI, no cost, cached until the item changes): its most distinctive words
+  (frequent in it, rare in the library, not in its title) until they carry 60 % of what sets it
+  apart, 3 to 15. Made with the search index's own `Tokenizer.terms` (folding, stemming), so every
+  keyword is a word `search` finds the item by; the tool descriptions say so. AI-made keywords
+  (Haiku 5.5, with synonyms and topics not in the text) were costed for the user, not built: about
+  $0.06–0.15 per 1,000 items batched, plus re-runs when items change.
 - **Clipboard**: a `clipboard` tool (words, kind, dates; `c:` handles; one line per clip, 90
   characters) and `read` on a clip for all of it. Never clips that look like passwords, keys or
   codes (`SensitiveDetector`). Settings → AI → "Ask can search my clipboard history" (on).

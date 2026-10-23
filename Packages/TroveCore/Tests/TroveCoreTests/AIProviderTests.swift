@@ -313,3 +313,25 @@ struct AIModelNameTests {
         #expect(await AskTools(library: lib).run("clipboard", [:]).text.contains("no tool")) // off unless allowed
     }
 }
+
+struct KeywordTests {
+    @Test func asManyAsItTakesAndAllSearchable() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let short = await lib.addNote(title: "Shopping", body: "milk eggs bread butter")
+        let topics = ["volcano", "glacier", "tundra", "monsoon", "estuary", "savanna", "delta", "fjord", "canyon", "plateau",
+                      "archipelago", "atoll", "lagoon", "steppe", "taiga", "mangrove", "geyser", "caldera", "moraine", "isthmus"]
+        let long = await lib.addNote(title: "Geography revision", body: topics.enumerated().map { i, t in
+            Array(repeating: "\(t) formation and examples", count: 1 + i % 3).joined(separator: ". ")
+        }.joined(separator: "\n"))
+        for i in 0..<8 { _ = await lib.addNote(title: "Filler \(i)", body: "formation examples ordinary words number \(i)") }
+        let items = await lib.items()
+        let k = await KeywordCache.shared.keywords(for: items)
+        let few = k[short] ?? [], many = k[long] ?? []
+        #expect(few.count >= 3 && few.count <= 4)
+        #expect(many.count > few.count && many.count <= KeywordCache.most)
+        #expect(!many.contains("formation")) // in every note: says nothing
+        // Made with the search index's rules: each keyword finds its item.
+        for word in many { #expect(await lib.search(word, limit: 50).contains { $0.id == long }, "\(word)") }
+        for word in few { #expect(await lib.search(word, limit: 50).contains { $0.id == short }, "\(word)") }
+    }
+}

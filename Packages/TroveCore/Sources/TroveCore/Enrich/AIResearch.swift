@@ -67,7 +67,7 @@ public struct AskTools: Sendable {
          "The library in a few lines: counts by kind, folders, top tags, date range\(clipboard ? ", clipboard size" : ""). Cheap; call it first for questions about the library as a whole.",
          ["type": "object", "properties": [String: Any](), "additionalProperties": false]),
         ("index",
-         "Every item, one line each: handle | title | kind | date | keywords. \(indexPage) a page, newest first (`offset` for more). Use it to see what exists or find something whose words you don't know. ~20 tokens an item, so prefer search when you have key words.",
+         "Every item, one line each: handle | title | kind | date | keywords (as many as it takes to cover it; each is a word search finds it by). \(indexPage) a page, newest first (`offset` for more). Use it to see what exists or find something whose words you don't know. ~20-50 tokens an item, so prefer search when you have key words.",
          ["type": "object", "additionalProperties": false, "properties": [
             "offset": ["type": "integer", "description": "items to skip, default 0"],
          ]]),
@@ -76,7 +76,7 @@ public struct AskTools: Sendable {
          Search every item (notes, links, PDFs, text in pictures, handwriting read from sketches and GoodNotes, emails, files). \
          Returns how many matched and up to `limit`: handle | title | kind | date | folder | snippet. Use a few key words, not a \
          sentence. Filters: kind:note|link|pdf|image|sketch|file|email|audio|video, tag:x, after:YYYY-MM-DD, before:YYYY-MM-DD, \
-         is:pinned, "exact phrase", -excluded.
+         is:pinned, "exact phrase", -excluded. Keywords from the index are search words: each one finds its item.
          """,
          ["type": "object", "additionalProperties": false, "required": ["query"], "properties": [
             "query": ["type": "string"],
@@ -388,69 +388,88 @@ public struct AskTools: Sendable {
     }
 }
 
-/// A few words that say what each item is about, worked out on the device (no AI, no cost) for the
-/// index: the item's most distinctive words (frequent in it, rare in the rest of the library),
-/// leaving out its title's. Kept until the item changes.
+/// Words that say what each item is about, worked out on the device (no AI, no cost) for the
+/// index. They're made with the search index's own rules (`Tokenizer.terms`: folded, lightly
+/// stemmed), so every keyword shown is a word `search` finds the item by. As many as it takes to
+/// cover the item: its most distinctive words (frequent in it, rare in the rest of the library, not
+/// in its title) are taken until they carry most of what sets it apart, at least 3 and at most 15,
+/// so a shopping list gets a few and a long notebook gets more. Kept until the item changes.
 actor KeywordCache {
     static let shared = KeywordCache()
+    static let fewest = 3
+    static let most = 15
+    /// Stop once the words taken carry this share of the item's distinctive weight.
+    static let coverage = 0.6
+
     private var cache: [String: (hlc: String, words: [String])] = [:]
     private var df: [String: Int] = [:]
     private var dfStamp = ""
 
-    func keywords(for items: [Item], count: Int = 3) -> [String: [String]] {
-        // Document frequencies: once per change to the library.
+    func keywords(for items: [Item]) -> [String: [String]] {
+        // How many items each word is in: once per change to the library.
         let stamp = "\(items.count)|\(items.map(\.record.updatedHLC).max() ?? "")"
-        var words: [String: [String: Int]] = [:]
+        var counted: [String: [String: Int]] = [:]
         if stamp != dfStamp {
             df = [:]
             for item in items {
-                let w = Self.counts(item)
-                words[item.id] = w
-                for k in w.keys { df[k, default: 0] += 1 }
+                let c = Self.counts(item)
+                counted[item.id] = c
+                for k in c.keys { df[k, default: 0] += 1 }
             }
             dfStamp = stamp
         }
-        let n = Double(max(1, items.count))
         var out: [String: [String]] = [:]
         for item in items {
             if let c = cache[item.id], c.hlc == item.record.updatedHLC { out[item.id] = c.words; continue }
-            let w = words[item.id] ?? Self.counts(item)
-            let title = Set(Self.tokens(item.displayTitle))
-            let common = max(2, items.count / 3)
-            var scored: [(word: String, score: Double)] = []
-            for (word, times) in w where !title.contains(word) {
-                let docs = df[word] ?? 1
-                guard docs < common || items.count < 6 else { continue }
-                scored.append((word, Double(times) * log(n / Double(docs) + 1)))
-            }
-            scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.word < $1.word }
-            let top = scored.prefix(count).map(\.word)
-            cache[item.id] = (item.record.updatedHLC, Array(top))
-            out[item.id] = Array(top)
+            let words = Self.pick(counted[item.id] ?? Self.counts(item), title: Set(Tokenizer.terms(item.displayTitle)),
+                                  df: df, items: items.count)
+            cache[item.id] = (item.record.updatedHLC, words)
+            out[item.id] = words
         }
         return out
     }
 
+    /// The distinctive words, best first, until they cover the item.
+    static func pick(_ counts: [String: Int], title: Set<String>, df: [String: Int], items: Int) -> [String] {
+        let n = Double(max(1, items))
+        let common = max(2, items / 3) // in a third of everything: says nothing about this one
+        var scored: [(word: String, score: Double)] = []
+        for (word, times) in counts where !title.contains(word) {
+            let docs = df[word] ?? 1
+            guard docs < common || items < 6 else { continue }
+            // Repeats count less and less: a word said 40 times isn't 40 times as telling.
+            scored.append((word, (1 + log(Double(times))) * log(n / Double(docs) + 1)))
+        }
+        scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.word < $1.word }
+        let total = scored.reduce(0) { $0 + $1.score }
+        guard total > 0 else { return [] }
+        var taken: [String] = [], carried = 0.0
+        for (word, score) in scored {
+            if taken.count >= most || (taken.count >= fewest && carried >= total * coverage) { break }
+            taken.append(word)
+            carried += score
+        }
+        return taken
+    }
+
     static func counts(_ item: Item) -> [String: Int] {
-        let text = [item.summary ?? "", String(item.body.prefix(6000)), String((item.ocrText ?? "").prefix(3000)),
-                    String((item.record["inkText"]?.string ?? "").prefix(3000)), item.tags.joined(separator: " ")].joined(separator: " ")
+        let text = [item.summary ?? "", String(item.body.prefix(20_000)), String((item.ocrText ?? "").prefix(8000)),
+                    String((item.record["inkText"]?.string ?? "").prefix(20_000)), item.record["sketchText"]?.string ?? "",
+                    item.tags.joined(separator: " ")].joined(separator: " ")
         var c: [String: Int] = [:]
-        for t in tokens(text) { c[t, default: 0] += 1 }
+        for t in Tokenizer.terms(text) where t.count >= 4 && t.count <= 24 && !t.allSatisfy(\.isNumber) && !stop.contains(t) {
+            c[t, default: 0] += 1
+        }
         return c
     }
 
-    static func tokens(_ text: String) -> [String] {
-        text.lowercased().split { !$0.isLetter }.compactMap { w in
-            w.count >= 4 && w.count <= 20 && !stop.contains(String(w)) ? String(w) : nil
-        }
-    }
-
+    /// Words too ordinary to say what something is about (on top of the search index's own).
     static let stop: Set<String> = [
-        "that", "this", "with", "from", "have", "were", "they", "them", "then", "than", "there", "their", "what", "when", "where",
-        "which", "while", "will", "would", "could", "should", "about", "after", "before", "into", "your", "yours", "just", "like",
-        "some", "more", "most", "also", "only", "very", "much", "many", "such", "been", "being", "here", "each", "other", "over",
-        "these", "those", "because", "through", "does", "doing", "done", "make", "made", "want", "need", "know", "think", "really",
-        "http", "https", "www", "com", "html", "untitled", "screenshot", "image", "note", "notes",
+        "then", "than", "there", "their", "they", "them", "what", "when", "where", "which", "while", "would", "could",
+        "should", "about", "after", "before", "into", "yours", "just", "like", "some", "more", "most", "also", "only", "very",
+        "much", "many", "such", "been", "being", "here", "each", "other", "over", "these", "those", "because", "through",
+        "doe", "doing", "done", "make", "made", "want", "need", "know", "think", "really", "http", "https", "html", "untitled",
+        "screenshot", "image", "note", "thing", "something", "anything", "everything", "going", "get", "got", "thi", "wa",
     ]
 }
 
