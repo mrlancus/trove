@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreText
 import Foundation
 import PDFKit
 import TroveCore
@@ -207,15 +208,40 @@ extension Handwriting {
 // MARK: Pages for Ask (view)
 
 extension Handwriting {
-    /// Long side of a page shown to your AI in Ask: legible handwriting at about 1,500 tokens a page
-    /// (a picture costs width × height / 750 tokens; a PDF page would cost its picture and its text).
-    static let viewLongSide = 1280.0
+    /// Pictures for your AI are sized by what's on them, so writing is always legible: at least
+    /// about one pixel per point of the page (a GoodNotes page is ~600 points wide), never more than
+    /// the 1568 px a model reads at. A page too big for that (a whiteboard, an endless sketch) is
+    /// shown whole with a lettered grid over it, and the model asks for one square (`section`, like
+    /// "B2"), drawn sharp. That costs only the squares it needs, not the whole board at full size.
+    static let maxSide = 1568.0
+    static let minPixelsPerPoint = 1.0
+    /// A grid square is at most this many points across, so it can be drawn sharp.
+    static let cellPoints = 1400.0
 
-    /// Draws pages `first..<first + count` of an item as JPEGs, with the ink written on them, and
-    /// says how many pages it has: a sketch's pages, every page of a GoodNotes notebook or
-    /// whiteboard, PDFs and pictures.
-    static func pageImages(_ item: Item, library: Library, first: Int, count: Int) async -> (images: [Data], total: Int) {
-        enum Source { case sketch(InkPageSpec), notebook(GoodNotesInk.Notebook, Int), file(Attachment, Data, InkPageSpec) }
+    struct PageResult: Sendable {
+        var images: [Data]
+        var total: Int
+        var note: String
+    }
+
+    /// The grid over a page of this size (columns, rows), or nil if it's small enough to read whole.
+    static func grid(width: Double, height: Double) -> (cols: Int, rows: Int)? {
+        guard max(width, height) * minPixelsPerPoint > maxSide else { return nil }
+        return (min(6, max(1, Int((width / cellPoints).rounded(.up)))), min(6, max(1, Int((height / cellPoints).rounded(.up)))))
+    }
+
+    /// "B2" → column 1, row 1 (0-based), inside the grid.
+    static func cell(_ name: String, in grid: (cols: Int, rows: Int)) -> (col: Int, row: Int)? {
+        let t = name.trimmingCharacters(in: .whitespaces).uppercased()
+        guard let letter = t.first, let a = letter.asciiValue, a >= 65, a < 65 + UInt8(grid.cols),
+              let row = Int(t.dropFirst()), row >= 1, row <= grid.rows else { return nil }
+        return (Int(a - 65), row - 1)
+    }
+
+    /// Draws pages `first..<first + count` of an item for your AI (with the ink written on them),
+    /// or one `section` of page `first`; says how many pages it has and how to look closer.
+    static func pageImages(_ item: Item, library: Library, first: Int, count: Int, section: String?) async -> PageResult {
+        enum Source: Sendable { case sketch(InkPageSpec), notebook(GoodNotesInk.Notebook, Int), file(Attachment, InkPageSpec) }
         var pages: [Source] = []
         if item.kind == .sketch {
             pages = InkRenderer.sketchPages(item).map { .sketch($0) }
@@ -229,12 +255,12 @@ extension Handwriting {
             } else {
                 let name = att.name, mime = att.mime
                 let specs = await Task.detached(priority: .userInitiated, operation: { InkRenderer.pages(for: data, mime: mime, name: name) }).value
-                pages += specs.map { .file(att, data, $0) }
+                pages += specs.map { .file(att, $0) }
             }
         }
-        var images: [Data] = []
-        for source in pages.dropFirst(max(0, first)).prefix(max(0, count)) {
-            let image: CGImage?
+
+        /// One page drawn at `pixelsPerPoint` (capped), with its size in points.
+        func draw(_ source: Source, pixelsPerPoint: Double) async -> (InkImage, Double, Double)? {
             switch source {
             case .sketch(let spec):
                 let strokes = await library.strokes(on: item.id, pageKey: spec.key)
@@ -243,31 +269,100 @@ extension Handwriting {
                     area = InkGeometry.Rect(x: b.x - 16, y: b.y - 16, width: b.width + 32, height: b.height + 32)
                 }
                 let content = InkContent(strokes: strokes.map(InkLine.init))
-                let width = viewWidth(area?.width ?? spec.width, area?.height ?? spec.height), box = area
-                image = await Task.detached(priority: .userInitiated) {
-                    InkRenderer.render(spec, content: content, pixelWidth: width, area: box).map(InkImage.init)
-                }.value?.image
+                let w = area?.width ?? spec.width, h = area?.height ?? spec.height, box = area
+                let px = Self.pixels(w, h, pixelsPerPoint)
+                return await Task.detached(priority: .userInitiated) {
+                    InkRenderer.render(spec, content: content, pixelWidth: px, area: box).map { (InkImage(image: $0), w, h) }
+                }.value
             case .notebook(let book, let i):
                 let page = book.pages[i]
-                let width = CGFloat(viewWidth(Double(page.width), Double(page.height)))
-                image = await Task.detached(priority: .userInitiated) {
-                    NotebookRenderer.render(page, of: book, width: width, scale: 1).map { InkImage(image: $0.cgImage) }
-                }.value?.image
-            case .file(let att, _, let spec):
+                let px = CGFloat(Self.pixels(page.width, page.height, pixelsPerPoint))
+                return await Task.detached(priority: .userInitiated) {
+                    NotebookRenderer.render(page, of: book, width: px, scale: 1).map { (InkImage(image: $0.cgImage), page.width, page.height) }
+                }.value
+            case .file(let att, let spec):
                 let strokes = await library.strokes(on: item.id, layer: att.id, pageKey: spec.key)
                 let content = InkContent(strokes: strokes.map(InkLine.init))
-                let width = viewWidth(spec.width, spec.height)
-                image = await Task.detached(priority: .userInitiated) {
-                    InkRenderer.render(spec, content: content, pixelWidth: width).map(InkImage.init)
-                }.value?.image
+                let px = Self.pixels(spec.width, spec.height, pixelsPerPoint)
+                return await Task.detached(priority: .userInitiated) {
+                    InkRenderer.render(spec, content: content, pixelWidth: px).map { (InkImage(image: $0), spec.width, spec.height) }
+                }.value
             }
-            if let image, let jpeg = InkRenderer.jpeg(image, quality: 0.8) { images.append(jpeg) }
         }
-        return (images, pages.count)
+
+        let total = pages.count
+        guard first >= 0, first < total else { return PageResult(images: [], total: total, note: "") }
+
+        // One square of a big page, sharp.
+        if let section, !section.isEmpty {
+            guard let whole = await draw(pages[first], pixelsPerPoint: 0.05) else { return PageResult(images: [], total: total, note: "It couldn't be drawn.") }
+            guard let g = grid(width: whole.1, height: whole.2), let c = cell(section, in: g) else {
+                return PageResult(images: [], total: total, note: "Page \(first + 1) has no section \(section): it's small enough to view whole.")
+            }
+            let cellW = whole.1 / Double(g.cols), cellH = whole.2 / Double(g.rows)
+            // Sharp enough for the square, but the whole page drawn at that size stays under ~40 MP.
+            let ppp = min(Self.maxSide / max(cellW, cellH), 2.0, (40_000_000 / max(1, whole.1 * whole.2)).squareRoot())
+            guard let big = await draw(pages[first], pixelsPerPoint: ppp) else { return PageResult(images: [], total: total, note: "It couldn't be drawn.") }
+            let k = Double(big.0.image.width) / whole.1
+            let rect = CGRect(x: Double(c.col) * cellW * k, y: Double(c.row) * cellH * k, width: cellW * k, height: cellH * k).integral
+            guard let crop = big.0.image.cropping(to: rect), let jpeg = InkRenderer.jpeg(crop, quality: 0.8) else {
+                return PageResult(images: [], total: total, note: "That section couldn't be drawn.")
+            }
+            return PageResult(images: [jpeg], total: total, note: "Section \(section.uppercased()) of page \(first + 1), sharp.")
+        }
+
+        var images: [Data] = [], notes: [String] = []
+        for i in first..<min(total, first + max(1, count)) {
+            // Its size first (cheaply), then drawn as sharp as the limit allows.
+            guard let probe = await draw(pages[i], pixelsPerPoint: 0.05) else { continue }
+            let (w, h) = (probe.1, probe.2)
+            let ppp = min(Self.maxSide / max(w, h, 1), 2.0)
+            guard let shown = await draw(pages[i], pixelsPerPoint: ppp) else { continue }
+            var image = shown.0.image
+            if let g = grid(width: w, height: h) {
+                image = Self.overlayGrid(image, cols: g.cols, rows: g.rows) ?? image
+                notes.append("Page \(i + 1) is big (\(Int(w))×\(Int(h)) points), so small writing may not be legible here: it has a \(g.cols)×\(g.rows) grid (columns A–\(String(UnicodeScalar(UInt8(64 + g.cols)))), rows 1–\(g.rows)). Call view with page \(i + 1) and a section like \"B2\" to see one square sharp; look only at the squares you need.")
+            }
+            if let jpeg = InkRenderer.jpeg(image, quality: 0.8) { images.append(jpeg) }
+        }
+        return PageResult(images: images, total: total, note: notes.joined(separator: " "))
     }
 
-    static func viewWidth(_ width: Double, _ height: Double) -> Int {
-        let long = max(1, width, height)
-        return max(200, Int((width * viewLongSide / long).rounded()))
+    /// Pixels wide for a page of `w`×`h` points at `ppp` pixels a point, inside the model's limit.
+    static func pixels(_ w: Double, _ h: Double, _ ppp: Double) -> Int {
+        let scale = min(ppp, 2.0)
+        return max(16, Int((w * scale).rounded()))
+    }
+
+    /// Thin lines and a letter-number label in each square, so the model can name one.
+    static func overlayGrid(_ image: CGImage, cols: Int, rows: Int) -> CGImage? {
+        let w = image.width, h = image.height
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let cw = Double(w) / Double(cols), ch = Double(h) / Double(rows)
+        ctx.setStrokeColor(CGColor(red: 1, green: 0.45, blue: 0.1, alpha: 0.55))
+        ctx.setLineWidth(2)
+        for c in 1..<max(1, cols) {
+            ctx.move(to: CGPoint(x: Double(c) * cw, y: 0)); ctx.addLine(to: CGPoint(x: Double(c) * cw, y: Double(h))); ctx.strokePath()
+        }
+        for r in 1..<max(1, rows) {
+            ctx.move(to: CGPoint(x: 0, y: Double(r) * ch)); ctx.addLine(to: CGPoint(x: Double(w), y: Double(r) * ch)); ctx.strokePath()
+        }
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, max(14, min(cw, ch) * 0.07), nil)
+        for c in 0..<cols {
+            for r in 0..<rows {
+                let label = "\(String(UnicodeScalar(UInt8(65 + c))))\(r + 1)"
+                let text = NSAttributedString(string: label, attributes: [
+                    NSAttributedString.Key(kCTFontAttributeName as String): font,
+                    NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(red: 1, green: 0.4, blue: 0.1, alpha: 0.85),
+                ])
+                let line = CTLineCreateWithAttributedString(text)
+                // Core Graphics counts rows from the bottom; labels go in each square's top-left.
+                ctx.textPosition = CGPoint(x: Double(c) * cw + 6, y: Double(h) - Double(r) * ch - CTFontGetAscent(font) - 4)
+                CTLineDraw(line, ctx)
+            }
+        }
+        return ctx.makeImage()
     }
 }

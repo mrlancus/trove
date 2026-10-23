@@ -455,7 +455,10 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   counted from the usage records below across every device. `live.since` (unix ms, optional): with
   `readHandwriting` on, only items added or written on since then are read as they arrive (an
   item's `createdHLC`, or its newest ink record); older ones are read only when the user runs
-  "Read all past handwriting". Missing = since the app opened.
+  "Read all past handwriting". Missing = since the app opened. `ask.style` (`concise`, `balanced`
+  or `detailed`), `ask.pages` (most page pictures or grid squares Ask may look at per question,
+  default 6, 0 = none) and `ask.clipboard` (bool, default true: Ask may search clipboard history,
+  never clips that look like passwords or codes).
 - **Keeping an item from your AI:** `aiHidden: true` on an item means no AI request ever includes
   it: Ask's tools don't list, search, open or show it, and its handwriting is read on the device
   (Vision) instead. Missing or false = visible (the default).

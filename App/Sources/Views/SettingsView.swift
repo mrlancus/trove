@@ -17,7 +17,7 @@ struct SettingsView: View {
                 .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
             Form { ClipboardSection() }.formStyle(.grouped)
                 .tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }
-            NavigationStack { Form { AISection() }.formStyle(.grouped) }
+            Form { AISection() }.formStyle(.grouped)
                 .tabItem { Label("Intelligence", systemImage: "sparkles") }
             Form { IntegrationsSection(); BridgesSection() }.formStyle(.grouped)
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
@@ -322,11 +322,23 @@ private struct RelaySection: View {
 /// Your own AI: provider, key and the three models (`AISettings`), saved for every device.
 private struct OwnAISection: View {
     @Environment(AppModel.self) private var model
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
     @State private var draft = AISettings()
     @State private var loaded = false
     @State private var available: [String] = []
     @State private var status: String?
     @State private var busy = false
+
+    /// "Claude Haiku 5.5 · 1×", from the chosen (or default) model.
+    private func modelSummary(_ tier: AISettings.Tier) -> String {
+        let m = draft.model(tier)
+        guard !m.isEmpty else { return "" }
+        let name = AIModelName.pretty(m)
+        guard tier != .fast, let r = AIPrices.relativeLabel(m, to: draft.model(.fast)) else { return name }
+        return "\(name) · \(r) Fast's cost"
+    }
 
     private var aiSeesLine: String {
         let hidden = model.items.lazy.filter { !$0.aiAllowed }.count
@@ -370,9 +382,11 @@ private struct OwnAISection: View {
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
+                    // What it is, by name, and what a question costs next to Fast.
+                    Text(modelSummary(tier)).font(.caption).foregroundStyle(.secondary).fixedSize()
                     if !available.isEmpty {
                         Menu {
-                            ForEach(available, id: \.self) { m in Button(m) { draft.models[tier] = m } }
+                            ForEach(available, id: \.self) { m in Button(AIModelName.pretty(m)) { draft.models[tier] = m } }
                         } label: { Image(systemName: "chevron.up.chevron.down") }
                         .menuIndicator(.hidden)
                         .fixedSize()
@@ -380,6 +394,17 @@ private struct OwnAISection: View {
                     }
                 }
             }
+            Picker("Answers", selection: $draft.style) {
+                ForEach(AISettings.Style.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            LabeledContent("Pictures of pages per question") {
+                Stepper(draft.pageBudget == 0 ? "None" : "\(draft.pageBudget)", value: $draft.pageBudget, in: 0...24)
+                    .fixedSize()
+            }
+            Text("Ask looks at pictures only when the text read from a page isn't enough, and at a big whiteboard one square at a time. Each picture costs about 1,500 tokens.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Ask can search my clipboard history", isOn: $draft.clipboardAccess)
             Toggle("Read new handwriting as it arrives", isOn: Binding(get: { draft.readHandwriting }, set: { on in
                 draft.readHandwriting = on
                 // Live from now: what's already in Trove waits for Read all past handwriting.
@@ -411,6 +436,15 @@ private struct OwnAISection: View {
                 .fixedSize()
             }
             Text(aiSeesLine).font(.caption).foregroundStyle(.secondary)
+            #if os(macOS)
+            // Its own window: the Settings window has no back button, so a page pushed in it was a dead end.
+            Button { openWindow(id: "ai-activity") } label: {
+                LabeledContent("Activity and costs") {
+                    Text("\(AIUsage.dollars(model.aiTotal(.month).cost)) this month  ›")
+                }
+            }
+            .buttonStyle(.plain)
+            #else
             NavigationLink {
                 AIActivityView()
             } label: {
@@ -418,6 +452,7 @@ private struct OwnAISection: View {
                     Text("\(AIUsage.dollars(model.aiTotal(.month).cost)) this month")
                 }
             }
+            #endif
             HStack {
                 Button("Save") {
                     Task {

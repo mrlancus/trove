@@ -1,92 +1,84 @@
 import SwiftUI
 import TroveCore
 
-/// Settings → AI → Activity and costs: every request your AI made, on every device, including
-/// background reading of handwriting, with its tokens and cost; totals for a session, day, week or
-/// month, and what each kind of work spent.
+/// Settings → AI → Activity and costs (its own window on the Mac): every request your AI made, on
+/// every device, including background reading of handwriting, with its tokens and cost; totals for
+/// a session, day, week or month, and what each kind of work spent. A lazy list, so a month of
+/// requests doesn't have to be laid out at once (all of it at once pegged the processor).
 struct AIActivityView: View {
     @Environment(AppModel.self) private var model
     @State private var period: AIUsage.Period = .day
     @State private var deviceNames: [String: String] = [:]
     @State private var firstDay: String?
 
-    private var calls: [AIUsage.Call] {
+    /// Everything the screen shows, worked out once per change rather than in each row.
+    private struct Summary {
+        var calls: [AIUsage.Call] = []
+        var total = AIUsage.Total()
+        var parts: [(purpose: AIUsage.Purpose, total: AIUsage.Total)] = []
+    }
+
+    private func summary() -> Summary {
         let start = period.start(sessionStart: model.aiSessionStart)
         let me = model.config?.deviceId ?? ""
-        return model.aiCalls.filter { $0.at >= start && (period != .session || $0.device == me) }
+        let calls = model.aiCalls.filter { $0.at >= start && (period != .session || $0.device == me) }
+        var byPurpose: [AIUsage.Purpose: AIUsage.Total] = [:]
+        var total = AIUsage.Total()
+        for c in calls {
+            total.add(c)
+            byPurpose[c.purpose, default: AIUsage.Total()].add(c)
+        }
+        let parts = AIUsage.Purpose.allCases.compactMap { p in byPurpose[p].map { (p, $0) } }
+        return Summary(calls: calls, total: total, parts: parts)
     }
 
     var body: some View {
-        let total = AIUsage.Total(calls)
-        Form {
+        let s = summary()
+        List {
             Section {
                 Picker("Period", selection: $period) {
                     ForEach(AIUsage.Period.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 HStack(spacing: 12) {
-                    stat(AIUsage.dollars(total.cost), "spent")
-                    stat(AIUsage.tokens(total.tokens), "tokens")
-                    stat("\(total.calls)", total.calls == 1 ? "request" : "requests")
+                    stat(AIUsage.dollars(s.total.cost), "spent")
+                    stat(AIUsage.tokens(s.total.tokens), "tokens")
+                    stat("\(s.total.calls)", s.total.calls == 1 ? "request" : "requests")
                 }
-                if total.unpriced > 0 {
-                    Text("\(total.unpriced) request\(total.unpriced == 1 ? "" : "s") from a provider that doesn't say its price: counted in tokens only.")
+                if s.total.unpriced > 0 {
+                    Text("\(s.total.unpriced) request\(s.total.unpriced == 1 ? "" : "s") from a provider that doesn't say its price: counted in tokens only.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            } footer: {
-                FormFooter(footer)
+                Text(footer).font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("By kind of work") {
-                ForEach(AIUsage.Purpose.allCases, id: \.self) { purpose in
-                    let part = AIUsage.Total(calls.filter { $0.purpose == purpose })
-                    if part.calls > 0 {
+            if !s.parts.isEmpty || model.aiSettings.readHandwriting {
+                Section("By kind of work") {
+                    ForEach(s.parts, id: \.purpose) { part in
                         LabeledContent {
-                            Text("\(AIUsage.dollars(part.cost)) · \(AIUsage.tokens(part.tokens)) tokens · \(part.calls)")
+                            Text("\(AIUsage.dollars(part.total.cost)) · \(AIUsage.tokens(part.total.tokens)) tokens · \(part.total.calls)")
                                 .monospacedDigit()
                         } label: {
-                            Label(purpose.label, systemImage: Self.symbol(purpose))
+                            Label(part.purpose.label, systemImage: Self.symbol(part.purpose))
                         }
                     }
-                }
-                if model.aiSettings.readHandwriting {
-                    let spent = model.backgroundAISpend, limit = model.aiSettings.monthlyLimit
-                    Text(limit > 0
-                         ? (spent >= limit
-                            ? "Reading handwriting has reached this month's limit (\(AIUsage.dollars(limit))) and is paused until next month; Apple's text recognition reads new pages meanwhile."
-                            : "Reading handwriting this month: \(AIUsage.dollars(spent)) of \(AIUsage.dollars(limit)).")
-                         : "Reading handwriting this month: \(AIUsage.dollars(spent)), no limit.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if model.aiSettings.readHandwriting {
+                        Text(limitLine).font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
 
             Section("Every request") {
-                if calls.isEmpty {
+                if s.calls.isEmpty {
                     Text("Nothing yet in this period.").foregroundStyle(.secondary)
                 }
-                ForEach(calls.prefix(400)) { call in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: Self.symbol(call.purpose))
-                            .foregroundStyle(call.purpose.isBackground ? Color.orange : Color.accentColor)
-                            .frame(width: 20)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(call.about.isEmpty ? call.purpose.label : "\(call.purpose.label): \(call.about)")
-                                .lineLimit(2)
-                            Text("\(call.at.formatted(date: .abbreviated, time: .shortened)) · \(device(call.device)) · \(call.model)")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Text(detail(call))
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Text(call.cost.map(AIUsage.dollars) ?? "—").monospacedDigit()
-                    }
-                }
-                if calls.count > 400 {
-                    Text("Showing the newest 400 of \(calls.count).").font(.caption).foregroundStyle(.secondary)
-                }
+                ForEach(s.calls) { call in row(call) }
             }
         }
-        .formStyle(.grouped)
+        #if os(macOS)
+        .listStyle(.inset(alternatesRowBackgrounds: false))
+        #endif
         .navigationTitle("AI activity")
         .task {
             await model.loadAIRecords()
@@ -95,6 +87,33 @@ struct AIActivityView: View {
                 deviceNames = Dictionary(devices.map { ($0.deviceId.uppercased(), $0.name) }, uniquingKeysWith: { a, _ in a })
             }
         }
+    }
+
+    private func row(_ call: AIUsage.Call) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: Self.symbol(call.purpose))
+                .foregroundStyle(call.purpose.isBackground ? Color.orange : Brand.orange)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(call.about.isEmpty ? call.purpose.label : "\(call.purpose.label): \(call.about)")
+                    .lineLimit(2)
+                Text("\(call.at.formatted(date: .abbreviated, time: .shortened)) · \(device(call.device)) · \(AIModelName.pretty(call.model))")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(detail(call))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Text(call.cost.map(AIUsage.dollars) ?? "—").monospacedDigit()
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var limitLine: String {
+        let spent = model.backgroundAISpend, limit = model.aiSettings.monthlyLimit
+        guard limit > 0 else { return "Reading handwriting this month: \(AIUsage.dollars(spent)), no limit." }
+        return spent >= limit
+            ? "Reading handwriting has reached this month's limit (\(AIUsage.dollars(limit))) and is paused until next month; Apple's text recognition reads new pages meanwhile."
+            : "Reading handwriting this month: \(AIUsage.dollars(spent)) of \(AIUsage.dollars(limit))."
     }
 
     /// Why this can read lower than the provider's console.
@@ -109,7 +128,7 @@ struct AIActivityView: View {
 
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.title2.weight(.semibold).monospacedDigit()).contentTransition(.numericText())
+            Text(value).font(.title2.weight(.semibold).monospacedDigit())
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

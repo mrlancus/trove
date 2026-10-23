@@ -136,9 +136,10 @@ extension AppModel {
 
     /// The library as Ask sees it: pages it asks to look at are drawn here.
     func askTools(_ library: Library) -> AskTools {
-        AskTools(library: library, pages: { item, first, count in
-            await Handwriting.pageImages(item, library: library, first: first, count: count)
-        })
+        AskTools(library: library, pages: { item, first, count, section in
+            let drawn = await Handwriting.pageImages(item, library: library, first: first, count: count, section: section)
+            return AskTools.PageView(images: drawn.images, total: drawn.total, note: drawn.note)
+        }, clipboard: aiSettings.clipboardAccess, pageBudget: aiSettings.pageBudget)
     }
 
     /// Lets your AI see an item or not.

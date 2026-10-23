@@ -42,6 +42,8 @@ struct AskView: View {
                 }
             }
         }
+        // Trove's orange for everything tinted here (it was the system accent, pink on some Macs).
+        .tint(Brand.orange)
         .sheetSize(width: 780, height: 680)
         .onAppear { focused = true }
     }
@@ -52,6 +54,7 @@ struct AskView: View {
         if ownAI {
             ToolbarItem(placement: .primaryAction) {
                 Button { showHistory = true } label: { Label("Chats", systemImage: "clock.arrow.circlepath") }
+                    .buttonStyle(.bordered)
                     .help("Your chats")
             }
             ToolbarItem(placement: .primaryAction) {
@@ -123,23 +126,7 @@ struct AskView: View {
             // buttons; a longer one grows upwards from the same line.
             HStack(alignment: .bottom, spacing: 10) {
                 if ownAI {
-                    Menu {
-                        Picker("Model", selection: $tier) {
-                            ForEach(AISettings.Tier.allCases, id: \.self) { t in
-                                Text("\(t.label) · \(model.aiSettings.model(t))").tag(t)
-                            }
-                        }
-                    } label: {
-                        Label(tier.label, systemImage: tier == .fast ? "hare" : tier == .smart ? "brain" : "sparkles")
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 12)
-                            .frame(height: 34)
-                            .background(.quaternary.opacity(0.6), in: Capsule())
-                    }
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .help("Fast is cheapest; Smarter and Best think harder and cost more")
+                    ModelButton(tier: $tier)
                 }
                 TextField(turns.isEmpty ? "Ask anything about what you've saved…" : "Ask a follow-up…", text: $question, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -395,7 +382,7 @@ private struct AskTurnView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    if !turn.model.isEmpty { Text(turn.model) }
+                    if !turn.model.isEmpty { Text(AIModelName.pretty(turn.model)) }
                     if turn.tokens > 0 { Text("\(AIUsage.tokens(turn.tokens)) tokens") }
                     if let cost = turn.cost { Text(AIUsage.dollars(cost)).monospacedDigit() }
                 }
@@ -438,6 +425,77 @@ private struct FlowChips: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+}
+
+/// Fast, Smarter or Best: a capsule the same height as the send button, opening a little panel with
+/// each model's proper name and what a question costs next to Fast.
+private struct ModelButton: View {
+    @Environment(AppModel.self) private var model
+    @Binding var tier: AISettings.Tier
+    @State private var open = false
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: Self.symbol(tier))
+                Text(tier.label)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .font(.callout.weight(.medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(Brand.orange.opacity(0.12), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Which model answers. Fast is cheapest; Smarter and Best think harder and cost more.")
+        .popover(isPresented: $open, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(AISettings.Tier.allCases, id: \.self) { t in
+                    Button {
+                        tier = t
+                        open = false
+                    } label: { row(t) }
+                    .buttonStyle(.plain)
+                }
+                Text("Costs are per question, next to Fast, from list prices.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .padding(.horizontal, 10).padding(.top, 4)
+            }
+            .padding(8)
+            .frame(width: 300)
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private func row(_ t: AISettings.Tier) -> some View {
+        let id = model.aiSettings.model(t)
+        let cost = t == .fast ? "Cheapest" : AIPrices.relativeLabel(id, to: model.aiSettings.model(.fast)).map { "\($0) the cost" } ?? ""
+        return HStack(spacing: 10) {
+            Image(systemName: Self.symbol(t)).frame(width: 22).foregroundStyle(Brand.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(t.label).font(.callout.weight(.semibold))
+                Text(AIModelName.pretty(id)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(cost).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(Brand.orange).opacity(t == tier ? 1 : 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(t == tier ? Brand.orange.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    static func symbol(_ t: AISettings.Tier) -> String {
+        switch t {
+        case .fast: "hare"
+        case .smart: "brain"
+        case .best: "sparkles"
         }
     }
 }

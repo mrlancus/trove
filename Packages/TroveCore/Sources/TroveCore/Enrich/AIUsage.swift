@@ -244,3 +244,60 @@ extension Library {
         return AIUsage.Total(await aiUsage(since: start).filter(\.purpose.isBackground)).cost
     }
 }
+
+/// Model ids as people write them: "claude-sonnet-5-5" → "Claude Sonnet 5.5",
+/// "anthropic/claude-haiku-5-5" → "Claude Haiku 5.5", "gpt-5-mini" → "GPT-5 Mini",
+/// "gemini-2.5-flash" → "Gemini 2.5 Flash". Date stamps on the end are left off.
+public enum AIModelName {
+    public static func pretty(_ id: String) -> String {
+        var name = id.trimmingCharacters(in: .whitespaces)
+        if let slash = name.lastIndex(of: "/") { name = String(name[name.index(after: slash)...]) }
+        if let colon = name.firstIndex(of: ":") { name = String(name[..<colon]) }
+        var words = name.split(whereSeparator: { $0 == "-" || $0 == "_" || $0 == " " }).map(String.init)
+        // A date (20251001) or "latest" on the end says nothing to a person.
+        while let last = words.last, (last.count >= 6 && last.allSatisfy(\.isNumber)) || last == "latest" { words.removeLast() }
+        guard !words.isEmpty else { return id }
+        var out: [String] = []
+        var i = 0
+        while i < words.count {
+            let w = words[i]
+            if w.allSatisfy(\.isNumber), i + 1 < words.count, words[i + 1].allSatisfy(\.isNumber), words[i + 1].count <= 2, w.count <= 2 {
+                out.append(w + "." + words[i + 1]) // 5-5 → 5.5
+                i += 2
+                continue
+            }
+            out.append(word(w))
+            i += 1
+        }
+        // GPT-5, GPT-4o: the version sticks to the name.
+        if out.first == "GPT", out.count > 1 { out[0] = "GPT-" + out[1]; out.remove(at: 1) }
+        return out.joined(separator: " ")
+    }
+
+    static func word(_ w: String) -> String {
+        let special = ["gpt": "GPT", "claude": "Claude", "llama": "Llama", "ai": "AI", "it": "IT", "oss": "OSS", "r1": "R1", "o1": "o1", "o3": "o3", "o4": "o4"]
+        if let s = special[w.lowercased()] { return s }
+        if w.first?.isNumber == true { return w }
+        return w.prefix(1).uppercased() + w.dropFirst()
+    }
+}
+
+extension AIPrices {
+    /// Roughly how many times as much a question costs on `model` as on `base`, from list prices,
+    /// weighing input four to one over output (a question mostly sends text). Nil when either
+    /// price is unknown.
+    public static func relativeCost(_ model: String, to base: String) -> Double? {
+        guard let a = price(model), let b = price(base) else { return nil }
+        let blend = { (p: Price) in p.input * 0.8 + p.output * 0.2 }
+        let d = blend(b)
+        return d > 0 ? blend(a) / d : nil
+    }
+
+    /// "Same cost", "≈20× the cost", "½ the cost".
+    public static func relativeLabel(_ model: String, to base: String) -> String? {
+        guard let r = relativeCost(model, to: base) else { return nil }
+        if abs(r - 1) < 0.05 { return "1×" }
+        if r < 1 { return String(format: "%.1f×", r) }
+        return r < 10 ? String(format: "%.1f×", r) : "\(Int(r.rounded()))×"
+    }
+}

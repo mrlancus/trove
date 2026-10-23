@@ -36,7 +36,37 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: Trove's look for Ask, the box, AI access, and smoothness (user: "make everything properly centred", "colours should fit the app, no AI logo", "laggy", "screenshots aren't saved to clipboard", "AI can't read GoodNotes whiteboards", "option to disable AI access per note", "buttons greyed out", "Apple Notes in the import area with the box opening", "menu bar icon is a generic box", "total cost lower than the console", "medium effort for Haiku", "Settings buttons move around", "scan all past handwriting with progress and stop, and a live toggle")
+## Latest round: Ask that reads whiteboards, searches the clipboard and spends less (user: "AI activity bugs out and you can't go back", "model selection not centred, show relative cost and proper names", "whiteboards too low resolution", "make it more concise, read fewer pages, only specific sections", "a keyword summary of each note", "tailored to the app", "let it access clipboard history, VERY well optimised")
+Not yet run on a device.
+- **Activity and costs** (Mac): the Settings window has no back button, so the page pushed into it
+  was a dead end, and it laid out up to 400 rows at once. It now opens in its own window
+  (`Window "ai-activity"`) as a lazy `List`, with every total worked out once per change.
+- **Model picker** (Ask): a capsule the same height as the send button (the `Menu` drew its own
+  bezel, off-centre) opening a panel: Fast/Smarter/Best, each model's proper name
+  (`AIModelName.pretty`: "Claude Sonnet 5.5", "GPT-5 Mini", "Gemini 2.5 Flash") and what a question
+  costs next to Fast (`AIPrices.relativeLabel`, list prices weighted 4:1 input to output: Sonnet
+  5.5 20×, Opus 5.5 40× Haiku). Settings shows the same beside each model. Ask is tinted Trove's
+  orange (Chats was the system accent).
+- **Legible pages** (`Handwriting.pageImages`): pictures are sized by the page, up to 2 px a point
+  and 1568 px. A page bigger than ~1568 points (whiteboards, endless sketches) comes whole with a
+  lettered grid (squares ≤1400 points, at most 6×6) and the note "ask for a section like B2"; `view`
+  with `section` draws that square sharp (the page drawn at most ~40 MP, then cropped).
+- **Spending less**: Settings → AI → Answers (Concise / Balanced / Detailed) and Pictures of pages
+  per question (default 6, 0 = none; `AskTools.Budget` refuses more and tells the model to answer
+  from what it has). Items and clips are named by 8-character handles instead of 36-character ids;
+  lines are `handle | title | kind | date | folder | snippet`.
+- **Keywords**: the index gives each item three words that say what it's about, worked out on the
+  device (`KeywordCache`: frequent in the item, rare in the library, not in its title; cached until
+  it changes). No AI and no cost, and it stays current as notes change.
+- **Clipboard**: a `clipboard` tool (words, kind, dates; `c:` handles; one line per clip, 90
+  characters) and `read` on a clip for all of it. Never clips that look like passwords, keys or
+  codes (`SensitiveDetector`). Settings → AI → "Ask can search my clipboard history" (on).
+- **Prompt** written for Trove: what's in it (Apple Notes, GoodNotes, screenshots, handwriting read
+  with mistakes, folders, tags, clipboard), and how to look things up cheaply.
+- **Check:** open Activity and costs from Settings and close it; ask about a big whiteboard and watch
+  for "Looked at square B2"; set Concise and Pictures 2; ask "what link did I copy about …".
+
+## Round before: Trove's look for Ask, the box, AI access, and smoothness (user: "make everything properly centred", "colours should fit the app, no AI logo", "laggy", "screenshots aren't saved to clipboard", "AI can't read GoodNotes whiteboards", "option to disable AI access per note", "buttons greyed out", "Apple Notes in the import area with the box opening", "menu bar icon is a generic box", "total cost lower than the console", "medium effort for Haiku", "Settings buttons move around", "scan all past handwriting with progress and stop, and a live toggle")
 Not yet run on a device.
 - **Dates**: an imported file now keeps the date it was made (older of creation and last change),
   so asking about a past day finds it. Items imported before this carry their import day (the AI is
