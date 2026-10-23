@@ -1,0 +1,1386 @@
+Fetching https://github.com/apple/swift-asn1.git
+Fetching https://github.com/apple/swift-crypto.git
+[1/2051] Fetching swift-asn1
+Fetched https://github.com/apple/swift-asn1.git from cache (0.96s)
+[1/18820] Fetching swift-crypto
+Fetched https://github.com/apple/swift-crypto.git from cache (7.48s)
+Computing version for https://github.com/apple/swift-crypto.git
+Computed https://github.com/apple/swift-crypto.git at 5.0.1 (11.63s)
+Computing version for https://github.com/apple/swift-asn1.git
+Computed https://github.com/apple/swift-asn1.git at 1.7.3 (0.38s)
+Creating working copy for https://github.com/apple/swift-asn1.git
+Working copy of https://github.com/apple/swift-asn1.git resolved at 1.7.3
+Creating working copy for https://github.com/apple/swift-crypto.git
+Working copy of https://github.com/apple/swift-crypto.git resolved at 5.0.1
+Building for debugging...
+[0/10] /Users/runner/work/trove/trove/Packages/TroveCore/.build/arm64-apple-macosx/debug/TroveCorePackageTests.derived/runner.swift
+[1/10] Copying PrivacyInfo.xcprivacy
+[1/10] Write sources
+[6/10] Copying Fixtures
+[7/10] Write swift-version-1977FEB4D2752686.txt
+[9/61] Emitting module Crypto
+[10/61] Compiling Crypto AES-GCM.swift
+[11/61] Compiling Crypto AES-GCM_boring.swift
+[12/61] Compiling Crypto ChaChaPoly_boring.swift
+[13/61] Compiling Crypto ChaChaPoly.swift
+[14/61] Compiling Crypto Cipher.swift
+[15/61] Compiling Crypto Nonces.swift
+[16/61] Compiling Crypto ASN1.swift
+[17/61] Compiling Crypto ASN1Any.swift
+[18/61] Compiling Crypto ASN1BitString.swift
+[19/61] Compiling Crypto ASN1Boolean.swift
+[20/61] Compiling Crypto ASN1Identifier.swift
+[21/61] Compiling Crypto ASN1Integer.swift
+[22/61] Compiling Crypto ASN1Null.swift
+[23/61] Compiling Crypto ASN1OctetString.swift
+[24/61] Compiling Crypto ASN1Strings.swift
+[25/61] Compiling Crypto ArraySliceBigint.swift
+[26/61] Compiling Crypto GeneralizedTime.swift
+[27/61] Compiling Crypto ObjectIdentifier.swift
+[28/61] Compiling Crypto ECDSASignature.swift
+[29/61] Compiling Crypto PEMDocument.swift
+[30/61] Compiling Crypto PKCS8PrivateKey.swift
+[31/61] Compiling Crypto SEC1PrivateKey.swift
+[32/61] Compiling Crypto SubjectPublicKeyInfo.swift
+[33/61] Compiling Crypto CryptoError_boring.swift
+[34/61] Compiling Crypto CryptoKitErrors.swift
+[35/61] Compiling Crypto Digest_boring.swift
+[36/61] Compiling Crypto Digest.swift
+[37/61] Compiling Crypto Digests.swift
+[38/61] Compiling Crypto HashFunctions.swift
+[39/61] Compiling Crypto HashFunctions_SHA2.swift
+[40/61] Compiling Crypto HashFunctions_SHA3.swift
+[41/61] Compiling Crypto Digest_xkcp.swift
+[42/61] Compiling Crypto HPKE-AEAD.swift
+[43/61] Compiling Crypto HPKE-Ciphersuite.swift
+[44/61] Compiling Crypto HPKE-KDF.swift
+[45/61] Compiling Crypto HPKE-KexKeyDerivation.swift
+[46/61] Compiling Crypto HPKE-LabeledExtract.swift
+[47/61] Compiling Crypto HPKE-Utils.swift
+[48/61] Compiling Crypto DHKEM.swift
+[49/61] Compiling Crypto HPKE-KEM-Curve25519.swift
+[50/61] Compiling Crypto HPKE-NIST-EC-KEMs.swift
+[51/61] Compiling Crypto HPKE-KEM.swift
+[52/61] Compiling Crypto HPKE-Errors.swift
+[53/61] Compiling Crypto HPKE.swift
+[54/61] Compiling Crypto HPKE-Context.swift
+[55/61] Compiling Crypto HPKE-KeySchedule.swift
+[56/61] Compiling Crypto HPKE-Modes.swift
+[57/61] Compiling Crypto Insecure.swift
+[58/61] Compiling Crypto Insecure_HashFunctions.swift
+[59/61] Compiling Crypto MLKEM_boring.swift
+[60/109] Compiling Crypto MLKEM_wrapper.swift
+[61/109] Compiling Crypto XWing_boring.swift
+[62/109] Compiling Crypto KEM-Errors.swift
+[63/109] Compiling Crypto KEM.swift
+[64/109] Compiling Crypto MLKEM.swift
+[65/109] Compiling Crypto XWing.swift
+[66/109] Compiling Crypto ECDH_boring.swift
+[67/109] Compiling Crypto DH.swift
+[68/109] Compiling Crypto ECDH.swift
+[69/109] Compiling Crypto ANSIx963.swift
+[70/109] Compiling Crypto HKDF.swift
+[71/109] Compiling Crypto AESWrap.swift
+[72/109] Compiling Crypto AESWrap_boring.swift
+[73/109] Compiling Crypto Ed25519_boring.swift
+[74/109] Compiling Crypto NISTCurvesKeys_boring.swift
+[75/109] Compiling Crypto X25519Keys_boring.swift
+[76/109] Compiling Crypto Curve25519.swift
+[77/109] Compiling Crypto Ed25519Keys.swift
+[78/109] Compiling Crypto NISTCurvesKeys.swift
+[79/109] Compiling Crypto X25519Keys.swift
+[80/109] Compiling Crypto SymmetricKeys.swift
+[81/109] Compiling Crypto HMAC.swift
+[82/109] Compiling Crypto MACFunctions.swift
+[83/109] Compiling Crypto MessageAuthenticationCode.swift
+[84/109] Compiling Crypto AES.swift
+[85/109] Compiling Crypto ECDSASignature_boring.swift
+[86/109] Compiling Crypto ECDSA_boring.swift
+[87/109] Compiling Crypto EdDSA_boring.swift
+[88/109] Compiling Crypto MLDSA_boring.swift
+[89/109] Compiling Crypto MLDSA_wrapper.swift
+[90/109] Compiling Crypto ECDSA.swift
+[91/109] Compiling Crypto Ed25519.swift
+[92/109] Compiling Crypto MLDSA.swift
+[93/109] Compiling Crypto Signature.swift
+[94/109] Compiling Crypto ArraySpanHelpers.swift
+[95/109] Compiling Crypto CryptoKitErrors_boring.swift
+[96/109] Compiling Crypto InlineArray+withBytes_boring.swift
+[97/109] Compiling Crypto Optional+withUnsafeBytes_boring.swift
+[98/109] Compiling Crypto RNG_boring.swift
+[99/109] Compiling Crypto SafeCompare_boring.swift
+[100/109] Compiling Crypto Zeroization_boring.swift
+[101/109] Compiling Crypto _CryptoModuleAnchor.swift
+[102/109] Compiling Crypto Data+ArraySpan.swift
+[103/109] Compiling Crypto PrettyBytes.swift
+[104/109] Compiling Crypto SafeCompare.swift
+[105/109] Compiling Crypto SecureBytes.swift
+[106/109] Compiling Crypto Zeroization.swift
+[107/109] Compiling Crypto resource_bundle_accessor.swift
+[108/158] Emitting module TroveCore
+[109/182] Compiling TroveCore Notes.swift
+[110/182] Compiling TroveCore Organizer.swift
+[111/182] Compiling TroveCore ClipIndex.swift
+[112/182] Compiling TroveCore SearchIndex.swift
+[113/182] Compiling TroveCore SmartCollections.swift
+[114/182] Compiling TroveCore TermIndex.swift
+[115/182] Compiling TroveCore VectorCache.swift
+[116/182] Compiling TroveCore Checkpoint.swift
+[117/182] Compiling TroveCore FolderTransport.swift
+[118/182] Compiling TroveCore HLC.swift
+[119/182] Compiling TroveCore JSONValue.swift
+[120/182] Compiling TroveCore Journal.swift
+[121/182] Compiling TroveCore LocalDatabase.swift
+[122/182] Compiling TroveCore Op.swift
+[123/182] Compiling TroveCore Pairing.swift
+[124/182] Compiling TroveCore PowerPolicy.swift
+[125/182] Compiling TroveCore PriceWatchSync.swift
+[126/182] Compiling TroveCore RecordStore.swift
+[127/182] Compiling TroveCore RelayClient.swift
+[128/182] Compiling TroveCore Segment.swift
+[129/182] Compiling TroveCore SyncBackoff.swift
+[130/182] Compiling TroveCore SyncEngine.swift
+[131/182] Compiling TroveCore TextMerge.swift
+[132/182] Compiling TroveCore Transport.swift
+[133/182] Compiling TroveCore AutoTagger.swift
+[134/182] Compiling TroveCore BasicEnricher.swift
+[135/182] Compiling TroveCore HTMLMetadata.swift
+[136/182] Compiling TroveCore SchemaOrg.swift
+[137/182] Compiling TroveCore URLCleaner.swift
+[138/182] Compiling TroveCore BinaryPlist.swift
+[139/182] Compiling TroveCore FileImport.swift
+[140/182] Compiling TroveCore FilePreview.swift
+[141/182] Compiling TroveCore GoodNotesInk.swift
+[142/182] Compiling TroveCore Importers.swift
+[143/182] Compiling TroveCore Inflate.swift
+[144/182] Compiling TroveCore Markdown.swift
+[145/182] Compiling TroveCore ObsidianMirror.swift
+[146/182] Compiling TroveCore PasteImport.swift
+[147/182] Compiling TroveCore SQLiteReader.swift
+[148/182] Compiling TroveCore Zip.swift
+[149/182] Compiling TroveCore Digest.swift
+[150/182] Compiling TroveCore Item.swift
+[151/182] Compiling TroveCore Library+Digest.swift
+[152/182] Compiling TroveCore Library+Folders.swift
+[153/182] Compiling TroveCore Library+Notes.swift
+[154/182] Compiling TroveCore Library+Screenshots.swift
+[155/182] Compiling TroveCore Library.swift
+[156/182] Compiling TroveCore Links.swift
+[157/182] Compiling TroveCore Clip.swift
+[158/182] Compiling TroveCore ClipEvents.swift
+[159/182] Compiling TroveCore ClipGraph.swift
+[160/182] Compiling TroveCore ClipInsights.swift
+[161/182] Compiling TroveCore Library+Clips.swift
+[162/182] Compiling TroveCore Bytes.swift
+[163/182] Compiling TroveCore InboxEnvelope.swift
+[164/182] Compiling TroveCore TRV1.swift
+[165/182] Compiling TroveCore VaultKeys.swift
+[166/182] Compiling TroveCore Ink.swift
+[167/182] Compiling TroveCore InkArrange.swift
+[168/182] Compiling TroveCore InkEditing.swift
+[169/182] Compiling TroveCore InkGeometry.swift
+[170/182] Compiling TroveCore InkOutline.swift
+[171/182] Compiling TroveCore InkPages.swift
+[172/182] Compiling TroveCore InkPaperShapes.swift
+[173/182] Compiling TroveCore InkScribble.swift
+[174/182] Compiling TroveCore InkShapes.swift
+[175/182] Compiling TroveCore InkStickers.swift
+[176/182] Compiling TroveCore PDFMarks.swift
+[177/182] Compiling TroveCore AIKeywords.swift
+[178/182] Compiling TroveCore AIProvider.swift
+[179/182] Compiling TroveCore AIResearch.swift
+[180/182] Compiling TroveCore AIUsage.swift
+[181/203] Compiling TroveCoreTests InkEditingTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[182/203] Compiling TroveCoreTests InkGeometryTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[183/203] Compiling TroveCoreTests InkOutlineTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[184/203] Compiling TroveCoreTests InkSafetyTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[185/203] Compiling TroveCoreTests InkTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[186/203] Compiling TroveCoreTests LibraryTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[187/203] Compiling TroveCoreTests LocalDatabaseTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[188/203] Compiling TroveCoreTests NotesTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[189/203] Compiling TroveCoreTests OrganizeTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[190/203] Compiling TroveCoreTests OutboxTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/OrganizeTests.swift:126:11: warning: 't' mutated after capture by sendable closure
+118 | 
+119 |     @Test func textVersionsGroupEditingSessions() async throws {
+120 |         nonisolated(unsafe) var t: Int64 = 1_000_000
+    |                                 `- note: variable defined here
+121 |         let engine = SyncEngine(device: "D", keys: .generate(), now: { t })
+    |                                                                      | `- note: capturing use
+    |                                                                      `- note: variable captured by sendable closure
+122 |         let lib = Library(engine: engine)
+123 |         let id = await lib.addNote(body: "a")
+124 |         t += 10_000; await lib.setBody(id, "ab")
+125 |         t += 10_000; await lib.setBody(id, "abc")      // same session
+126 |         t += 600_000; await lib.setBody(id, "abcd")    // later session
+    |           `- warning: 't' mutated after capture by sendable closure
+127 |         let versions = await lib.textVersions(id)
+128 |         #expect(versions.map(\.text) == ["abcd", "abc"])
+[191/213] Emitting module TroveCoreTests
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+[192/213] Compiling TroveCoreTests AIProviderTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[193/213] Compiling TroveCoreTests Benchmarks.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[194/213] Compiling TroveCoreTests BridgeInboxTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[195/213] Compiling TroveCoreTests CheckpointTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[196/213] Compiling TroveCoreTests ClipTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[197/213] Compiling TroveCoreTests CryptoTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[198/213] Compiling TroveCoreTests DigestTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[199/213] Compiling TroveCoreTests EnrichTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[200/213] Compiling TroveCoreTests GoodNotesInkTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[201/213] Compiling TroveCoreTests ImportTests.swift
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:180:130: note: expanded code originates here
+178 |         #expect(result?["tool_use_id"] as? String == "t1" && (result?["content"] as? String ?? "").contains("Icarus costume"))
+179 |         let third = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+180 |         #expect(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").contains("40 feathers and wire"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall(((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"40 feathers and wire",expression: .__fromFunctionCall(.__fromSyntaxNode(#"((third[6]["content"] as? [[String: Any]])?.first?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""40 feathers and wire""#, "40 feathers and wire"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+181 |     }
+182 | 
+
+macro expansion #expect:2:7: warning: result of call to 'contains' is unused [#no-usage]
+`- /Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/AIProviderTests.swift:199:78: note: expanded code originates here
+197 |         let msgs = (net.body(2)["messages"] as? [[String: Any]]) ?? []
+198 |         #expect(msgs.last?["role"] as? String == "tool" && msgs.last?["tool_call_id"] as? String == "c1")
+199 |         #expect((msgs.last?["content"] as? String ?? "").contains("1 items"))
+    |         `- note: in expansion of macro 'expect' here
+    +--- macro expansion #expect ---------------------------------------
+    |1 | Testing.__checkFunctionCall((msgs.last?["content"] as? String ?? "").self,calling: {
+    |2 |   $0?.contains($1)
+    |  |       `- warning: result of call to 'contains' is unused [#no-usage]
+    |3 | },"1 items",expression: .__fromFunctionCall(.__fromSyntaxNode(#"(msgs.last?["content"] as? String ?? "")"#),"contains",(nil,.__fromStringLiteral(#""1 items""#, "1 items"))),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+    +-------------------------------------------------------------------
+200 |     }
+201 | 
+[202/213] Compiling TroveCoreTests PDFMarksTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[203/213] Compiling TroveCoreTests PowerPolicyTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[204/213] Compiling TroveCoreTests RecordIndexTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[205/213] Compiling TroveCoreTests RelayIntegrationTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[206/213] Compiling TroveCoreTests ScreenshotTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[207/213] Compiling TroveCoreTests SearchIndexTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[208/213] Compiling TroveCoreTests SyncBackoffTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[209/213] Compiling TroveCoreTests SyncTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[210/213] Compiling TroveCoreTests WebInteropTests.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[211/213] Compiling TroveCoreTests resource_bundle_accessor.swift
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/RelayIntegrationTests.swift:41:88: warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+39 | 
+40 |         // A browser extension seals into the inbox with only the public key + inbox token.
+41 |         let ext = RelayClient(baseURL: base, vaultId: mac.vaultId, token: try #require(mac.inboxToken))
+   |                                                                                        `- warning: '#require(_:_:)' is redundant because 'mac.inboxToken' never equals 'nil' (from macro 'require')
+42 |         let env = InboxEnvelope(header: .init(source: "web", mime: "text/plain", url: "https://example.com/story", title: "Story"), body: Data("great quote".utf8))
+43 |         _ = try await ext.postInbox(sealed: try TRV1.seal(env.encoded(), to: keys.publicKey), source: "web")
+
+/Users/runner/work/trove/trove/Packages/TroveCore/Tests/TroveCoreTests/SyncTests.swift:11:11: warning: 't' mutated after capture by sendable closure
+  5 | @Suite struct HLCAndOpTests {
+  6 |     @Test func hlcFormatsSortsAndIsMonotonic() {
+  7 |         nonisolated(unsafe) var t: Int64 = 1_000
+    |                                 `- note: variable defined here
+  8 |         var clock = HLCClock(device: "A", now: { t })
+    |                                                | `- note: capturing use
+    |                                                `- note: variable captured by sendable closure
+  9 |         let a = clock.tick()
+ 10 |         let b = clock.tick()       // same millis → counter bump
+ 11 |         t = 999                    // wall clock went backwards
+    |           `- warning: 't' mutated after capture by sendable closure
+ 12 |         let c = clock.tick()
+ 13 |         #expect(a < b && b < c)
+[212/215] Compiling TroveCorePackageTests runner.swift
+[213/215] Emitting module TroveCorePackageTests
+[213/215] Write Objects.LinkFileList
+[214/215] Linking TroveCorePackageTests
+Build complete! (57.97s)
+Test Suite 'All tests' started at 2026-10-23 13:10:27.794.
+Test Suite 'All tests' passed at 2026-10-23 13:10:27.796.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite OrganizeTests started.
+◇ Suite ImportTests started.
+◇ Suite InkSafetyTests started.
+◇ Suite RecordIndexTests started.
+◇ Suite TagColourTests started.
+◇ Suite InkEditingTests started.
+◇ Suite SharedSettingTests started.
+◇ Suite InkScribbleTests started.
+◇ Suite CheckpointTests started.
+◇ Suite GoodNotesInkTests started.
+◇ Suite OutboxTests started.
+◇ Suite ThrottleTests started.
+◇ Suite PowerPolicyTests started.
+◇ Suite SyncBackoffTests started.
+◇ Suite AIModelNameTests started.
+◇ Suite RecordStoreTests started.
+◇ Suite LocalDatabaseTests started.
+◇ Suite DigestTests started.
+◇ Suite CheckpointPowerTests started.
+◇ Suite ClipTests started.
+◇ Suite SearchTests started.
+➜ Suite Benchmarks skipped.
+◇ Suite PairingTests started.
+◇ Suite StrayItemTests started.
+◇ Suite HTMLTests started.
+◇ Suite FileImportTests started.
+◇ Suite KeywordTests started.
+◇ Suite ScreenshotTests started.
+◇ Suite ScreenshotRouteTests started.
+◇ Suite InkPaperTests started.
+◇ Suite URLCleanerTests started.
+◇ Suite PasteImportTests started.
+◇ Suite BridgeInboxTests started.
+◇ Suite TextMergeTests started.
+◇ Suite PDFMarksTests started.
+◇ Suite EngineTests started.
+◇ Suite LibraryTests started.
+◇ Suite CryptoTests started.
+◇ Suite InkOutlineTests started.
+◇ Suite AIProviderTests started.
+◇ Suite SegmentTests started.
+◇ Suite VectorCacheTests started.
+◇ Suite NotesTests started.
+◇ Suite InkTests started.
+◇ Suite SearchIndexTests started.
+◇ Suite AIKeywordTests started.
+◇ Suite WebInteropTests started.
+◇ Suite InkGeometryTests started.
+◇ Suite PushCoalescerTests started.
+◇ Suite NewestInkTimeTests started.
+◇ Suite ClipEventTests started.
+◇ Suite FilePreviewTests started.
+◇ Suite HLCAndOpTests started.
+◇ Suite RelayIntegrationTests started.
+◇ Test linksMatchTheSharedCases() started.
+◇ Test textVersionsGroupEditingSessions() started.
+◇ Test organiserMatchesTheSharedCases() started.
+◇ Test bridgeCopiesAttachmentsToo() started.
+◇ Test inboxEntriesImportedTwiceMakeOneItem() started.
+◇ Test newItemsAreFiledAndFoldersAreShared() started.
+◇ Test movingRenamingDeletingAndTidyingUp() started.
+◇ Test enrichmentRefilesAutoFiledLinksOnly() started.
+◇ Test fileVersionsKeepEveryEdit() started.
+◇ Test presetColoursAndSizesFollowYou() started.
+◇ Test lassoMovesThatArentRealAreNotStored() started.
+◇ Test reloadingAPageOfInkStaysCheap() started.
+◇ Test ballpointKeepsOneThickness() started.
+◇ Test obsidianRoundTrip() started.
+◇ Test markdownFrontMatterLinksAndTags() started.
+◇ Test readwiseNotionAppleNotes() started.
+◇ Test kindleClippings() started.
+◇ Test customTagsSyncTheirColoursAndDeletingCleansUp() started.
+◇ Test bookmarksAndCSV() started.
+◇ Test numbersThatArentRealDontStopTheApp() started.
+◇ Test theElementsLibraryMatchesTheWebsite() started.
+◇ Test indexesByKindAndInkByItem() started.
+◇ Test shapesHandlesAndConnectorsMatchTheWebsite() started.
+◇ Test lassoEditsInTheLibrary() started.
+◇ Test transformsAndElementsMatchTheWebsite() started.
+◇ Test settingsMadeOnOneDeviceReachTheOthers() started.
+◇ Test websiteCheckpointLoadsAndLaterOpsApplyLikeAFullReplay() started.
+◇ Test rulerProtractorStraighteningAndGroupsMatchTheWebsite() started.
+◇ Test fullReplayMatchesTheWebsite() started.
+◇ Test sealedWithTheSegmentKey() started.
+◇ Test writesTheSwiftCheckpointForTheWebsite() started.
+◇ Test scribblesMatchTheWebsite() started.
+◇ Test swiftCheckpointsRoundTripAndStack() started.
+◇ Test whiteboardFitsContent() started.
+◇ Test editsLikeTheWebsite() started.
+◇ Test decodesTheSameAsTheWebsite() started.
+◇ Test heat() started.
+◇ Test notANotebook() started.
+◇ Test aConflictingSegmentIsNotRetriedForEver() started.
+◇ Test batteryBudgetTakesOnlyThisDevicesLastHour() started.
+◇ Test followsTheDeviceState() started.
+◇ Test mergesWhatComesClose() started.
+◇ Test restartedOutboxKeepsSegmentsSmall() started.
+◇ Test sketchingHoldsBackEverythingButTheInk() started.
+◇ Test theSetting() started.
+◇ Test prettyNames() started.
+◇ Test lowPowerWaitsLonger() started.
+◇ Test backsOffWhenQuietAndResetsOnChange() started.
+◇ Test lastWriterWinsPerFieldInAnyOrder() started.
+◇ Test deleteAndUndelete() started.
+◇ Test concurrentTextEditsMergeOrBecomeConflicts() started.
+◇ Test duplicateOpsAreIgnored() started.
+◇ Test handlesKeywordsAndClipboard() started.
+◇ Test weeksAndIds() started.
+◇ Test onThisDayAndDuplicatesMatchTheWebsite() started.
+◇ Test savesOnlyWhatChangedAndReopens() started.
+◇ Test autoDigestWritesLastWeekOnceAndRespectsDeletion() started.
+◇ Test noCheckpointWhileNotAllowed() started.
+◇ Test aNewDeviceStartsFromACheckpointAndKeepsIt() started.
+◇ Test digestMatchesTheWebsite() started.
+◇ Test legacyJSONSnapshotsStillOpenAndMoveIntoTheDatabase() started.
+◇ Test clipsSyncBetweenDevices() started.
+◇ Test editingRenamingTaggingAndSaving() started.
+◇ Test howMuchToKeepIsASyncedSetting() started.
+◇ Test limitKeepsTheNewest() started.
+◇ Test spotsSecrets() started.
+◇ Test transforms() started.
+◇ Test historyDedupesPinsPrunesAndSaves() started.
+◇ Test tokenizerFoldsStemsAndDropsStopwords() started.
+◇ Test ruleTagsAutoSaveAndTheAIQueue() started.
+◇ Test rankingPrefixAndFilters() started.
+◇ Test classifies() started.
+◇ Test insightsMatchTheWebsite() started.
+◇ Test smartCollections() started.
+◇ Test prefixesUseTheSortedVocabulary() started.
+➜ Test coreHotPaths() skipped.
+◇ Test qrPayloadRoundTripsAsURLOrCode() started.
+◇ Test editsToUnknownIdsNeverMakeEmptyItems() started.
+◇ Test goodNotesFilesCountAsGoodNotesHoweverTheyArrived() started.
+◇ Test schemaRecipeProductEventPlace() started.
+◇ Test basicEnricherPicksCategoryAndFields() started.
+◇ Test metadataAndReadableText() started.
+◇ Test portableInflateMatchesFixedAndDynamicBlocks() started.
+◇ Test rejectsCorruptData() started.
+◇ Test readsZipEntries() started.
+◇ Test routesEverythingInsideAZip() started.
+◇ Test summariesWithoutAI() started.
+◇ Test asManyAsItTakesAndAllSearchable() started.
+◇ Test placedImportsKeepTheirFolders() started.
+◇ Test routesPerDevice() started.
+◇ Test plainFilesAndJunk() started.
+◇ Test twoDevicesSaveOneAndExactCopiesGo() started.
+◇ Test stripsTrackingKeepsMeaning() started.
+◇ Test importsIntoTheClipboard() started.
+◇ Test findsPasteOnTheMac() started.
+◇ Test bridgesDecodeAsTheRelaySendsThem() started.
+◇ Test headersRoundTripAndOldOnesStillRead() started.
+◇ Test readsPasteLikeTheWebsite() started.
+◇ Test bridgeEntriesBecomeTheSameItemsAsOnTheWebsite() started.
+◇ Test cleanMerges() started.
+◇ Test myersMatchesAreALongestCommonSubsequence() started.
+◇ Test highlightGeometryMatchesTheWebsite() started.
+◇ Test elementsReadAsTheWebsiteReadsThem() started.
+◇ Test papersMatchTheWebsite() started.
+◇ Test textMatchesTheWebsite() started.
+◇ Test highlightsQuotesFormValuesAndText() started.
+◇ Test pageBoxesAndFieldIdsMatchTheWebsite() started.
+◇ Test bridgeCopiesSegmentsBetweenTransports() started.
+◇ Test conflictingEditsReturnNil() started.
+◇ Test unencryptedVaultWritesReadableJSONL() started.
+◇ Test vaultInfoRoundTrip() started.
+◇ Test blobsAreEncryptedAndDeduplicated() started.
+◇ Test threeDevicesConvergeThroughAFolder() started.
+◇ Test snapshotRestoresStateAndUnpushedWork() started.
+◇ Test exportsSwiftVectorWhenAsked() started.
+◇ Test vaultKeysExportImportAndDerive() started.
+◇ Test roundTripsSymmetricAndSealedAcrossChunkBoundaries() started.
+◇ Test inboxEnvelopeRoundTrip() started.
+◇ Test base64URL() started.
+◇ Test rejectsTamperingTruncationAndWrongKeys() started.
+◇ Test compactPointsMatchTheWebsite() started.
+◇ Test gridAndGrainMatchTheWebsite() started.
+◇ Test fastBase64MatchesFoundationAndDecodesQuickly() started.
+◇ Test decryptsWorkerProducedFixtures() started.
+◇ Test outlinesAndArrowheadsMatchTheWebsite() started.
+◇ Test filesCollectionsAndImports() started.
+◇ Test enrichmentRespectsTiersAndUserTitles() started.
+◇ Test compactPointsStylesSettingsAndTapeInTheLibrary() started.
+◇ Test priceWatchesApplyOntoItemsAndReportNewDrops() started.
+◇ Test notesLinksDedupeAndSearch() started.
+◇ Test conflictsAreSurfacedAndResolvable() started.
+◇ Test metersAndLogsUsage() started.
+◇ Test penSettingsMatchTheWebsite() started.
+◇ Test researchWithOpenAIStyleFunctionCalls() started.
+◇ Test inboxEnvelopesBecomeItems() started.
+◇ Test duplicatesFromAnotherSourceAreListedThereToo() started.
+◇ Test settingsRoundTripAndDefaults() started.
+◇ Test liveReadingTakesOnlyWhatsNew() started.
+◇ Test claudeReadsAPageAndExplainsFailures() started.
+◇ Test chatsAreSaved() started.
+◇ Test listsModels() started.
+◇ Test hiddenItemsAreNeverShownAndPagesAreViewed() started.
+◇ Test claudeRequestAndAnswer() started.
+◇ Test fileNamesRoundTrip() started.
+◇ Test researchUsesTheLibraryTools() started.
+◇ Test roundTripsAndIsSmall() started.
+◇ Test largeJournalsAreCutIntoSegments() started.
+◇ Test templatesAndTheDailyNote() started.
+◇ Test openAIStyleFallsBackWhenAParameterIsRefused() started.
+◇ Test encryptDecryptAndContiguity() started.
+◇ Test placeholdersAndNames() started.
+◇ Test checklists() started.
+◇ Test sketchesAndStrokes() started.
+◇ Test libraryDailyNoteTemplatesAndTicks() started.
+◇ Test packedPointsWidthsAndColoursMatchTheWebsite() started.
+◇ Test snapshotReindexesOnlyWhatChanged() started.
+◇ Test improvesKeywordsCheaply() started.
+◇ Test parsesOperators() started.
+◇ Test cutOffAnswersAreSplitNotFailed() started.
+◇ Test libraryRestoresItsIndex() started.
+◇ Test pagesElementsLassoAndPartialErase() started.
+◇ Test matchesTheWebsite() started.
+◇ Test erasingLassoAndWidthsMatchTheWebsite() started.
+◇ Test exportsJournalForWebWhenAsked() started.
+◇ Test shapesMatchTheWebsite() started.
+◇ Test aThreeHourWritingSession() started.
+◇ Test scenarioMergesAsExpected() started.
+◇ Test waitsForAPauseButNotForever() started.
+◇ Test pageChangeAndFlushOnly() started.
+◇ Test unwrapsPasteJSON() started.
+◇ Test materialisesJournalsWrittenByTheWebApp() started.
+◇ Test eventsReadLikeTheWebsite() started.
+◇ Test goodNotesAndIWork() started.
+◇ Test recordConnectAndDelete() started.
+◇ Test clipGraphJoinsByWhere() started.
+◇ Test newInkAlwaysDrawsOnTop() started.
+◇ Test hlcFormatsSortsAndIsMonotonic() started.
+◇ Test pairingSyncBlobsAndInbox() started.
+◇ Test opJSONUsesCompactKeys() started.
+ink reload, 3,000 strokes: strokes(on:) 0.0236585918 seconds, inkSignature 0.0022836084 seconds, inkedLayers 0.0043747084 seconds
+decode 200-point stroke: points 703 µs, points2 385 µs; sizes 4267 vs 1604 chars
+3-hour writing session: 6069 strokes, 18 page changes; pushes 200 before → 67 batched
+✔ Test organiserMatchesTheSharedCases() passed after 2.983 seconds.
+✔ Test linksMatchTheSharedCases() passed after 2.983 seconds.
+✔ Test textVersionsGroupEditingSessions() passed after 2.983 seconds.
+✔ Test movingRenamingDeletingAndTidyingUp() passed after 2.983 seconds.
+✔ Test enrichmentRefilesAutoFiledLinksOnly() passed after 2.983 seconds.
+✔ Test presetColoursAndSizesFollowYou() passed after 2.983 seconds.
+✔ Test lassoMovesThatArentRealAreNotStored() passed after 2.983 seconds.
+✔ Test newItemsAreFiledAndFoldersAreShared() passed after 2.983 seconds.
+✔ Test ballpointKeepsOneThickness() passed after 2.983 seconds.
+✔ Test inboxEntriesImportedTwiceMakeOneItem() passed after 2.984 seconds.
+✔ Test obsidianRoundTrip() passed after 2.983 seconds.
+✔ Test markdownFrontMatterLinksAndTags() passed after 2.983 seconds.
+✔ Test readwiseNotionAppleNotes() passed after 2.983 seconds.
+✔ Test kindleClippings() passed after 2.983 seconds.
+✔ Test bookmarksAndCSV() passed after 2.983 seconds.
+✔ Test customTagsSyncTheirColoursAndDeletingCleansUp() passed after 2.983 seconds.
+✔ Test indexesByKindAndInkByItem() passed after 2.983 seconds.
+✔ Test numbersThatArentRealDontStopTheApp() passed after 2.984 seconds.
+✔ Test theElementsLibraryMatchesTheWebsite() passed after 2.983 seconds.
+✔ Test lassoEditsInTheLibrary() passed after 2.983 seconds.
+✔ Test shapesHandlesAndConnectorsMatchTheWebsite() passed after 2.983 seconds.
+✔ Test settingsMadeOnOneDeviceReachTheOthers() passed after 2.983 seconds.
+✔ Test transformsAndElementsMatchTheWebsite() passed after 2.983 seconds.
+✔ Test rulerProtractorStraighteningAndGroupsMatchTheWebsite() passed after 2.983 seconds.
+✔ Test fullReplayMatchesTheWebsite() passed after 2.983 seconds.
+✔ Test websiteCheckpointLoadsAndLaterOpsApplyLikeAFullReplay() passed after 2.983 seconds.
+✔ Test sealedWithTheSegmentKey() passed after 2.983 seconds.
+✔ Test writesTheSwiftCheckpointForTheWebsite() passed after 2.983 seconds.
+✔ Test whiteboardFitsContent() passed after 2.983 seconds.
+✔ Test scribblesMatchTheWebsite() passed after 2.983 seconds.
+✔ Test swiftCheckpointsRoundTripAndStack() passed after 2.983 seconds.
+✔ Test editsLikeTheWebsite() passed after 2.983 seconds.
+✔ Test heat() passed after 2.983 seconds.
+✔ Test notANotebook() passed after 2.983 seconds.
+✔ Test aConflictingSegmentIsNotRetriedForEver() passed after 2.983 seconds.
+✔ Test batteryBudgetTakesOnlyThisDevicesLastHour() passed after 2.983 seconds.
+✔ Test followsTheDeviceState() passed after 2.983 seconds.
+✔ Test mergesWhatComesClose() passed after 2.983 seconds.
+✔ Test decodesTheSameAsTheWebsite() passed after 2.983 seconds.
+✔ Test sketchingHoldsBackEverythingButTheInk() passed after 2.983 seconds.
+✔ Test theSetting() passed after 2.983 seconds.
+✔ Test prettyNames() passed after 2.983 seconds.
+✔ Test lowPowerWaitsLonger() passed after 2.983 seconds.
+✔ Test backsOffWhenQuietAndResetsOnChange() passed after 2.983 seconds.
+✔ Test lastWriterWinsPerFieldInAnyOrder() passed after 2.983 seconds.
+✔ Test deleteAndUndelete() passed after 2.983 seconds.
+✔ Test concurrentTextEditsMergeOrBecomeConflicts() passed after 2.983 seconds.
+✔ Test duplicateOpsAreIgnored() passed after 2.983 seconds.
+✔ Test handlesKeywordsAndClipboard() passed after 2.983 seconds.
+✔ Test weeksAndIds() passed after 2.983 seconds.
+✔ Test onThisDayAndDuplicatesMatchTheWebsite() passed after 2.983 seconds.
+✔ Test restartedOutboxKeepsSegmentsSmall() passed after 2.984 seconds.
+✔ Test savesOnlyWhatChangedAndReopens() passed after 2.983 seconds.
+✔ Test autoDigestWritesLastWeekOnceAndRespectsDeletion() passed after 2.983 seconds.
+✔ Test aNewDeviceStartsFromACheckpointAndKeepsIt() passed after 2.983 seconds.
+✔ Test digestMatchesTheWebsite() passed after 2.983 seconds.
+✔ Test legacyJSONSnapshotsStillOpenAndMoveIntoTheDatabase() passed after 2.983 seconds.
+✔ Test clipsSyncBetweenDevices() passed after 2.983 seconds.
+✔ Test editingRenamingTaggingAndSaving() passed after 2.983 seconds.
+✔ Test howMuchToKeepIsASyncedSetting() passed after 2.983 seconds.
+✔ Test limitKeepsTheNewest() passed after 2.983 seconds.
+✔ Test spotsSecrets() passed after 2.983 seconds.
+✔ Test transforms() passed after 2.983 seconds.
+✔ Test tokenizerFoldsStemsAndDropsStopwords() passed after 2.983 seconds.
+✔ Test ruleTagsAutoSaveAndTheAIQueue() passed after 2.983 seconds.
+✔ Test reloadingAPageOfInkStaysCheap() passed after 2.984 seconds.
+✔ Test rankingPrefixAndFilters() passed after 2.983 seconds.
+✔ Test smartCollections() passed after 2.991 seconds.
+✔ Test classifies() passed after 2.991 seconds.
+✔ Test prefixesUseTheSortedVocabulary() passed after 2.991 seconds.
+✔ Test qrPayloadRoundTripsAsURLOrCode() passed after 2.991 seconds.
+✔ Test editsToUnknownIdsNeverMakeEmptyItems() passed after 2.991 seconds.
+✔ Test goodNotesFilesCountAsGoodNotesHoweverTheyArrived() passed after 2.991 seconds.
+✔ Test schemaRecipeProductEventPlace() passed after 2.991 seconds.
+✔ Test basicEnricherPicksCategoryAndFields() passed after 2.991 seconds.
+✔ Test metadataAndReadableText() passed after 2.991 seconds.
+✔ Test insightsMatchTheWebsite() passed after 2.991 seconds.
+✔ Test rejectsCorruptData() passed after 2.991 seconds.
+✔ Test readsZipEntries() passed after 2.991 seconds.
+✔ Test routesEverythingInsideAZip() passed after 2.991 seconds.
+✔ Test summariesWithoutAI() passed after 2.991 seconds.
+✔ Test portableInflateMatchesFixedAndDynamicBlocks() passed after 2.991 seconds.
+✔ Test placedImportsKeepTheirFolders() passed after 2.991 seconds.
+✔ Test routesPerDevice() passed after 2.991 seconds.
+✔ Test plainFilesAndJunk() passed after 2.991 seconds.
+✔ Test stripsTrackingKeepsMeaning() passed after 2.991 seconds.
+✔ Test twoDevicesSaveOneAndExactCopiesGo() passed after 2.991 seconds.
+✔ Test asManyAsItTakesAndAllSearchable() passed after 2.991 seconds.
+✔ Test findsPasteOnTheMac() passed after 2.991 seconds.
+✔ Test bridgesDecodeAsTheRelaySendsThem() passed after 2.991 seconds.
+✔ Test headersRoundTripAndOldOnesStillRead() passed after 2.991 seconds.
+✔ Test readsPasteLikeTheWebsite() passed after 2.991 seconds.
+✔ Test bridgeEntriesBecomeTheSameItemsAsOnTheWebsite() passed after 2.991 seconds.
+✔ Test cleanMerges() passed after 2.991 seconds.
+✔ Test myersMatchesAreALongestCommonSubsequence() passed after 2.991 seconds.
+✔ Test highlightGeometryMatchesTheWebsite() passed after 2.991 seconds.
+✔ Test elementsReadAsTheWebsiteReadsThem() passed after 2.991 seconds.
+✔ Test papersMatchTheWebsite() passed after 2.991 seconds.
+✔ Test textMatchesTheWebsite() passed after 2.991 seconds.
+✔ Test highlightsQuotesFormValuesAndText() passed after 2.991 seconds.
+✔ Test pageBoxesAndFieldIdsMatchTheWebsite() passed after 2.991 seconds.
+✔ Test bridgeCopiesSegmentsBetweenTransports() passed after 2.991 seconds.
+✔ Test conflictingEditsReturnNil() passed after 2.991 seconds.
+✔ Test unencryptedVaultWritesReadableJSONL() passed after 2.991 seconds.
+✔ Test vaultInfoRoundTrip() passed after 2.991 seconds.
+✔ Test threeDevicesConvergeThroughAFolder() passed after 2.992 seconds.
+✔ Test snapshotRestoresStateAndUnpushedWork() passed after 2.992 seconds.
+✔ Test exportsSwiftVectorWhenAsked() passed after 2.992 seconds.
+✔ Test vaultKeysExportImportAndDerive() passed after 2.992 seconds.
+✔ Test roundTripsSymmetricAndSealedAcrossChunkBoundaries() passed after 2.992 seconds.
+✔ Test inboxEnvelopeRoundTrip() passed after 2.992 seconds.
+✔ Test base64URL() passed after 2.992 seconds.
+✔ Test rejectsTamperingTruncationAndWrongKeys() passed after 2.992 seconds.
+✔ Test compactPointsMatchTheWebsite() passed after 2.992 seconds.
+✔ Test gridAndGrainMatchTheWebsite() passed after 2.992 seconds.
+✔ Test decryptsWorkerProducedFixtures() passed after 2.992 seconds.
+✔ Test noCheckpointWhileNotAllowed() passed after 2.993 seconds.
+✔ Test outlinesAndArrowheadsMatchTheWebsite() passed after 2.992 seconds.
+✔ Test filesCollectionsAndImports() passed after 2.992 seconds.
+✔ Test enrichmentRespectsTiersAndUserTitles() passed after 2.992 seconds.
+✔ Test compactPointsStylesSettingsAndTapeInTheLibrary() passed after 2.992 seconds.
+✔ Test priceWatchesApplyOntoItemsAndReportNewDrops() passed after 2.992 seconds.
+✔ Test notesLinksDedupeAndSearch() passed after 2.992 seconds.
+✔ Test conflictsAreSurfacedAndResolvable() passed after 2.992 seconds.
+✔ Test metersAndLogsUsage() passed after 2.992 seconds.
+✔ Test penSettingsMatchTheWebsite() passed after 2.993 seconds.
+✔ Test researchWithOpenAIStyleFunctionCalls() passed after 2.992 seconds.
+✔ Test duplicatesFromAnotherSourceAreListedThereToo() passed after 2.995 seconds.
+✔ Test settingsRoundTripAndDefaults() passed after 2.995 seconds.
+✔ Test liveReadingTakesOnlyWhatsNew() passed after 2.996 seconds.
+✔ Test claudeReadsAPageAndExplainsFailures() passed after 2.996 seconds.
+✔ Test chatsAreSaved() passed after 2.996 seconds.
+✔ Test listsModels() passed after 2.996 seconds.
+✔ Test hiddenItemsAreNeverShownAndPagesAreViewed() passed after 2.995 seconds.
+✔ Test claudeRequestAndAnswer() passed after 2.995 seconds.
+✔ Test fileNamesRoundTrip() passed after 2.995 seconds.
+✔ Test researchUsesTheLibraryTools() passed after 2.995 seconds.
+✔ Test roundTripsAndIsSmall() passed after 2.995 seconds.
+✔ Test largeJournalsAreCutIntoSegments() passed after 2.995 seconds.
+✔ Test templatesAndTheDailyNote() passed after 2.995 seconds.
+✔ Test encryptDecryptAndContiguity() passed after 2.995 seconds.
+✔ Test openAIStyleFallsBackWhenAParameterIsRefused() passed after 2.996 seconds.
+✔ Test placeholdersAndNames() passed after 2.995 seconds.
+✔ Test checklists() passed after 2.995 seconds.
+✔ Test sketchesAndStrokes() passed after 2.995 seconds.
+✔ Test libraryDailyNoteTemplatesAndTicks() passed after 2.995 seconds.
+✔ Test packedPointsWidthsAndColoursMatchTheWebsite() passed after 2.995 seconds.
+✔ Test snapshotReindexesOnlyWhatChanged() passed after 2.995 seconds.
+✔ Test fastBase64MatchesFoundationAndDecodesQuickly() passed after 2.996 seconds.
+✔ Test parsesOperators() passed after 2.995 seconds.
+✔ Test cutOffAnswersAreSplitNotFailed() passed after 2.995 seconds.
+✔ Test libraryRestoresItsIndex() passed after 2.995 seconds.
+✔ Test pagesElementsLassoAndPartialErase() passed after 2.995 seconds.
+✔ Test erasingLassoAndWidthsMatchTheWebsite() passed after 2.995 seconds.
+✔ Test matchesTheWebsite() passed after 2.995 seconds.
+✔ Test exportsJournalForWebWhenAsked() passed after 2.995 seconds.
+✔ Test scenarioMergesAsExpected() passed after 2.995 seconds.
+✔ Test aThreeHourWritingSession() passed after 2.995 seconds.
+✔ Test shapesMatchTheWebsite() passed after 2.995 seconds.
+✔ Test waitsForAPauseButNotForever() passed after 2.995 seconds.
+✔ Test pageChangeAndFlushOnly() passed after 2.995 seconds.
+✔ Test unwrapsPasteJSON() passed after 2.995 seconds.
+✔ Test materialisesJournalsWrittenByTheWebApp() passed after 2.995 seconds.
+✔ Test eventsReadLikeTheWebsite() passed after 2.995 seconds.
+✔ Test goodNotesAndIWork() passed after 2.995 seconds.
+✔ Test recordConnectAndDelete() passed after 2.995 seconds.
+✔ Test clipGraphJoinsByWhere() passed after 2.995 seconds.
+✔ Test newInkAlwaysDrawsOnTop() passed after 2.995 seconds.
+✔ Test bridgeCopiesAttachmentsToo() passed after 2.999 seconds.
+✔ Test hlcFormatsSortsAndIsMonotonic() passed after 2.980 seconds.
+✔ Test pairingSyncBlobsAndInbox() passed after 2.980 seconds.
+✔ Test opJSONUsesCompactKeys() passed after 2.979 seconds.
+✔ Test historyDedupesPinsPrunesAndSaves() passed after 2.998 seconds.
+✔ Test blobsAreEncryptedAndDeduplicated() passed after 2.997 seconds.
+✔ Test inboxEnvelopesBecomeItems() passed after 2.997 seconds.
+✔ Suite InkSafetyTests passed after 3.001 seconds.
+✔ Suite ImportTests passed after 3.001 seconds.
+✔ Suite TagColourTests passed after 3.001 seconds.
+✔ Suite RecordIndexTests passed after 3.001 seconds.
+✔ Suite InkEditingTests passed after 3.001 seconds.
+✔ Suite SharedSettingTests passed after 3.001 seconds.
+✔ Suite CheckpointTests passed after 3.001 seconds.
+✔ Suite GoodNotesInkTests passed after 3.001 seconds.
+✔ Suite InkScribbleTests passed after 3.001 seconds.
+✔ Suite PowerPolicyTests passed after 3.001 seconds.
+✔ Suite OutboxTests passed after 3.001 seconds.
+✔ Suite ThrottleTests passed after 3.001 seconds.
+✔ Suite AIModelNameTests passed after 3.001 seconds.
+✔ Suite SyncBackoffTests passed after 3.001 seconds.
+✔ Suite RecordStoreTests passed after 3.001 seconds.
+✔ Suite DigestTests passed after 3.001 seconds.
+✔ Suite LocalDatabaseTests passed after 3.001 seconds.
+✔ Suite SearchTests passed after 3.001 seconds.
+✔ Suite PairingTests passed after 3.001 seconds.
+✔ Suite StrayItemTests passed after 3.001 seconds.
+✔ Suite HTMLTests passed after 3.001 seconds.
+✔ Suite FileImportTests passed after 3.001 seconds.
+✔ Suite ScreenshotRouteTests passed after 3.001 seconds.
+✔ Suite URLCleanerTests passed after 3.001 seconds.
+✔ Suite ScreenshotTests passed after 3.001 seconds.
+✔ Suite KeywordTests passed after 3.001 seconds.
+✔ Suite BridgeInboxTests passed after 3.001 seconds.
+✔ Suite TextMergeTests passed after 3.001 seconds.
+✔ Suite PDFMarksTests passed after 3.001 seconds.
+✔ Suite InkPaperTests passed after 3.001 seconds.
+✔ Suite CryptoTests passed after 3.001 seconds.
+✔ Suite InkOutlineTests passed after 3.001 seconds.
+✔ Suite CheckpointPowerTests passed after 3.001 seconds.
+✔ Suite AIProviderTests passed after 3.001 seconds.
+✔ Suite SegmentTests passed after 3.002 seconds.
+✔ Suite VectorCacheTests passed after 3.002 seconds.
+✔ Suite NotesTests passed after 3.002 seconds.
+✔ Suite InkTests passed after 3.002 seconds.
+✔ Suite SearchIndexTests passed after 3.002 seconds.
+✔ Suite InkGeometryTests passed after 3.002 seconds.
+✔ Suite WebInteropTests passed after 3.002 seconds.
+✔ Suite PushCoalescerTests passed after 3.002 seconds.
+✔ Suite ClipEventTests passed after 3.002 seconds.
+✔ Suite FilePreviewTests passed after 3.002 seconds.
+✔ Suite NewestInkTimeTests passed after 3.002 seconds.
+✔ Suite HLCAndOpTests passed after 3.002 seconds.
+✔ Suite RelayIntegrationTests passed after 3.002 seconds.
+✔ Suite ClipTests passed after 3.003 seconds.
+✔ Suite EngineTests passed after 3.003 seconds.
+✔ Test fileVersionsKeepEveryEdit() passed after 3.002 seconds.
+✔ Suite LibraryTests passed after 3.003 seconds.
+✔ Suite OrganizeTests passed after 3.004 seconds.
+✔ Test importsIntoTheClipboard() passed after 3.536 seconds.
+✔ Suite PasteImportTests passed after 3.539 seconds.
+✔ Test improvesKeywordsCheaply() passed after 3.589 seconds.
+✔ Suite AIKeywordTests passed after 3.593 seconds.
+✔ Test run with 179 tests in 54 suites passed after 3.594 seconds.
