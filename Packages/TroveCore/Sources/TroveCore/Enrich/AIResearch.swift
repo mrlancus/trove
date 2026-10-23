@@ -455,9 +455,14 @@ public actor KeywordCache {
     }
 
     static func counts(_ item: Item) -> [String: Int] {
-        let text = [item.summary ?? "", String(item.body.prefix(20_000)), String((item.ocrText ?? "").prefix(8000)),
-                    String((item.record["inkText"]?.string ?? "").prefix(20_000)), item.record["sketchText"]?.string ?? "",
-                    item.tags.joined(separator: " ")].joined(separator: " ")
+        var parts: [String] = []
+        parts.append(item.summary ?? "")
+        parts.append(String(item.body.prefix(20_000)))
+        parts.append(String((item.ocrText ?? "").prefix(8000)))
+        parts.append(String((item.record["inkText"]?.string ?? "").prefix(20_000)))
+        parts.append(item.record["sketchText"]?.string ?? "")
+        parts.append(item.tags.joined(separator: " "))
+        let text = parts.joined(separator: " ")
         var c: [String: Int] = [:]
         for t in Tokenizer.terms(text) where t.count >= 4 && t.count <= 24 && !t.allSatisfy(\.isNumber) && !stop.contains(t) {
             c[t, default: 0] += 1

@@ -164,8 +164,16 @@ public struct Item: Identifiable, Hashable, Sendable {
 
     /// Everything searchable, in one string.
     public var searchableText: String {
-        ([title, body, summary ?? "", ocrText ?? "", record["sketchText"]?.string ?? "", record["inkText"]?.string ?? "",
-          url?.absoluteString ?? "", siteName ?? ""] + tags + aiKeywords).joined(separator: "\n")
+        var parts: [String] = [title, body]
+        parts.append(summary ?? "")
+        parts.append(ocrText ?? "")
+        parts.append(record["sketchText"]?.string ?? "")
+        parts.append(record["inkText"]?.string ?? "")
+        parts.append(url?.absoluteString ?? "")
+        parts.append(siteName ?? "")
+        parts += tags
+        parts += aiKeywords
+        return parts.joined(separator: "\n")
     }
 }
 

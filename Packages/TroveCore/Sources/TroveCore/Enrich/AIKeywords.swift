@@ -15,9 +15,7 @@ public enum AIKeywording {
 
     /// What's sent for one item: "title | keywords | the start of its text".
     static func brief(_ item: Item, local: [String]) -> String? {
-        let text = [item.summary ?? "", item.body, item.ocrText ?? "", item.record["inkText"]?.string ?? ""]
-            .lazy.filter { !$0.isEmpty }.joined(separator: " ").prefix(snippet * 3)
-            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let text = source(item).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let title = item.displayTitle
         guard !text.isEmpty || !["Untitled", "Screenshot", "Sketch", "Image"].contains(title) else { return nil }
         var parts = [String(title.prefix(80))]
@@ -28,9 +26,18 @@ public enum AIKeywording {
 
     /// What the keywords were made from: when this changes, they're made again.
     static func signature(_ item: Item) -> String {
-        let text = [item.summary ?? "", item.body, item.ocrText ?? "", item.record["inkText"]?.string ?? ""]
-            .lazy.filter { !$0.isEmpty }.joined(separator: " ").prefix(snippet * 3)
-        return String((item.displayTitle + "|" + String(text)).sha256Hex.prefix(16))
+        let text = source(item)
+        return String((item.displayTitle + "|" + text).sha256Hex.prefix(16))
+    }
+
+    /// The start of everything the item says.
+    private static func source(_ item: Item) -> String {
+        var parts: [String] = []
+        parts.append(item.summary ?? "")
+        parts.append(item.body)
+        parts.append(item.ocrText ?? "")
+        parts.append(item.record["inkText"]?.string ?? "")
+        return String(parts.filter { !$0.isEmpty }.joined(separator: " ").prefix(snippet * 3))
     }
 
     public struct Estimate: Sendable, Equatable {
