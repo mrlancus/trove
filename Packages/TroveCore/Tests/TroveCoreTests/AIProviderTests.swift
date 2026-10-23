@@ -335,3 +335,32 @@ struct KeywordTests {
         for word in few { #expect(await lib.search(word, limit: 50).contains { $0.id == short }, "\(word)") }
     }
 }
+
+struct AIKeywordTests {
+    @Test func improvesKeywordsCheaply() async throws {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let trip = await lib.addNote(title: "Trams", body: "Rode the 28 tram up to the castle, then pastéis de nata.")
+        _ = await lib.addNote(title: "Untitled", body: "")
+        let items = await lib.itemsNeedingAIKeywords()
+        #expect(items.count == 2)
+        let local = await KeywordCache.shared.keywords(for: items)
+        let est = AIKeywording.estimate(items, local: local, model: "claude-haiku-5-5")
+        #expect(est.items == 1 && (est.cost ?? 1) < 0.001)
+        // 100,000 items like this one stay a few dollars.
+        let big = AIKeywording.estimate(Array(repeating: items.first { $0.id == trip }!, count: 100_000), local: local, model: "claude-haiku-5-5")
+        #expect((big.cost ?? 99) < 5)
+
+        let net = AIProviderTests.FakeNet([(200, #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"{\"items\":[{\"n\":1,\"k\":[\"Lisbon\",\"holiday\",\"portugal\",\"holiday\"]}]}"}],"usage":{"input_tokens":300,"output_tokens":40}}"#)])
+        var s = AISettings()
+        s.apiKey = "k"
+        let done = try await AIClient(settings: s, transport: net.transport).improveKeywords(items, local: local, library: lib)
+        #expect(done == 1)
+        #expect(await lib.item(trip)?.aiKeywords == ["lisbon", "holiday", "portugal"])
+        #expect(await lib.itemsNeedingAIKeywords().isEmpty) // the empty one is marked done without being sent
+        #expect(await lib.search("portugal", limit: 5).first?.id == trip)
+        let prompt = String(data: net.requests[0].httpBody ?? Data(), encoding: .utf8) ?? ""
+        #expect(prompt.contains("1. Trams") && !prompt.contains(trip))
+        await lib.setBody(trip, "Something else entirely now")
+        #expect(await lib.itemsNeedingAIKeywords().map(\.id) == [trip])
+    }
+}

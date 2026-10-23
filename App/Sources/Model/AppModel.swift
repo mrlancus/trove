@@ -125,6 +125,9 @@ final class AppModel {
     /// What happened to the last screenshot brought in (Settings → Screenshots).
     var screenshotStatus: String?
     var screenshotProblem = false
+    /// Improve keywords with your AI (Settings → AI): progress, and the run (Stop cancels it).
+    var keywordRun: KeywordRun?
+    @ObservationIgnored var keywordTask: Task<Void, Never>?
     /// Read all past handwriting (Settings → AI): progress, and the run itself (Stop cancels it).
     var handwritingScan: HandwritingScan?
     @ObservationIgnored var handwritingScanTask: Task<Void, Never>?

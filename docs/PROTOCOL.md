@@ -459,6 +459,11 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   or `detailed`), `ask.pages` (most page pictures or grid squares Ask may look at per question,
   default 6, 0 = none) and `ask.clipboard` (bool, default true: Ask may search clipboard history,
   never clips that look like passwords or codes).
+- **AI keywords:** `aiKeywords` (array of lowercase strings) on an item: search words your AI added
+  that aren't in its text (topics, synonyms, places); indexed by search like tags. `aiKeywordsSig`
+  says what they were made from (a hash of the title and the start of the text): when it no longer
+  matches, they're made again. In `settings.ai`, `keywords.live` (bool, default false) makes them
+  for new and changed items in the background.
 - **Keeping an item from your AI:** `aiHidden: true` on an item means no AI request ever includes
   it: Ask's tools don't list, search, open or show it, and its handwriting is read on the device
   (Vision) instead. Missing or false = visible (the default).

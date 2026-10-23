@@ -82,6 +82,9 @@ public struct AISettings: Sendable, Equatable {
     public var pageBudget = 6
     /// Ask may search clipboard history (never passwords or codes).
     public var clipboardAccess = true
+    /// Make AI keywords for new and changed items as they arrive (in the background, inside the
+    /// monthly limit). Everything older is done with Improve keywords.
+    public var liveKeywords = false
 
     public enum Style: String, CaseIterable, Sendable {
         case concise, balanced, detailed
@@ -111,6 +114,7 @@ public struct AISettings: Sendable, Equatable {
         style = fields["ask.style"]?.string.flatMap(Style.init(rawValue:)) ?? .balanced
         pageBudget = Int(fields["ask.pages"]?.number ?? 6)
         clipboardAccess = fields["ask.clipboard"]?.bool ?? true
+        liveKeywords = fields["keywords.live"]?.bool ?? false
         monthlyLimit = max(0, fields["limit.background"]?.number ?? 1.0)
     }
 
@@ -124,6 +128,7 @@ public struct AISettings: Sendable, Equatable {
         f["ask.style"] = .string(style.rawValue)
         f["ask.pages"] = .number(Double(pageBudget))
         f["ask.clipboard"] = .bool(clipboardAccess)
+        f["keywords.live"] = .bool(liveKeywords)
         return f
     }
 

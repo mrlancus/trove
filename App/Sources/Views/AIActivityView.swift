@@ -153,6 +153,7 @@ struct AIActivityView: View {
         case .handwriting: "pencil.and.scribble"
         case .action: "wand.and.stars"
         case .test: "checkmark.seal"
+        case .keywords: "tag"
         }
     }
 }

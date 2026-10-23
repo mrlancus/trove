@@ -139,6 +139,27 @@ actor EnrichmentService {
                 if ai.settings.monthlyLimit > 0, await library.backgroundAISpend() >= ai.settings.monthlyLimit { aiLimitReached = true; break }
             }
         }
+        // Keywords from your AI for what's new or changed this week (older items wait for Improve
+        // keywords): one request of up to 40 a round, inside the monthly limit.
+        if let ai = ownAI, ai.settings.liveKeywords, Date() >= aiPausedUntil, !aiLimitReached, !Task.isCancelled {
+            let limit = ai.settings.monthlyLimit
+            if limit == 0 || (await library.backgroundAISpend()) < limit {
+                let recent = Int64(Date().addingTimeInterval(-7 * 86_400).timeIntervalSince1970 * 1000)
+                let due = await library.itemsNeedingAIKeywords().filter { (HLC($0.record.updatedHLC)?.millis ?? 0) >= recent }
+                if !due.isEmpty {
+                    let local = await KeywordCache.shared.keywords(for: all.filter(\.aiAllowed))
+                    do {
+                        try await ai.improveKeywords(Array(due.prefix(AIKeywording.batchSize)), local: local, library: library)
+                        round.requests += 1
+                        round.changed += 1
+                    } catch {
+                        pauseAI()
+                    }
+                }
+            } else {
+                aiLimitReached = true
+            }
+        }
         return round
     }
 

@@ -294,7 +294,9 @@ public struct AskTools: Sendable {
         var text = "\(items.count) items; \(shown.isEmpty ? "none here" : "\(start + 1)–\(start + shown.count)"), newest first. handle | title | kind | date | keywords\n"
         text += shown.map { item in
             var l = "\(Self.handle(item.id)) | \(item.displayTitle.prefix(60)) | \(item.kind.rawValue) | \(Self.day.string(from: item.createdAt))"
-            if let k = keywords[item.id], !k.isEmpty { l += " | " + k.joined(separator: " ") }
+            var k = keywords[item.id] ?? []
+            for w in item.aiKeywords where !k.contains(w) { k.append(w) }
+            if !k.isEmpty { l += " | " + k.joined(separator: " ") }
             return l
         }.joined(separator: "\n")
         if start + shown.count < items.count { text += "\nMore: index offset \(start + shown.count)." }
@@ -394,8 +396,8 @@ public struct AskTools: Sendable {
 /// cover the item: its most distinctive words (frequent in it, rare in the rest of the library, not
 /// in its title) are taken until they carry most of what sets it apart, at least 3 and at most 15,
 /// so a shopping list gets a few and a long notebook gets more. Kept until the item changes.
-actor KeywordCache {
-    static let shared = KeywordCache()
+public actor KeywordCache {
+    public static let shared = KeywordCache()
     static let fewest = 3
     static let most = 15
     /// Stop once the words taken carry this share of the item's distinctive weight.
@@ -405,7 +407,7 @@ actor KeywordCache {
     private var df: [String: Int] = [:]
     private var dfStamp = ""
 
-    func keywords(for items: [Item]) -> [String: [String]] {
+    public func keywords(for items: [Item]) -> [String: [String]] {
         // How many items each word is in: once per change to the library.
         let stamp = "\(items.count)|\(items.map(\.record.updatedHLC).max() ?? "")"
         var counted: [String: [String: Int]] = [:]
