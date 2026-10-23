@@ -710,7 +710,9 @@ private struct KeywordsRow: View {
                     Text("\(run.done) of \(run.total)").monospacedDigit().foregroundStyle(.secondary).fixedSize()
                     Button("Stop", role: .destructive) { model.stopKeywords() }.fixedSize()
                 }
-                Text("Adding search words · \(AIUsage.dollars(model.keywordRunCost)) so far").font(.caption).foregroundStyle(.secondary)
+                // Each request takes a while (it reads 20 items at once), so say which ones it's on.
+                Text("Adding search words to items \(run.done + 1)–\(min(run.done + AIKeywording.batchSize, run.total)) · \(AIUsage.dollars(model.keywordRunCost)) so far")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             } else {
                 LabeledContent {
                     Button("Improve keywords") { model.improveAllKeywords() }
@@ -730,7 +732,7 @@ private struct KeywordsRow: View {
     private var summary: String {
         var parts: [String] = []
         if let run = model.keywordRun, run.finished {
-            parts.append(run.error.map { "Stopped: \($0)." } ?? (run.stopped ? "Stopped after \(run.done) of \(run.total)." : "Done: \(run.done) items."))
+            parts.append(run.error.map { "Stopped after \(run.done) of \(run.total): \($0.hasSuffix(".") ? $0 : $0 + ".")" } ?? (run.stopped ? "Stopped after \(run.done) of \(run.total)." : "Done: \(run.done) items."))
             parts.append("Spent \(AIUsage.dollars(model.keywordRunCost)).")
         }
         if model.ownAI == nil { parts.append("Save your AI first.") }

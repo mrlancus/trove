@@ -346,9 +346,9 @@ struct AIKeywordTests {
         let local = await KeywordCache.shared.keywords(for: items)
         let est = AIKeywording.estimate(items, local: local, model: "claude-haiku-5-5")
         #expect(est.items == 1 && (est.cost ?? 1) < 0.001)
-        // 100,000 items like this one stay a few dollars.
+        // 100,000 items like this one stay a few dollars, thinking included.
         let big = AIKeywording.estimate(Array(repeating: items.first { $0.id == trip }!, count: 100_000), local: local, model: "claude-haiku-5-5")
-        #expect((big.cost ?? 99) < 5)
+        #expect((big.cost ?? 99) < 8)
 
         let net = AIProviderTests.FakeNet([(200, #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"{\"items\":[{\"n\":1,\"k\":[\"Lisbon\",\"holiday\",\"portugal\",\"holiday\"]}]}"}],"usage":{"input_tokens":300,"output_tokens":40}}"#)])
         var s = AISettings()
@@ -362,5 +362,23 @@ struct AIKeywordTests {
         #expect(prompt.contains("1. Trams") && !prompt.contains(trip))
         await lib.setBody(trip, "Something else entirely now")
         #expect(await lib.itemsNeedingAIKeywords().map(\.id) == [trip])
+    }
+
+    @Test func cutOffAnswersAreSplitNotFailed() async throws {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let a = await lib.addNote(title: "Trams", body: "Rode the 28 tram up to the castle.")
+        let b = await lib.addNote(title: "Pasta", body: "Boil the water, salt it well.")
+        let items = await lib.itemsNeedingAIKeywords()
+        let cut = #"{"model":"claude-haiku-5-5","stop_reason":"max_tokens","content":[],"usage":{"input_tokens":300,"output_tokens":4000}}"#
+        func one(_ k: String) -> String {
+            #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"{\"items\":[{\"n\":1,\"k\":[\"\#(k)\"]}]}"}],"usage":{"input_tokens":200,"output_tokens":40}}"#
+        }
+        let net = AIProviderTests.FakeNet([(200, cut), (200, one("first")), (200, one("second"))])
+        var s = AISettings()
+        s.apiKey = "k"
+        let done = try await AIClient(settings: s, transport: net.transport).improveKeywords(items, local: [:], library: lib)
+        #expect(done == 2 && net.requests.count == 3)
+        let words = [await lib.item(a)?.aiKeywords ?? [], await lib.item(b)?.aiKeywords ?? []].flatMap { $0 }
+        #expect(Set(words) == ["first", "second"])
     }
 }

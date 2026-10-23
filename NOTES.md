@@ -63,10 +63,12 @@ Not yet run on a device.
 - **Keywords from your AI** (Settings → AI, `AIKeywording`, user asked for it, "fairly cheap even with
   100,000 items"): Improve keywords shows how many items need them and the estimated cost first,
   then progress, cost so far and Stop. Each item goes as a brief (title | its on-device keywords |
-  first 300 characters, ~120 tokens), 40 to a request, numbered not by id; empty items are marked
-  done unsent; an item is redone only when its title or start changes. About $0.025 per 1,000 items
-  on Haiku 5.5, ~$2–3 for 100,000 (estimates are priced per request, so Haiku's long-prompt price
-  never applies). Saved as `aiKeywords` (searchable, shown in Ask's index). "Keep keywords up to
+  first 300 characters, ~120 tokens), 20 to a request, numbered not by id; empty items are marked
+  done unsent; an item is redone only when its title or start changes. Haiku at medium effort thinks
+  ~100 tokens per item, which is most of the cost: about $0.06 per 1,000 items, ~$6 for 100,000
+  (estimates are priced per request, so Haiku's long-prompt price never applies). The token limit
+  leaves room for that thinking (at 40 items with ~3,900 tokens every answer was cut off), and a
+  request that's still cut off is split in two and retried instead of stopping the run. Saved as `aiKeywords` (searchable, shown in Ask's index). "Keep keywords up to
   date" does new and changed items (this week) in the background, one request a round, inside the
   monthly limit (keywords count as background spending).
 - **Clipboard**: a `clipboard` tool (words, kind, dates; `c:` handles; one line per clip, 90

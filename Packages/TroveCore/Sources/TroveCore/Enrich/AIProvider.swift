@@ -198,6 +198,8 @@ public struct AIClient: Sendable {
         public let status: Int
         public let message: String
         public var errorDescription: String? { message }
+        /// The answer hit its token limit (thinking included) before it was finished.
+        public static let cutOff = Failure(status: 200, message: "The answer was cut off.")
     }
 
     public enum Part: Sendable {
@@ -305,7 +307,7 @@ public struct AIClient: Sendable {
         let usage = await meterUsage(o, model: model, purpose: purpose)
         let stop = o["stop_reason"]?.string
         if stop == "refusal" { throw Failure(status: 200, message: "The model declined this one.") }
-        if stop == "max_tokens" { throw Failure(status: 200, message: "The answer was cut off.") }
+        if stop == "max_tokens" { throw Failure.cutOff }
         let text = (o["content"]?.array ?? []).compactMap { block -> String? in
             block.object?["type"]?.string == "text" ? block.object?["text"]?.string : nil
         }.joined()
