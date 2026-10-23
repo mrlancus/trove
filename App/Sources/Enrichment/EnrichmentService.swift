@@ -143,7 +143,8 @@ actor EnrichmentService {
         // keywords): one request of up to 40 a round, inside the monthly limit.
         if let ai = ownAI, ai.settings.liveKeywords, Date() >= aiPausedUntil, !aiLimitReached, !Task.isCancelled {
             let limit = ai.settings.monthlyLimit
-            if limit == 0 || (await library.backgroundAISpend()) < limit {
+            let spent = limit > 0 ? await library.backgroundAISpend() : 0
+            if limit == 0 || spent < limit {
                 let recent = Int64(Date().addingTimeInterval(-7 * 86_400).timeIntervalSince1970 * 1000)
                 let due = await library.itemsNeedingAIKeywords().filter { (HLC($0.record.updatedHLC)?.millis ?? 0) >= recent }
                 if !due.isEmpty {
