@@ -128,7 +128,7 @@ struct AIProviderTests {
         #expect(calls.count == 1 && calls[0].purpose == .handwriting && calls[0].about == "Page 1")
         // 1M input at $0.10 (over 100K prompt: $0.50) and 200K output at $2.50: Haiku 5.5's long-prompt price.
         #expect(abs((calls[0].cost ?? 0) - (0.5 + 0.5)) < 1e-9)
-        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "medium") // Haiku always at medium
+        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "low") // reading a page needs little thinking
         #expect(AIPrices.cost(model: "claude-opus-5-5", input: 0, output: 0, cacheRead: 1_000_000) == 0.20)
         #expect(AIPrices.cost(model: "claude-haiku-5-5", input: 10_000, output: 1_000) == (10_000 * 0.10 + 1_000 * 0.50) / 1_000_000)
         #expect(AIPrices.cost(model: "gpt-x", input: 1, output: 1) == nil)
@@ -348,7 +348,7 @@ struct AIKeywordTests {
         #expect(est.items == 1 && (est.cost ?? 1) < 0.001)
         // 100,000 items like this one stay a few dollars, thinking included.
         let big = AIKeywording.estimate(Array(repeating: items.first { $0.id == trip }!, count: 100_000), local: local, model: "claude-haiku-5-5")
-        #expect((big.cost ?? 99) < 8)
+        #expect((big.cost ?? 99) < 5)
 
         let net = AIProviderTests.FakeNet([(200, #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"{\"items\":[{\"n\":1,\"k\":[\"Lisbon\",\"holiday\",\"portugal\",\"holiday\"]}]}"}],"usage":{"input_tokens":300,"output_tokens":40}}"#)])
         var s = AISettings()
@@ -360,6 +360,7 @@ struct AIKeywordTests {
         #expect(await lib.search("portugal", limit: 5).first?.id == trip)
         let prompt = String(data: net.requests[0].httpBody ?? Data(), encoding: .utf8) ?? ""
         #expect(prompt.contains("1. Trams") && !prompt.contains(trip))
+        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "low")
         await lib.setBody(trip, "Something else entirely now")
         #expect(await lib.itemsNeedingAIKeywords().map(\.id) == [trip])
     }

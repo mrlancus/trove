@@ -64,8 +64,8 @@ Not yet run on a device.
   100,000 items"): Improve keywords shows how many items need them and the estimated cost first,
   then progress, cost so far and Stop. Each item goes as a brief (title | its on-device keywords |
   first 300 characters, ~120 tokens), 20 to a request, numbered not by id; empty items are marked
-  done unsent; an item is redone only when its title or start changes. Haiku at medium effort thinks
-  ~100 tokens per item, which is most of the cost: about $0.06 per 1,000 items, ~$6 for 100,000
+  done unsent; an item is redone only when its title or start changes. It runs at low effort (at
+  medium Haiku thought ~100 tokens per item, most of the cost): about $0.04 per 1,000 items, ~$4 for 100,000
   (estimates are priced per request, so Haiku's long-prompt price never applies). The token limit
   leaves room for that thinking (at 40 items with ~3,900 tokens every answer was cut off), and a
   request that's still cut off is split in two and retried instead of stopping the run. Saved as `aiKeywords` (searchable, shown in Ask's index). "Keep keywords up to
@@ -100,7 +100,9 @@ Not yet run on a device.
 - **Reading handwriting**: "Read new handwriting as it arrives" (live) now takes only what's added
   or written on since it was turned on (`live.since`); everything older waits for **Read all past
   handwriting** (Settings → AI), which shows a progress bar, pages and cost so far, and Stop.
-- **Haiku always at medium effort** (the user's choice; it was low for reading pages).
+- **Effort** (the user's choice, after asking whether it matters): low for reading handwriting and
+  keywords (simple jobs where thinking is most of the cost), medium for Ask (it plans several steps).
+  It was briefly medium everywhere for Haiku.
 - **Costs lower than the console**: prices were right (cache reads on Opus 5.5 and Fable 5.1 are
   now priced lower, as they are). Likely gaps: spending before metering began, devices still on an
   older Trove, other apps on the same key, and requests given up after 2 minutes (still billed): the

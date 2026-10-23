@@ -4,8 +4,8 @@ import Foundation
 /// its text (topics, categories, synonyms, places, people: "holiday", "Portugal" for a note about
 /// Lisbon trams), saved on the item (`aiKeywords`) where search and Ask's index find them.
 ///
-/// Built to stay cheap at any size (about $0.06 per 1,000 items on Claude Haiku 5.5, so ~$6 for
-/// 100,000, most of it the model's thinking): each item is sent as a brief (title, its on-device
+/// Built to stay cheap at any size (about $0.04 per 1,000 items on Claude Haiku 5.5, so ~$4 for
+/// 100,000, much of it the model's thinking, kept short at low effort): each item is sent as a brief (title, its on-device
 /// keywords, the first 300 characters, ~120 tokens), never its whole text; 20 items share a request;
 /// items are numbered rather than named by id; the reply is a few words each; empty items are
 /// skipped; and an item is done again only when its brief changes. A request whose answer runs out
@@ -59,7 +59,7 @@ public enum AIKeywording {
         }
         let batches = (count + batchSize - 1) / batchSize
         input += batches * 350                          // the instructions
-        let output = count * 100 + batches * 300        // a few words each, and the thinking about each
+        let output = count * 50 + batches * 200         // a few words each, and a little thinking about each
         // Priced per request: each is small, so long-prompt prices never apply.
         let perRequest = batches == 0 ? 0 : AIPrices.cost(model: model, input: input / batches, output: output / batches)
         return Estimate(items: count, inputTokens: input, outputTokens: output, cost: perRequest.map { $0 * Double(batches) })
@@ -111,7 +111,7 @@ extension AIClient {
         do {
             // Room to spare: only what's used is billed, and thinking counts against it.
             reply = try await complete([.text(AIKeywording.instructions + "\n\n" + list)], schema: AIKeywording.schema,
-                                       maxTokens: 4000 + sent.count * 400,
+                                       maxTokens: 4000 + sent.count * 400, effort: "low",
                                        purpose: Purpose(.keywords, about: "\(sent.count) items"))
         } catch let failure as Failure where failure == .cutOff && sent.count > 1 {
             // Ran out of room: the two halves, each on its own.

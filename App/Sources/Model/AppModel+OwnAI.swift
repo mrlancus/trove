@@ -3,7 +3,7 @@ import TroveCore
 
 /// Your own AI (Settings → AI): a provider and API key you add once, used straight from this device
 /// for Ask, note and page actions, and reading handwriting. Fast (the default), Smarter and Best
-/// are the models you chose, always at medium effort.
+/// are the models you chose, at low effort for simple jobs (pages, keywords) and medium for Ask.
 extension AppModel {
     /// The client for your AI, when it's set up. Every request it makes is logged (Activity, costs).
     var ownAI: AIClient? {
