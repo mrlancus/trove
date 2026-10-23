@@ -174,7 +174,7 @@ extension Library {
 }
 
 /// Talks to the provider: Claude's Messages API, or any OpenAI-style chat API (OpenAI, Gemini,
-/// OpenRouter, Mistral, Groq, a local Ollama or LM Studio…). Always at medium effort.
+/// OpenRouter, Mistral, Groq, a local Ollama or LM Studio…). Low effort for simple jobs, medium for Ask.
 public struct AIClient: Sendable {
     public typealias Transport = @Sendable (URLRequest) async throws -> (Data, Int)
 
@@ -198,6 +198,8 @@ public struct AIClient: Sendable {
         public let status: Int
         public let message: String
         public var errorDescription: String? { message }
+        /// The answer hit its token limit (thinking included) before it was finished.
+        public static let cutOff = Failure(status: 200, message: "The answer was cut off.")
     }
 
     public enum Part: Sendable {
@@ -233,14 +235,13 @@ public struct AIClient: Sendable {
 
     /// One request. With `schema`, the reply is JSON in that shape (structured output where the API
     /// has it, else asked for in the prompt).
-    /// `effort` is medium unless the job is simple (reading a page is "low": the thinking is billed
-    /// as output, and transcribing needs little of it). Haiku always runs at medium: the user's
-    /// choice, since low read worse and Haiku is cheap enough.
+    /// `effort` is medium unless the job is simple: reading a page and making keywords are "low" (the
+    /// thinking is billed as output and is most of their cost, and they need little of it); Ask, which
+    /// plans searches over several steps, is medium. The user's choice.
     public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
                          effort: String = "medium", purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
-        let effort = Self.isHaiku(model) ? "medium" : effort
         if settings.provider == .anthropic {
             return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
         }
@@ -305,7 +306,7 @@ public struct AIClient: Sendable {
         let usage = await meterUsage(o, model: model, purpose: purpose)
         let stop = o["stop_reason"]?.string
         if stop == "refusal" { throw Failure(status: 200, message: "The model declined this one.") }
-        if stop == "max_tokens" { throw Failure(status: 200, message: "The answer was cut off.") }
+        if stop == "max_tokens" { throw Failure.cutOff }
         let text = (o["content"]?.array ?? []).compactMap { block -> String? in
             block.object?["type"]?.string == "text" ? block.object?["text"]?.string : nil
         }.joined()
@@ -355,7 +356,6 @@ public struct AIClient: Sendable {
         throw lastError ?? Failure(status: 0, message: "The AI didn't answer.")
     }
 
-    static func isHaiku(_ model: String) -> Bool { model.lowercased().contains("haiku") }
 
     func send(_ request: URLRequest) async throws -> JSONValue {
         let (data, status) = try await transport(request)
