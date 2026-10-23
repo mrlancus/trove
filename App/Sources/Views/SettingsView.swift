@@ -405,6 +405,8 @@ private struct OwnAISection: View {
             Text("Ask looks at pictures only when the text read from a page isn't enough, and at a big whiteboard one square at a time. Each picture costs about 1,500 tokens.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Ask can search my clipboard history", isOn: $draft.clipboardAccess)
+            KeywordsRow()
+            Toggle("Keep keywords up to date as things change", isOn: $draft.liveKeywords)
             Toggle("Read new handwriting as it arrives", isOn: Binding(get: { draft.readHandwriting }, set: { on in
                 draft.readHandwriting = on
                 // Live from now: what's already in Trove waits for Read all past handwriting.
@@ -692,6 +694,51 @@ private struct HandwritingScanRow: View {
         guard let waiting else { return "Looking…" }
         if model.ownAI == nil { return "Save your AI first." }
         return waiting == 0 ? "Your AI has read everything." : "\(waiting) sketches, notebooks and pages your AI hasn't read. You can stop at any time."
+    }
+}
+
+/// Improve keywords with your AI: what it would cost first, then progress with Stop.
+private struct KeywordsRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var estimate: AIKeywording.Estimate?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let run = model.keywordRun, !run.finished {
+                HStack(spacing: 10) {
+                    ProgressView(value: run.fraction)
+                    Text("\(run.done) of \(run.total)").monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                    Button("Stop", role: .destructive) { model.stopKeywords() }.fixedSize()
+                }
+                Text("Adding search words · \(AIUsage.dollars(model.keywordRunCost)) so far").font(.caption).foregroundStyle(.secondary)
+            } else {
+                LabeledContent {
+                    Button("Improve keywords") { model.improveAllKeywords() }
+                        .disabled(model.ownAI == nil || (estimate?.items ?? 0) == 0)
+                        .fixedSize()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Keywords from your AI")
+                        Text(summary).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .task(id: model.keywordRun?.finished) { estimate = await model.keywordEstimate() }
+    }
+
+    private var summary: String {
+        var parts: [String] = []
+        if let run = model.keywordRun, run.finished {
+            parts.append(run.error.map { "Stopped: \($0)." } ?? (run.stopped ? "Stopped after \(run.done) of \(run.total)." : "Done: \(run.done) items."))
+            parts.append("Spent \(AIUsage.dollars(model.keywordRunCost)).")
+        }
+        if model.ownAI == nil { parts.append("Save your AI first.") }
+        else if let e = estimate {
+            parts.append(e.items == 0 ? "Every item has them." : "\(e.items) items need them: about \(e.cost.map(AIUsage.dollars) ?? "an unknown cost") with \(AIModelName.pretty(model.aiSettings.model(.fast))).")
+        } else { parts.append("Working out the cost…") }
+        parts.append("Adds topics and other words that aren't in the text (\"holiday\" for a note about Lisbon trams), so search and Ask find more. Only a short summary of each item is sent.")
+        return parts.joined(separator: " ")
     }
 }
 

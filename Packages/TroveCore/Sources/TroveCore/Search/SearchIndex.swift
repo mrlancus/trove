@@ -28,7 +28,8 @@ public struct SearchIndex: Sendable {
     /// The searchable fields of an item and their weights, in scoring order (core/search.js ITEM_FIELDS).
     static func fields(_ item: Item) -> [(String, Double)] {
         [(item.title, 3), (item.tags.joined(separator: " "), 2.5), (item.summary ?? "", 1.5), (item.siteName ?? "", 1.5), (item.body, 1),
-         (item.ocrText ?? "", 1), (item.sketchText ?? "", 1), (item.inkText ?? "", 1), (item.url?.host ?? "", 1)]
+         (item.ocrText ?? "", 1), (item.sketchText ?? "", 1), (item.inkText ?? "", 1), (item.url?.host ?? "", 1),
+         (item.aiKeywords.joined(separator: " "), 2)]
     }
 
     public mutating func update(_ item: Item) {

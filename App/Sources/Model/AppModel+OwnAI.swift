@@ -235,3 +235,66 @@ extension AppModel {
         handwritingScanTask?.cancel()
     }
 }
+
+// MARK: Improve keywords with your AI
+
+extension AppModel {
+    /// Making AI keywords for everything, by hand (Settings → AI): how far it's got.
+    struct KeywordRun: Equatable {
+        var total = 0
+        var done = 0
+        var started = Date()
+        var finished = false
+        var stopped = false
+        var error: String?
+        var fraction: Double { total == 0 ? 1 : Double(done) / Double(total) }
+    }
+
+    /// What it has cost so far (this device's keyword requests since it started).
+    var keywordRunCost: Double {
+        guard let run = keywordRun else { return 0 }
+        let me = config?.deviceId ?? ""
+        return AIUsage.Total(aiCalls.filter { $0.purpose == .keywords && $0.at >= run.started && $0.device == me }).cost
+    }
+
+    /// How many items still need keywords and roughly what doing them all would cost.
+    func keywordEstimate() async -> AIKeywording.Estimate? {
+        guard let library else { return nil }
+        let items = await library.itemsNeedingAIKeywords()
+        let local = await KeywordCache.shared.keywords(for: await library.items().filter(\.aiAllowed))
+        return AIKeywording.estimate(items, local: local, model: aiSettings.model(.fast))
+    }
+
+    /// Every item that needs them, 40 to a request, until done or stopped.
+    func improveAllKeywords() {
+        guard keywordTask == nil, let library, let ai = ownAI else { return }
+        keywordTask = Task { [weak self] in
+            guard let self else { return }
+            let items = await library.itemsNeedingAIKeywords()
+            let local = await KeywordCache.shared.keywords(for: await library.items().filter(\.aiAllowed))
+            var run = KeywordRun(total: items.count)
+            self.keywordRun = run
+            var rest = items[...]
+            while !rest.isEmpty, !Task.isCancelled {
+                let batch = Array(rest.prefix(AIKeywording.batchSize))
+                rest = rest.dropFirst(batch.count)
+                do {
+                    try await ai.improveKeywords(batch, local: local, library: library)
+                } catch {
+                    run.error = error.localizedDescription
+                    break
+                }
+                run.done += batch.count
+                self.keywordRun = run
+            }
+            run.stopped = Task.isCancelled
+            run.finished = true
+            self.keywordRun = run
+            self.keywordTask = nil
+            await self.reload()
+            Task { await self.syncNow() }
+        }
+    }
+
+    func stopKeywords() { keywordTask?.cancel() }
+}

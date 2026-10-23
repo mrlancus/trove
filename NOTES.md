@@ -55,9 +55,20 @@ Not yet run on a device.
   per question (default 6, 0 = none; `AskTools.Budget` refuses more and tells the model to answer
   from what it has). Items and clips are named by 8-character handles instead of 36-character ids;
   lines are `handle | title | kind | date | folder | snippet`.
-- **Keywords**: the index gives each item three words that say what it's about, worked out on the
-  device (`KeywordCache`: frequent in the item, rare in the library, not in its title; cached until
-  it changes). No AI and no cost, and it stays current as notes change.
+- **Keywords**: the index gives each item the words that say what it's about, worked out on the
+  device (`KeywordCache`, no AI, no cost, cached until the item changes): its most distinctive words
+  (frequent in it, rare in the library, not in its title) until they carry 60 % of what sets it
+  apart, 3 to 15. Made with the search index's own `Tokenizer.terms` (folding, stemming), so every
+  keyword is a word `search` finds the item by; the tool descriptions say so.
+- **Keywords from your AI** (Settings → AI, `AIKeywording`, user asked for it, "fairly cheap even with
+  100,000 items"): Improve keywords shows how many items need them and the estimated cost first,
+  then progress, cost so far and Stop. Each item goes as a brief (title | its on-device keywords |
+  first 300 characters, ~120 tokens), 40 to a request, numbered not by id; empty items are marked
+  done unsent; an item is redone only when its title or start changes. About $0.025 per 1,000 items
+  on Haiku 5.5, ~$2–3 for 100,000 (estimates are priced per request, so Haiku's long-prompt price
+  never applies). Saved as `aiKeywords` (searchable, shown in Ask's index). "Keep keywords up to
+  date" does new and changed items (this week) in the background, one request a round, inside the
+  monthly limit (keywords count as background spending).
 - **Clipboard**: a `clipboard` tool (words, kind, dates; `c:` handles; one line per clip, 90
   characters) and `read` on a clip for all of it. Never clips that look like passwords, keys or
   codes (`SensitiveDetector`). Settings → AI → "Ask can search my clipboard history" (on).

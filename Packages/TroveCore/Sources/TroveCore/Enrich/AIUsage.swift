@@ -14,6 +14,8 @@ public enum AIUsage {
         case action
         /// Settings → AI → Test.
         case test
+        /// Search words for items (Improve keywords, and keeping them up to date).
+        case keywords
 
         public var label: String {
             switch self {
@@ -21,11 +23,12 @@ public enum AIUsage {
             case .handwriting: "Reading handwriting"
             case .action: "Note actions"
             case .test: "Test"
+            case .keywords: "Keywords"
             }
         }
 
         /// Runs without you asking (counts against the monthly limit for background work).
-        public var isBackground: Bool { self == .handwriting }
+        public var isBackground: Bool { self == .handwriting || self == .keywords }
     }
 
     /// One request to the provider.
