@@ -83,6 +83,12 @@ struct TroveApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultPosition(.center)
 
+        // Settings → AI → Activity and costs.
+        Window("AI Activity", id: "ai-activity") {
+            AIActivityView().environment(model).frame(minWidth: 560, minHeight: 520)
+        }
+        .defaultSize(width: 680, height: 720)
+
         MenuBarExtra {
             MenuBarContent().environment(model)
         } label: {

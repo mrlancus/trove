@@ -76,6 +76,23 @@ public struct AISettings: Sendable, Equatable {
     public var readHandwriting = true
     /// When live reading was turned on. Before it was kept (nil), from when the app opened.
     public var liveSince: Date?
+    /// How long Ask's answers are.
+    public var style: Style = .balanced
+    /// Most pictures of pages (or grid squares) Ask may look at for one question; 0 = none.
+    public var pageBudget = 6
+    /// Ask may search clipboard history (never passwords or codes).
+    public var clipboardAccess = true
+
+    public enum Style: String, CaseIterable, Sendable {
+        case concise, balanced, detailed
+        public var label: String {
+            switch self {
+            case .concise: "Concise"
+            case .balanced: "Balanced"
+            case .detailed: "Detailed"
+            }
+        }
+    }
     /// The most background work (reading handwriting) may spend a month, in US dollars, across
     /// every device; 0 means no limit. Ask and actions you start yourself aren't limited.
     public var monthlyLimit = 1.0
@@ -91,6 +108,9 @@ public struct AISettings: Sendable, Equatable {
         }
         readHandwriting = fields["readHandwriting"]?.bool ?? true
         liveSince = fields["live.since"]?.date
+        style = fields["ask.style"]?.string.flatMap(Style.init(rawValue:)) ?? .balanced
+        pageBudget = Int(fields["ask.pages"]?.number ?? 6)
+        clipboardAccess = fields["ask.clipboard"]?.bool ?? true
         monthlyLimit = max(0, fields["limit.background"]?.number ?? 1.0)
     }
 
@@ -101,6 +121,9 @@ public struct AISettings: Sendable, Equatable {
         ]
         for t in Tier.allCases { f["model.\(t.rawValue)"] = .string(models[t] ?? "") }
         if let liveSince { f["live.since"] = JSONValue(liveSince) }
+        f["ask.style"] = .string(style.rawValue)
+        f["ask.pages"] = .number(Double(pageBudget))
+        f["ask.clipboard"] = .bool(clipboardAccess)
         return f
     }
 

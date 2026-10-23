@@ -204,17 +204,21 @@ struct AIProviderTests {
         let open = try await lib.addFile(Data([1, 2, 3]), name: "Whiteboard.pdf", mime: "application/pdf")
         let secret = await lib.addNote(title: "Diary", body: "secret whiteboard plans")
         await lib.setAIAllowed(secret, false)
-        let tools = AskTools(library: lib, pages: { item, first, count in
-            (item.id == open && first == 0 ? Array(repeating: Data([0xFF, 0xD8]), count: min(count, 2)) : [], 2)
-        })
+        let tools = AskTools(library: lib, pages: { item, first, count, _ in
+            AskTools.PageView(images: item.id == open && first == 0 ? Array(repeating: Data([0xFF, 0xD8]), count: min(count, 2)) : [], total: 2)
+        }, pageBudget: 3)
         #expect(await tools.run("search", ["query": "whiteboard"]).listed == [open])
         #expect(await tools.run("read", ["ids": [.string(secret)]]).opened.isEmpty)
         let index = await tools.run("index", [:]).text
         #expect(index.contains("Whiteboard") && !index.contains("Diary") && index.hasPrefix("1 items"))
-        #expect(await tools.run("overview", [:]).text.contains("1 more items are kept private"))
-        #expect(await tools.run("read", ["ids": [.string(open)]]).text.contains("use view"))
+        #expect(await tools.run("overview", [:]).text.contains("1 more items are private"))
+        #expect(await tools.run("read", ["ids": [.string(open)]]).text.contains("view them"))
         let viewed = await tools.run("view", ["id": .string(open), "count": 4])
         #expect(viewed.images.count == 2 && viewed.text.contains("pages 1–2 of 2") && viewed.opened == [open])
+        // Three pictures allowed for the question: one left, then none.
+        #expect(await tools.run("view", ["id": .string(open), "count": 2, "page": 2]).images.isEmpty) // fake has no page 2: nothing spent
+        #expect(await tools.run("view", ["id": .string(open), "count": 2]).images.count == 1)
+        #expect(await tools.run("view", ["id": .string(open)]).text.contains("limit"))
         #expect(await tools.run("view", ["id": .string(secret)]).images.isEmpty)
 
         // The pictures go back to Claude inside the tool result.
@@ -224,7 +228,8 @@ struct AIProviderTests {
         ])
         var s = AISettings()
         s.apiKey = "k"
-        _ = try await AIClient(settings: s, transport: net.transport).research("What's on it?", tools: tools)
+        let fresh = AskTools(library: lib, pages: { _, _, count, _ in AskTools.PageView(images: Array(repeating: Data([0xFF, 0xD8]), count: min(count, 1)), total: 2) })
+        _ = try await AIClient(settings: s, transport: net.transport).research("What's on it?", tools: fresh)
         #expect((net.body(0)["tools"] as? [[String: Any]])?.contains { $0["name"] as? String == "view" } == true)
         let msgs = (net.body(1)["messages"] as? [[String: Any]]) ?? []
         let result = (msgs.last?["content"] as? [[String: Any]])?.first
@@ -272,5 +277,39 @@ struct ScreenshotRouteTests {
         let a = try await lib.addScreenshotClip(Data([1, 2, 3]), device: "iPad")
         let b = try await lib.addScreenshotClip(Data([1, 2, 3]), device: "iPhone")
         #expect(a != nil && a == b) // the same screenshot seen by two devices is one clip
+    }
+}
+
+struct AIModelNameTests {
+    @Test func prettyNames() {
+        #expect(AIModelName.pretty("claude-sonnet-5-5") == "Claude Sonnet 5.5")
+        #expect(AIModelName.pretty("anthropic/claude-haiku-5-5") == "Claude Haiku 5.5")
+        #expect(AIModelName.pretty("claude-opus-4-5-20251101") == "Claude Opus 4.5")
+        #expect(AIModelName.pretty("gpt-5-mini") == "GPT-5 Mini")
+        #expect(AIModelName.pretty("gemini-2.5-flash") == "Gemini 2.5 Flash")
+        #expect(AIModelName.pretty("llama3.2:latest") == "Llama3.2")
+        #expect(AIPrices.relativeLabel("claude-haiku-5-5", to: "claude-haiku-5-5") == "1×")
+        #expect(AIPrices.relativeLabel("claude-sonnet-5-5", to: "claude-haiku-5-5") == "20×")
+        #expect(AIPrices.relativeLabel("claude-opus-5-5", to: "claude-haiku-5-5") == "40×")
+        #expect(AIPrices.relativeLabel("x/y", to: "claude-haiku-5-5") == nil)
+    }
+
+    @Test func handlesKeywordsAndClipboard() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let a = await lib.addNote(title: "Trip", body: "Lisbon trams and pastéis, Lisbon again; Lisbon tiles.")
+        _ = await lib.addNote(title: "Shopping", body: "milk eggs bread")
+        _ = await lib.addClip(text: "https://example.com/recipe-pasta")
+        _ = await lib.addClip(text: "hunter2-Password!9")
+        let tools = AskTools(library: lib, clipboard: true)
+        let index = await tools.run("index", [:]).text
+        #expect(index.contains(AskTools.handle(a) + " | Trip") && index.contains("lisbon"))
+        #expect(await tools.run("read", ["ids": [.string(AskTools.handle(a))]]).opened == [a])
+        let found = await tools.run("clipboard", ["query": "pasta"])
+        #expect(found.text.hasPrefix("1 clips match") && found.text.contains("example.com"))
+        let handle = String(found.text.split(separator: "\n")[1].split(separator: " ")[0])
+        #expect(await tools.run("read", ["ids": [.string(handle)]]).text.contains("recipe-pasta"))
+        #expect(!(await tools.run("clipboard", [:]).text.contains("hunter2")))
+        #expect(await tools.run("clipboard", ["query": "x"]).step.isEmpty == false)
+        #expect(await AskTools(library: lib).run("clipboard", [:]).text.contains("no tool")) // off unless allowed
     }
 }
