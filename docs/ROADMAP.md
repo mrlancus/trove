@@ -1,5 +1,7 @@
 # Trove roadmap: what to build next
 
+> **Superseded for new work by `docs/MASTER_PLAN.md` (2026-11-02).** Most of this roadmap has landed; the master plan continues the open items.
+
 _Written 2026-10-21 from a read of the code as it stands (commit fe47b18). The user asked for "a detailed
 plan of what else we can do to any part of Trove": new features, faster everything (searches above
 all), **sketching good enough to be serious competition for GoodNotes**, and how AI, GitHub,

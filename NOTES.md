@@ -906,7 +906,15 @@ user says "publish" (`cd server && npx wrangler deploy`).
 - **Drawing**: researched and planned, not built (`docs/DRAWING_PLAN.md`).
 
 ## Next steps
-**The full plan is `docs/ROADMAP.md`** (sketching vs GoodNotes, search, performance, AI, bridges to
+**Newest plan: `docs/MASTER_PLAN.md`** (2026-11-02, the user: "improve everything … massively increase
+performance and battery life … must not miss a thing"). It has research into Paste, GoodNotes/Notability,
+Obsidian and Apple Notes, a performance and battery architecture (P1 change feed: stop rebuilding the whole
+library on every change; P8 Mac clipboard watcher; P10 batched segment fetch; P11 iCloud without directory
+walks…), the TextKit 2 editor, Obsidian-style navigation and Views, Paste-style clipboard, notebooks, capture,
+AI, sync/security, CI performance tests, decisions for the user (§13) and an order (§14). Start with round 1
+unless the user says otherwise.
+
+**The earlier plan is `docs/ROADMAP.md`** (mostly landed) (sketching vs GoodNotes, search, performance, AI, bridges to
 other services, GitHub). Its "Decisions for the user" list is still open; ask before starting items marked ❓.
 
 1. **This round on devices**: the user tries drawing with Apple Pencil on the iPad (app and Safari),
