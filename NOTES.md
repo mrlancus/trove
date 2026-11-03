@@ -36,7 +36,45 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: Ask that reads whiteboards, searches the clipboard and spends less (user: "AI activity bugs out and you can't go back", "model selection not centred, show relative cost and proper names", "whiteboards too low resolution", "make it more concise, read fewer pages, only specific sections", "a keyword summary of each note", "tailored to the app", "let it access clipboard history, VERY well optimised")
+## Latest round: the master plan, round 1 (user: "do everything!"; GoodNotes first; branch `claude/trove-research-improvements-dwcw63`, not merged to main yet)
+Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
+`workflow_dispatch` (branch builds never publish the `latest` release). Not yet run on a device.
+- **Speed and battery** (P1, P6, P8, P9): TroveCore has a **change feed** (`RecordStore.changes(since:)`,
+  `SyncEngine.changes`, `Library.itemChanges`): the search index and the item list update only the
+  records that changed instead of walking the library. Mac clipboard checks adapt (0.3 s while you use
+  the Mac, 1 s, 2 s when idle, 25 % timer tolerance) and stop while the screen sleeps; sync, the live
+  socket and clipboard pause on sleep and resume with one sync on wake; the live socket pings every
+  50 s (was 25 s); while live, polling is a 5–10 min safety net; Spotlight remembers what it indexed
+  (`spotlight-indexed.plist` in Caches) so launches don't re-index everything, and drops items deleted
+  elsewhere; open items found by id, not by scanning. **CI: built OK** (20c8b56).
+- **Math Assist** (G7, N10): `TroveCore/Math` (parser and solver: arithmetic, powers, roots, %, trig in
+  degrees, variables down the page, linear equations, checks with ✓/✗, worked steps), `EqualsDetector`
+  (spots `=` from two strokes' shapes, no model), `MathLine` (only the line left of the `=`),
+  `MathCandidates` (top-10 guesses × look-alike swaps, the one that's valid maths wins; unsure → "?"),
+  `MathCache` (one recognition per line). App: `MathAssistController` (after 0.4 s of pen rest, Vision on
+  a ~48 px crop of the line, answer as a text box; on request only in Low Power Mode/hot), sketch
+  Settings menu → Math Assist, lasso → Solve. Test `testAnHourOfMathsReadsEachLineOnce`.
+- **Appearance** (D1b): Settings → Appearance: Style Automatic / Liquid Glass / Standard, Theme,
+  Cards. `.troveAppearance()` on every window; `Glass` draws solid panels in Standard.
+- **Ask this notebook** (G14): `StudyChat.swift` (`AIRules` grounded/no yes-man/concise, also used by
+  Ask; `StudyContext` handles `[p3.4]`; big notebooks trimmed to relevant pages with a note;
+  `studyReply` caches the notebook; `StudyMemory` Markdown summaries in Application Support/Trove/
+  sessions; `DiagramSpec` parse, layout, tweak). App: Ask button in the sketch editor → side panel
+  (`StudyPanel.swift`): chat, shortcuts, temporary chat, cost, "Show N places" highlights (Vision now
+  stores each line's box in `HandwritingPages`), diagram preview Keep / Remove / Tweak.
+- **Export to GoodNotes** (G13): `GoodNotesWriter` (round trip: original zip, GoodNotes' own ink and
+  text marked erased, Trove's appended, outlines that own fills kept; fresh notebooks/whiteboards;
+  `ZipWriter`). Editor → Export → GoodNotes notebook. **Unverified with real GoodNotes**: ask the user to
+  import a few exports on the iPad and to send a blank notebook + whiteboard exported from GoodNotes.
+- **Notebooks** (G1, G2, G5, G10): covers (item menu → Cover; `cover` field), page names + Outline in
+  the pages panel (`pageList[].name`, kept by the website), Add/Remove space here, Present (no tools,
+  laser).
+- **Next** (§14): check CI for the later commits; then G9 zoom window, G11 whiteboard quadtree, G3
+  planners, GoodNotes library import with folders, G6 word recognition, G4 audio synced to ink, G8 study;
+  P10 batched segment fetch (relay + clients), P11 iCloud NSMetadataQuery, P4 binary search index, P7
+  thumbnails, P15 launch; then N1 editor.
+
+## Round before: Ask that reads whiteboards, searches the clipboard and spends less (user: "AI activity bugs out and you can't go back", "model selection not centred, show relative cost and proper names", "whiteboards too low resolution", "make it more concise, read fewer pages, only specific sections", "a keyword summary of each note", "tailored to the app", "let it access clipboard history, VERY well optimised")
 Not yet run on a device.
 - **Activity and costs** (Mac): the Settings window has no back button, so the page pushed into it
   was a dead end, and it laid out up to 400 rows at once. It now opens in its own window
