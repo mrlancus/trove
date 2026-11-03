@@ -63,6 +63,18 @@ final class VaultStore {
     @ObservationIgnored private var scopedURL: URL?
 
     init() {
+        #if DEBUG
+        if let size = TestVault.size {
+            // UI and performance tests: a generated vault in its own folder; the Keychain is never touched.
+            supportDir = TestVault.supportDir
+            try? FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
+            let config = Self.read(VaultConfig.self, from: supportDir.appendingPathComponent("config.json")) ?? TestVault.prepare(size, in: supportDir)
+            Self.write(config, to: supportDir.appendingPathComponent("config.json"))
+            self.config = config
+            keys = VaultKeys.generate()
+            return
+        }
+        #endif
         supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Trove", isDirectory: true)
         try? FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)

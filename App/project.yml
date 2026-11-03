@@ -32,6 +32,23 @@ schemes:
     build:
       targets:
         Trove: all
+  # App tests (docs/PERF_AUDIT.md step 0), run by .github/workflows/apps.yml → scripts/ci-app-tests.sh.
+  TroveMacTests:
+    build:
+      targets:
+        Trove: all
+        TroveTests: [test]
+    test:
+      config: Debug
+      targets: [TroveTests]
+  TroveiOSUITests:
+    build:
+      targets:
+        Trove: all
+        TroveUITests: [test]
+    test:
+      config: Debug
+      targets: [TroveUITests]
 
 packages:
   TroveCore:
@@ -234,3 +251,31 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.keyboard
+
+  # Unit and performance tests, hosted in the Mac app (docs/PERF_AUDIT.md step 0).
+  TroveTests:
+    type: bundle.unit-test
+    supportedDestinations: [macOS]
+    sources:
+      - path: Tests/TroveTests
+    dependencies:
+      - target: Trove
+      - package: TroveCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.tests
+
+  # UI tests on iPhone and iPad simulators: launch, scroll, open, type, screenshots for docs/UI_AUDIT.md.
+  TroveUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS]
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Trove
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.uitests
+        TEST_TARGET_NAME: Trove
