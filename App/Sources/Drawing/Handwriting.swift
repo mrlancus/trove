@@ -14,12 +14,17 @@ enum Handwriting {
 
     /// Reads what changed; returns how many pages went through Vision. `fast` in Low Power Mode or when hot.
     @discardableResult
-    static func read(_ itemId: String, library: Library, fast: Bool = false, ai: AIClient? = nil) async -> Int {
+    /// `forChat`: the notebook chat is about to send the pages. The item's signature syncs but the
+    /// page text is only on this device, so a matching signature can mean "read elsewhere, nothing
+    /// here" (the chat then saw no handwriting at all). For the chat every page is checked against
+    /// what this device holds (`HandwritingFreshness`), and Vision always reads accurately.
+    static func read(_ itemId: String, library: Library, fast: Bool = false, ai: AIClient? = nil, forChat: Bool = false) async -> Int {
         guard let item = await library.item(itemId), item.kind == .sketch else { return 0 }
         // Read by your AI or by Vision: switching to AI reads everything again, once.
         let reader = ai == nil ? "" : "|ai"
         let sig = await library.inkSignature(itemId) + reader
-        guard item.record[signatureField]?.string != sig else { return 0 }
+        let fast = forChat ? false : fast
+        guard forChat || item.record[signatureField]?.string != sig else { return 0 }
         let signpost = Perf.begin("Read handwriting")
         defer { Perf.end("Read handwriting", signpost) }
         let known = await HandwritingPages.shared.pages(of: itemId)
@@ -32,7 +37,8 @@ enum Handwriting {
             guard !strokes.isEmpty else { continue }
             let latest = strokes.map(\.record.updatedHLC).max() ?? ""
             let pageSig = "\(strokes.count)-\(latest)-\(spec.width)x\(spec.height)\(reader)"
-            if let page = known[spec.key], page.sig == pageSig {
+            // A page your AI read is better than Vision's reading: the chat keeps it.
+            if let page = known[spec.key], page.sig == pageSig || (forChat && ai == nil && page.sig == pageSig + "|ai") {
                 kept[spec.key] = page
                 if !page.text.isEmpty { parts.append(page.text) }
                 continue
@@ -376,5 +382,41 @@ extension Handwriting {
             }
         }
         return ctx.makeImage()
+    }
+}
+
+extension Handwriting {
+    /// The ink written on a PDF's or picture's pages, read by Vision page by page for the notebook
+    /// chat (plan A5.3: before, only sketches' handwriting was ever read). Cached on this device
+    /// under `cacheKey` by each page's strokes, so unchanged pages aren't read again.
+    @MainActor
+    static func readInk(pages: [InkPageSpec], content: [String: InkContent], cacheKey: String) async -> Int {
+        let known = await HandwritingPages.shared.pages(of: cacheKey)
+        var kept: [String: HandwritingPages.Page] = [:]
+        var read = 0
+        for spec in pages {
+            let strokes = content[spec.key]?.strokes ?? []
+            guard !strokes.isEmpty else { continue }
+            let pageSig = "\(strokes.count)-" + String(strokes.map { "\($0.id):\($0.points.count)" }.joined(separator: ",").sha256Hex.prefix(16))
+            if let page = known[spec.key], page.sig == pageSig { kept[spec.key] = page; continue }
+            var plain = spec
+            plain.background = .paper(.blank, color: nil)
+            let ink = InkContent(strokes: strokes)
+            let w = spec.width, h = spec.height
+            let width = Int(min(2400, max(800, w * 2)))
+            guard let image = await Task.detached(priority: .userInitiated, operation: {
+                InkRenderer.render(plain, content: ink, pixelWidth: width).map(InkImage.init)
+            }).value else { continue }
+            let found = await AppleEnricher.recognizeLines(in: image.image, fast: false)
+            let text = found.map(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            let boxes = found.map { line -> [Double] in
+                let b = line.box
+                return [Double(b.minX) * w, (1 - Double(b.maxY)) * h, Double(b.width) * w, Double(b.height) * h]
+            }
+            kept[spec.key] = HandwritingPages.Page(sig: pageSig, text: text, lines: boxes)
+            read += 1
+        }
+        await HandwritingPages.shared.set(kept, for: cacheKey)
+        return read
     }
 }

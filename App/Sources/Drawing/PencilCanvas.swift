@@ -914,7 +914,15 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
 
-        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { zoomedByHand = true }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            zoomedByHand = true
+            FrameMeter.shared.begin("Pinch")
+        }
+
+        // Slow frames while panning or pinching, counted for Settings → Diagnostics.
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { FrameMeter.shared.begin("Pan") }
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) { if !decelerate { FrameMeter.shared.end() } }
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { FrameMeter.shared.end() }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             resize(scrollView)
@@ -924,6 +932,7 @@ struct PencilCanvas: UIViewRepresentable {
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            FrameMeter.shared.end()
             let z = Double(scale)
             DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
         }

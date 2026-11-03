@@ -1,3 +1,4 @@
+import PDFKit
 import SwiftUI
 import TroveCore
 
@@ -47,17 +48,26 @@ final class StudyPanelModel {
 
     var ready: Bool { editor.app?.ownAI != nil }
 
-    /// Reads any pages whose handwriting changed (Vision, on the device), then puts together what
-    /// the chat sees: every page's lines, handwriting first, then its text boxes.
+    /// Reads any pages whose handwriting changed (Vision, on the device, accurate), then puts
+    /// together what the chat sees: every page's handwriting, its text boxes, and a PDF page's own
+    /// text. Run before every question, so what you wrote since opening Ask is seen too; unchanged
+    /// pages cost a signature check (docs/plans/sketch-2-plan.md A5).
     func prepare() async {
         guard let library = editor.app?.library else { return }
         status = "Reading your pages…"
         defer { status = nil }
+        let itemId = editor.target.itemId
+        let cacheKey: String
         if editor.isSketch {
-            let fast = editor.app?.policy.recognition == .fast
-            _ = await Handwriting.read(editor.target.itemId, library: library, fast: fast)
+            _ = await Handwriting.read(itemId, library: library, forChat: true)
+            cacheKey = itemId
+        } else {
+            // Ink written on a PDF's or picture's pages (it was never read before).
+            cacheKey = "\(itemId)|\(editor.target.layer)"
+            _ = await Handwriting.readInk(pages: editor.pages, content: editor.content, cacheKey: cacheKey)
         }
-        let known = await HandwritingPages.shared.pages(of: editor.target.itemId)
+        let known = await HandwritingPages.shared.pages(of: cacheKey)
+        var pdfText = PDFPageText()
         var pages: [StudyContext.Page] = []
         var boxes: [String: [InkGeometry.Rect?]] = [:]
         for (i, spec) in editor.pages.enumerated() {
@@ -80,11 +90,18 @@ final class StudyPanelModel {
                     rects.append(box.frame)
                 }
             }
+            // A PDF page's own printed text, after what was written on it.
+            if case .pdf(let data, let index) = spec.background {
+                for line in pdfText.lines(data, page: index) {
+                    lines.append(line)
+                    rects.append(nil)
+                }
+            }
             pages.append(StudyContext.Page(key: spec.key, label: "Page \(i + 1)", text: lines.joined(separator: "\n")))
             boxes[spec.key] = rects
         }
-        // A PDF or picture with no page-by-page text: what the whole file says.
-        if pages.allSatisfy({ $0.lines.isEmpty }), let item = await library.item(editor.target.itemId) {
+        // A picture with no page-by-page text: what the whole file says.
+        if pages.allSatisfy({ $0.lines.isEmpty }), let item = await library.item(itemId) {
             let text = [item.body, item.ocrText ?? "", item.inkText ?? "", item.sketchText ?? ""].filter { !$0.isEmpty }.joined(separator: "\n")
             pages = [StudyContext.Page(key: editor.pages.first?.key ?? "0", label: "The whole document", text: text)]
             boxes = [:]
@@ -101,7 +118,8 @@ final class StudyPanelModel {
         busy = true
         error = nil
         defer { busy = false }
-        if context == nil { await prepare() }
+        // Every question: pages written on since the last one are read (the rest are cached).
+        await prepare()
         guard let context else { return }
         if context.pages.allSatisfy({ $0.lines.isEmpty }) {
             error = "There's nothing readable in this notebook yet."
@@ -361,5 +379,17 @@ private struct DiagramPreview: View {
         }
         .padding(10)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// Each PDF page's printed text, one document opened per file (the pages of a file share its data).
+@MainActor
+struct PDFPageText {
+    private var doc: (count: Int, document: PDFDocument)?
+
+    mutating func lines(_ data: Data, page index: Int) -> [String] {
+        if doc?.count != data.count { doc = PDFDocument(data: data).map { (data.count, $0) } }
+        guard let text = doc?.document.page(at: index)?.string else { return [] }
+        return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 }
