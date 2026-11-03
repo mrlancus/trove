@@ -20,6 +20,7 @@ struct DevelopView: View {
             }
         }
         .navigationTitle("Develop")
+        .tint(Theme.accent)
         .task {
             await develop.start(model)
             Diagnostics.shared.ready("Develop")
@@ -39,8 +40,8 @@ struct DevelopView: View {
                 if !develop.toReview.isEmpty { review }
                 more
             }
-            .padding(20)
-            .frame(maxWidth: 720, alignment: .leading)
+            .padding(Theme.Space.xl)
+            .frame(maxWidth: Theme.readingWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
     }
@@ -65,7 +66,7 @@ struct DevelopView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: 16)
+        .card(cornerRadius: Theme.Radius.large)
     }
 
     private var papers: some View {
@@ -95,7 +96,7 @@ struct DevelopView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: 16)
+        .card(cornerRadius: Theme.Radius.large)
     }
 
     private var skillsList: some View {
@@ -117,7 +118,7 @@ struct DevelopView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: 16)
+        .card(cornerRadius: Theme.Radius.large)
     }
 
     private var review: some View {
@@ -135,7 +136,7 @@ struct DevelopView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: 16)
+        .card(cornerRadius: Theme.Radius.large)
     }
 
     private var more: some View {
@@ -275,7 +276,7 @@ struct PracticeView: View {
             if r.uncertain { Text("Not sure of this mark: it goes to review and counts for nothing until you confirm it.").font(.caption).foregroundStyle(.orange) }
         }
         .padding(12)
-        .card(cornerRadius: 12)
+        .card(cornerRadius: Theme.Radius.medium)
     }
 
     private func markWithAI(_ p: Problem) async {

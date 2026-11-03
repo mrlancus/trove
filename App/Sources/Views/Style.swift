@@ -93,7 +93,7 @@ enum ItemStyle {
 /// Liquid Glass on OS 26+ when Settings → Appearance allows it; otherwise a solid panel
 /// (Standard) or, before OS 26, the system material.
 struct Glass: ViewModifier {
-    var cornerRadius: CGFloat = 18
+    var cornerRadius: CGFloat = Theme.Radius.large
     var interactive = false
     @Environment(\.usesGlass) private var usesGlass
 
@@ -110,12 +110,12 @@ struct Glass: ViewModifier {
 }
 
 extension View {
-    func glass(cornerRadius: CGFloat = 18, interactive: Bool = false) -> some View {
+    func glass(cornerRadius: CGFloat = Theme.Radius.large, interactive: Bool = false) -> some View {
         modifier(Glass(cornerRadius: cornerRadius, interactive: interactive))
     }
 
     /// Subtle card used across the library grid.
-    func card(cornerRadius: CGFloat = 18) -> some View {
+    func card(cornerRadius: CGFloat = Theme.Radius.large) -> some View {
         background(.background.secondary, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.separator.opacity(0.4), lineWidth: 0.5))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

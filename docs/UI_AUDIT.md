@@ -26,5 +26,6 @@ Type, Split View and the Mac's three window sizes still to add).
 
 Decision 16 (A Glass, glass on floating controls only). The iOS 26 build already uses system Liquid
 Glass for the tab bar and toolbars (seen in every screenshot). The restyle puts Trove's colours, type
-and spacing into shared tokens (`App/Sources/Views/Style.swift`) so B or C can be switched in one place;
-it follows U2–U6.
+and spacing into shared tokens (`App/Sources/Views/Theme.swift`: accent, radii, spacing, reading width) so B
+or C can be switched in one place. `card`, `glass` and Develop use them now; other views move onto them
+as they're touched, one screen per commit, each checked against the next run's screenshots.
