@@ -833,6 +833,17 @@ private struct ClipboardSection: View {
         @Bindable var clipboard = model.clipboard
         Section {
             Toggle("Keep clipboard history", isOn: shared(.clipboardHistory))
+            Picker("Pause recording", selection: Binding(
+                get: { (model.clipboard.pausedUntil.map { $0 > Date() } ?? false) ? -1 : 0 },
+                set: { v in if v >= 0 { model.clipboard.pause(for: v == 0 ? nil : Double(v)) } })) {
+                Text("Recording").tag(0)
+                if let until = model.clipboard.pausedUntil, until > Date() {
+                    Text("Paused until \(until.formatted(date: .omitted, time: .shortened))").tag(-1)
+                }
+                Text("Pause for 5 minutes").tag(300)
+                Text("Pause for an hour").tag(3600)
+                Text("Pause until tomorrow").tag(86_400)
+            }
             Picker("Passwords and codes", selection: Binding(
                 get: { model.isOn(.saveSensitive) ? 2 : model.isOn(.holdSensitive) ? 1 : 0 },
                 set: { v in

@@ -20,6 +20,8 @@ final class ClipboardPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        // Never in screen sharing, recordings or screenshots (MASTER_PLAN C6): it shows what you copied.
+        sharingType = .none
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true

@@ -85,7 +85,7 @@ final class ClipboardWatcher {
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
         lastSeenChange = Date()
-        guard store.enabled, pb.changeCount != ClipPasteboard.ownChangeCount else { return }
+        guard store.recording, pb.changeCount != ClipPasteboard.ownChangeCount else { return }
         let types = Set((pb.types ?? []).map(\.rawValue))
         guard types.isDisjoint(with: Self.skipTypes) else { return }
         let app = NSWorkspace.shared.frontmostApplication
@@ -153,7 +153,7 @@ final class ClipboardWatcher {
         let pb = UIPasteboard.general
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
-        guard store.enabled, pb.changeCount != ClipPasteboard.ownChangeCount else { store.copyWaiting = false; return }
+        guard store.recording, pb.changeCount != ClipPasteboard.ownChangeCount else { store.copyWaiting = false; return }
         store.copyWaiting = pb.hasStrings || pb.hasURLs || pb.hasImages
     }
 }

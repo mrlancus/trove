@@ -22,6 +22,13 @@ final class ClipboardStore {
     private(set) var clips: [Clip] = []
     private(set) var ephemeral: [EphemeralClip] = []
     var enabled: Bool { didSet { UserDefaults.standard.set(enabled, forKey: "clipboard.enabled") } }
+    /// Paused until then (MASTER_PLAN C5): copies aren't recorded, on this device only.
+    var pausedUntil: Date? {
+        didSet { UserDefaults.standard.set(pausedUntil?.timeIntervalSince1970, forKey: "clipboard.pausedUntil") }
+    }
+    /// Recording right now: on, and not paused.
+    var recording: Bool { enabled && (pausedUntil.map { $0 <= Date() } ?? true) }
+    func pause(for seconds: TimeInterval?) { pausedUntil = seconds.map { Date().addingTimeInterval($0) } }
     /// Keep sensitive copies for two minutes on this device (off: ignore them entirely).
     var keepSensitive: Bool { didSet { UserDefaults.standard.set(keepSensitive, forKey: "clipboard.keepSensitive") } }
     /// Save sensitive copies like any other (synced and kept, no protection), when you'd rather.
@@ -63,6 +70,7 @@ final class ClipboardStore {
 
     init() {
         enabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        pausedUntil = (UserDefaults.standard.object(forKey: "clipboard.pausedUntil") as? Double).map { Date(timeIntervalSince1970: $0) }
         keepSensitive = UserDefaults.standard.object(forKey: "clipboard.keepSensitive") as? Bool ?? true
         saveSensitive = UserDefaults.standard.object(forKey: "clipboard.saveSensitive") as? Bool ?? false
         captureOnOpen = UserDefaults.standard.object(forKey: "clipboard.captureOnOpen") as? Bool ?? true
