@@ -90,6 +90,15 @@ struct PencilCanvas: UIViewRepresentable {
             }
         }
         canvas.onLayout = { [weak c, weak canvas] in if let c, let canvas { c.layout(canvas) } }
+        // Placing AI output: the view's points to a page's and back (plan A3).
+        editor.screenToPage = { [weak c, weak canvas] p in
+            guard let c, let canvas else { return nil }
+            return c.page(at: p, in: canvas)
+        }
+        editor.pageToScreen = { [weak c, weak canvas] key, p in
+            guard let c, let canvas else { return nil }
+            return c.screen(key, p, in: canvas)
+        }
         // The ruler is Trove's own (PencilKit's only follows a line started at its edge): the Pencil put
         // down anywhere on it, or inside the protractor, draws along the nearer edge or the arc as it
         // goes. PencilKit's drawing waits for this to say no, which it does as the Pencil touches down.
@@ -705,6 +714,21 @@ struct PencilCanvas: UIViewRepresentable {
             syncElements()
         }
 
+        /// The page and its point under a point in the view.
+        func page(at p: CGPoint, in canvas: UIScrollView) -> (key: String, point: InkPoint)? {
+            let z = max(0.01, canvas.zoomScale)
+            let content = CGPoint(x: (p.x + canvas.contentOffset.x) / z, y: (p.y + canvas.contentOffset.y) / z)
+            guard let s = slot(at: content) else { return nil }
+            return (s.spec.key, InkPoint(x: content.x - s.offset.x, y: content.y - s.offset.y))
+        }
+
+        /// Where a page's point is in the view.
+        func screen(_ key: String, _ p: InkPoint, in canvas: UIScrollView) -> CGPoint? {
+            guard let s = slots.first(where: { $0.spec.key == key }) else { return nil }
+            let z = canvas.zoomScale
+            return CGPoint(x: (p.x + s.offset.x) * z - canvas.contentOffset.x, y: (p.y + s.offset.y) * z - canvas.contentOffset.y)
+        }
+
         /// The page under a canvas point (at 100 %), or the nearest one.
         private func slot(at p: CGPoint) -> Slot? {
             if let hit = slots.first(where: { $0.frame.insetBy(dx: -Self.gap / 2, dy: -Self.gap / 2).contains(p) }) { return hit }
@@ -737,7 +761,7 @@ struct PencilCanvas: UIViewRepresentable {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
                 return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
-                    || !o.highlights.isEmpty || !o.looking.isEmpty
+                    || !o.highlights.isEmpty || !o.looking.isEmpty || o.ghostBox != nil
                     || !o.handles.isEmpty || o.preview != nil || o.protractor != nil || o.ruler != nil || editor.dragPreview(slot.spec.key) != nil
             }
         }

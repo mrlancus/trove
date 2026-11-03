@@ -153,6 +153,18 @@ struct MouseInkCanvas: NSViewRepresentable {
             }
         }
         view.syncText(textEdit)
+        // Placing AI output: the view's points to the page's and back (plan A3).
+        editor.screenToPage = { [weak scroll, weak view] p in
+            guard let scroll, let view, let page = view.page else { return nil }
+            let local = NSPoint(x: p.x, y: scroll.isFlipped ? p.y : scroll.bounds.height - p.y)
+            let d = view.convert(local, from: scroll)
+            return (page.key, InkPoint(x: d.x - page.origin, y: d.y - page.origin))
+        }
+        editor.pageToScreen = { [weak scroll, weak view] key, p in
+            guard let scroll, let view, let page = view.page, page.key == key else { return nil }
+            let s = scroll.convert(NSPoint(x: p.x + page.origin, y: p.y + page.origin), from: view)
+            return CGPoint(x: s.x, y: scroll.isFlipped ? s.y : scroll.bounds.height - s.y)
+        }
         view.needsDisplay = true
     }
 }

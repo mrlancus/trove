@@ -270,3 +270,89 @@ struct PencilHoverDetector: UIViewRepresentable {
     }
 }
 #endif
+
+/// Placing AI output (docs/plans/sketch-2-plan.md A3): drag a box on the page (or tap for a
+/// sensible size there); the output is written into it faintly, in your pen and handwriting sized
+/// like what's around; drag again to try another place or size; then Keep, Tweak or Cancel.
+struct InkPlacementLayer: View {
+    let editor: InkEditorModel
+    @State private var start: (key: String, point: InkPoint)?
+    @State private var tweak = ""
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.04)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            if start == nil { start = editor.screenToPage?(v.startLocation) }
+                            guard let s = start else { return }
+                            let now = editor.screenToPage?(v.location)
+                            editor.placeBox(key: s.key, from: s.point, to: now?.key == s.key ? now!.point : s.point)
+                        }
+                        .onEnded { _ in start = nil })
+                controls
+                    .fixedSize()
+                    .position(controlsAt(in: g.size))
+            }
+        }
+    }
+
+    private var isDiagram: Bool {
+        if case .diagram = editor.placing?.kind { return true }
+        return false
+    }
+
+    private var controls: some View {
+        VStack(spacing: 8) {
+            if editor.placing?.box == nil {
+                Label("Drag where it should go, or tap", systemImage: "rectangle.dashed")
+                    .font(.callout.weight(.medium))
+            } else {
+                HStack(spacing: 8) {
+                    Button("Keep") { Task { await editor.commitPlacing() } }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                    Button("Cancel", role: .cancel) { editor.cancelPlacing() }
+                        .buttonStyle(.bordered)
+                }
+                if isDiagram {
+                    HStack(spacing: 6) {
+                        TextField("Tweak: \"left to right\", \"add ATP\"…", text: $tweak)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 220)
+                            .onSubmit { send() }
+                        Button(editor.placing?.tweaking == true ? "…" : "Tweak") { send() }
+                            .disabled(editor.placing?.tweaking == true || tweak.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                Text("Drag again to move it or change its size").font(.caption).foregroundStyle(.secondary)
+            }
+            if editor.placing?.box == nil {
+                Button("Cancel", role: .cancel) { editor.cancelPlacing() }.buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 3)
+    }
+
+    private func send() {
+        let t = tweak
+        tweak = ""
+        Task { await editor.tweakPlacing(t) }
+    }
+
+    /// Under the box when there's room, else above it; at the bottom while there's no box yet.
+    private func controlsAt(in size: CGSize) -> CGPoint {
+        let fallback = CGPoint(x: size.width / 2, y: size.height - 90)
+        guard let p = editor.placing, let key = p.key, let box = p.box,
+              let bottom = editor.pageToScreen?(key, InkPoint(x: box.x + box.width / 2, y: box.maxY)),
+              let top = editor.pageToScreen?(key, InkPoint(x: box.x + box.width / 2, y: box.y)) else { return fallback }
+        let half: CGFloat = isDiagram ? 70 : 50
+        var y = bottom.y + 24 + half
+        if y + half > size.height - 8 { y = top.y - 24 - half }
+        return CGPoint(x: min(max(bottom.x, 170), size.width - 170), y: min(max(y, half + 8), size.height - half - 8))
+    }
+}

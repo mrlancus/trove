@@ -424,6 +424,15 @@ final class InkEditorModel {
     var exporting = false
     /// Where new pictures go on an endless canvas (the middle of what's on screen), in page points.
     @ObservationIgnored var visibleCenter = InkPoint(x: 384, y: 400)
+    /// AI output being placed (plan A3): you drag a box (or tap), it's shown there faintly in
+    /// handwriting, then Keep writes it as real strokes in one undo step, grouped, marked `by: ai`.
+    var placing: InkPlacing? {
+        didSet { overlayChanged() }
+    }
+    /// Converting between the canvas view's points and a page's points (set by the canvas).
+    @ObservationIgnored var screenToPage: ((CGPoint) -> (key: String, point: InkPoint)?)?
+    @ObservationIgnored var pageToScreen: ((String, InkPoint) -> CGPoint?)?
+
     /// Where the floating Ask box is (window coordinates), and whether the Pencil is hovering over it
     /// (it then fades and lets the Pencil write underneath; plan A4).
     @ObservationIgnored var askFrame: CGRect?
@@ -894,6 +903,10 @@ final class InkEditorModel {
         if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
         o.highlights = studyHighlights[key] ?? []
         o.looking = aiLooking[key] ?? []
+        if let p = placing, p.key == key {
+            o.ghost = p.lines
+            o.ghostBox = p.box
+        }
         o.lookPhase = lookPhase
         return o
     }
@@ -1736,6 +1749,12 @@ final class InkEditorModel {
 
     // MARK: Undo
 
+    /// Strokes just added as one step (placed AI output), so one undo takes them all away.
+    func recordAdded(strokes ids: [String]) {
+        guard !ids.isEmpty else { return }
+        record(Action(add: ids.map { Ref(id: $0, kind: "stroke") }))
+    }
+
     private func record(_ action: Action) {
         undoStack.append(action)
         redoStack.removeAll()
@@ -2494,4 +2513,95 @@ enum InkBullets {
 extension String {
     /// nil for an empty string.
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// AI output on its way to the page (`InkEditorModel.placing`).
+struct InkPlacing {
+    enum Kind {
+        case diagram(DiagramSpec)
+        case text(String)
+    }
+    var kind: Kind
+    var key: String?
+    var box: InkGeometry.Rect?
+    var lines: [InkLine] = []
+    var tweaking = false
+}
+
+extension InkEditorModel {
+    func startPlacing(_ kind: InkPlacing.Kind) {
+        placing = InkPlacing(kind: kind)
+    }
+
+    func cancelPlacing() { placing = nil }
+
+    /// A box dragged from `a` to `b` on page `key` (a tap: a sensible size at the tap).
+    func placeBox(key: String, from a: InkPoint, to b: InkPoint) {
+        guard var p = placing else { return }
+        var rect = InkGeometry.Rect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        if rect.width < 24 || rect.height < 16 {
+            switch p.kind {
+            case .diagram: rect = InkGeometry.Rect(x: a.x, y: a.y, width: 380, height: 240)
+            case .text: rect = InkGeometry.Rect(x: a.x, y: a.y, width: 320, height: 140)
+            }
+        }
+        p.key = key
+        p.box = rect
+        p.lines = lines(for: p.kind, in: rect, key: key)
+        placing = p
+    }
+
+    /// The output as strokes in `rect`: your pen's colour, handwriting at the size of what's around.
+    private func lines(for kind: InkPlacing.Kind, in rect: InkGeometry.Rect, key: String) -> [InkLine] {
+        let colour = color(for: Self.penLike(tool) ? tool : .pen)
+        let strokes: [InkPlacement.Stroke]
+        var xh = 7.0
+        switch kind {
+        case .diagram(let spec):
+            strokes = InkPlacement.diagram(spec, in: rect, seed: UInt64(truncatingIfNeeded: spec.json.stableHash))
+            xh = max(3, min(rect.width, rect.height) / 30)
+        case .text(let text):
+            let mine = (content[key]?.strokes ?? []).filter { $0.by.isEmpty }.compactMap(\.bounds)
+            xh = min(max(InkHandwriting.sizeNear(rect, strokes: mine), 3), 30)
+            strokes = InkPlacement.text(text, in: rect, xHeight: xh, seed: text.stableHash)
+        }
+        return strokes.map { s in
+            InkLine(id: UUID().uuidString.lowercased(), tool: .pen, color: colour,
+                    width: s.role == .text ? min(4, max(1, xh * 0.2)) : 1.6, points: s.points)
+        }
+    }
+
+    private static func penLike(_ t: InkEditorTool) -> Bool { t.ink != nil && t != .highlighter }
+
+    /// Writes what's shown as real strokes: one group, one undo step, marked as the AI's.
+    func commitPlacing() async {
+        guard let p = placing, let key = p.key, !p.lines.isEmpty, let library = app?.library else { return }
+        placing = nil
+        let group = "ai-" + String(UUID().uuidString.prefix(8)).lowercased()
+        var ids: [String] = []
+        for l in p.lines {
+            if let id = await library.addStroke(on: target.itemId, layer: target.layer, pageKey: key, tool: l.tool, color: l.color, width: l.width,
+                                                points: l.points, group: group, by: "ai") {
+                ids.append(id)
+            }
+        }
+        recordAdded(strokes: ids)
+        await reloadInk()
+        app?.inkChanged()
+    }
+
+    /// "Arrows left to right", "add ATP": a cheap AI call changes the diagram, redrawn in its box.
+    func tweakPlacing(_ instruction: String) async {
+        guard var p = placing, case .diagram(let spec) = p.kind, let ai = app?.ownAI else { return }
+        let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        p.tweaking = true
+        placing = p
+        if let next = try? await ai.tweakDiagram(spec, instruction: text) {
+            p.kind = .diagram(next)
+            if let key = p.key, let box = p.box { p.lines = lines(for: p.kind, in: box, key: key) }
+        }
+        p.tweaking = false
+        if placing != nil { placing = p }
+    }
 }

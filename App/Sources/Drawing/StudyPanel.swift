@@ -212,6 +212,25 @@ final class StudyPanelModel {
 
     func removeDiagram() { preview = nil; tweak = "" }
 
+    /// Hands the diagram to the page: you drag where it goes, see it written there, then keep it.
+    func placeDiagram() {
+        guard let spec = preview else { return }
+        preview = nil
+        editor.startPlacing(.diagram(spec))
+    }
+
+    /// Writes an answer on the page, in handwriting, where you drag.
+    func placeText(_ text: String) {
+        editor.startPlacing(.text(Self.plain(text)))
+    }
+
+    /// An answer without Markdown marks and the [p1.2] references.
+    static func plain(_ text: String) -> String {
+        var t = text.replacingOccurrences(of: #"\[p\d+\.\d+\]"#, with: "", options: .regularExpression)
+        for mark in ["**", "__", "`", "#"] { t = t.replacingOccurrences(of: mark, with: "") }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func tweakDiagram() async {
         guard let spec = preview, let ai = editor.app?.ownAI else { return }
         let instruction = tweak.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,7 +277,7 @@ struct StudyPanel: View {
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if model.entries.isEmpty { intro }
                             ForEach(model.entries) { entry in
-                                EntryView(entry: entry) { model.show(entry.refs) }.id(entry.id)
+                                EntryView(entry: entry, showPlaces: { model.show(entry.refs) }, write: { model.placeText(entry.answer) }).id(entry.id)
                             }
                             if let spec = model.preview { DiagramPreview(model: model, spec: spec) }
                             if let status = model.status ?? (model.busy ? "Thinking…" : nil) {
@@ -333,6 +352,7 @@ struct StudyPanel: View {
 private struct EntryView: View {
     let entry: StudyPanelModel.Entry
     let showPlaces: () -> Void
+    var write: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -341,6 +361,9 @@ private struct EntryView: View {
                 .background(Brand.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
             Text(LocalizedStringKey(entry.answer)).font(.callout).textSelection(.enabled)
             HStack(spacing: 10) {
+                if let write {
+                    Button("Write on the page…", action: write).font(.caption).buttonStyle(.borderless)
+                }
                 if !entry.refs.isEmpty {
                     Button(entry.refs.count == 1 ? "Show on the page" : "Show \(entry.refs.count) places", action: showPlaces)
                         .font(.caption).buttonStyle(.borderless)
@@ -390,7 +413,8 @@ private struct DiagramPreview: View {
             .frame(height: min(260, max(80, layout.size.height + 12)))
             .opacity(0.75)
             HStack {
-                Button("Keep") { Task { await model.keepDiagram() } }.buttonStyle(.borderedProminent)
+                // You choose where and how big: drag a box on the page (plan A3).
+                Button("Place on the page…") { model.placeDiagram() }.buttonStyle(.borderedProminent)
                 Button("Remove", role: .destructive) { model.removeDiagram() }.buttonStyle(.bordered)
             }
             HStack {
