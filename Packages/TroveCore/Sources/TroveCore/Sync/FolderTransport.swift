@@ -11,6 +11,11 @@ public struct FolderTransport: SyncTransport, CheckpointTransport {
     /// Unique per transport (the engine tracks push state by name).
     public let name: String
 
+    /// Each device folder's listing, kept while the folder's modification date stays the same
+    /// (MASTER_PLAN P11): a sync round then reads one date per device instead of every file name,
+    /// which on iCloud Drive is what wakes its daemon.
+    let listings = ListingCache()
+
     /// Hook for the app to wrap file access (NSFileCoordinator / startDownloadingUbiquitousItem).
     public var coordinate: @Sendable (_ url: URL, _ write: Bool, _ body: (URL) throws -> Void) throws -> Void
 
@@ -68,13 +73,22 @@ public struct FolderTransport: SyncTransport, CheckpointTransport {
         var refs: [SegmentRef] = []
         for device in try fm.contentsOfDirectory(atPath: syncDir.path) where !device.hasPrefix(".") {
             let dir = syncDir.appendingPathComponent(device, isDirectory: true)
+            let modified = (try? fm.attributesOfItem(atPath: dir.path)[.modificationDate] as? Date) ?? nil
+            if let modified, let cached = listings.refs(for: device, modified: modified) {
+                refs += cached
+                continue
+            }
+            var found: [SegmentRef] = []
             for file in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
                 // iCloud placeholders look like ".name.trv.icloud"; report them so the app downloads them.
                 let name = file.hasPrefix(".") && file.hasSuffix(".icloud") ? String(file.dropFirst().dropLast(7)) : file
                 if let (first, last) = Segment.parseFileName(name) {
-                    refs.append(SegmentRef(device: device, first: first, last: last))
+                    found.append(SegmentRef(device: device, first: first, last: last))
                 }
             }
+            // A placeholder becoming the real file doesn't change the list of segments, so the cache holds.
+            if let modified { listings.store(found, for: device, modified: modified) }
+            refs += found
         }
         return refs.sorted { ($0.device, $0.first) < ($1.device, $1.first) }
     }
@@ -187,5 +201,19 @@ public struct FolderTransport: SyncTransport, CheckpointTransport {
             try data.write(to: temp)
             try FileManager.default.moveItem(at: temp, to: u)
         }
+    }
+}
+
+/// Segment listings per device folder, valid while the folder's modification date is unchanged.
+final class ListingCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String: (modified: Date, refs: [SegmentRef])] = [:]
+
+    func refs(for device: String, modified: Date) -> [SegmentRef]? {
+        lock.withLock { entries[device].flatMap { $0.modified == modified ? $0.refs : nil } }
+    }
+
+    func store(_ refs: [SegmentRef], for device: String, modified: Date) {
+        lock.withLock { entries[device] = (modified, refs) }
     }
 }

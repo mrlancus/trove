@@ -109,3 +109,23 @@ final class SegmentBatchTests: XCTestCase {
         XCTAssertThrowsError(try RelayClient.splitBatch(le32(10) + Data("short".utf8), count: 1))
     }
 }
+
+/// iCloud folder listings are reused while a device's folder is unchanged (MASTER_PLAN P11).
+final class FolderListingTests: XCTestCase {
+    func testNewSegmentsStillShowUp() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("folder-\(UUID().uuidString)")
+        let t = FolderTransport(root: root)
+        try await t.pushSegment(SegmentRef(device: "dev-a", first: 1, last: 3), data: Data("one".utf8))
+        var refs = try await t.listSegments()
+        XCTAssertEqual(refs.map(\.key), ["dev-a/1"])
+        refs = try await t.listSegments() // cached
+        XCTAssertEqual(refs.count, 1)
+        // Adding a file changes the folder's date: the next list sees it.
+        try await Task.sleep(for: .milliseconds(20))
+        try await t.pushSegment(SegmentRef(device: "dev-a", first: 4, last: 4), data: Data("two".utf8))
+        let dir = root.appendingPathComponent(".sync/dev-a")
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: dir.path)
+        refs = try await t.listSegments()
+        XCTAssertEqual(refs.map(\.key), ["dev-a/1", "dev-a/4"])
+    }
+}
