@@ -47,7 +47,7 @@ before and after shows whether a change helped, and an A15 core is in the same c
 
 | Workflow | Platform | Budget | Baseline | Now | Status | Method, commit |
 |---|---|---|---|---|---|---|
-| Search, per keystroke (items) | core, all | 5 ms p90 | p50 34.1, p90 102.0, max 279.7 ms | p50 21.8, p90 **65.0**, max 158.8 ms | ❌ over budget (B3) | L, bb65fc5 |
+| Search, per keystroke (items) | core, all | 5 ms p90 | p50 34.1, p90 102.0, max 279.7 ms | p50 10.5, p90 **28.1**, max 67.4 ms | ❌ over budget (B3) | L, L1 commit (was 21.8/65.0/158.8 at bb65fc5) |
 | Open one notebook page's ink (500-page notebook) | core, all | < 200 ms cold, 1 frame cached | 113.0 ms | **0.5 ms** | ✅ (core path) | L, notebookPage vs notebookPageIndexed |
 | Open a notebook in the editor (decode every stroke) | iPad, iPhone, Mac | no hang > 100 ms | ~300 ms of decoding on the main thread (decodeAllStrokes 293.8 ms, L) | off the main thread (B4) | implemented, pending device | L + code, this commit |
 | Materialise the vault (cold start without checkpoint) | all | launch < 400 ms (MASTER_PLAN) | recordStoreApply 4,951 ms for 243k ops | — | ❌ (only without a checkpoint; apps load SQLite + checkpoint) | L |
@@ -92,9 +92,12 @@ checked each candidate against every query word (including the word the candidat
 against all 64 prefix words, then again while scoring, with String-keyed dictionaries
 (`Search/TermIndex.swift`). Fixed now: skip the lead word's check, look up from the smaller side
 (doc terms or prefix list, same order so scores sum identically), skip filters when there are none:
-p90 102 → 65 ms (L, bb65fc5). **Still over.** Next (large change, §8 L1): integer document numbers,
-postings as sorted arrays with term frequencies, term-at-a-time scoring with a top-k heap, and
-capping a 2-letter prefix at the 16 commonest words (the website's fixtures change with it).
+p90 102 → 65 ms (L, bb65fc5). Then L1: documents numbered, postings carry term frequencies, the lead
+word scored by walking its postings, a top-k heap: p90 65 → 28.1 ms, identical results and scores
+(`SearchEngineEquivalenceTests` checks 300 random queries against scoring every doc the old way).
+**Still over.** What's left is the two-letter prefix ("pl" stands for 64 words over ~40k notes). Next:
+cap a two-letter prefix at the 16 commonest words, or wait for the third letter before searching on
+prefixes (both change results, so `core/search.js` and `search-cases.json` change with them).
 
 **B4. Opening a notebook decoded every stroke on the main thread.** `InkEditorModel` is
 `@MainActor`; its ink reload (`Drawing/InkEditorModel.swift`, "Reload ink") turned every stroke into
@@ -204,7 +207,7 @@ check: `powermetrics` (above) with Trove idle in the background should show no w
 
 Large changes (made or planned), each with its rollback:
 - **L0 (made): B4**, stroke decoding off the main thread. Rollback: revert the commit.
-- **L1 (planned): search engine on integer ids with top-k.** Changes `TermIndex` and its JS twin
+- **L1 (made): search engine on numbered documents with top-k; the saved index format is unchanged.** Changes `TermIndex` and its JS twin
   `core/search.js` together, with `search-cases.json`; the saved index format bumps (rebuilt once on
   first launch). Rollback: revert; the old format is rebuilt from the vault.
 - **L2 (made, not deployed): the relay counts cache reads at 0.1 and cache writes at 1.25 (`meteredTokens`); caching its own instructions waits until they pass Haiku 5.5's 512-token minimum.** Changes the relay

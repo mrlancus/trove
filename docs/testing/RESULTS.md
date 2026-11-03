@@ -16,3 +16,4 @@ One row per run. Never edit an old row; a re-run is a new row. Who: `Claude` (cl
 | 2026-11-03 | web unit incl. `develop.test.mjs` (TEST-DEV-001, 003) | Develop slice commit | Linux, Node | Claude | pass | 73 tests |
 | 2026-11-03 | catalogue links (TEST-CUR-001) | after 222109b | Linux, Python 3 | Claude | pass | 20 links, 0 broken (`scripts/check-catalogue.py`) |
 | 2026-11-03 | relay tests (`server`, vitest on the Workers runtime) incl. metered tokens | after 9c1c8c9 | Linux, Node | Claude | pass | 59 tests; tsc clean |
+| 2026-11-03 | TEST-PERF-001 | L1 commit | Linux x86-64 VM, release | Claude | fail | p90 28.1 ms (was 65.0); results identical (SearchEngineEquivalenceTests pass) |

@@ -77,7 +77,8 @@ public struct SearchIndex: Sendable {
         let plan = self.plan(query)
         let folders = self.folders, inked = self.inked, items = self.items
         let filtered = query.hasFilters || !plan.exclude.isEmpty || !plan.excludePhrases.isEmpty
-        let passes: (String, TermIndex.Doc) -> Bool = !filtered ? { id, _ in items[id] != nil } : { id, doc in
+        // Without filters every indexed doc passes (docs and items are kept together), so none is asked.
+        let passes: ((String, TermIndex.Doc) -> Bool)? = !filtered ? nil : { id, doc in
             for t in plan.exclude where doc.terms[t] != nil { return false }
             guard let item = items[id], query.matches(item, folders: folders, inked: inked) else { return false }
             for p in plan.excludePhrases where Self.hasPhrase(item, p) { return false }
@@ -93,7 +94,7 @@ public struct SearchIndex: Sendable {
         let byMeaning = semantic.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
         var meaning: [String] = []
         for (id, _) in byMeaning where meaning.count < 200 {
-            if let doc = engine.docs[id], passes(id, doc) { meaning.append(id) }
+            if let doc = engine.docs[id], passes?(id, doc) ?? (items[id] != nil) { meaning.append(id) }
         }
         let fused = RankFusion.reciprocal([keywords.ranked.prefix(max(limit, 200)).map(\.id), meaning])
         let total = Set(keywords.ranked.map(\.id)).union(meaning).count

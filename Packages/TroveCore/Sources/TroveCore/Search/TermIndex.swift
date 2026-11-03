@@ -41,7 +41,14 @@ struct TermIndex: Sendable {
     static let maxPrefixTerms = 64
 
     private(set) var docs: [String: Doc] = [:]
-    private(set) var postings: [String: Set<String>] = [:]
+    /// term → (document number → weighted term frequency). Numbers instead of ids, and the frequency
+    /// kept with them, so scoring a word walks its postings without hashing ids or re-reading docs
+    /// (docs/PERF_AUDIT.md B3, L1).
+    private(set) var postings: [String: [Int32: Double]] = [:]
+    private var numberOf: [String: Int32] = [:]
+    private var idOf: [String] = []
+    private var docAt: [Doc?] = []
+    private var freeNumbers: [Int32] = []
     private(set) var totalLength: Double = 0
     private var vocabulary: [String] = []
     private var byLength: [Int: [String]] = [:]
@@ -67,17 +74,30 @@ struct TermIndex: Sendable {
         remove(id)
         docs[id] = doc
         totalLength += doc.length
-        for t in doc.terms.keys {
+        let n: Int32
+        if let reused = freeNumbers.popLast() {
+            n = reused
+            idOf[Int(n)] = id
+            docAt[Int(n)] = doc
+        } else {
+            n = Int32(idOf.count)
+            idOf.append(id)
+            docAt.append(doc)
+        }
+        numberOf[id] = n
+        for (t, tf) in doc.terms {
             if postings[t] == nil { stale = true }
-            postings[t, default: []].insert(id)
+            postings[t, default: [:]][n] = tf
         }
     }
 
     mutating func remove(_ id: String) {
-        guard let old = docs.removeValue(forKey: id) else { return }
+        guard let old = docs.removeValue(forKey: id), let n = numberOf.removeValue(forKey: id) else { return }
         totalLength -= old.length
+        docAt[Int(n)] = nil
+        freeNumbers.append(n)
         for t in old.terms.keys {
-            postings[t]?.remove(id)
+            postings[t]?[n] = nil
             if postings[t]?.isEmpty == true { postings[t] = nil; stale = true }
         }
     }
@@ -208,61 +228,125 @@ struct TermIndex: Sendable {
         var createdAt: Double
     }
 
-    /// Scores only the docs that hold every word. `passes` applies filters and exclusions; `hasPhrase`
-    /// checks a phrase word for word. Returns the best `limit` in order and how many matched.
-    func search(_ plan: Plan, now: Double, limit: Int, passes: (String, Doc) -> Bool, hasPhrase: (String, [String]) -> Bool) -> (ranked: [Ranked], total: Int) {
+    /// Scores only the docs that hold every word. `passes` applies filters and exclusions (nil: none);
+    /// `hasPhrase` checks a phrase word for word. Returns the best `limit` in order and how many matched.
+    ///
+    /// The rarest word ("lead") picks the candidates by walking its postings, which also gives each
+    /// candidate's matched lead terms and frequencies; the other words are checked per candidate. The
+    /// score is summed word by word in the plan's order and term by term in sorted order, exactly as
+    /// before and as the website does, so results and ties are unchanged (`search-cases.json`).
+    func search(_ plan: Plan, now: Double, limit: Int, passes: ((String, Doc) -> Bool)?, hasPhrase: (String, [String]) -> Bool) -> (ranked: [Ranked], total: Int) {
         let n = Double(max(docs.count, 1))
         let avg = max(totalLength / n, 1)
         var found: [Ranked] = []
         let ms = plan.matchers
         if ms.isEmpty {
-            for (id, doc) in docs where passes(id, doc) { found.append(Ranked(id: id, score: 0, createdAt: doc.createdAt)) }
+            for (id, doc) in docs where passes?(id, doc) ?? true { found.append(Ranked(id: id, score: 0, createdAt: doc.createdAt)) }
             found.sort { $0.createdAt != $1.createdAt ? $0.createdAt > $1.createdAt : $0.id < $1.id }
             return (Array(found.prefix(limit)), found.count)
         }
         guard ms.allSatisfy({ $0.matcher.exact || !$0.matcher.prefix.isEmpty || !$0.matcher.near.isEmpty }) else { return ([], 0) }
-        // The rarest word picks the candidates.
         var leadAt = 0
         for (i, x) in ms.enumerated() where x.matcher.estimate < ms[leadAt].matcher.estimate { leadAt = i }
         let lead = ms[leadAt].matcher
-        var ids = Set<String>()
-        if lead.exact { ids.formUnion(postings[lead.word] ?? []) }
-        for t in lead.prefix { ids.formUnion(postings[t] ?? []) }
-        for t in lead.near { ids.formUnion(postings[t] ?? []) }
-        var idf: [String: Double] = [:]
         func idfOf(_ t: String) -> Double {
-            if let v = idf[t] { return v }
             let df = Double(postings[t]?.count ?? 1)
-            let v = log(1 + (n - df + 0.5) / (df + 0.5))
+            return log(1 + (n - df + 0.5) / (df + 0.5))
+        }
+        // The lead's terms in the order `matched` reports them, with their weight and idf.
+        struct LeadTerm { var term: String; var mult: Double; var idf: Double; var post: [Int32: Double] }
+        var exactTerm: LeadTerm?
+        if lead.exact, let post = postings[lead.word] { exactTerm = LeadTerm(term: lead.word, mult: 1, idf: idfOf(lead.word), post: post) }
+        let prefixTerms = lead.prefix.compactMap { t in postings[t].map { LeadTerm(term: t, mult: 0.7, idf: idfOf(t), post: $0) } }
+        let nearTerms = lead.near.compactMap { t in postings[t].map { LeadTerm(term: t, mult: 0.5, idf: idfOf(t), post: $0) } }
+        // Per candidate: which lead terms matched (indexes into the chosen list) and their frequencies.
+        var hits: [Int32: [(Int, Double)]] = [:]
+        var kind: [Int32: Int] = [:] // 0 exact, 1 prefix, 2 near
+        if let e = exactTerm { for (doc, tf) in e.post { hits[doc] = [(0, tf)]; kind[doc] = 0 } }
+        for (i, t) in prefixTerms.enumerated() {
+            for (doc, tf) in t.post where kind[doc] != 0 {
+                hits[doc, default: []].append((i, tf))
+                kind[doc] = 1
+            }
+        }
+        for (i, t) in nearTerms.enumerated() {
+            for (doc, tf) in t.post where kind[doc] == nil || kind[doc] == 2 {
+                hits[doc, default: []].append((i, tf))
+                kind[doc] = 2
+            }
+        }
+        var idf: [String: Double] = [:]
+        func cachedIdf(_ t: String) -> Double {
+            if let v = idf[t] { return v }
+            let v = idfOf(t)
             idf[t] = v
             return v
         }
-        candidates: for id in ids {
-            guard let doc = docs[id] else { continue }
-            for (i, x) in ms.enumerated() {
-                // Every candidate came from the lead's postings, so it has the lead word.
-                if i != leadAt, !has(doc, x.matcher) { continue candidates }
-                if x.title, !inTitle(doc, x.matcher) { continue candidates }
-            }
-            guard passes(id, doc) else { continue }
+        let others = ms.enumerated().filter { $0.offset != leadAt }.map(\.element)
+        candidates: for (num, matchedLead) in hits {
+            guard let doc = docAt[Int(num)] else { continue }
+            let id = idOf[Int(num)]
+            for x in others where !has(doc, x.matcher) { continue candidates }
+            for x in ms where x.title && !inTitle(doc, x.matcher) { continue candidates }
+            if let passes, !passes(id, doc) { continue }
             for p in plan.phrases where p.count >= 2 && !hasPhrase(id, p) { continue candidates }
+            let list = kind[num] == 0 ? [exactTerm!] : kind[num] == 1 ? prefixTerms : nearTerms
+            let norm = 1.2 * (0.25 + 0.75 * doc.length / avg)
             var score = 0.0
-            for x in ms {
-                for (t, mult) in matched(doc, x.matcher) {
-                    let tf = (doc.terms[t] ?? 0) * mult
-                    score += idfOf(t) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * doc.length / avg))
+            for (i, x) in ms.enumerated() {
+                if i == leadAt {
+                    for (k, raw) in matchedLead {
+                        let t = list[k]
+                        let tf = raw * t.mult
+                        score += t.idf * (tf * 2.2) / (tf + norm)
+                    }
+                } else {
+                    for (t, mult) in matched(doc, x.matcher) {
+                        let tf = (doc.terms[t] ?? 0) * mult
+                        score += cachedIdf(t) * (tf * 2.2) / (tf + norm)
+                    }
                 }
             }
             if doc.pinned { score += 0.25 }
             score += max(0, 0.5 - (now - doc.createdAt) / 86_400_000 / 60)
             found.append(Ranked(id: id, score: score, createdAt: doc.createdAt))
         }
-        found.sort {
-            if $0.score != $1.score { return $0.score > $1.score }
-            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
-            return $0.id < $1.id
+        return (Self.best(found, limit), found.count)
+    }
+
+    static func before(_ a: Ranked, _ b: Ranked) -> Bool {
+        if a.score != b.score { return a.score > b.score }
+        if a.createdAt != b.createdAt { return a.createdAt > b.createdAt }
+        return a.id < b.id
+    }
+
+    /// The best `limit`, in order, without sorting everything when there are many more.
+    static func best(_ found: [Ranked], _ limit: Int) -> [Ranked] {
+        guard limit < found.count / 4, limit > 0 else { return Array(found.sorted(by: before).prefix(limit)) }
+        // A min-heap of the best `limit` seen so far (the worst of them on top).
+        var heap: [Ranked] = []
+        heap.reserveCapacity(limit + 1)
+        func up(_ i: Int) {
+            var c = i
+            while c > 0 { let p = (c - 1) / 2; if before(heap[p], heap[c]) { heap.swapAt(p, c); c = p } else { break } }
         }
-        return (Array(found.prefix(limit)), found.count)
+        func down(_ i: Int) {
+            var p = i
+            while true {
+                let l = 2 * p + 1, r = l + 1
+                var worst = p
+                if l < heap.count, before(heap[worst], heap[l]) { worst = l }
+                if r < heap.count, before(heap[worst], heap[r]) { worst = r }
+                if worst == p { return }
+                heap.swapAt(p, worst)
+                p = worst
+            }
+        }
+        for r in found {
+            if heap.count < limit { heap.append(r); up(heap.count - 1) }
+            else if before(r, heap[0]) { heap[0] = r; down(0) }
+        }
+        return heap.sorted(by: before)
     }
 
     /// Whether `phrase` (terms) appears word for word in one of `texts`.
