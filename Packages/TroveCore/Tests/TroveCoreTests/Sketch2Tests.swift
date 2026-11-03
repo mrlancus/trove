@@ -292,3 +292,23 @@ struct InkPlacementTests {
         #expect(b.x >= target.x - 3 && b.maxX <= target.maxX + 6 && b.y >= target.y - 3)
     }
 }
+
+struct NewSketchTests {
+    @Test func makesWhatWasChosenAndRemembers() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: nil, encrypted: false))
+        var c = NewSketchChoice()
+        c.paper = .grid; c.size = .a5; c.landscape = true; c.color = "#fff8e7"
+        let id = await lib.addSketch(c, title: "Physics")
+        let item = await lib.item(id)!
+        #expect(item.paper == .grid)
+        let page = item.sketchPageList[0]
+        #expect(page.color == "#fff8e7")
+        #expect(page.size == InkPageSize.a5.dimensions(landscape: true))
+        var w = NewSketchChoice()
+        w.kind = .whiteboard
+        let board = await lib.addSketch(w)
+        #expect(await lib.item(board)!.isInfiniteCanvas)
+        #expect(NewSketchChoice.load(c.data) == c)
+        #expect(NewSketchChoice.load(nil) == NewSketchChoice())
+    }
+}

@@ -2575,14 +2575,15 @@ extension InkEditorModel {
         let colour = color(for: Self.penLike(tool) ? tool : .pen)
         let strokes: [InkPlacement.Stroke]
         var xh = 7.0
+        let style = InkHandwriting.Style(rawValue: UserDefaults.standard.string(forKey: "ink.handwriting") ?? "") ?? .neat
         switch kind {
         case .diagram(let spec):
-            strokes = InkPlacement.diagram(spec, in: rect, seed: UInt64(truncatingIfNeeded: spec.json.stableHash))
+            strokes = InkPlacement.diagram(spec, in: rect, style: style, seed: spec.json.stableHash)
             xh = max(3, min(rect.width, rect.height) / 30)
         case .text(let text):
             let mine = (content[key]?.strokes ?? []).filter { $0.by.isEmpty }.compactMap(\.bounds)
             xh = min(max(InkHandwriting.sizeNear(rect, strokes: mine), 3), 30)
-            strokes = InkPlacement.text(text, in: rect, xHeight: xh, seed: text.stableHash)
+            strokes = InkPlacement.text(text, in: rect, xHeight: xh, style: style, seed: text.stableHash)
         }
         return strokes.map { s in
             InkLine(id: UUID().uuidString.lowercased(), tool: .pen, color: colour,

@@ -168,6 +168,7 @@ final class MathAssistController {
         o.xHeight = InkHandwriting.sizeNear(InkGeometry.Rect(x: right, y: entry.line.y, width: lineHeight * 3, height: entry.line.height), strokes: boxes)
         o.xHeight = min(max(o.xHeight, 3), 40)
         o.seed = lineKey.stableHash
+        o.style = InkHandwriting.Style(rawValue: UserDefaults.standard.string(forKey: "ink.handwriting") ?? "") ?? .neat
         let start = InkPoint(x: right + max(6, o.xHeight * 0.9), y: midY + o.xHeight * 0.5)
         let written = InkHandwriting.write(text, at: start, options: o)
         let unsure = text == "?"
