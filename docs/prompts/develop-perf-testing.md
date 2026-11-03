@@ -338,6 +338,31 @@ still works:
    with a named, explained rule. Self-marking counts, because I'm the one who decides what I got
    right. Each attempt keeps its source, so "where did this come from?" also works from my history.
 
+### AI costs for Develop (decided)
+
+Trove is for a wide range of young students, so AI has to be **cheap by default**. Defaults, all on
+Claude Haiku 5.5 through the relay:
+
+- **Haiku 5.5 at `low` effort** for everything by default: marking, hints, concept tagging, splitting
+  help, explanations.
+- **Haiku 5.5 at `medium` effort for hard questions.** "Hard" is decided by a deterministic rule in
+  TroveCore, not by the AI, for example: the question is worth 4 or more marks, is an extended or
+  multi-step answer, comes from a competition paper (BPhO, UKMT, olympiads), is marked from
+  handwritten working, or a `low` mark came back uncertain. Put the rule and its thresholds in one
+  place, with a reason for each.
+- **Nothing more expensive automatically.** No silent step-up to Sonnet or Opus. A better model is
+  used only when I pick it (the existing Fast/Smarter/Best choice) or bring my own key.
+- **Hard limits on size:** only the question, the matched mark-scheme entry, my answer and at most
+  the pictures needed; tight `max_tokens`; the stable instructions first so the cache gets reused.
+- **Check it before relying on it.** Build the test set from Part 2 §4 step 5 with 20–30 of my
+  attempts that I've marked by hand (typed and handwritten, easy and hard, right and wrong). Run
+  Haiku `low`, Haiku `medium` and, for comparison only, Sonnet `low`, and record agreement with my
+  marks per marking point and the cost of each. If Haiku `medium` isn't good enough on hard
+  questions, say so in NOTES.md with the numbers and flag those marks as uncertain in the app,
+  rather than switching the default to a dearer model.
+- Show the cost per marked question in the AI activity window, so the defaults can be judged on
+  real numbers.
+
 **Not now: AI-generated problems.** Today's affordable models (Haiku on the relay) aren't good enough
 at writing correct exam-style problems, and doing it well costs too many tokens. Don't build it.
 Leave the problem record able to say where a problem came from, so generated problems could be added
