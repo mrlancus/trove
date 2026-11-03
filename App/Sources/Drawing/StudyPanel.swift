@@ -204,7 +204,7 @@ final class StudyPanelModel {
     private func picturePages(_ context: StudyContext) -> [String] {
         let pages = editor.pages.map { spec in
             PagePictures.Page(key: spec.key, strokes: (editor.content[spec.key]?.strokes ?? []).filter { $0.by.isEmpty }.count,
-                              textCharacters: context.pages.first { $0.key == spec.key }?.text.count ?? 0)
+                              textCharacters: context.pages.first { $0.key == spec.key }?.lines.reduce(0) { $0 + $1.count } ?? 0)
         }
         return PagePictures.choose(pages, current: editor.currentPage?.key)
     }
