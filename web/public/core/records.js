@@ -191,6 +191,8 @@ export class RecordStore {
     this.lastApplied = maxString(this.lastApplied, op.h);
     const record = this.records.get(op.r) ?? { id: op.r, kind: op.k ?? "item", fields: {}, texts: {}, conflicts: {}, createdHLC: op.h, updatedHLC: op.h };
     const oldKind = this.records.has(op.r) ? record.kind : null;
+    const isInk = (k) => k === "stroke" || k === "element";
+    const oldOn = oldKind && isInk(oldKind) && typeof record.fields.on === "string" ? record.fields.on : null;
     // An op older than what the checkpoint holds for a field (from a device that was offline) loses to it.
     const stamps = this.base ? this.base.stamps.get(op.r) : undefined;
     if (op.k && !(stamps?.kind && op.h < stamps.kind)) record.kind = op.k;
@@ -228,9 +230,12 @@ export class RecordStore {
       }
       this.history.set(key, versions);
     }
-    if ((record.kind === "stroke" || record.kind === "element") && typeof record.fields.on === "string") {
-      if (!this.inkByItem.has(record.fields.on)) this.inkByItem.set(record.fields.on, new Set());
-      this.inkByItem.get(record.fields.on).add(op.r);
+    const on = isInk(record.kind) && typeof record.fields.on === "string" ? record.fields.on : null;
+    // A stroke moved to another item (or no longer ink) leaves the first item's list.
+    if (oldOn !== null && oldOn !== on) this.inkByItem.get(oldOn)?.delete(op.r);
+    if (on !== null) {
+      if (!this.inkByItem.has(on)) this.inkByItem.set(on, new Set());
+      this.inkByItem.get(on).add(op.r);
     }
     this.records.set(op.r, record);
   }

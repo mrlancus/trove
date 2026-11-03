@@ -62,6 +62,17 @@ test("HLCs sort as strings and never go backwards", () => {
   assert.equal(clock.tick(), "0000000005000-0008-dev");
 });
 
+test("a stroke moved to another item leaves the first item's ink (as RecordStore.swift)", () => {
+  const store = new RecordStore();
+  const op = (s, f, k = "stroke") => ({ d: "D", s, h: `${String(1000 + s).padStart(13, "0")}-0000-D`, r: "k", k, t: "set", f });
+  store.apply([op(1, { on: "a", page: "0" })]);
+  store.apply([op(2, { on: "b" })]);
+  assert.deepEqual(store.inkOn("a"), []);
+  assert.deepEqual(store.inkOn("b").map((r) => r.id), ["k"]);
+  store.apply([op(3, {}, "item")]);
+  assert.deepEqual(store.inkOn("b"), []);
+});
+
 test("Swift-written journals materialise identically in JS", async () => {
   const f = JSON.parse(readFileSync(new URL("./fixtures/swift-journal.json", import.meta.url)));
   const keys = await importVaultKeys(f.keys);
