@@ -96,7 +96,9 @@ struct MainView: View {
     /// Connections takes the whole right side (list and detail columns); what was open closes, and a
     /// point tapped there opens over it.
     @ViewBuilder private var split: some View {
-        if model.selection == .graph, model.searchText.isEmpty { graphSplit } else { columnsSplit }
+        if model.selection == .graph, model.searchText.isEmpty { graphSplit }
+        else if model.selection == .develop, model.searchText.isEmpty { developSplit }
+        else { columnsSplit }
     }
 
     private var graphSplit: some View {
@@ -118,6 +120,19 @@ struct MainView: View {
             #if os(macOS)
             .sheetSize(width: 760, height: 820)
             #endif
+        }
+    }
+
+    /// Develop takes the whole right side, like Connections.
+    private var developSplit: some View {
+        @Bindable var model = model
+        return NavigationSplitView(columnVisibility: $columns) {
+            SidebarView(showSettings: $showSettings)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } detail: {
+            NavigationStack { DevelopView() }
+                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
+                .toolbar { toolbar }
         }
     }
 
@@ -328,6 +343,8 @@ struct SidebarView: View {
                 // Right under Sketches.
                 Label("Clipboard", systemImage: "doc.on.clipboard")
                     .tag(AppModel.Selection.clipboard)
+                Label("Develop", systemImage: "graduationcap")
+                    .tag(AppModel.Selection.develop)
                 Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(AppModel.Selection.graph)
                 Label("Import", systemImage: "square.and.arrow.down.on.square")
@@ -674,6 +691,7 @@ struct LibraryView: View {
         case .graph: return "Connections"
         case .importer: return "Import"
         case .clipboard: return "Clipboard"
+        case .develop: return "Develop"
         case nil: return "Trove"
         }
     }

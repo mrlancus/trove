@@ -16,6 +16,8 @@ public enum AIUsage {
         case test
         /// Search words for items (Improve keywords, and keeping them up to date).
         case keywords
+        /// Develop: marking an attempt against its mark scheme (only when you tap Mark with AI).
+        case develop
 
         public var label: String {
             switch self {
@@ -24,6 +26,7 @@ public enum AIUsage {
             case .action: "Note actions"
             case .test: "Test"
             case .keywords: "Keywords"
+            case .develop: "Develop marking"
             }
         }
 

@@ -34,6 +34,7 @@ struct ItemDetailView: View {
                     .card(cornerRadius: 14)
                 }
                 tags
+                ItemConceptsSection(item: item)
                 ConnectionsSection(item: item)
                 if !similar.isEmpty { similarSection }
             }

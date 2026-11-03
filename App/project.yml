@@ -61,6 +61,9 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+      # The paper catalogue (facts and links only), bundled as the fallback (docs/DEVELOP_PLAN.md Appendix D).
+      - path: ../catalogue/papers.json
+        buildPhase: resources
     dependencies:
       - package: TroveCore
       - target: TroveShare

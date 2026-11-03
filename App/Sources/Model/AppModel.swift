@@ -21,6 +21,8 @@ final class AppModel {
         case graph
         case importer
         case clipboard
+        /// Develop: practice, papers, skills (docs/DEVELOP_PLAN.md).
+        case develop
     }
 
     /// A folder and its subfolders, for the sidebar's outline.
@@ -573,7 +575,7 @@ final class AppModel {
         case .source(let src): out = items.filter { $0.sources.contains(src) }
         case .folder(let id): out = items.filter { $0.folder == id }
         case .unfiled: out = unfiledItems
-        case .graph, .importer, .clipboard, nil: out = items
+        case .graph, .importer, .clipboard, .develop, nil: out = items
         }
         // Pinned first, then the chosen order (MASTER_PLAN N12); items are already newest first.
         switch sortOrder {

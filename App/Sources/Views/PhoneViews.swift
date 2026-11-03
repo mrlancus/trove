@@ -20,7 +20,7 @@ struct PhoneRootView: View {
     @State private var libraryPath: [PhoneRoute] = []
     @State private var searchPath: [PhoneRoute] = []
 
-    enum PhoneTab: Hashable { case library, clipboard, search }
+    enum PhoneTab: Hashable { case library, clipboard, practise, search }
 
     var body: some View {
         @Bindable var model = model
@@ -45,6 +45,9 @@ struct PhoneRootView: View {
                 .task { await model.clipboard.reload() }
             }
             .badge(model.clipboard.ephemeral.count)
+            Tab("Practise", systemImage: "graduationcap", value: PhoneTab.practise) {
+                NavigationStack { DevelopView() }
+            }
             Tab(value: PhoneTab.search, role: .search) {
                 NavigationStack(path: $searchPath) {
                     PhoneSearch()
@@ -58,7 +61,7 @@ struct PhoneRootView: View {
         }
         .onChange(of: model.selectedItemID) { _, id in
             guard let id else { return }
-            if tab == .clipboard { tab = .library }
+            if tab == .clipboard || tab == .practise { tab = .library }
             if tab == .search { open(id, on: &searchPath) } else { open(id, on: &libraryPath) }
         }
         .onChange(of: libraryPath) { _, path in if tab == .library { follow(path) } }
@@ -75,6 +78,7 @@ struct PhoneRootView: View {
         case .list(.graph): GraphScreen()
         case .list(.importer): ImportView()
         case .list(.clipboard): ClipboardScreen(embedded: true)
+        case .list(.develop): DevelopView()
         case .list(let selection):
             LibraryView()
                 .onAppear { if model.selection != selection { model.selection = selection } }

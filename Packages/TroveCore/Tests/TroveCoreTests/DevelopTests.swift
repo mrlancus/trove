@@ -342,3 +342,37 @@ import Testing
 extension DevelopAI.Task {
     static let allCasesForTest: [DevelopAI.Task] = [.mark, .hint, .tagConcepts, .splitHelp, .explain, .plan]
 }
+
+/// Marking (docs/testing/develop.md TEST-DEV-013, 014).
+@Suite struct DevelopMarkingTests {
+    // TEST-DEV-013
+    @Test func schemeLinesBecomeTickablePoints() {
+        let entry = "01.2   v from the graph: 2.4 m s−1          1     AO3\n   p = 0.50 × 2.4 = 1.2 kg m s−1    1\nMarks\n"
+        let points = DevelopMarking.points(fromScheme: entry)
+        #expect(points.map(\.text) == ["v from the graph: 2.4 m s−1", "p = 0.50 × 2.4 = 1.2 kg m s−1"])
+        #expect(DevelopMarking.selfMarkScore(ticked: 1, marks: 2, points: 2) == 0.5)
+        #expect(DevelopMarking.selfMarkScore(ticked: 3, marks: 2, points: 3) == 1)
+        #expect(DevelopMarking.selfMarkScore(ticked: 1, marks: nil, points: 4) == 0.25)
+    }
+
+    // TEST-DEV-014
+    @Test func aiMarksQuoteTheSchemeOrGoToReview() {
+        let prompt = DevelopMarking.prompt(question: "Calculate p.", scheme: "01.2 p = mv", answer: "p = 1.2", marks: 2)
+        #expect(prompt.hasPrefix(DevelopMarking.instructions))
+        #expect(prompt.contains("<mark_scheme>\n01.2 p = mv\n</mark_scheme>"))
+        #expect(DevelopMarking.prompt(question: "Q", scheme: nil, answer: "A", marks: nil).contains("none was found"))
+        let good = #"{"points":[{"point":"v from graph","got":true,"quote":"v = 2.4","why":""},{"point":"p = mv","got":false,"quote":"","why":"no product"}],"marksAwarded":1,"confidence":0.9,"rationale":"","schemeQuestioned":false}"#
+        let r = DevelopMarking.parse(good, marks: 2, hadScheme: true)
+        #expect(r?.score == 0.5 && r?.uncertain == false && r?.marking == .aiScheme)
+        let unquoted = #"{"points":[{"point":"","got":true,"quote":"","why":""}],"marksAwarded":1,"confidence":0.95,"rationale":"","schemeQuestioned":false}"#
+        #expect(DevelopMarking.parse(unquoted, marks: 1, hadScheme: true)?.uncertain == true)
+        let unsure = #"{"points":[],"marksAwarded":0,"confidence":0.4,"rationale":"","schemeQuestioned":false}"#
+        #expect(DevelopMarking.parse(unsure, marks: 1, hadScheme: true)?.uncertain == true)
+        let noScheme = #"{"points":[{"point":"uses p = mv","got":true,"quote":"p = mv","why":""}],"marksAwarded":1,"confidence":0.9,"rationale":"no scheme","schemeQuestioned":false}"#
+        #expect(DevelopMarking.parse(noScheme, marks: 1, hadScheme: false)?.marking == .aiNoScheme)
+        #expect(DevelopMarking.parse("not json", marks: 1, hadScheme: true) == nil)
+        // An uncertain AI mark counts for nothing in the mastery model.
+        let s = Mastery.evaluate(skill: "s", [Attempt(id: "a", problem: "p", skills: ["s"], at: 0, hint: 0, marking: .aiScheme, score: 1, uncertain: true, b: 0, sourceKey: "x")])
+        #expect(s.mastery == nil)
+    }
+}

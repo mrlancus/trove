@@ -154,6 +154,7 @@ struct AIActivityView: View {
         case .action: "wand.and.stars"
         case .test: "checkmark.seal"
         case .keywords: "tag"
+        case .develop: "graduationcap"
         }
     }
 }
