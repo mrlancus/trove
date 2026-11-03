@@ -168,8 +168,12 @@ enum ThumbnailCache {
         let key = attachment.id
         if let hit = cached(key) { return hit }
         let task = loading[key] ?? Task<Decoded?, Never> {
+            // On disk from an earlier launch: no decrypting or decoding the original (MASTER_PLAN P7).
+            if let saved = await Task.detached(priority: .utility, operation: { DiskThumbnails.load(key) }).value { return saved }
             guard let data = try? await library.attachmentData(attachment) else { return nil }
-            return await Task.detached(priority: .utility) { decode(data, attachment) }.value
+            let made = await Task.detached(priority: .utility) { decode(data, attachment) }.value
+            if let made { Task.detached(priority: .background) { DiskThumbnails.save(made, key) } }
+            return made
         }
         loading[key] = task
         let decoded = await task.value
@@ -200,6 +204,34 @@ enum ThumbnailCache {
         let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: maxPixels,
                                         kCGImageSourceCreateThumbnailWithTransform: true]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+}
+
+/// Card pictures saved as small JPEGs in Caches (the system may clear them; they're made again).
+enum DiskThumbnails {
+    static let dir: URL = {
+        let d = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("thumbs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    static func url(_ key: String) -> URL {
+        dir.appendingPathComponent(key.filter { $0.isLetter || $0.isNumber || $0 == "-" } + "-700.jpg")
+    }
+
+    static func load(_ key: String) -> ThumbnailCache.Decoded? {
+        guard let data = try? Data(contentsOf: url(key)), let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return ThumbnailCache.Decoded(cgImage: image)
+    }
+
+    static func save(_ d: ThumbnailCache.Decoded, _ key: String) {
+        guard let jpeg = InkRenderer.jpeg(d.cgImage, quality: 0.8) else { return }
+        #if os(iOS)
+        try? jpeg.write(to: url(key), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try? jpeg.write(to: url(key), options: .atomic)
+        #endif
     }
 }
 
