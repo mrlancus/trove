@@ -237,6 +237,10 @@ struct InkEditorView: View {
                         Text("Off").tag(MathAssist.Mode.off)
                     }
                     Toggle("Smaller drawings (every device up to date)", isOn: Binding(get: { editor.inkSettings.compactPoints }, set: { editor.setCompactPoints($0) }))
+                    #if os(iOS)
+                    // Trove's GPU ink is sharp at every zoom; PencilKit's ink is the fallback (reopen to apply).
+                    Toggle("Classic ink (PencilKit)", isOn: Binding(get: { !InkMetalView.enabled }, set: { InkMetalView.enabled = !$0 }))
+                    #endif
                     if !editor.inkSettings.favourites.isEmpty {
                         Menu("Remove a favourite pen") {
                             ForEach(Array(editor.inkSettings.favourites.enumerated()), id: \.offset) { i, f in
