@@ -118,6 +118,9 @@ public struct Item: Identifiable, Hashable, Sendable {
         }
     }
     public var isPinned: Bool { record[Field.pinned]?.bool ?? false }
+    /// A reminder on the item (MASTER_PLAN N8, PROTOCOL.md §9 `remindAt`): every device schedules a
+    /// local notification for it (no push on a free Apple ID).
+    public var remindAt: Date? { record["remindAt"]?.date }
     /// Your AI may look at it (everything may, unless you turned it off for this item).
     public var aiAllowed: Bool { record[Field.aiHidden]?.bool != true }
     /// Search words your AI added (topics and synonyms that aren't in the text itself).

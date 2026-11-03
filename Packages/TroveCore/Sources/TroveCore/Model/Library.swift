@@ -274,6 +274,8 @@ public actor Library {
     }
 
     public func setPinned(_ id: String, _ pinned: Bool) async { await update(id, [Field.pinned: .bool(pinned)]) }
+    /// Sets or clears an item's reminder.
+    public func setReminder(_ id: String, at date: Date?) async { await update(id, ["remindAt": date.map { JSONValue($0) } ?? .null]) }
     /// Lets your AI see an item or not.
     public func setAIAllowed(_ id: String, _ allowed: Bool) async { await update(id, [Field.aiHidden: .bool(!allowed)]) }
     /// Every item at once (Settings → AI); returns how many changed.

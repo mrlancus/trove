@@ -787,6 +787,14 @@ struct ItemMenu: View {
     let item: Item
     @Environment(AppModel.self) private var model
 
+    private func remind(_ item: Item, _ date: Date?) {
+        Task {
+            if date != nil { await Reminders.ask() }
+            await model.library?.setReminder(item.id, at: date)
+            await model.reload()
+        }
+    }
+
     var body: some View {
         Button { Task { await model.copy([item]) } } label: { Label("Copy", systemImage: "doc.on.doc") }
         if item.kind != .sketch, let file = item.attachments.first {
@@ -797,6 +805,15 @@ struct ItemMenu: View {
         }
         Button { Task { await model.togglePin(item) } } label: {
             Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+        }
+        Menu {
+            Button("In an hour") { remind(item, Date().addingTimeInterval(3600)) }
+            Button("This evening (6 pm)") { remind(item, Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date())) }
+            Button("Tomorrow morning (9 am)") { remind(item, Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date())) }
+            Button("Next week") { remind(item, Calendar.current.date(byAdding: .day, value: 7, to: Date())) }
+            if item.remindAt != nil { Divider(); Button("No reminder") { remind(item, nil) } }
+        } label: {
+            Label(item.remindAt.map { "Reminder: \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Remind me", systemImage: "bell")
         }
         if item.record["flashcards"]?.array?.isEmpty == false {
             Button { model.studyDeck = item.id; model.showStudy = true } label: { Label("Study these cards", systemImage: "rectangle.on.rectangle.angled") }

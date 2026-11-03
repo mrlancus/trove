@@ -465,6 +465,7 @@ final class AppModel {
             Task.detached(priority: .utility) { await semantic.update(snapshot, saveNow: saveCache) }
             publishWidget()
             SpotlightIndexer.index(items)
+            Reminders.sync(items)
         }
         await applySharedSettings()
         await loadAISettings()

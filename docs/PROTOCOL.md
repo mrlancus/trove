@@ -583,6 +583,9 @@ newest first, one per editing session (same device, edits less than 2 minutes ap
 **Inbox imports** (§4) use the item id `inbox-<relay entry id, lowercased>`. When the website and an
 app import the same entry at the same time, they write the same item rather than two.
 
+
+**Reminders.** `remindAt` (an ISO date like `createdAt`, or null) on any item: each device schedules a local notification for it at that time; clearing it (null) or deleting the item removes them. Devices don't coordinate who shows it, so every device that's on shows it.
+
 ## 10. Drawing (sketches and ink on files)
 Every stroke is its own record with `kind: "stroke"` (`Ink.swift`, `web/public/core/ink.js`, both
 checked against `Fixtures/ink-cases.json`). Two devices drawing at once just add strokes, erasing
