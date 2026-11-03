@@ -39,6 +39,65 @@ public struct RecordStore: Sendable {
     /// The checkpoint this store starts from, if any (PROTOCOL.md §3 "Checkpoints").
     public private(set) var base: Checkpoint.Base?
 
+    // MARK: Change feed (docs/MASTER_PLAN.md P1)
+    /// Goes up by one for every record an op touches. Readers keep the value they last saw and ask
+    /// `changes(since:)` for what's different, instead of re-reading every record after each change.
+    public private(set) var changeVersion = 0
+    /// (version, record id), oldest first. Trimmed when long; asking from before `changeFloor` (or
+    /// before a rebuild) answers "everything changed".
+    private var changeLog: [(version: Int, id: String)] = []
+    private var changeFloor = 0
+    static let changeLogLimit = 200_000
+
+    /// What changed since a reader last looked.
+    public struct ChangeSet: Sendable, Equatable {
+        /// Everything may have changed (first look, a rebuild, or the reader fell too far behind).
+        public var all: Bool
+        /// The ids of records that changed (deleted ones included), by kind. Empty when `all`.
+        public var byKind: [String: Set<String>]
+        /// Pass this to the next `changes(since:)`.
+        public var token: Int
+
+        public var isEmpty: Bool { !all && byKind.isEmpty }
+        /// Whether any record of these kinds changed (always true when `all`).
+        public func touches(_ kinds: Set<String>) -> Bool { all || kinds.contains { byKind[$0] != nil } }
+        public func ids(_ kind: String) -> Set<String> { byKind[kind] ?? [] }
+    }
+
+    /// The records changed after `token` (a `changeVersion` the reader saw; -1 for the first look).
+    public func changes(since token: Int) -> ChangeSet {
+        if token < changeFloor || token > changeVersion { return ChangeSet(all: true, byKind: [:], token: changeVersion) }
+        var byKind: [String: Set<String>] = [:]
+        // The log is in version order: walk back from the end until reaching the token.
+        var i = changeLog.count - 1
+        while i >= 0, changeLog[i].version > token {
+            let id = changeLog[i].id
+            byKind[records[id]?.kind ?? "", default: []].insert(id)
+            i -= 1
+        }
+        return ChangeSet(all: false, byKind: byKind, token: changeVersion)
+    }
+
+    private var rebuilding = false
+
+    private mutating func noteChange(_ id: String) {
+        if rebuilding { return }
+        changeVersion += 1
+        changeLog.append((changeVersion, id))
+        if changeLog.count > Self.changeLogLimit {
+            let drop = changeLog.count / 2
+            changeFloor = changeLog[drop - 1].version
+            changeLog.removeFirst(drop)
+        }
+    }
+
+    /// Everything is new to every reader (after a rebuild or a new checkpoint).
+    private mutating func noteEverythingChanged() {
+        changeVersion += 1
+        changeLog = []
+        changeFloor = changeVersion
+    }
+
     public init() {}
 
     public var opCount: Int { ops.count }
@@ -75,7 +134,10 @@ public struct RecordStore: Sendable {
         newestInk = [:]
         lastApplied = ""
         if base != nil { applyBase() }
+        rebuilding = true
         for op in ops { applyOne(op) }
+        rebuilding = false
+        noteEverythingChanged()
     }
 
     // MARK: Checkpoints
@@ -198,6 +260,7 @@ public struct RecordStore: Sendable {
             noteInkTime(record, on: on)
         }
         records[op.record] = record
+        noteChange(op.record)
     }
 
     private mutating func noteInkTime(_ record: Record, on itemId: String) {

@@ -6,6 +6,11 @@ public actor Library {
     public let engine: SyncEngine
     private var index = SearchIndex()
     private var indexed: [String: String] = [:]   // record id → updatedHLC already indexed
+    /// The change version the search index has caught up to (docs/MASTER_PLAN.md P1).
+    private var indexToken = -1
+    /// Items, newest first, kept up to date from the change feed instead of rebuilt per call.
+    private var itemList: [Item] = []
+    private var itemsToken = -1
     let now: @Sendable () -> Date
 
     public init(engine: SyncEngine, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -17,7 +22,64 @@ public actor Library {
 
     public func items() async -> [Item] {
         await refreshIndex()
-        return await engine.records(kind: "item").filter { !$0.isStrayItem }.map(Item.init).sorted { $0.createdAt > $1.createdAt }
+        let changes = await engine.changes(since: itemsToken)
+        itemsToken = changes.token
+        if changes.all {
+            itemList = await engine.records(kind: "item").filter { !$0.isStrayItem }.map(Item.init).sorted(by: Self.newestFirst)
+        } else if case let ids = changes.ids("item"), !ids.isEmpty {
+            await updateItemList(ids)
+        }
+        return itemList
+    }
+
+    /// Newest first; the id breaks ties so the order is the same on every call.
+    static func newestFirst(_ a: Item, _ b: Item) -> Bool {
+        let ta = a.createdAt, tb = b.createdAt
+        return ta != tb ? ta > tb : a.id < b.id
+    }
+
+    /// Takes changed items out and puts their current versions back in place (binary search),
+    /// so one edit costs a lookup, not decoding and sorting the whole library.
+    private func updateItemList(_ ids: Set<String>) async {
+        if ids.count > max(64, itemList.count / 4) {
+            itemList = await engine.records(kind: "item").filter { !$0.isStrayItem }.map(Item.init).sorted(by: Self.newestFirst)
+            return
+        }
+        itemList.removeAll { ids.contains($0.id) }
+        for id in ids {
+            guard let r = await engine.record(id), r.kind == "item", !r.isDeleted, !r.isStrayItem else { continue }
+            let item = Item(r)
+            var lo = 0, hi = itemList.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if Self.newestFirst(itemList[mid], item) { lo = mid + 1 } else { hi = mid }
+            }
+            itemList.insert(item, at: lo)
+        }
+    }
+
+    /// What a screen needs to catch up from `token`: the items that changed (current versions),
+    /// the ids that went away (deleted or no longer items), and the token to pass next time.
+    /// `all` means start again from `items()`.
+    public struct ItemChanges: Sendable {
+        public var all: Bool
+        public var changed: [Item]
+        public var removed: Set<String>
+        public var otherKinds: Set<String>
+        public var token: Int
+        public var isEmpty: Bool { !all && changed.isEmpty && removed.isEmpty && otherKinds.isEmpty }
+    }
+
+    public func itemChanges(since token: Int) async -> ItemChanges {
+        let changes = await engine.changes(since: token)
+        if changes.all { return ItemChanges(all: true, changed: [], removed: [], otherKinds: [], token: changes.token) }
+        var changed: [Item] = [], removed: Set<String> = []
+        for id in changes.ids("item") {
+            if let r = await engine.record(id), r.kind == "item", !r.isDeleted, !r.isStrayItem { changed.append(Item(r)) } else { removed.insert(id) }
+        }
+        // An id that stopped being an item is filed under its new kind; the screen drops it too.
+        for (kind, ids) in changes.byKind where kind != "item" { removed.formUnion(ids) }
+        return ItemChanges(all: false, changed: changed, removed: removed, otherKinds: Set(changes.byKind.keys).subtracting(["item"]), token: changes.token)
     }
 
     public func item(_ id: String) async -> Item? {
@@ -74,18 +136,38 @@ public actor Library {
         let records = await engine.store.all(kind: "item").filter { !$0.isStrayItem && !$0.isDeleted }
         let fresh = index.restore(snapshot, items: records.map(Item.init))
         indexed = [:]
+        indexToken = await engine.changeVersion
+        let folders = await engine.records(kind: "folder").map(Folder.init)
+        index.folders = Dictionary(folders.map { ($0.id, SearchFolder(name: $0.name, parent: $0.parent)) }, uniquingKeysWith: { a, _ in a })
         for r in await engine.store.all(kind: "item") where !r.isStrayItem { indexed[r.id] = r.updatedHLC }
         return fresh
     }
 
+    /// Brings the search index up to date from the change feed: only items and folders that
+    /// changed since the last call are looked at (it used to walk every item every time).
     private func refreshIndex() async {
-        let folders = await engine.records(kind: "folder").map(Folder.init)
-        index.folders = Dictionary(folders.map { ($0.id, SearchFolder(name: $0.name, parent: $0.parent)) }, uniquingKeysWith: { a, _ in a })
-        for record in await engine.store.all(kind: "item") where !record.isStrayItem {
-            let id = record.id
-            if indexed[id] != record.updatedHLC {
-                index.update(Item(record))
-                indexed[id] = record.updatedHLC
+        let changes = await engine.changes(since: indexToken)
+        guard !changes.isEmpty else { return }
+        indexToken = changes.token
+        if changes.touches(["folder"]) {
+            let folders = await engine.records(kind: "folder").map(Folder.init)
+            index.folders = Dictionary(folders.map { ($0.id, SearchFolder(name: $0.name, parent: $0.parent)) }, uniquingKeysWith: { a, _ in a })
+        }
+        if changes.all {
+            for record in await engine.store.all(kind: "item") where !record.isStrayItem {
+                let id = record.id
+                if indexed[id] != record.updatedHLC {
+                    index.update(Item(record))
+                    indexed[id] = record.updatedHLC
+                }
+            }
+        } else {
+            for id in changes.ids("item") {
+                guard let record = await engine.record(id), record.kind == "item", !record.isStrayItem else { continue }
+                if indexed[id] != record.updatedHLC {
+                    index.update(Item(record))
+                    indexed[id] = record.updatedHLC
+                }
             }
         }
         index.prepare()

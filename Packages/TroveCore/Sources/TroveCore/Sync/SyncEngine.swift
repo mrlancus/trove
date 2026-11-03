@@ -174,6 +174,10 @@ public actor SyncEngine {
     public func ink(on itemId: String) -> [Record] { store.ink(on: itemId) }
     public func newestInkTime(on itemId: String) -> Double? { store.newestInkTime(on: itemId) }
     public func record(_ id: String) -> Record? { store.record(id) }
+    /// What changed since `token` (docs/MASTER_PLAN.md P1); -1 for the first look.
+    public func changes(since token: Int) -> RecordStore.ChangeSet { store.changes(since: token) }
+    /// The current change version, for readers that start from what's there now.
+    public var changeVersion: Int { store.changeVersion }
 
     public func addTransport(_ t: any SyncTransport) { transports.append(t) }
 
