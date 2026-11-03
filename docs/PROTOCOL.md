@@ -927,3 +927,13 @@ syncing both write the template's body, so it can appear twice; the apps sync be
 spaces or tabs before it, and a space, tab or the end of the line after `]`. Lines inside ``` code
 fences don't count. Ticking one writes the body with that one mark changed (`x` or a space), as an
 ordinary text edit, so it merges with other edits.
+
+### Study (flashcards with spaced repetition)
+
+A note with a `flashcards` field (`[{front, back}]`) is a deck. Each card's review state is a record
+of kind `card` with id `card.<note id>.<first 12 hex chars of sha256(front)>` (stable while the
+question stays the same), fields: `note`, `stability` (days), `difficulty` (1–10), `reps`, `lapses`,
+`last` and `due` (Unix ms). Scheduling is FSRS-5 with its default weights and 90 % retention
+(`Study.swift`); Again brings a card back after 10 minutes. Fields are last-writer-wins, so two
+devices reviewing the same card at once keep the later review. Readers that don't know `card`
+ignore it.

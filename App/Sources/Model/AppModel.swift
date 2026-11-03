@@ -119,6 +119,9 @@ final class AppModel {
     /// new doesn't touch `items` (which would redraw every screen and card).
     @ObservationIgnored private var shownLibraryStamp = ""
     @ObservationIgnored private var shownInkStamp = ""
+    /// Study mode (StudyView): open, and which deck (nil: everything due).
+    var showStudy = false
+    var studyDeck: String?
     var sync = SyncStatus()
     var enriching = false
     var toast: String?

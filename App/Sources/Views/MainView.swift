@@ -15,7 +15,9 @@ struct RootView: View {
         case .onboarding:
             OnboardingView()
         case .ready:
+            @Bindable var model = model
             MainView()
+                .sheet(isPresented: $model.showStudy) { StudyView(noteId: model.studyDeck) }
         case .failed(let message):
             VStack(spacing: 16) {
                 EmptyState(symbol: "exclamationmark.triangle", title: "Trove couldn't open your vault", message: message)
@@ -788,6 +790,9 @@ struct ItemMenu: View {
         }
         Button { Task { await model.togglePin(item) } } label: {
             Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+        }
+        if item.record["flashcards"]?.array?.isEmpty == false {
+            Button { model.studyDeck = item.id; model.showStudy = true } label: { Label("Study these cards", systemImage: "rectangle.on.rectangle.angled") }
         }
         if item.kind == .sketch {
             Menu {
