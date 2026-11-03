@@ -115,6 +115,11 @@ struct TroveApp: App {
         switch url.host {
         case "capture":
             model.showCapture = true
+        case "today":
+            Task { await model.openToday() }
+        case "study":
+            model.studyDeck = nil
+            model.showStudy = true
         case "item":
             model.selectedItemID = url.pathComponents.dropFirst().first
         case "search":

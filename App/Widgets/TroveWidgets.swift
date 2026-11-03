@@ -89,6 +89,24 @@ struct CaptureControl: ControlWidget {
         .displayName("Capture in Trove")
     }
 }
+
+struct TodayControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "TroveTodayControl") {
+            ControlWidgetButton(action: OpenTodayIntent()) { Label("Today", systemImage: "calendar") }
+        }
+        .displayName("Today's Note")
+    }
+}
+
+struct StudyControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "TroveStudyControl") {
+            ControlWidgetButton(action: OpenStudyIntent()) { Label("Study", systemImage: "rectangle.on.rectangle.angled") }
+        }
+        .displayName("Study Flashcards")
+    }
+}
 #endif
 
 @main
@@ -98,6 +116,8 @@ struct TroveWidgetBundle: WidgetBundle {
         PinnedWidget()
         #if os(iOS)
         CaptureControl()
+        TodayControl()
+        StudyControl()
         #endif
     }
 }

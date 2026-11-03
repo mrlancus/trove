@@ -57,5 +57,9 @@ struct TroveShortcuts: AppShortcutsProvider {
                     shortTitle: "Capture", systemImageName: "plus.circle")
         AppShortcut(intent: SearchTroveIntent(), phrases: ["Search \(.applicationName)"],
                     shortTitle: "Search", systemImageName: "magnifyingglass")
+        AppShortcut(intent: OpenTodayIntent(), phrases: ["Today's note in \(.applicationName)", "Open today in \(.applicationName)"],
+                    shortTitle: "Today's Note", systemImageName: "calendar")
+        AppShortcut(intent: OpenStudyIntent(), phrases: ["Study flashcards in \(.applicationName)", "Revise with \(.applicationName)"],
+                    shortTitle: "Study", systemImageName: "rectangle.on.rectangle.angled")
     }
 }
