@@ -737,6 +737,7 @@ struct PencilCanvas: UIViewRepresentable {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
                 return o.eraser != nil || !o.lasers.isEmpty || !o.lasso.isEmpty || o.selection != nil || o.tape != nil || o.tip != nil
+                    || !o.highlights.isEmpty || !o.looking.isEmpty
                     || !o.handles.isEmpty || o.preview != nil || o.protractor != nil || o.ruler != nil || editor.dragPreview(slot.spec.key) != nil
             }
         }
@@ -1083,6 +1084,12 @@ struct PencilCanvas: UIViewRepresentable {
         /// isn't drawn too (that redrew the whole overlay, text boxes and all, on every hover move).
         @objc func hovered(_ g: UIHoverGestureRecognizer) {
             guard let canvas = g.view as? UIScrollView else { return }
+            // The Ask box let the Pencil through: it comes back when the Pencil leaves it or lifts away.
+            if editor.pencilOverAsk {
+                let ended = g.state == .ended || g.state == .cancelled
+                let p = g.location(in: nil)
+                if ended || !(editor.askFrame?.contains(p) ?? false) { editor.pencilOverAsk = false }
+            }
             if editor.protractor != nil {
                 // The protractor reads the angle of wherever the Pencil hovers.
                 let z = canvas.zoomScale

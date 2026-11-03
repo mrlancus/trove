@@ -30,6 +30,13 @@ struct InkEditorView: View {
     /// Inside the file viewer's Edit: the viewer has the Done button, and leaving saves.
     let embedded: Bool
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var compactWidth: Bool { sizeClass == .compact }
+    #else
+    private var compactWidth: Bool { false }
+    #endif
+
     init(target: InkTarget, app: AppModel, embedded: Bool = false) {
         _editor = State(initialValue: InkEditorModel(target: target, app: app))
         self.embedded = embedded
@@ -75,6 +82,12 @@ struct InkEditorView: View {
                     .transition(.opacity)
                 }
             }
+            // Ask floats over the page (plan A4); an iPhone gets a sheet instead.
+            .overlay {
+                if asking, !compactWidth, !editor.presenting {
+                    GeometryReader { g in FloatingAskBox(editor: editor, container: g.size) { asking = false } }
+                }
+            }
             .clipped()
             if showsPageBar, !editor.presenting { pageBar }
         }
@@ -82,17 +95,15 @@ struct InkEditorView: View {
         .task(id: app.inkPulledRevision) { if editor.loaded { await editor.reloadInk() } }
         .onAppear { app.drawingOpen += 1 }
         .onDisappear { app.drawingOpen = max(0, app.drawingOpen - 1) }
-        // One side panel: the pages, or Ask this notebook.
-        .inspector(isPresented: Binding(get: { editor.showPages || asking }, set: { if !$0 { editor.showPages = false; asking = false } })) {
-            if asking {
-                StudyPanel(editor: editor)
-                    .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
-            } else {
-                InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage)
-            }
+        // The pages panel at the side; Ask floats over the page instead.
+        .inspector(isPresented: Binding(get: { editor.showPages }, set: { editor.showPages = $0 })) {
+            InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage)
         }
-        .onChange(of: asking) { _, on in if on { editor.showPages = false } }
-        .onChange(of: editor.showPages) { _, on in if on { asking = false } }
+        .sheet(isPresented: Binding(get: { asking && compactWidth }, set: { if !$0 { asking = false } })) {
+            StudyPanel(editor: editor)
+                .presentationDetents([.fraction(0.3), .medium, .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        }
         .sheet(item: $editor.aiResult) { result in InkAIResultSheet(result: result, editor: editor) }
         .alert("Save as element", isPresented: $savingElement) {
             TextField("Name", text: $elementName)

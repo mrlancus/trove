@@ -52,9 +52,12 @@ final class StudyPanelModel {
     /// together what the chat sees: every page's handwriting, its text boxes, and a PDF page's own
     /// text. Run before every question, so what you wrote since opening Ask is seen too; unchanged
     /// pages cost a signature check (docs/plans/sketch-2-plan.md A5).
-    func prepare() async {
+    /// `thinking`: a question is about to go, so the outline stays on what was read until it's answered.
+    func prepare(thinking: Bool = false) async {
         guard let library = editor.app?.library else { return }
         status = "Reading your pages…"
+        // "The AI is looking here": the pages while they're read (plan A6).
+        editor.aiLooking = pageOutlines()
         defer { status = nil }
         let itemId = editor.target.itemId
         let cacheKey: String
@@ -108,6 +111,27 @@ final class StudyPanelModel {
         }
         context = StudyContext(title: editor.target.title, pages: pages)
         lineBoxes = boxes
+        // While the AI thinks: the lines it was given (or the page, where none are known).
+        var looking: [String: [InkGeometry.Rect]] = [:]
+        for (key, rects) in boxes {
+            let known = rects.compactMap { $0 }
+            if !known.isEmpty { looking[key] = known }
+        }
+        editor.aiLooking = thinking ? (looking.isEmpty ? pageOutlines() : looking) : [:]
+    }
+
+    /// Each page's outline (an endless canvas: round what's on screen).
+    private func pageOutlines() -> [String: [InkGeometry.Rect]] {
+        var out: [String: [InkGeometry.Rect]] = [:]
+        for spec in editor.pages {
+            if spec.infinite {
+                let c = editor.visibleCenter
+                out[spec.key] = [InkGeometry.Rect(x: c.x - 320, y: c.y - 220, width: 640, height: 440)]
+            } else {
+                out[spec.key] = [InkGeometry.Rect(x: 6, y: 6, width: spec.width - 12, height: spec.height - 12)]
+            }
+        }
+        return out
     }
 
     func send(_ question: String, maxTokens: Int = 700) async {
@@ -117,9 +141,9 @@ final class StudyPanelModel {
         input = ""
         busy = true
         error = nil
-        defer { busy = false }
+        defer { busy = false; editor.aiLooking = [:] }
         // Every question: pages written on since the last one are read (the rest are cached).
-        await prepare()
+        await prepare(thinking: true)
         guard let context else { return }
         if context.pages.allSatisfy({ $0.lines.isEmpty }) {
             error = "There's nothing readable in this notebook yet."

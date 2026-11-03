@@ -424,6 +424,10 @@ final class InkEditorModel {
     var exporting = false
     /// Where new pictures go on an endless canvas (the middle of what's on screen), in page points.
     @ObservationIgnored var visibleCenter = InkPoint(x: 384, y: 400)
+    /// Where the floating Ask box is (window coordinates), and whether the Pencil is hovering over it
+    /// (it then fades and lets the Pencil write underneath; plan A4).
+    @ObservationIgnored var askFrame: CGRect?
+    var pencilOverAsk = false
 
     private struct Ref { var id: String; var kind: String }
     private struct Action {
@@ -908,8 +912,35 @@ final class InkEditorModel {
         if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, rotate: t.rotate, color: color(for: .tape)) }
         if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
         o.highlights = studyHighlights[key] ?? []
+        o.looking = aiLooking[key] ?? []
+        o.lookPhase = lookPhase
         return o
     }
+
+    /// Where the AI is reading, by page (plan A6): outlined while it works, then cleared. The dashes
+    /// move (15 times a second, only while it works; still with Reduce Motion or in Low Power Mode).
+    var aiLooking: [String: [InkGeometry.Rect]] = [:] {
+        didSet {
+            overlayChanged()
+            if aiLooking.isEmpty { lookTask?.cancel(); lookTask = nil; return }
+            guard lookTask == nil else { return }
+            #if os(iOS)
+            let still = UIAccessibility.isReduceMotionEnabled || ProcessInfo.processInfo.isLowPowerModeEnabled
+            #else
+            let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || ProcessInfo.processInfo.isLowPowerModeEnabled
+            #endif
+            guard !still else { return }
+            lookTask = Task { @MainActor [weak self] in
+                while let self, !self.aiLooking.isEmpty, !Task.isCancelled {
+                    self.lookPhase -= 1.5
+                    self.overlayChanged()
+                    try? await Task.sleep(for: .milliseconds(66), tolerance: .milliseconds(20))
+                }
+            }
+        }
+    }
+    @ObservationIgnored private(set) var lookPhase = 0.0
+    @ObservationIgnored private var lookTask: Task<Void, Never>?
 
     /// Lines the notebook chat pointed at, by page (StudyPanel). Static markers, redrawn only when set.
     var studyHighlights: [String: [InkGeometry.Rect]] = [:] {
