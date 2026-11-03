@@ -84,13 +84,7 @@ final class LiveMarkdownController {
 
 // MARK: - Styling (both platforms)
 
-#if canImport(UIKit)
-typealias PlatformFont = UIFont
-typealias PlatformColor = UIColor
-#else
-typealias PlatformFont = NSFont
-typealias PlatformColor = NSColor
-#endif
+// PlatformFont / PlatformColor are declared in PDFReader.swift.
 
 @MainActor
 enum MarkdownStyler {
@@ -129,13 +123,13 @@ enum MarkdownStyler {
     static func withTraits(_ font: PlatformFont, bold: Bool = false, italic: Bool = false) -> PlatformFont {
         #if canImport(UIKit)
         var traits = font.fontDescriptor.symbolicTraits
-        if bold { traits.insert(.traitBold) }
-        if italic { traits.insert(.traitItalic) }
+        if bold { traits.insert(UIFontDescriptor.SymbolicTraits.traitBold) }
+        if italic { traits.insert(UIFontDescriptor.SymbolicTraits.traitItalic) }
         return font.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: font.pointSize) } ?? font
         #else
         var traits = font.fontDescriptor.symbolicTraits
-        if bold { traits.insert(.bold) }
-        if italic { traits.insert(.italic) }
+        if bold { traits.insert(NSFontDescriptor.SymbolicTraits.bold) }
+        if italic { traits.insert(NSFontDescriptor.SymbolicTraits.italic) }
         return NSFont(descriptor: font.fontDescriptor.withSymbolicTraits(traits), size: font.pointSize) ?? font
         #endif
     }
