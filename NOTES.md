@@ -86,6 +86,10 @@ Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the b
   (PROTOCOL.md §10), Recordings menu plays back with the strokes written at that moment marked, lasso →
   Play from here, transcripts on the device (searchable). **Check on the iPad**: microphone prompt,
   marks following the audio.
+- **More**: planners (G3, Add → New planner), maths in notes (N10, Return after `=`), slash menu (N3),
+  reminders (N8, item menu → Remind me), plain export (I5, Select → Export as Markdown and files), Link it
+  on mentions (O4), command palette (O2, ⌘K), sorting (N12), app lock (S3 first part, Settings →
+  Privacy), predicted next paste (C3). The website's sync also uses `segments/batch`.
 - **Next** (§14): check CI for the later commits; then G9 zoom window, G11 whiteboard quadtree, G3
   planners, GoodNotes library import with folders, G6 word recognition, G4 audio synced to ink, G8 study;
   P10 batched segment fetch (relay + clients), P11 iCloud NSMetadataQuery, P4 binary search index, P7
