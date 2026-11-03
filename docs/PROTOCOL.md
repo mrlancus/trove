@@ -774,6 +774,10 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   Adding (with the size, paper and colour of the page before), duplicating (with everything on the
   page), reordering and deleting pages rewrite the list; the last page can't be deleted. Two
   devices changing the list at once: the last write wins.
+- `recordings`: audio recorded while writing (MASTER_PLAN G4), `[{attachment, start, duration, transcript?}]`:
+  `attachment` is an ordinary encrypted attachment (AAC in M4A), `start` the Unix ms recording began
+  (the same clock as strokes' `createdAt`, so a stroke's place in the audio is `createdAt - start`),
+  `duration` seconds, `transcript` text made on the device (searchable in the apps).
 - `cover`: a notebook's cover on the shelf, `{color: "#rrggbb", pattern: "plain"|"lines"|"dots"|"grid"|"linen"}`; absent or null shows the first page.
 - `pageSize` `[w, h]` (optional, 768 × 1024 when unset), and `canvas`: `"infinite"` for one endless
   page `"0"` (any coordinates, paper drawn everywhere; papers that lay out a page are plain lined

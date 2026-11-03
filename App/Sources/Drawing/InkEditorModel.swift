@@ -450,6 +450,20 @@ final class InkEditorModel {
     @ObservationIgnored private var unsavedStrokes: [String: (key: String, line: InkLine)] = [:]
     @ObservationIgnored private var unsavedDeletes: Set<String> = []
     @ObservationIgnored private(set) weak var app: AppModel?
+    /// Audio synced to ink (InkAudioController, MASTER_PLAN G4) and the sketch's recordings.
+    @ObservationIgnored private var audioController: InkAudioController?
+    var audio: InkAudioController {
+        if let a = audioController { return a }
+        let a = InkAudioController(editor: self)
+        audioController = a
+        return a
+    }
+    private(set) var recordings: [InkRecording] = []
+    func reloadRecordings() async {
+        guard isSketch, let item = await app?.library?.item(target.itemId) else { return }
+        recordings = item.recordings
+    }
+
     /// Math Assist: answers after a written `=` (MathAssistController, MASTER_PLAN G7).
     @ObservationIgnored private var mathController: MathAssistController?
     var math: MathAssistController {
@@ -679,6 +693,7 @@ final class InkEditorModel {
             pages = InkRenderer.sketchPages(item)
             pagesSig = Self.signature(item)
             pageNames = Self.names(item)
+            recordings = item.recordings
         } else {
             guard let item = await library.item(target.itemId), let att = item.attachments.first(where: { $0.id == target.layer }),
                   let data = try? await library.attachmentData(att) else { failed = "Couldn't open the file. It may still be syncing."; return }
@@ -940,7 +955,8 @@ final class InkEditorModel {
         if let shape, tool != .highlighter, shape == "line" || shape == "polyline" || shape == "curve" { style.arrow = arrow }
         if let shape, InkStrokeStyle.closedShapes.contains(shape) { style.fill = fill }
         let id = id ?? UUID().uuidString.lowercased()
-        let line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape, style: style)
+        var line = InkLine(id: id, tool: tool, color: color, width: width, points: pts, shape: shape, style: style)
+        line.createdAt = (Date().timeIntervalSince1970 * 1000).rounded()
         content[key, default: InkContent()].strokes.append(line)
         unsavedStrokes[id] = (key, line)
         revision += 1

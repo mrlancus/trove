@@ -255,6 +255,9 @@ struct InkEditorView: View {
                     }
                     .help(editor.darkPage ? "Show the page light" : "Show the page dark (black page, black and white ink swapped; only on this device)")
                 }
+                if editor.isSketch {
+                    InkAudioButtons(editor: editor, audio: editor.audio)
+                }
                 Button { editor.presenting = true } label: { Label("Present", systemImage: "play.rectangle") }
                     .help("Presentation mode: hide the tools, laser in hand")
                 Button { asking.toggle() } label: { Label("Ask", systemImage: "bubble.left.and.text.bubble.right") }
@@ -966,5 +969,34 @@ struct InkPenOptions: View {
         #if os(macOS)
         .padding()
         #endif
+    }
+}
+
+
+/// Record while writing, and the sketch's recordings to play back (MASTER_PLAN G4).
+struct InkAudioButtons: View {
+    let editor: InkEditorModel
+    @Bindable var audio: InkAudioController
+
+    var body: some View {
+        Button {
+            Task { if audio.isRecording { await audio.stopRecording() } else { await audio.startRecording() } }
+        } label: {
+            Label(audio.isRecording ? "Stop recording" : "Record", systemImage: audio.isRecording ? "stop.circle.fill" : "mic")
+        }
+        .foregroundStyle(audio.isRecording ? .red : .primary)
+        .help(audio.isRecording ? "Stop recording" : "Record audio while you write; play it back with the writing marked")
+        if !editor.recordings.isEmpty {
+            Menu {
+                if audio.playing != nil { Button("Stop playing") { audio.stop() } }
+                ForEach(editor.recordings) { rec in
+                    Button("\(Date(timeIntervalSince1970: rec.start / 1000).formatted(date: .abbreviated, time: .shortened)) · \(Int(rec.duration / 60)) min \(Int(rec.duration) % 60) s") {
+                        Task { await audio.play(rec) }
+                    }
+                }
+            } label: { Label("Recordings", systemImage: audio.playing == nil ? "waveform" : "waveform.circle.fill") }
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
     }
 }

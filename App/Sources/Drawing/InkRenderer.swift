@@ -44,6 +44,8 @@ struct InkLine: Sendable, Identifiable {
     /// A connector's joined ends ("" when free).
     var from = ""
     var to = ""
+    /// When it was drawn (Unix ms), for audio synced to ink; nil when unknown.
+    var createdAt: Double?
 
     init(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) {
         self.id = id; self.tool = tool; self.color = color; self.width = width; self.points = points; self.shape = shape; self.style = style
@@ -53,6 +55,7 @@ struct InkLine: Sendable, Identifiable {
         group = s.group
         from = s.from
         to = s.to
+        createdAt = s.createdAt.timeIntervalSince1970 * 1000
     }
 
     func transformed(_ t: InkGeometry.Transform) -> InkLine {
