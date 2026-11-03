@@ -330,6 +330,7 @@ struct InkEditorView: View {
                 Button("Cut") { editor.cutSelection() }.keyboardShortcut("x", modifiers: .command).disabled(editor.selection == nil)
                 Button("Duplicate") { editor.duplicateSelection() }.keyboardShortcut("d", modifiers: .command).disabled(editor.selection == nil)
                 Button("Ask") { asking.toggle() }.keyboardShortcut("k", modifiers: .command)
+            }
             .opacity(0)
             .allowsHitTesting(false)
         }
