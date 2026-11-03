@@ -18,9 +18,11 @@ on:
 permissions:
   contents: write
 
+# A newer push waits for the running build instead of cancelling it: cancelling could stop it halfway
+# through replacing the "latest" release.
 concurrency:
   group: apps-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -138,7 +140,7 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -rf /tmp/ct && mkdir -p /tmp/ct
-          (cd build/tests 2>/dev/null && find . -name "*.xcresult" -prune -o -type f -print | cpio -pdm /tmp/ct 2>/dev/null) || true
+          rsync -a --exclude '*.xcresult' build/tests/ /tmp/ct/ 2>/dev/null || true
           echo "${{ github.sha }} ${{ steps.tests.outcome }}" > /tmp/ct/RESULT
           cd /tmp/ct
           git init -q && git checkout -qb ci-logs-tests

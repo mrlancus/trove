@@ -265,6 +265,9 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.mrlancus.trove.tests
+        # The app is multiplatform, so XcodeGen's default (an iOS-style path) is wrong for the Mac bundle.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Trove.app/Contents/MacOS/Trove
+        BUNDLE_LOADER: $(TEST_HOST)
 
   # UI tests on iPhone and iPad simulators: launch, scroll, open, type, screenshots for docs/UI_AUDIT.md.
   TroveUITests:

@@ -44,7 +44,7 @@ for pattern in "iPhone SE" "iPhone [0-9]+ Pro Max" "iPad mini" "iPad Pro 13|iPad
   # The launch-time test runs on one iPhone only (it launches the app six times).
   [[ "$pattern" == "iPhone SE" ]] || skip=(-skip-testing:TroveUITests/TroveUITests/testLaunchTime)
   xcodebuild -project App/Trove.xcodeproj -scheme TroveiOSUITests -destination "platform=iOS Simulator,name=$device" \
-    -derivedDataPath build/udd -resultBundlePath "$OUT/ui-$slug.xcresult" "${skip[@]}" \
+    -derivedDataPath build/udd -resultBundlePath "$OUT/ui-$slug.xcresult" ${skip[@]+"${skip[@]}"} \
     test-without-building > "$OUT/ui-$slug.log" 2>&1 || status=1
   grep -E "Test Case .*(passed|failed)|error:|Executed [0-9]+ test" "$OUT/ui-$slug.log" | head -60 | sed "s/^/[$device] /" >> "$OUT/ui-summary.txt"
   mkdir -p "$OUT/shots/$slug"
