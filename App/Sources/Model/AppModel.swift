@@ -123,6 +123,8 @@ final class AppModel {
     var showStudy = false
     /// Open Quickly (⌘O).
     var showSwitcher = false
+    /// Recently Deleted.
+    var showTrash = false
     var studyDeck: String?
     var sync = SyncStatus()
     var enriching = false

@@ -19,6 +19,7 @@ struct RootView: View {
             MainView()
                 .sheet(isPresented: $model.showStudy) { StudyView(noteId: model.studyDeck) }
                 .sheet(isPresented: $model.showSwitcher) { QuickSwitcher() }
+                .sheet(isPresented: $model.showTrash) { TrashView() }
         case .failed(let message):
             VStack(spacing: 16) {
                 EmptyState(symbol: "exclamationmark.triangle", title: "Trove couldn't open your vault", message: message)

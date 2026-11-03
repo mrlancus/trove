@@ -134,6 +134,7 @@ private struct VaultSection: View {
 
     var body: some View {
         Section("Vault") {
+            NavigationLink("Recently Deleted") { TrashList() }
             if let c = model.config {
                 LabeledContent("Storage") {
                     switch c.storage {
