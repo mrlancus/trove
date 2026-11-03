@@ -42,10 +42,31 @@ public enum InkOutline {
     /// with sharp turns rounded. Nil for strokes drawn as an even line (markers, highlighters,
     /// clean shapes, dashed lines). Draw it with quadratic curves through the corners' midpoints.
     public static func outline(tool: InkTool, width: Double, points raw: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) -> [InkPoint]? {
+        guard let parts = outlineParts(tool: tool, width: width, points: raw, shape: shape, style: style) else { return nil }
+        if let dot = parts.dot { return dot }
+        return parts.left + parts.endCap + parts.right.reversed() + parts.startCap
+    }
+
+    /// The outline in pieces, for the GPU renderer (`InkTessellator`): the two sides (always the same
+    /// length, point i of each across from the other), the caps between them, and their centres.
+    /// A single point is `dot` (a circle) instead.
+    public struct OutlineParts: Sendable {
+        public var left: [InkPoint] = []
+        public var right: [InkPoint] = []
+        /// From the left side's end round to the right side's end (exclusive of both).
+        public var endCap: [InkPoint] = []
+        /// From the right side's start round to the left side's start (exclusive of both).
+        public var startCap: [InkPoint] = []
+        public var endCentre = InkPoint(x: 0, y: 0)
+        public var startCentre = InkPoint(x: 0, y: 0)
+        public var dot: [InkPoint]?
+    }
+
+    public static func outlineParts(tool: InkTool, width: Double, points raw: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) -> OutlineParts? {
         if shape != nil || style.dash != nil || !tool.usesPressure { return nil }
         // Points that aren't real numbers can't be drawn (and would stop the arcs below).
         let raw = raw.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) ? raw : raw.filter { $0.x.isFinite && $0.y.isFinite }
-        guard let firstRaw = raw.first else { return [] }
+        guard let firstRaw = raw.first else { return OutlineParts(dot: []) }
         var pts: [InkPoint] = [firstRaw]
         for p in raw.dropFirst() {
             let last = pts[pts.count - 1]
@@ -67,10 +88,10 @@ public enum InkOutline {
         var r: [Double] = []
         for i in 0..<n { r.append(max(minRadius, pointWidth(tool: tool, width: width, nib: style.nib, points: pts, index: i) / 2)) }
         if n == 1 {
-            return (0..<(capSteps * 2)).map { k in
+            return OutlineParts(dot: (0..<(capSteps * 2)).map { k in
                 let a = Double.pi * Double(k) / Double(capSteps)
                 return InkPoint(x: pts[0].x + r[0] * cos(a), y: pts[0].y + r[0] * sin(a))
-            }
+            })
         }
         var dirs: [(x: Double, y: Double)] = []
         for i in 0..<(n - 1) {
@@ -104,19 +125,20 @@ public enum InkOutline {
             left.append(InkPoint(x: p.x + nx * r[i], y: p.y + ny * r[i]))
             right.append(InkPoint(x: p.x - nx * r[i], y: p.y - ny * r[i]))
         }
-        var out = left
+        var parts = OutlineParts(left: left, right: right)
         let e = dirs[n - 2], ae = atan2(e.y, e.x), last = pts[n - 1]
         for k in 1..<capSteps {
             let a = ae + Double.pi / 2 - Double.pi * Double(k) / Double(capSteps)
-            out.append(InkPoint(x: last.x + r[n - 1] * cos(a), y: last.y + r[n - 1] * sin(a)))
+            parts.endCap.append(InkPoint(x: last.x + r[n - 1] * cos(a), y: last.y + r[n - 1] * sin(a)))
         }
-        out.append(contentsOf: right.reversed())
         let b = dirs[0], ab = atan2(b.y, b.x), first = pts[0]
         for k in 1..<capSteps {
             let a = ab - Double.pi / 2 - Double.pi * Double(k) / Double(capSteps)
-            out.append(InkPoint(x: first.x + r[0] * cos(a), y: first.y + r[0] * sin(a)))
+            parts.startCap.append(InkPoint(x: first.x + r[0] * cos(a), y: first.y + r[0] * sin(a)))
         }
-        return out
+        parts.endCentre = last
+        parts.startCentre = first
+        return parts
     }
 
     /// Arrowheads on a `line` or `polyline` shape with `arrow`: triangles [tip, left, right].

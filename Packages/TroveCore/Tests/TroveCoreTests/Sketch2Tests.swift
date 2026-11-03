@@ -65,3 +65,79 @@ struct PictureConsentTests {
         #expect(!no.send && PictureConsent.decide(no.setting, session: no.session) == .ask)
     }
 }
+
+struct InkTessellatorTests {
+    func area(_ p: InkTessellator.Part) -> Double {
+        var a = 0.0
+        for t in stride(from: 0, to: p.indices.count, by: 3) {
+            let i = Int(p.indices[t]) * 2, j = Int(p.indices[t + 1]) * 2, k = Int(p.indices[t + 2]) * 2
+            let x0 = Double(p.positions[i]), y0 = Double(p.positions[i + 1]), x1 = Double(p.positions[j]), y1 = Double(p.positions[j + 1])
+            let x2 = Double(p.positions[k]), y2 = Double(p.positions[k + 1])
+            a += abs((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)) / 2
+        }
+        return a
+    }
+
+    func valid(_ p: InkTessellator.Part) -> Bool {
+        p.positions.allSatisfy(\.isFinite) && p.indices.count % 3 == 0 && p.indices.allSatisfy { Int($0) < p.vertexCount }
+    }
+
+    @Test func markerLineCoversItsArea() {
+        // A straight marker line 100 long, 6 wide: a rectangle and two half circles.
+        let pts = (0...10).map { InkPoint(x: Double($0) * 10, y: 50, pressure: 0.5) }
+        let parts = InkTessellator.parts(tool: .marker, color: "#000000", width: 6, points: pts)
+        #expect(parts.count == 1)
+        let p = parts[0]
+        #expect(valid(p))
+        let r = InkOutline.lineWidth(tool: .marker, width: 6, points: pts) / 2
+        let expected = 100 * 2 * r + Double.pi * r * r
+        #expect(abs(area(p) - expected) / expected < 0.05)
+    }
+
+    @Test func penOutlineMatchesItsPolygon() {
+        let pts = (0...40).map { i -> InkPoint in
+            let t = Double(i) / 40
+            return InkPoint(x: 20 + t * 200, y: 100 + sin(t * 3) * 10, pressure: 0.3 + 0.5 * t)
+        }
+        let parts = InkTessellator.parts(tool: .pen, color: "#000000", width: 3, points: pts)
+        #expect(parts.count == 1)
+        #expect(valid(parts[0]))
+        // The outline polygon's area (shoelace) vs the triangles': the same shape (gentle curve, no overlap).
+        let o = InkOutline.outline(tool: .pen, width: 3, points: pts)!
+        var a = 0.0
+        for i in 0..<o.count { let p = o[i], q = o[(i + 1) % o.count]; a += p.x * q.y - q.x * p.y }
+        a = abs(a) / 2
+        #expect(abs(area(parts[0]) - a) / a < 0.03)
+    }
+
+    @Test func dotsDashesFillsAndArrows() {
+        let line = [InkPoint(x: 0, y: 0), InkPoint(x: 100, y: 0)]
+        let dashed = InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: line, shape: "line", style: InkStrokeStyle(dash: "dash"))
+        #expect(valid(dashed[0]))
+        // 100 long with 6-on, 4-off dashes: 10 pieces, so less area than a solid line but more than half.
+        let solid = InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: line, shape: "line")
+        #expect(area(dashed[0]) < area(solid[0]) && area(dashed[0]) > area(solid[0]) * 0.5)
+        let square = [InkPoint(x: 0, y: 0), InkPoint(x: 10, y: 0), InkPoint(x: 10, y: 10), InkPoint(x: 0, y: 10), InkPoint(x: 0, y: 0)]
+        let filled = InkTessellator.parts(tool: .pen, color: "#000", width: 1, points: square, shape: "rectangle", style: InkStrokeStyle(fill: "#ff0000"))
+        #expect(filled.count == 2 && filled[0].color == "#ff0000")
+        #expect(abs(area(filled[0]) - 100) < 1e-6)
+        let arrow = InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: line, shape: "line", style: InkStrokeStyle(arrow: "end"))
+        #expect(valid(arrow[0]) && arrow[0].triangleCount > solid[0].triangleCount)
+        let star = (0..<10).map { i -> InkPoint in
+            let a = Double(i) * Double.pi / 5, r = i % 2 == 0 ? 10.0 : 4.0
+            return InkPoint(x: r * cos(a), y: r * sin(a))
+        }
+        let starFill = InkTessellator.parts(tool: .pen, color: "#000", width: 1, points: star, shape: "star", style: InkStrokeStyle(fill: "#00ff00"))
+        var shoelace = 0.0
+        for i in 0..<star.count { let p = star[i], q = star[(i + 1) % star.count]; shoelace += p.x * q.y - q.x * p.y }
+        #expect(abs(area(starFill[0]) - abs(shoelace) / 2) < 1e-6)
+    }
+
+    @Test func everyStressStrokeIsValid() {
+        for s in InkStress.strokes(page: 0, count: 300) {
+            for p in InkTessellator.parts(tool: s.tool, color: s.color, width: s.width, points: s.points) { #expect(valid(p)) }
+        }
+        #expect(InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: [InkPoint(x: 1, y: 1)])[0].triangleCount > 8)
+        #expect(InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: []).isEmpty)
+    }
+}
