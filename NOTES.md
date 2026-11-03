@@ -2,6 +2,11 @@
 
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
+## In progress
+- 2026-11-03, `main`, session_01C6a43TMdUt74aePrEdY1qc: `docs/prompts/develop-perf-testing.md` Parts 1–3.
+  Files: `docs/DEVELOP_PLAN.md`, `docs/PERF_AUDIT.md`, `docs/testing/`, `Packages/TroveCore/Sources/TroveCore/Develop/`,
+  `Packages/TroveCore/Sources/TroveCore/Gen/`, `App/project.yml`, `App/Sources/Services/Perf.swift`, `MetricsReporter.swift`.
+
 ## Status
 | Part | State | Tested |
 |---|---|---|
@@ -1012,6 +1017,13 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
    - Notion and Readwise import UI (parsers exist in TroveCore)
 
 ## Manual steps for the user
+- **The way back to before the Develop work** (2026-11-03): `main` as it was is saved on the branch
+  `archive/main-before-develop` (b5c07b9). To go back: `git checkout -b old archive/main-before-develop`.
+  Never delete or force-push it.
+  - **The `pre-develop` tag isn't on GitHub yet**: this session's git proxy refused tag pushes (HTTP 403),
+    so only the branch was saved. Make the tag yourself on any computer:
+    `git fetch origin && git tag -a pre-develop -m "main before the Develop, performance and testing work" origin/archive/main-before-develop && git push origin pre-develop`
+    (or GitHub → Releases → Draft a new release → tag `pre-develop`, target `archive/main-before-develop`).
 - **Your own AI (Claude):** create an API key at https://console.anthropic.com/settings/keys, add
   credit (about $5) and set a monthly spend limit there, then paste the key into Trove → Settings →
   AI → Your AI (never into a chat). It syncs to your other devices end-to-end encrypted.
