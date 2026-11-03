@@ -75,6 +75,17 @@ Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the b
   deploy**, older relays fall back), the engine fetches wanted segments together and applies them in
   one go; iCloud folder listings reused while a device folder's modification date is unchanged.
 - **Cards** (P7): card pictures cached on disk as small JPEGs (`Caches/thumbs`).
+- **Notes editor** (N1): `LiveMarkdownEditor` (TextKit 2 `UITextView`/`NSTextView`, styles from
+  TroveCore `MarkdownSyntax`, only the edited paragraph restyled; tap checkboxes, Return continues lists,
+  `[[` suggestions, Writing Tools) replaces the plain editor in the item view. **Check on device**: typing
+  feel, undo, the suggestion bar, checkbox taps.
+- **Open Quickly** (O1, ⌘O, `FuzzyMatch`), **Recently Deleted** (N11, 30 days, Restore; File menu and
+  Settings → Vault), **clipboard pause** (C5) and **palette hidden from screen sharing** (C6), **controls**
+  for Today's Note and Study (X1) and App Shortcuts (X3), **handwriting search jumps to the line** (G6).
+- **Audio synced to ink** (G4): Record in the sketch toolbar (AAC 32 kbps), `recordings` field
+  (PROTOCOL.md §10), Recordings menu plays back with the strokes written at that moment marked, lasso →
+  Play from here, transcripts on the device (searchable). **Check on the iPad**: microphone prompt,
+  marks following the audio.
 - **Next** (§14): check CI for the later commits; then G9 zoom window, G11 whiteboard quadtree, G3
   planners, GoodNotes library import with folders, G6 word recognition, G4 audio synced to ink, G8 study;
   P10 batched segment fetch (relay + clients), P11 iCloud NSMetadataQuery, P4 binary search index, P7
