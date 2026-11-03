@@ -351,6 +351,20 @@ problems and resources → track → reassess → estimate readiness from eviden
 doesn't drill what I've already shown I can do. The same framework works for non-academic goals and
 projects.
 
+### Later ideas (note them in the plan, don't build them yet)
+
+- **Study with friends.** Casual challenges between friends only, never strangers. A challenge is a
+  set of catalogue questions or a whole paper (a mock), with a deadline or a shared timer. Friends
+  join by invite link, and you see their answers only after you've submitted yours. Marking can be
+  anything: self, a friend (peer marking), or AI. It's for fun, so it never changes anyone's mastery.
+  Only catalogue questions can be shared, as references that each device downloads from the board
+  itself; my own uploads stay mine. Keep the design open to this (questions referenced by stable
+  catalogue ids, attempts as their own records) without building any of it.
+- **Compare with the national cohort.** Examiner reports often give how candidates did on each
+  question. Showing "you got 4/6; the average candidate got 2.8" needs no accounts and shares nothing.
+
+The prompt for building these later is `docs/prompts/study-with-friends.md`.
+
 ## Take a position on these (at minimum)
 
 1. **The graph's shape.** I suggested four object types: Knowledge, Sources, Activities and
