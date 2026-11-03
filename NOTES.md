@@ -1133,6 +1133,19 @@ user says "publish" (`cd server && npx wrangler deploy`).
 - **Drawing**: researched and planned, not built (`docs/DRAWING_PLAN.md`).
 
 ## Next steps
+**Up next: Sketch 2** (2026-11-03): `docs/plans/sketch-2-plan.md`, reviewed in `docs/plans/sketch-2-review.md`,
+written from the brief in `docs/plans/sketch-2-prompt.md`. It covers:
+- no lag panning or zooming, and nothing going soft;
+- a sleek toolbar where nothing is hidden;
+- your own 100 % zoom;
+- Math Assist and AI writing as light-blue handwriting strokes you can erase;
+- a floating Ask box;
+- the AI reading handwriting (five root causes found);
+- an "AI is looking here" outline;
+- choosing where AI output goes.
+
+Nothing is built yet. It waits for the user's answers to the plan's §5 questions.
+
 **Newest plan: `docs/MASTER_PLAN.md`** (2026-11-02, the user: "improve everything … massively increase
 performance and battery life … must not miss a thing"). It has research into Paste, GoodNotes/Notability,
 Obsidian and Apple Notes, a performance and battery architecture (P1 change feed: stop rebuilding the whole
