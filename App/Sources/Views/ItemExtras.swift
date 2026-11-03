@@ -265,7 +265,19 @@ struct ConnectionsSection: View {
             }
             if !mentions.isEmpty {
                 Text("Mentioned in").font(.caption).foregroundStyle(.secondary)
-                FlowRow { ForEach(mentions) { other in chip(other, action: ("Link", { _ = Task { await model.connect(other.id, item.id) } })) } }
+                FlowRow {
+                    ForEach(mentions) { other in
+                        // "Link it": the mention in that note becomes a [[link]]; otherwise a connection.
+                        chip(other, action: ("Link", { _ = Task {
+                            if other.kind == .note, let body = Links.linkMention(in: other.body, title: item.displayTitle) {
+                                await model.library?.setBody(other.id, body)
+                                await model.reload()
+                            } else {
+                                await model.connect(other.id, item.id)
+                            }
+                        } }))
+                    }
+                }
             }
             if !related.isEmpty {
                 Text("Maybe related").font(.caption).foregroundStyle(.secondary)

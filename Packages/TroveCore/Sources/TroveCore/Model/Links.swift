@@ -119,3 +119,25 @@ extension Library {
         if let item = await item(b), item.links.contains(a) { await update(b, [Field.links: JSONValue(item.links.filter { $0 != a })]) }
     }
 }
+
+extension Links {
+    /// Obsidian's "Link it" (MASTER_PLAN O4): the first plain mention of `title` in `body` (whole
+    /// words, any case, not already inside [[…]]) turned into a `[[title]]` link. nil when there's none.
+    public static func linkMention(in body: String, title: String) -> String? {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return nil }
+        var search = body.startIndex..<body.endIndex
+        while let r = body.range(of: t, options: [.caseInsensitive, .diacriticInsensitive], range: search) {
+            let before = r.lowerBound > body.startIndex ? body[body.index(before: r.lowerBound)] : " "
+            let after = r.upperBound < body.endIndex ? body[r.upperBound] : " "
+            let open = body[..<r.lowerBound].range(of: "[[", options: .backwards)
+            let close = body[..<r.lowerBound].range(of: "]]", options: .backwards)
+            let insideLink = open != nil && (close == nil || close!.lowerBound < open!.lowerBound)
+            if !before.isLetter, !before.isNumber, !after.isLetter, !after.isNumber, !insideLink {
+                return body.replacingCharacters(in: r, with: "[[\(t)]]")
+            }
+            search = r.upperBound..<body.endIndex
+        }
+        return nil
+    }
+}
