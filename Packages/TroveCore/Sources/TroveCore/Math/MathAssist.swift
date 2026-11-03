@@ -151,3 +151,21 @@ public enum MathAssist {
     /// How long after the pen lifts before reading the line (a new stroke nearby cancels it).
     public static let settleDelay: Double = 0.4
 }
+
+extension MathAssist {
+    /// Maths in notes (MASTER_PLAN N10): the answer to write after a line that ends in "=", using
+    /// variables defined on earlier lines (`rent = 900`). nil when the line isn't maths.
+    public static func noteAnswer(line: String, before: [String]) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasSuffix("="), trimmed.count > 1 else { return nil }
+        // Only lines that look like maths: digits or defined letters, operators, brackets.
+        var env: [String: Double] = [:]
+        for b in before.suffix(200) {
+            if case .assignment(let name, let v) = solve(b, env: env) { env[name] = v }
+        }
+        guard case .value(let v) = solve(trimmed, env: env) else { return nil }
+        return format(v)
+    }
+
+    static func format(_ v: Double) -> String { MathExpression.format(MathExpression.tidy(v)) }
+}

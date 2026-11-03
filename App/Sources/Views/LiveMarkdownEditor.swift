@@ -256,6 +256,11 @@ struct MarkdownTextView: UIViewRepresentable {
             let ns = textView.text as NSString
             let lineRange = ns.lineRange(for: NSRange(location: range.location, length: 0))
             let line = ns.substring(with: NSRange(location: lineRange.location, length: range.location - lineRange.location))
+            // Maths in notes: "12 * 4 =" then Return writes the answer (variables from lines above).
+            if let answer = MathAssist.noteAnswer(line: line, before: ns.substring(to: lineRange.location).components(separatedBy: "\n")) {
+                replace(range, with: (line.hasSuffix(" ") ? "" : " ") + answer + "\n")
+                return false
+            }
             guard let next = MarkdownSyntax.continuation(of: line) else { return true }
             if next.endList {
                 // An empty item: Return ends the list (the marker goes).
@@ -382,6 +387,11 @@ struct MarkdownTextView: NSViewRepresentable {
             let ns = textView.string as NSString
             let lineRange = ns.lineRange(for: NSRange(location: range.location, length: 0))
             let line = ns.substring(with: NSRange(location: lineRange.location, length: range.location - lineRange.location))
+            // Maths in notes: "12 * 4 =" then Return writes the answer (variables from lines above).
+            if let answer = MathAssist.noteAnswer(line: line, before: ns.substring(to: lineRange.location).components(separatedBy: "\n")) {
+                replace(range, with: (line.hasSuffix(" ") ? "" : " ") + answer + "\n")
+                return false
+            }
             guard let next = MarkdownSyntax.continuation(of: line) else { return true }
             if next.endList {
                 replace(NSRange(location: lineRange.location, length: range.location - lineRange.location), with: "")

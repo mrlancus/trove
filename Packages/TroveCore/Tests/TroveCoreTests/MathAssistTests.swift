@@ -113,3 +113,12 @@ final class MathAssistTests: XCTestCase {
         XCTAssertEqual(cache.recognitions, 132)
     }
 }
+
+final class NoteMathTests: XCTestCase {
+    func testAnswersLinesEndingInEquals() {
+        XCTAssertEqual(MathAssist.noteAnswer(line: "12 * 4 =", before: []), "48")
+        XCTAssertEqual(MathAssist.noteAnswer(line: "r * 12 =", before: ["Budget", "r = 900"]), "10800")
+        XCTAssertNil(MathAssist.noteAnswer(line: "Meeting notes =", before: []))
+        XCTAssertNil(MathAssist.noteAnswer(line: "2 + 2", before: []))
+    }
+}
