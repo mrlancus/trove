@@ -265,3 +265,30 @@ struct StrokeByTests {
         #expect(strokes.first { $0.id == answer }?.by == "assist")
     }
 }
+
+struct InkPlacementTests {
+    func box(_ strokes: [InkPlacement.Stroke]) -> InkGeometry.Rect? { InkGeometry.bounds(strokes.flatMap(\.points)) }
+
+    @Test func diagramFitsTheBoxYouDrew() {
+        let spec = DiagramSpec(kind: .flow, title: "Photosynthesis", nodes: [.init(id: "a", label: "Light"), .init(id: "b", label: "Glucose"), .init(id: "c", label: "Energy")],
+                               edges: [.init(from: "a", to: "b"), .init(from: "b", to: "c")])
+        for target in [InkGeometry.Rect(x: 100, y: 100, width: 500, height: 200), InkGeometry.Rect(x: 50, y: 300, width: 200, height: 400)] {
+            let strokes = InkPlacement.diagram(spec, in: target)
+            #expect(strokes.contains { $0.role == .text } && strokes.contains { $0.role == .line })
+            let b = box(strokes)!
+            // Inside the box (a hand's overshoot and the letters' tails allowed).
+            #expect(b.x >= target.x - 6 && b.maxX <= target.maxX + 6 && b.y >= target.y - 6 && b.maxY <= target.maxY + 6)
+            #expect(strokes.allSatisfy { $0.points.allSatisfy { $0.x.isFinite && $0.y.isFinite } })
+        }
+        // The same every time.
+        let t = InkGeometry.Rect(x: 0, y: 0, width: 400, height: 300)
+        #expect(InkPlacement.diagram(spec, in: t) == InkPlacement.diagram(spec, in: t))
+    }
+
+    @Test func textWrapsInsideItsBox() {
+        let target = InkGeometry.Rect(x: 40, y: 40, width: 220, height: 160)
+        let strokes = InkPlacement.text("Mitochondria release energy from glucose by respiration", in: target, xHeight: 7)
+        let b = box(strokes)!
+        #expect(b.x >= target.x - 3 && b.maxX <= target.maxX + 6 && b.y >= target.y - 3)
+    }
+}

@@ -82,6 +82,8 @@ struct InkEditorView: View {
                     .transition(.opacity)
                 }
             }
+            // Placing AI output: drag where it goes (plan A3).
+            .overlay { if editor.placing != nil { InkPlacementLayer(editor: editor) } }
             // Ask floats over the page (plan A4); an iPhone gets a sheet instead.
             .overlay {
                 if asking, !compactWidth, !editor.presenting {

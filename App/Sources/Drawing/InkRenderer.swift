@@ -662,6 +662,9 @@ struct InkOverlay {
     /// Where the AI is reading right now: a thin travelling outline (plan A6), and its dash phase.
     var looking: [InkGeometry.Rect] = []
     var lookPhase: Double = 0
+    /// AI output being placed: shown faintly in its box until kept (plan A3).
+    var ghost: [InkLine] = []
+    var ghostBox: InkGeometry.Rect?
 }
 
 extension InkRenderer {
@@ -691,7 +694,20 @@ extension InkRenderer {
                 ctx.drawPath(using: .fillStroke)
             }
         }
-        if !o.looking.isEmpty {
+        if let box = o.ghostBox {
+            ctx.saveGState()
+            ctx.setAlpha(0.55)
+            draw(o.ghost, in: ctx)
+            ctx.restoreGState()
+            ctx.saveGState()
+            ctx.setStrokeColor(CGColor(red: 10 / 255, green: 132 / 255, blue: 1, alpha: 0.5))
+            ctx.setLineWidth(1.5 * px)
+            ctx.setLineDash(phase: 0, lengths: [7 * px, 5 * px])
+            ctx.addPath(CGPath(roundedRect: CGRect(x: box.x - 6, y: box.y - 6, width: box.width + 12, height: box.height + 12), cornerWidth: 8, cornerHeight: 8, transform: nil))
+            ctx.strokePath()
+            ctx.restoreGState()
+        }
+                if !o.looking.isEmpty {
             // Thin, see-through, its dashes moving slowly: noticeable, never in the way.
             ctx.saveGState()
             ctx.setStrokeColor(CGColor(red: 10 / 255, green: 132 / 255, blue: 1, alpha: 0.45))
