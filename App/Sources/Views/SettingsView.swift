@@ -21,7 +21,7 @@ struct SettingsView: View {
                 .tabItem { Label("Intelligence", systemImage: "sparkles") }
             Form { IntegrationsSection(); BridgesSection() }.formStyle(.grouped)
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
-            Form { BatterySection() }.formStyle(.grouped)
+            Form { BatterySection(); DiagnosticsSection() }.formStyle(.grouped)
                 .tabItem { Label("Battery", systemImage: "battery.75percent") }
         }
         .frame(width: 600, height: 560)
@@ -48,6 +48,7 @@ private struct SettingsList: View {
             BridgesSection()
             ClipboardSection()
             BatterySection()
+            DiagnosticsSection()
             AboutSection()
         }
         .formStyle(.grouped)

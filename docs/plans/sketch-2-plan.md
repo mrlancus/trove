@@ -262,9 +262,8 @@ each step:
       (`MTKView` presented handler), so there's no flicker and no gap.
     - The Mac draws the live stroke in Metal too (no PencilKit there).
 - **The gate.**
-  - S3 ships behind Settings → Sketch → "New ink renderer" (default off) until the user has tried it
-    on the iPad.
-  - It becomes the default once the user agrees it looks the same and feels faster.
+  - S3 is on by default once the CI look-match test passes. "Classic ink (PencilKit)" in Settings →
+    Sketch switches back, in case something looks wrong on the iPad (§5 Q1).
   - If the look can't be matched for an ink (the pencil is the risk), that ink alone keeps a
     PencilKit layer, and the setting says so.
 - **Unchanged.** Exports, thumbnails and the website keep `InkRenderer` and the JS renderer.
@@ -740,11 +739,21 @@ Nothing in `App/` compiles on Linux. So each step:
 
 ## 5. Questions for the user
 
-1. **The new ink renderer (S3).** The user asked what it involves and why Apple Notes doesn't need
-   it (answered in chat, 2026-11-03).
-   - **Decision:** S1 and S2 come first. They remove the lag that is Trove's own fault.
-   - Then the user tries it on the iPad and decides whether the remaining PencilKit re-sharpening
-     is worth S3.
+1. ~~The new ink renderer (S3)~~ **Answered (2026-11-03):** "if you think there will still be any
+   lag when zooming then make the new renderer; if there's another way of zero lag being more
+   efficient do it, it just needs zero lag."
+   - PencilKit still re-sharpens ink after every zoom, so S2 alone can't reach zero. **S3 is built.**
+   - Alternatives were weighed:
+     - **Our own bitmap tiles of the PencilKit drawing** are still bitmaps. A fast pinch outruns
+       them.
+     - **One `CAShapeLayer` per stroke** is re-rasterised on the CPU at every zoom step, which is
+       far worse with thousands of strokes.
+     - **GPU triangles (Metal)** are both the only zero-blur option and the most efficient one.
+       Strokes are turned into triangles once and cached. Drawing a frame is a single small GPU
+       pass, and nothing runs while the page is still.
+   - **Default on** once the CI look-match test passes (GPU render vs `InkRenderer` within 2 %),
+     with Settings → Sketch → "Classic ink (PencilKit)" as a fallback switch.
+
 2. ~~Default handwriting style~~ **Answered:** natural, neat handwriting that looks real, sized like
    the writing around it (A1).
    - The glyphs' licence is still checked first. If it isn't OFL or public domain, the choice of
