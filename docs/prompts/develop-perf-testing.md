@@ -4,37 +4,68 @@ This is one prompt in three parts. No single session will finish it, so each par
 point**. A session does as much as it can, leaves the repo and NOTES.md so the next session can
 continue, and ends with a short report of what it did and what's waiting on me.
 
+## Before anything else: save the current `main`, then work on `main`
+
+This prompt is my explicit permission to push to `main`, whatever branch the session was started on.
+
+1. `git fetch origin` and check whether a branch named `archive/main-before-develop` already exists
+   on `origin`. If it does, an earlier session has done this step: skip to the ground rules.
+2. Otherwise save today's `main` exactly as it is on GitHub:
+   ```bash
+   git branch archive/main-before-develop origin/main
+   git push origin archive/main-before-develop
+   git tag -a pre-develop -m "main before the Develop, performance and testing work" origin/main
+   git push origin pre-develop
+   ```
+3. If the session was started on another branch with commits of its own that aren't on `main`,
+   merge them into `main` (no force-push), push, and say in NOTES.md that the branch is merged.
+4. From then on, commit to `main` and push to `main`. Record the archive branch and tag in NOTES.md
+   under "Manual steps" so I know how to get back to the old state.
+
+**Never delete, move or force-push** `archive/main-before-develop` or the `pre-develop` tag, and never
+force-push `main`. They are the way back if this work goes wrong.
+
 ## Ground rules (all parts)
 
 - **Other sessions may be editing the code.** Run `git pull --rebase` before you start and before
   every push. Keep an **In progress** section in NOTES.md (create it if it's missing): add a line for your session (date, branch,
   part, the files you're working in) and remove it when you stop. Stay out of files that another
-  line claims. Make small commits and push to the branch this session was given (`main` if none).
-  Keep NOTES.md current.
+  line claims. Make small commits and push to `main`. Keep NOTES.md current.
 - **The code is the source of truth.** Read `CLAUDE.md` and `NOTES.md` in full, then the parts of
   `docs/ARCHITECTURE.md`, `docs/PROTOCOL.md`, `docs/MASTER_PLAN.md` and `docs/RESEARCH.md` that apply
   to your part, then the code. Where the docs and the code disagree, believe the code, fix the doc in
   a separate commit, and say what you fixed.
-- **Earlier decisions stand until I change them.** MASTER_PLAN.md §13 holds decisions I've already
-  made. Where this prompt conflicts with one of them, don't pick a side yourself: put the conflict in
-  front of me (the known ones are listed under "Facts" below).
+- **Don't ask me for permission. Decide and keep going.** That includes large changes, protocol and
+  relay changes, migrations, restyles and every open decision in this prompt. Where something is my
+  kind of decision, pick the option you'd recommend, build it, and log it in NOTES.md under
+  **Decisions taken for you** (what you chose, the alternatives, why, and how to undo it). I'll
+  overrule anything I disagree with later. Only three things still need me: spending money (a paid
+  plan or service), deleting or overwriting my vault's data, and things only my devices can do. For
+  this work, this overrides CLAUDE.md's "ask the user before decisions that are theirs".
+- **Earlier decisions stand unless this prompt overrides them.** MASTER_PLAN.md §13 holds decisions
+  I've already made. Where this prompt conflicts with one of them, choose, and log the choice as
+  above (the known conflicts are listed under "Facts" below).
 - **Be critical.** Don't agree with an idea just because I wrote it.
 - **Nothing that exists today is lost.** No feature may be removed to make room for something new.
 - **Never claim anything works, or got faster, without evidence.** Use the evidence words below.
 - **Research with the web, not memory.** For provider docs, Anki formats and exam-board terms, cite
   the URL and the date you read it.
 - **What each part may change:**
-  - **Part 1 (Develop)** is planning only. It writes `docs/DEVELOP_PLAN.md` and fixes wrong docs. It
-    changes no code. No Develop code gets written until I've answered its section F.
-  - **Part 2 (performance, battery, AI cost, UI)** changes code. Small fixes with measured gains go
-    straight in, one cause per commit. Ask me first before a **large change**: anything that changes
-    PROTOCOL.md, the relay, the on-disk or synced format, or the threading model of a subsystem, or
-    that touches more than about 300 lines.
+  - **Part 1 (Develop)** starts with a plan. It writes `docs/DEVELOP_PLAN.md` and fixes wrong docs. It
+    changes no code itself. Once the plan is pushed, take your recommendation for every item in
+    section F and start building Develop's first slice (roadmap section D) without waiting for me.
+  - **Part 2 (performance, battery, AI cost, UI)** changes code. Fixes go straight in, one cause per
+    commit, large ones included. For a **large change** (anything that changes PROTOCOL.md, the
+    relay, the on-disk or synced format, or the threading model of a subsystem, or that touches more
+    than about 300 lines), write a short note in `docs/PERF_AUDIT.md` first saying what changes, why,
+    the risk and how to roll it back, then make it. Relay and protocol changes still follow
+    CLAUDE.md: PROTOCOL.md, the tests, Swift, JS and fixtures in the same commit, with older clients
+    left working.
   - **Part 3 (testing)** writes `docs/testing/`. From the moment it exists, every change adds or
     updates its tests in the same commit.
-- **Order:** Part 1 first, ending with section F. Then carry on with Parts 2 and 3 in the same session
-  while I read it; don't wait for my answers. Everything Develop adds later must meet Part 2's budgets
-  and get Part 3's tests.
+- **Order:** Part 1 first, ending with section F. Then Part 2 step 0 and Part 3's first files, then
+  Develop's first slice and the rest of Part 2, in whatever order unblocks the most. Never wait for
+  my answers. Everything Develop adds must meet Part 2's budgets and get Part 3's tests.
 
 ### Evidence words (use exactly these)
 
@@ -76,9 +107,10 @@ microphone and camera permissions. Say so on each of those tests instead of impl
 
 ---
 
-# Part 1: Develop. Analysis, architecture and roadmap (planning only)
+# Part 1: Develop. Analysis, architecture and roadmap (plan first, then build)
 
-**Stop point:** `docs/DEVELOP_PLAN.md` pushed, its section F listed in your final message.
+**Stop point:** `docs/DEVELOP_PLAN.md` pushed and its section F logged in NOTES.md. Then go straight on
+to building, as the ground rules say.
 
 ## Build on what exists
 
@@ -303,7 +335,7 @@ projects.
 ## Deliverable: `docs/DEVELOP_PLAN.md`
 
 Aim for something I can read in about 40 minutes, and put the detail in appendices. Use Mermaid for
-diagrams. Each section ends with "Decisions for you", or with nothing if there are none.
+diagrams. Each section ends with "Decisions taken for you", or with nothing if there are none.
 
 - **A. What exists**, limited to what Develop builds on: the data model, sync, encryption, Study, the
   graph, handwriting, and AI (every call site, provider and route, with its trigger and tier), each
@@ -328,8 +360,9 @@ diagrams. Each section ends with "Decisions for you", or with nothing if there a
   as text wireframes: what's on screen, what's one tap away, and what's hidden. Answer "what should I
   do next?" in one place. No dashboards of statistics, and no managing the graph by hand. Use the
   existing components in `App/Sources/Views` (`Style.swift`, `Glass`). Keep the wireframes
-  independent of the visual direction, which is still open. Don't restyle anything.
-- **F. Decisions for me**: one consolidated, numbered list with your recommendation for each.
+  independent of the visual direction.
+- **F. Decisions taken for you**: one consolidated, numbered list with what you chose for each, the
+  alternatives, and what it would take to change it later. You build on these choices straight away.
   Include at least: which A-level Physics specification to use for the slice; where practice
   problems come from; how I get specifications and past papers into Trove; whether Develop data
   syncs to the website; AI budget defaults; on-device versus cloud marking (decision 9); and whether
@@ -358,7 +391,7 @@ These are core requirements, not polish. They apply to all of Trove: what exists
 everything Develop adds.
 
 **Stop point for a session:** the measurement work in step 0 is in, `docs/PERF_AUDIT.md` is current,
-and either every row you can measure is green or the next fix is a large change waiting for me.
+and every row you can measure is green.
 Rows that need my device numbers are marked pending, with the exact steps for me to collect them.
 
 ## Start from MASTER_PLAN
@@ -381,8 +414,8 @@ Without these, a fix has no before and after number, so they come first:
 3. **On-device diagnostics**: a main-thread hang detector, a frame and hitch counter (CADisplayLink),
    and signposts around every workflow in the table below, added to the existing `Perf` and
    `MetricsReporter`. Show them in the existing Settings → Battery screen, with one "Export
-   diagnostics" action. Where they are stored (local only, or the vault as decision 4 says) is my
-   call; ask.
+   diagnostics" action. Choose where they are stored (local only, or the vault as decision 4 says)
+   and log the choice.
 
 ## Budgets that define "no lag"
 
@@ -414,8 +447,8 @@ words." "iPhone: scrolling the library hitches when thumbnails appear." -->
 
 My devices: <!-- e.g. iPhone 15 (iOS 26.x), iPad Air M2 (iPadOS 26.x), Intel MacBook Pro 2019 (macOS 15.x) -->
 
-If either list above is still empty, ask me for it in your first message and start on step 0 while
-you wait.
+If either list above is still empty, don't stop: measure everything, assume my oldest device is the
+slowest one that runs iOS 18, and remind me in your final message to fill the lists in.
 
 ## 1. How to measure, given my setup
 
@@ -493,8 +526,8 @@ Do this in order:
    minimum lengths per model), structured outputs and tool schemas, the token-count endpoint, and the
    Message Batches API for non-urgent work. Then the equivalents for the other bring-your-own-key
    providers (OpenAI, Gemini, OpenRouter), since users choose those too. Note which techniques need a
-   relay change (batches are asynchronous, so the relay would have to hold and poll them) and treat
-   those as large changes.
+   relay change (batches are asynchronous, so the relay would have to hold and poll them); those are
+   large changes, so note them in the audit before you make them.
 3. **Write the strategy** in `docs/PERF_AUDIT.md`. For each technique, give the expected saving,
    the trade-off, and how it will be measured. Techniques to consider:
    - Retrieve only what's relevant, and never send whole notebooks or chats.
@@ -538,9 +571,9 @@ Process: take simulator screenshots from the step 0 UI-test targets (iPhone SE a
 mini and 13-inch, both orientations, one Split View size, and the Mac at three window sizes, at the
 default and the largest Dynamic Type) plus Playwright for the web. Review them in `docs/UI_AUDIT.md`,
 listing clutter, discoverability and layout faults with a screenshot for each. Then propose the
-fixes. **The visual direction is still my decision** (three mockups, NOTES.md "Design mockups";
-MASTER_PLAN §13 decision 1 leans to A Glass). Ask me before any restyle; layout and readability fixes
-don't need to wait for that choice.
+fixes, then make them. For the visual direction (three mockups, NOTES.md "Design mockups"), go with
+MASTER_PLAN §13 decision 1 (A Glass, glass on floating controls only) and restyle the apps to it.
+Keep the colours, type and spacing in shared tokens so I can switch to B or C later in one place.
 
 ## Deliverable: `docs/PERF_AUDIT.md`, kept up to date
 
@@ -552,8 +585,8 @@ don't need to wait for that choice.
    risk, and how the fix was or will be verified.
 4. The AI cost audit and strategy from §4.
 5. The UI audit summary (with a link to `docs/UI_AUDIT.md`).
-6. The remaining work, ordered by impact against risk, with the large changes that need my approval
-   listed separately.
+6. The remaining work, ordered by impact against risk, with the large changes (made or planned)
+   listed separately, each with its rollback.
 
 ## Fixing: controlled steps until every row is green
 
