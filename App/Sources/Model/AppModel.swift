@@ -125,6 +125,8 @@ final class AppModel {
     var showSwitcher = false
     /// Recently Deleted.
     var showTrash = false
+    /// The command palette (⌘K).
+    var showCommands = false
     var studyDeck: String?
     var sync = SyncStatus()
     var enriching = false
