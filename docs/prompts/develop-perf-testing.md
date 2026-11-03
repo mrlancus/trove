@@ -345,11 +345,22 @@ Claude Haiku 5.5 through the relay:
 
 - **Haiku 5.5 at `low` effort** for everything by default: marking, hints, concept tagging, splitting
   help, explanations.
-- **Haiku 5.5 at `medium` effort for hard questions.** "Hard" is decided by a deterministic rule in
-  TroveCore, not by the AI, for example: the question is worth 4 or more marks, is an extended or
-  multi-step answer, comes from a competition paper (BPhO, UKMT, olympiads), is marked from
-  handwritten working, or a `low` mark came back uncertain. Put the rule and its thresholds in one
-  place, with a reason for each.
+- **Haiku 5.5 at `medium` effort for questions that are genuinely hard.** Hard means hard to
+  solve, not long or worth a lot of marks: a GCSE question is never hard, however many marks it
+  has. Decide it with a deterministic rule in TroveCore, not by asking the AI, from evidence of
+  real difficulty:
+  - **The level.** GCSE and equivalent: never hard. A-level and equivalent: hard only with evidence
+    below. Competition and olympiad papers (BPhO, UKMT, olympiads) and university-level questions:
+    hard by default.
+  - **How real candidates did.** Where the examiner report gives the national average for the
+    question, a low average (the threshold set in one place) makes it hard.
+  - **How students do on it in Trove**, once the mastery model has enough attempts to estimate a
+    question's difficulty.
+
+  Marks, length, being multi-step and being handwritten don't count as difficulty on their own.
+  Separately from difficulty, a `low` mark that comes back uncertain is checked once more at
+  `medium` (only those, so it stays cheap). Put the rule and its thresholds in one place, with a
+  reason for each.
 - **Nothing more expensive automatically.** No silent step-up to Sonnet or Opus. A better model is
   used only when I pick it (the existing Fast/Smarter/Best choice) or bring my own key.
 - **Hard limits on size:** only the question, the matched mark-scheme entry, my answer and at most
