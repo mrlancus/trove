@@ -562,19 +562,22 @@ quietly relax the budget.
 
 ## Where I see lag (a starting point, not the scope)
 
-<!-- Be as specific as you can: device and OS, screen, what you did, how big your vault is, how it
-felt. For example: "iPad Air M2, iPadOS 26.1: open a 40-page GoodNotes import, flick through pages,
-each page goes blank for ~0.5 s." "Mac, Intel i5: typing in a long note stutters after ~2000
-words." "iPhone: scrolling the library hitches when thumbnails appear." -->
+What I've noticed (2026-11-03), from memory and not exhaustive:
 
-- 
-- 
-- 
+- **Scrolling** feels laggy in many places.
+- **Panning** (canvases, notebooks, PDFs) isn't smooth.
+- **Opening things** (new items, notebooks, pages, documents) is slow to show content.
+- Lag in other places too that I can't recall exactly. So measure every workflow, not only these.
 
-My devices: <!-- e.g. iPhone 15 (iOS 26.x), iPad Air M2 (iPadOS 26.x), Intel MacBook Pro 2019 (macOS 15.x) -->
+My devices (OS versions not noted; read them from the diagnostics export):
 
-If either list above is still empty, don't stop: measure everything, assume my oldest device is the
-slowest one that runs iOS 18, and remind me in your final message to fill the lists in.
+- **iPhone 14** (A15, 60 Hz screen, no Apple Intelligence). The oldest and slowest of my mobile
+  devices, so it sets the bar.
+- **iPad Air** with an M-series chip (M1, M2 or M3; 60 Hz screen, Apple Intelligence, Apple Pencil).
+- **Intel MacBook Pro** (runs the universal build; the worst case on the Mac).
+
+None of my devices has a 120 Hz screen, so the 16.7 ms frame budget is the one my devices check.
+The 8.3 ms budget still applies to code paths, for ProMotion users.
 
 ## 1. How to measure, given my setup
 
