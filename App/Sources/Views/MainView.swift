@@ -699,6 +699,10 @@ struct LibraryView: View {
     @ViewBuilder private var emptyState: some View {
         if model.searchResults != nil {
             EmptyState(symbol: "magnifyingglass", title: "No matches", message: "Try fewer words, or search by meaning, like “that pasta place”.")
+        } else if model.selection == .smart(.recent), !model.items.isEmpty {
+            // Recent is the last two weeks; a library with older things isn't empty (UI_AUDIT U1).
+            EmptyState(symbol: "clock", title: "Nothing in the last two weeks",
+                       message: "Your \(model.items.count) older items are in the folders and collections in the sidebar, and in search.")
         } else {
             EmptyState(symbol: "tray", title: "Nothing here yet", message: "Share things to Trove, drop files here, or tap + to capture.")
         }

@@ -117,7 +117,7 @@ jobs:
   # the release. Logs, perf.json and the UI screenshots go to the ci-logs-tests branch.
   app-tests:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 

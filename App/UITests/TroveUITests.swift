@@ -35,16 +35,24 @@ final class TroveUITests: XCTestCase {
         add(attachment)
     }
 
-    /// The generated notebook's title shows once the vault has loaded (the first launch writes it).
+    /// The library has loaded once its collections show counts (the first launch writes the vault).
     func waitForLibrary(_ app: XCUIApplication) -> Bool {
-        app.staticTexts["Generated notebook"].firstMatch.waitForExistence(timeout: 180)
-            || app.buttons["Generated notebook"].firstMatch.waitForExistence(timeout: 5)
+        app.staticTexts["Sketches"].firstMatch.waitForExistence(timeout: 120)
+    }
+
+    /// Opens a collection in the sidebar (iPad, Mac) or the Library tab's list (iPhone).
+    func open(_ app: XCUIApplication, _ name: String) {
+        let row = app.staticTexts[name].firstMatch
+        if row.waitForExistence(timeout: 10) { row.tap() }
     }
 
     func testLibraryScrollsAndShows() {
         let app = launch()
         XCTAssertTrue(waitForLibrary(app), "the generated vault never showed")
-        shot(app, "library")
+        shot(app, "sidebar")
+        open(app, "Notes")
+        sleep(2)
+        shot(app, "notes")
         let window = app.windows.firstMatch
         let options = XCTMeasureOptions()
         options.iterationCount = 3
@@ -52,18 +60,19 @@ final class TroveUITests: XCTestCase {
             window.swipeUp(velocity: .fast)
             window.swipeDown(velocity: .fast)
         }
-        shot(app, "library-scrolled")
+        shot(app, "notes-scrolled")
     }
 
     func testOpenTheNotebook() {
         let app = launch()
         XCTAssertTrue(waitForLibrary(app))
+        open(app, "Sketches")
         let notebook = app.staticTexts["Generated notebook"].firstMatch
-        if notebook.exists { notebook.tap() } else { app.buttons["Generated notebook"].firstMatch.tap() }
+        XCTAssertTrue(notebook.waitForExistence(timeout: 30), "the generated notebook isn't in Sketches")
+        notebook.tap()
         sleep(3)
         shot(app, "notebook-item")
-        let window = app.windows.firstMatch
-        window.swipeUp()
+        app.windows.firstMatch.swipeUp()
         shot(app, "notebook-item-scrolled")
     }
 
@@ -72,15 +81,24 @@ final class TroveUITests: XCTestCase {
         XCTAssertTrue(waitForLibrary(app))
         let field = app.searchFields.firstMatch
         if !field.waitForExistence(timeout: 5) {
-            // iPhone: Search is its own tab.
-            app.tabBars.buttons.element(boundBy: app.tabBars.buttons.count - 1).tap()
+            // iPhone: Search is its own tab (the last one).
+            let tabs = app.tabBars.buttons
+            if tabs.count > 0 { tabs.element(boundBy: tabs.count - 1).tap() }
         }
-        if field.waitForExistence(timeout: 10) {
-            field.tap()
-            field.typeText("momentum")
-            sleep(1)
-        }
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
+        field.tap()
+        field.typeText("momentum")
+        sleep(1)
         shot(app, "search")
+    }
+
+    func testDevelop() {
+        let app = launch()
+        XCTAssertTrue(waitForLibrary(app))
+        let tab = app.tabBars.buttons["Practise"]
+        if tab.exists { tab.tap() } else { open(app, "Develop") }
+        XCTAssertTrue(app.staticTexts["Papers"].firstMatch.waitForExistence(timeout: 20), "Develop didn't open")
+        shot(app, "develop")
     }
 
     func testRotateAndShow() {
@@ -88,7 +106,7 @@ final class TroveUITests: XCTestCase {
         XCTAssertTrue(waitForLibrary(app))
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
-        shot(app, "library")
+        shot(app, "sidebar")
         XCUIDevice.shared.orientation = .portrait
         sleep(1)
     }
