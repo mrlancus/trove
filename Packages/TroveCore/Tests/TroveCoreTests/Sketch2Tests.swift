@@ -312,3 +312,16 @@ struct NewSketchTests {
         #expect(NewSketchChoice.load(nil) == NewSketchChoice())
     }
 }
+
+struct PagePicturesTests {
+    @Test func picksDrawingPagesCurrentFirst() {
+        let pages = [PagePictures.Page(key: "a", strokes: 300, textCharacters: 900),   // writing
+                     PagePictures.Page(key: "b", strokes: 60, textCharacters: 4),       // a diagram
+                     PagePictures.Page(key: "c", strokes: 120, textCharacters: 20),     // a diagram
+                     PagePictures.Page(key: "d", strokes: 3, textCharacters: 0)]        // almost empty
+        #expect(PagePictures.choose(pages, current: nil) == ["c", "b"])
+        #expect(PagePictures.choose(pages, current: "b") == ["b", "c"])
+        #expect(PagePictures.choose(pages, current: "b", limit: 1) == ["b"])
+        #expect(abs(PagePictures.cost(3) - 0.00048) < 1e-9)
+    }
+}

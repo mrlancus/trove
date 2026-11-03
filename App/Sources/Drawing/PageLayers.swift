@@ -1,5 +1,5 @@
 #if os(iOS)
-import QuartzCore
+@preconcurrency import QuartzCore
 import TroveCore
 import UIKit
 
@@ -71,14 +71,16 @@ final class InkPageLayer: CALayer {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     /// No implicit animations: the layers follow the model at once.
-    static let noActions: [String: CAAction] = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull(), "frame": NSNull(),
+    static var noActions: [String: CAAction] {
+        ["position": NSNull(), "bounds": NSNull(), "contents": NSNull(), "frame": NSNull(),
                                                  "transform": NSNull(), "hidden": NSNull(), "path": NSNull(), "lineWidth": NSNull(),
                                                  "backgroundColor": NSNull(), "sublayers": NSNull(), "opacity": NSNull(),
                                                  "shadowPath": NSNull(), "shadowOpacity": NSNull(), "contentsScale": NSNull()]
+    }
 
     /// Places the page at `frame` (canvas points at 100 %) and builds its paper. `area`: what's
     /// near the screen, in the page's own points (an endless canvas builds its paper only there).
-    func show(_ spec: InkPageSpec, frame: CGRect, dark: Bool, area: CGRect, zoom: CGFloat) {
+    func show(_ spec: InkPageSpec, frame: CGRect, dark: Bool, area: CGRect, zoom: CGFloat, screen: CGFloat) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -93,7 +95,7 @@ final class InkPageLayer: CALayer {
             backgroundColor = InkRenderer.cgColor(color ?? "#ffffff")
             setEdge(spec.infinite ? nil : (InkPage.isDark(color) ? UIColor.white.withAlphaComponent(0.12) : UIColor.black.withAlphaComponent(0.08)), bounds: bounds)
             // Lines in page points: 1 pt, but never thinner than a pixel on screen (zoomed far out).
-            let width = max(1, 1 / max(0.05, zoom * contentsScaleForScreen))
+            let width = max(1, 1 / max(0.05, zoom * screen))
             let sig = "\(spec.key)|\(kind.rawValue)|\(color ?? "")|\(dark)|\(spec.width)x\(spec.height)"
             let needsArea = spec.infinite && !(paperArea?.contains(area) ?? false)
             if sig != paperSig || needsArea {
@@ -117,7 +119,6 @@ final class InkPageLayer: CALayer {
         picturesLayer.frame = CGRect(x: shift, y: shift, width: frame.width, height: frame.height)
     }
 
-    private var contentsScaleForScreen: CGFloat { UIScreen.main.scale }
 
     /// A thin edge under the page: a hard shadow with a given path (no blur, no offscreen pass).
     private func setEdge(_ colour: UIColor?, bounds: CGRect) {
@@ -293,12 +294,11 @@ final class InkElementsLayer: CALayer {
 
     /// `zoom`: what to draw for; `near`: whether the page is on or near the screen (far pages draw
     /// at the screen's scale only, to save memory).
-    func show(_ elements: [InkBox], peeked: Set<String>, frame: CGRect, zoom: CGFloat, near: Bool) {
+    func show(_ elements: [InkBox], peeked: Set<String>, frame: CGRect, zoom: CGFloat, near: Bool, screen: CGFloat) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         if self.frame != frame { self.frame = frame }
-        let screen = UIScreen.main.scale
         var seen: Set<String> = []
         for e in elements where e.kind == .text || e.kind == .tape {
             seen.insert(e.id)

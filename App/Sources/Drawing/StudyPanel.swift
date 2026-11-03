@@ -29,6 +29,11 @@ final class StudyPanelModel {
     /// A diagram waiting for Keep / Remove / Tweak.
     var preview: DiagramSpec?
     var tweak = ""
+    /// A question waiting for "may I look at the pages as pictures?" (plan A5.5).
+    var pictureAsk: (question: String, maxTokens: Int, pages: [String])?
+    /// This session's answer ("for this session"), and a one-off answer for the next question.
+    private var sessionPictures: Bool?
+    private var oneShotPictures: Bool?
     private var turns: [StudyTurn] = []
     private var context: StudyContext?
     /// Where each line of each page is (page key → line boxes), for highlighting.
@@ -145,13 +150,28 @@ final class StudyPanelModel {
         // Every question: pages written on since the last one are read (the rest are cached).
         await prepare(thinking: true)
         guard let context else { return }
-        if context.pages.allSatisfy({ $0.lines.isEmpty }) {
+        // Pages that are mostly drawing (diagrams, maths layout) can go as pictures, asked first.
+        var pictures: [(label: String, jpeg: Data)] = []
+        let wanted = picturePages(context)
+        if !wanted.isEmpty {
+            let decision: PictureConsent.Decision
+            if let once = oneShotPictures { decision = once ? .send : .skip; oneShotPictures = nil }
+            else { decision = PictureConsent.decide(Self.pictureSetting, session: sessionPictures) }
+            switch decision {
+            case .send: pictures = await renderPictures(wanted)
+            case .skip: break
+            case .ask:
+                pictureAsk = (q, maxTokens, wanted)
+                return
+            }
+        }
+        if context.pages.allSatisfy({ $0.lines.isEmpty }), pictures.isEmpty {
             error = "There's nothing readable in this notebook yet."
             return
         }
         let summary = temporary || !Self.memoryOn ? nil : (turns.isEmpty ? Self.memory.summary(for: editor.target.itemId) : nil)
         do {
-            let answer = try await ai.studyReply(q, context: context, history: turns, summary: summary, maxTokens: maxTokens)
+            let answer = try await ai.studyReply(q, context: context, history: turns, summary: summary, maxTokens: maxTokens, pictures: pictures)
             if let u = answer.usage { usage.add(u) }
             turns.append(StudyTurn(question: q, answer: answer.text))
             entries.append(Entry(question: q, answer: answer.display(context: context), refs: answer.refs, unverified: answer.unverified))
@@ -160,6 +180,56 @@ final class StudyPanelModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    // MARK: Page pictures (asked first)
+
+    /// Settings → Sketch: ask each session (default), always, or never.
+    static var pictureSetting: PictureConsent.Setting {
+        get { PictureConsent.Setting(rawValue: UserDefaults.standard.string(forKey: "ai.pagePictures") ?? "") ?? .askEachSession }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "ai.pagePictures") }
+    }
+
+    /// The answer to "may I look at the pages?": then the question goes.
+    func answerPictures(_ answer: PictureConsent.Answer) async {
+        guard let ask = pictureAsk else { return }
+        pictureAsk = nil
+        let r = PictureConsent.apply(answer, setting: Self.pictureSetting)
+        Self.pictureSetting = r.setting
+        sessionPictures = r.session
+        oneShotPictures = r.send
+        await send(ask.question, maxTokens: ask.maxTokens)
+    }
+
+    private func picturePages(_ context: StudyContext) -> [String] {
+        let pages = editor.pages.map { spec in
+            PagePictures.Page(key: spec.key, strokes: (editor.content[spec.key]?.strokes ?? []).filter { $0.by.isEmpty }.count,
+                              textCharacters: context.pages.first { $0.key == spec.key }?.text.count ?? 0)
+        }
+        return PagePictures.choose(pages, current: editor.currentPage?.key)
+    }
+
+    /// The pages drawn as they look (about 1 100 px on the long side, JPEG).
+    private func renderPictures(_ keys: [String]) async -> [(label: String, jpeg: Data)] {
+        var out: [(label: String, jpeg: Data)] = []
+        for key in keys {
+            guard let i = editor.pages.firstIndex(where: { $0.key == key }) else { continue }
+            let spec = editor.pages[i]
+            let content = editor.content[key] ?? InkContent()
+            var area: InkGeometry.Rect?
+            if spec.infinite, let b = InkGeometry.bounds(content.strokes.flatMap(\.points)) {
+                area = InkGeometry.Rect(x: b.x - 24, y: b.y - 24, width: b.width + 48, height: b.height + 48)
+            }
+            let w = area?.width ?? spec.width, h = area?.height ?? spec.height
+            let width = Int(max(200, min(1100, 1100 * w / max(w, h))))
+            let box = area
+            let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
+                guard let image = InkRenderer.render(spec, content: content, pixelWidth: width, area: box) else { return nil }
+                return InkRenderer.jpeg(image, quality: 0.8)
+            }.value
+            if let jpeg { out.append(("page \(i + 1)", jpeg)) }
+        }
+        return out
     }
 
     func run(_ shortcut: StudyShortcut) async {
@@ -280,6 +350,7 @@ struct StudyPanel: View {
                                 EntryView(entry: entry, showPlaces: { model.show(entry.refs) }, write: { model.placeText(entry.answer) }).id(entry.id)
                             }
                             if let spec = model.preview { DiagramPreview(model: model, spec: spec) }
+                            if let ask = model.pictureAsk { PictureAskCard(model: model, pages: ask.pages.count) }
                             if let status = model.status ?? (model.busy ? "Thinking…" : nil) {
                                 Label(status, systemImage: "ellipsis").foregroundStyle(.secondary).font(.callout)
                             }
@@ -439,5 +510,30 @@ struct PDFPageText {
         if doc?.count != data.count { doc = PDFDocument(data: data).map { (data.count, $0) } }
         guard let text = doc?.document.page(at: index)?.string else { return [] }
         return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
+/// "To answer this I'd look at 2 pages as pictures (≈ $0.0003)": allow once, for this session,
+/// always, or not now (then it answers from the text only). Changeable in Settings → Sketch.
+private struct PictureAskCard: View {
+    let model: StudyPanelModel
+    let pages: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("To answer this I'd look at \(pages) page\(pages == 1 ? "" : "s") as \(pages == 1 ? "a picture" : "pictures") (about \(String(format: "$%.4f", PagePictures.cost(pages))))",
+                  systemImage: "photo.on.rectangle")
+                .font(.callout)
+            Text("They have drawings or maths the text alone may miss.").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Button("Allow") { Task { await model.answerPictures(.allowOnce) } }.buttonStyle(.borderedProminent)
+                Button("This session") { Task { await model.answerPictures(.allowSession) } }.buttonStyle(.bordered)
+                Button("Always") { Task { await model.answerPictures(.allowAlways) } }.buttonStyle(.bordered)
+                Button("Not now") { Task { await model.answerPictures(.notNow) } }.buttonStyle(.bordered)
+            }
+            .controlSize(.small)
+        }
+        .padding(10)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }

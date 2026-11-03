@@ -343,7 +343,7 @@ struct PencilCanvas: UIViewRepresentable {
         /// Text boxes and tape over the ink, one small layer each, scaled the same way.
         let elementsHost = InkZoomHost()
         /// The GPU ink renderer; nil with Settings → Sketch → Classic ink (PencilKit draws all the ink then).
-        let metal: InkMetalView? = InkMetalView.enabled ? InkMetalView() : nil
+        let metal: InkMetalView? = InkMetalView.enabled ? InkMetalView.make() : nil
         private var pageLayers: [String: InkPageLayer] = [:]
         private var elementLayers: [String: InkElementsLayer] = [:]
         /// The content at 100 % (the hosts' size).
@@ -489,7 +489,7 @@ struct PencilCanvas: UIViewRepresentable {
                 resize(canvas)
                 syncPages()
                 shownPictures = ""
-                shownBoxes = 
+                shownBoxes = ""
                 if turned {
                     UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
                 }
@@ -666,7 +666,7 @@ struct PencilCanvas: UIViewRepresentable {
             let z = max(0.01, zoom)
             let o = slot.offset
             let local = CGRect(x: visible.minX / z - o.x, y: visible.minY / z - o.y, width: visible.width / z, height: visible.height / z)
-            l.show(slot.spec, frame: slot.frame, dark: isDark(slot), area: local, zoom: zoom)
+            l.show(slot.spec, frame: slot.frame, dark: isDark(slot), area: local, zoom: zoom, screen: max(1, paperView.traitCollection.displayScale))
         }
 
         /// PDF and picture pages show what `InkBackdrop` has ready.
@@ -704,7 +704,8 @@ struct PencilCanvas: UIViewRepresentable {
                     elementLayers[slot.spec.key] = n
                     return n
                 }()
-                l.show(shown.elements, peeked: shown.peeked, frame: CGRect(origin: slot.offset, size: slot.frame.size), zoom: z, near: slot.frame.intersects(near))
+                l.show(shown.elements, peeked: shown.peeked, frame: CGRect(origin: slot.offset, size: slot.frame.size), zoom: z, near: slot.frame.intersects(near),
+                       screen: max(1, canvas.traitCollection.displayScale))
             }
         }
 

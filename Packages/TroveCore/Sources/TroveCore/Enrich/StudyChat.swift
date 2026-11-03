@@ -263,8 +263,10 @@ extension AIClient {
     /// One reply in a notebook chat. The rules and the notebook go first and are cached, so each
     /// later question in the session pays about a tenth for them; the previous session's summary
     /// (a few hundred tokens) stands in for old chats.
+    /// `pictures`: pages sent as pictures too (JPEG), when their drawings matter and you allowed it
+    /// (docs/plans/sketch-2-plan.md A5.5); each is labelled with its page.
     public func studyReply(_ question: String, context: StudyContext, history: [StudyTurn], summary: String?,
-                           tier: AISettings.Tier = .fast, maxTokens: Int = 700) async throws -> StudyAnswer {
+                           tier: AISettings.Tier = .fast, maxTokens: Int = 700, pictures: [(label: String, jpeg: Data)] = []) async throws -> StudyAnswer {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
         let fitted = context.fitted(for: question)
@@ -280,7 +282,17 @@ extension AIClient {
                 messages.append(["role": "user", "content": t.question])
                 messages.append(["role": "assistant", "content": t.answer.isEmpty ? "(no answer)" : t.answer])
             }
-            messages.append(["role": "user", "content": opening + question])
+            if pictures.isEmpty {
+                messages.append(["role": "user", "content": opening + question])
+            } else {
+                var content: [Any] = []
+                for p in pictures {
+                    content.append(["type": "text", "text": "Picture of \(p.label):"])
+                    content.append(["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": p.jpeg.base64EncodedString()]])
+                }
+                content.append(["type": "text", "text": opening + question])
+                messages.append(["role": "user", "content": content])
+            }
             let body: [String: Any] = [
                 "model": model, "max_tokens": maxTokens + 1500,
                 "system": [
@@ -300,7 +312,16 @@ extension AIClient {
                 messages.append(["role": "user", "content": t.question])
                 messages.append(["role": "assistant", "content": t.answer.isEmpty ? "(no answer)" : t.answer])
             }
-            messages.append(["role": "user", "content": opening + question])
+            if pictures.isEmpty {
+                messages.append(["role": "user", "content": opening + question])
+            } else {
+                var content: [Any] = pictures.flatMap { p -> [Any] in
+                    [["type": "text", "text": "Picture of \(p.label):"],
+                     ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64," + p.jpeg.base64EncodedString()]]]
+                }
+                content.append(["type": "text", "text": opening + question])
+                messages.append(["role": "user", "content": content])
+            }
             var body: [String: Any] = ["model": model, "messages": messages]
             body[settings.provider == .openai ? "max_completion_tokens" : "max_tokens"] = maxTokens + 1500
             let json = try await send(request("/chat/completions", body: body))

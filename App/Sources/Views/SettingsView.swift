@@ -946,6 +946,7 @@ private struct ClipboardSection: View {
 private struct SketchSection: View {
     @State private var choice = NewSketchChoice.load(UserDefaults.standard.data(forKey: "sketch.new"))
     @AppStorage("ink.handwriting") private var handwriting = InkHandwriting.Style.neat.rawValue
+    @AppStorage("ai.pagePictures") private var pictures = PictureConsent.Setting.askEachSession.rawValue
     #if os(iOS)
     @State private var gpuInk = InkMetalView.enabled
     #endif
@@ -953,6 +954,12 @@ private struct SketchSection: View {
     var body: some View {
         Section {
             Toggle("Ask for page settings on New sketch", isOn: Binding(get: { choice.ask }, set: { choice.ask = $0; UserDefaults.standard.set(choice.data, forKey: "sketch.new") }))
+            Picker("Ask may look at page pictures", selection: Binding(get: { StudyPanelModel.pictureSetting }, set: { StudyPanelModel.pictureSetting = $0; pictures = $0.rawValue })) {
+                Text("Ask each session").tag(PictureConsent.Setting.askEachSession)
+                Text("Always").tag(PictureConsent.Setting.always)
+                Text("Never").tag(PictureConsent.Setting.never)
+            }
+            .id(pictures)
             Picker("AI and Math Assist handwriting", selection: $handwriting) {
                 Text("Neat").tag(InkHandwriting.Style.neat.rawValue)
                 Text("Script").tag(InkHandwriting.Style.script.rawValue)
