@@ -609,6 +609,7 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
 | `group` | optional: a group id shared by strokes and elements picked and moved as one (below); `""` or unset is none |
 | `from`, `to` | optional: a connector's joined ends, the ids of a stroke or element on the same page (below) |
 | `createdAt` | Unix ms; strokes draw in this order (each new stroke on an item gets a later time than the last) |
+| `by` | optional: who wrote it when it wasn't the user, `assist` (Math Assist's answers) or `ai` (AI output placed on the page). Drawn like any stroke; apps use it to leave the user's edits alone and to never read their own answers as input. Unset or `""` is the user's ink |
 | `device` | device id |
 
 - **Compact points (`points2`)**: base64url of bytes: the version (`2`; readers also take `1`,

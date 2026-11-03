@@ -183,3 +183,85 @@ struct EditorLayoutTests {
         #expect(placed["selection"]!.maxY <= placed["zoom"]!.y)
     }
 }
+
+struct InkHandwritingTests {
+    func strokeBoxes(_ r: InkHandwriting.Result) -> [InkGeometry.Rect] { r.strokes.compactMap { InkGeometry.bounds($0) } }
+
+    @Test func deterministicAndFinite() {
+        var o = InkHandwriting.Options()
+        o.seed = 42
+        let a = InkHandwriting.write("x = 3/4, hello world", at: InkPoint(x: 10, y: 50), options: o)
+        let b = InkHandwriting.write("x = 3/4, hello world", at: InkPoint(x: 10, y: 50), options: o)
+        #expect(a.strokes == b.strokes)
+        #expect(!a.strokes.isEmpty && a.lines == 1)
+        #expect(a.strokes.allSatisfy { $0.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.pressure > 0 && $0.pressure <= 1 } })
+        // Times only go forward.
+        let times = a.strokes.flatMap { $0.map(\.t) }
+        #expect(zip(times, times.dropFirst()).allSatisfy { $0 <= $1 })
+        let script = InkHandwriting.write("hello", at: InkPoint(x: 0, y: 0), options: { var s = o; s.style = .script; return s }())
+        #expect(!script.strokes.isEmpty)
+    }
+
+    @Test func sitsOnItsBaselineAtItsSize() {
+        var o = InkHandwriting.Options()
+        o.xHeight = 10
+        o.variation = 0
+        let r = InkHandwriting.write("xxxx", at: InkPoint(x: 0, y: 100), options: o)
+        let b = r.bounds!
+        // An x: from the baseline up about one x-height.
+        #expect(abs(b.maxY - 100) < 1.5)
+        #expect(abs(b.height - 10) < 2.5)
+    }
+
+    @Test func wrapsAndFits() {
+        var o = InkHandwriting.Options()
+        o.xHeight = 6
+        let box = InkGeometry.Rect(x: 0, y: 0, width: 120, height: 200)
+        let r = InkHandwriting.fit("the mitochondria is the powerhouse of the cell", in: box, options: o)!
+        #expect(r.lines > 1)
+        #expect(r.bounds!.maxX <= box.maxX + 4)
+        #expect(InkHandwriting.fit("a very long answer that cannot fit", in: InkGeometry.Rect(x: 0, y: 0, width: 30, height: 10), options: o) == nil)
+    }
+
+    @Test func matchesTheWritingAround() {
+        // "Someone's" writing at x-height 9 on a line, then a gap on that line to fill.
+        for size in [5.0, 9.0, 14.0] {
+            var o = InkHandwriting.Options()
+            o.xHeight = size
+            o.seed = 7
+            let theirs = InkHandwriting.write("the answer is", at: InkPoint(x: 20, y: 200), options: o)
+            let gap = InkGeometry.Rect(x: 20 + theirs.bounds!.width + 20, y: 200 - size * 1.5, width: 80, height: size * 2)
+            let got = InkHandwriting.sizeNear(gap, strokes: strokeBoxes(theirs))
+            #expect(abs(got - size) / size < 0.25, "size \(size) got \(got)")
+        }
+        // Nothing near: the ruling, then the box, then 7.
+        #expect(abs(InkHandwriting.sizeNear(InkGeometry.Rect(x: 0, y: 0, width: 50, height: 0), strokes: [], ruling: 32) - 13.44) < 0.01)
+        #expect(InkHandwriting.sizeNear(InkGeometry.Rect(x: 0, y: 0, width: 50, height: 0), strokes: []) == 7)
+        // Vision's line box on the same line wins.
+        let line = InkGeometry.Rect(x: 0, y: 90, width: 200, height: 24)
+        #expect(abs(InkHandwriting.sizeNear(InkGeometry.Rect(x: 210, y: 95, width: 40, height: 14), strokes: [], lines: [line]) - 10) < 0.01)
+    }
+
+    @Test func fastEnough() {
+        let text = String(repeating: "the quick brown fox jumps over the lazy dog ", count: 23)
+        var o = InkHandwriting.Options()
+        o.maxWidth = 400
+        let start = Date()
+        let r = InkHandwriting.write(text, at: InkPoint(x: 0, y: 0), options: o)
+        #expect(r.lines > 5)
+        #expect(Date().timeIntervalSince(start) < 0.5)
+    }
+}
+
+struct StrokeByTests {
+    @Test func byRoundTrips() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: nil, encrypted: false))
+        let id = await lib.addSketch(title: "Maths")
+        let page = await lib.item(id)!.sketchPageList[0].id
+        let mine = await lib.addStroke(on: id, pageKey: page, tool: .pen, color: "#000", width: 2, points: [InkPoint(x: 1, y: 1), InkPoint(x: 2, y: 2)])!
+        let answer = await lib.addStroke(on: id, pageKey: page, tool: .pen, color: "#5aa9e6", width: 2, points: [InkPoint(x: 1, y: 1), InkPoint(x: 2, y: 2)], by: "assist")!
+        let strokes = await lib.strokes(on: id, pageKey: page)
+        #expect(strokes.first { $0.id == mine }?.by == "")
+        #expect(strokes.first { $0.id == answer }?.by == "assist")
+    }
+}
