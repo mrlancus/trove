@@ -584,7 +584,7 @@ extension AIClient {
         - Dates are when things were saved to Trove (imported files: when the file was made).
         - If nothing relevant turns up, say so plainly and suggest what to search for.
         Answer in Markdown.
-        """]
+        """, AIRules.ask]
         switch style {
         case .concise: parts.append("Be very brief: a sentence or a few bullet points, no preamble, and stop as soon as you can answer.")
         case .balanced: parts.append("Be brief and direct: a short paragraph or a few bullet points.")
