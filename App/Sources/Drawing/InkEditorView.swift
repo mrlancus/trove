@@ -13,6 +13,7 @@ struct InkEditorView: View {
     @State private var importingPicture = false
     @State private var photo: PhotosPickerItem?
     @State private var exportFile: PDFFile?
+    @State private var goodNotesFile: GoodNotesFile?
     @State private var confirmDeletePage: String?
     @State private var pageSettings = false
     /// Ask this notebook (StudyPanel, MASTER_PLAN G14).
@@ -115,6 +116,14 @@ struct InkEditorView: View {
         }
         .fileExporter(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } }), document: exportFile,
                       contentType: .pdf, defaultFilename: editor.target.title) { _ in exportFile = nil }
+        .onChange(of: editor.exportedGoodNotes) { _, data in
+            if let data { goodNotesFile = GoodNotesFile(data: data); editor.exportedGoodNotes = nil }
+        }
+        .fileExporter(isPresented: Binding(get: { goodNotesFile != nil }, set: { if !$0 { goodNotesFile = nil } }), document: goodNotesFile,
+                      contentType: GoodNotesFile.type, defaultFilename: editor.target.title) { _ in
+            goodNotesFile = nil
+            if let notes = editor.goodNotesReport?.notes, !notes.isEmpty { app.toast = notes.joined(separator: "; ") }
+        }
         .confirmationDialog("Delete this page and everything on it?", isPresented: Binding(get: { confirmDeletePage != nil }, set: { if !$0 { confirmDeletePage = nil } })) {
             Button("Delete page", role: .destructive) { if let key = confirmDeletePage { editor.deletePage(key) }; confirmDeletePage = nil }
         }
@@ -240,8 +249,13 @@ struct InkEditorView: View {
                 }
                 Button { asking.toggle() } label: { Label("Ask", systemImage: "bubble.left.and.text.bubble.right") }
                     .help("Ask about this notebook, check facts, or revise (quiz me)")
-                Button { editor.exportPDF() } label: { Label("Export PDF", systemImage: "square.and.arrow.up") }
-                    .disabled(editor.exporting)
+                Menu {
+                    Button("PDF") { editor.exportPDF() }
+                    Button("GoodNotes notebook (.goodnotes)") { editor.exportGoodNotes() }
+                } label: { Label("Export", systemImage: "square.and.arrow.up") }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .disabled(editor.exporting)
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
@@ -626,6 +640,16 @@ struct InkPagesPanel: View {
             }
         }
     }
+}
+
+/// An exported GoodNotes notebook, for the save panel.
+struct GoodNotesFile: FileDocument {
+    static let type = UTType(filenameExtension: "goodnotes", conformingTo: .data) ?? .data
+    static var readableContentTypes: [UTType] { [type] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
 /// An exported drawing, for the save panel.

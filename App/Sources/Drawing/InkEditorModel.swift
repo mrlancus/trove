@@ -414,6 +414,9 @@ final class InkEditorModel {
     var textEdit: InkTextEdit?
     var showPages = false
     var exportedPDF: Data?
+    /// A `.goodnotes` file made by Export → GoodNotes (MASTER_PLAN G13), and what didn't go across exactly.
+    var exportedGoodNotes: Data?
+    var goodNotesReport: GoodNotesWriter.Report?
     var exporting = false
     /// Where new pictures go on an endless canvas (the middle of what's on screen), in page points.
     @ObservationIgnored var visibleCenter = InkPoint(x: 384, y: 400)
@@ -1789,6 +1792,60 @@ final class InkEditorModel {
             exportedPDF = await Task.detached(priority: .userInitiated) { InkRenderer.pdf(pages: pages) }.value
             exporting = false
         }
+    }
+
+    /// Export → GoodNotes: a notebook that came from GoodNotes is copied with Trove's ink in place of
+    /// its own (everything else kept); anything else becomes a new notebook (pages with their
+    /// paper or PDF page behind) or, for an endless canvas, a whiteboard.
+    func exportGoodNotes() {
+        guard let library = app?.library else { return }
+        exporting = true
+        let specs = pages, itemId = target.itemId, layer = target.layer, all = specs.map { display($0.key) }
+        Task {
+            defer { exporting = false }
+            if !layer.isEmpty, let item = await library.item(itemId),
+               let att = item.attachments.first(where: { $0.id == layer }), att.name.lowercased().hasSuffix(".goodnotes"),
+               let original = try? await library.attachmentData(att) {
+                guard item.goodnotesInk.contains(layer) else {
+                    // Never edited in Trove: the notebook as it is.
+                    exportedGoodNotes = original
+                    return
+                }
+                var ink: [Int: GoodNotesWriter.PageInk] = [:]
+                for (i, c) in all.enumerated() { ink[i] = Self.goodNotesInk(c) }
+                let pagesInk = ink
+                if let out = await Task.detached(priority: .userInitiated, operation: { try? GoodNotesWriter.patch(original, pages: pagesInk) }).value {
+                    goodNotesReport = out.report
+                    exportedGoodNotes = out.data
+                }
+                return
+            }
+            var fresh: [GoodNotesWriter.FreshPage] = []
+            for (spec, c) in zip(specs, all) {
+                if spec.infinite {
+                    let b = await library.inkBounds(on: itemId, layer: layer, pageKey: spec.key)
+                    fresh.append(.init(width: max(612, b.map { $0.maxX + 36 } ?? 612), height: max(792, b.map { $0.maxY + 36 } ?? 792),
+                                       background: nil, ink: Self.goodNotesInk(c)))
+                } else {
+                    let background = await Task.detached(priority: .userInitiated) { InkRenderer.pdf(pages: [(spec: spec, content: InkContent(), bounds: nil)]) }.value
+                    fresh.append(.init(width: spec.width, height: spec.height, background: background, ink: Self.goodNotesInk(c)))
+                }
+            }
+            let pagesOut = fresh
+            let out = await Task.detached(priority: .userInitiated) { GoodNotesWriter.notebook(pagesOut) }.value
+            goodNotesReport = out.report
+            exportedGoodNotes = out.data
+        }
+    }
+
+    /// A page's strokes and text boxes as GoodNotes takes them (tape, pictures and Trove-only
+    /// extras like connectors' links stay behind; dashes and fills become plain lines).
+    static func goodNotesInk(_ c: InkContent) -> GoodNotesWriter.PageInk {
+        GoodNotesWriter.PageInk(
+            strokes: c.strokes.filter { !$0.points.isEmpty }.map { GoodNotesWriter.Stroke(color: $0.color, width: $0.width, points: $0.points, highlighter: $0.tool == .highlighter) },
+            texts: c.elements.filter { $0.kind == .text && !$0.text.isEmpty }.map {
+                GoodNotesWriter.Text(x: $0.frame.x, y: $0.frame.y, w: $0.frame.width, h: $0.frame.height, text: $0.text, size: $0.size, color: $0.color)
+            })
     }
 
     /// When the editor closes: a fresh card picture for a sketch, and its handwriting read for search.
