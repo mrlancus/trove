@@ -42,6 +42,10 @@ public enum GoodNotesInk {
         public var layers: [Layer]
         /// Ink found on the page that couldn't be read (a layout not known yet).
         public var unread = 0
+        /// The zip member the page's records are in (for writing back, `GoodNotesWriter`).
+        public var path = ""
+        /// How far `fitToContent` moved everything (GoodNotes units): subtract to get GoodNotes' own coordinates.
+        public var offsetX = 0.0, offsetY = 0.0
 
         public var strokes: [Stroke] { layers.compactMap { if case .ink(let s) = $0 { s } else { nil } } }
         public var texts: [TextBox] { layers.compactMap { if case .text(let t) = $0 { t } else { nil } } }
@@ -71,6 +75,8 @@ public enum GoodNotesInk {
         public var isPencil = false
         /// A shape's fill (one closed run), drawn with `alpha`.
         public var isFill = false
+        /// For a fill: the shape whose outline it belongs to.
+        public var fillOf: String?
 
         public var isHighlighter: Bool { alpha < 0.95 }
         /// GoodNotes' pencil is grainy and light.
@@ -211,7 +217,7 @@ public enum GoodNotesInk {
                 if let s = sizes[id] ?? nil { size = s }
             }
             let found = content(recs, attachmentIds: Set(attachments.keys))
-            var page = Page(id: p.id, width: size.width, height: size.height, background: background, layers: found.layers, unread: found.unread)
+            var page = Page(id: p.id, width: size.width, height: size.height, background: background, layers: found.layers, unread: found.unread, path: p.path)
             if background == nil || max(page.width, page.height) > oversized { page = fitToContent(page) }
             pages.append(page)
         }
@@ -248,6 +254,8 @@ public enum GoodNotesInk {
         let dx = (margin - x0) / scale, dy = (margin - y0) / scale
         var out = page
         if huge { out.background = nil }
+        out.offsetX += dx
+        out.offsetY += dy
         out.width = max(200, x1 - x0 + 2 * margin)
         out.height = max(200, y1 - y0 + 2 * margin)
         out.layers = page.layers.map { layer in
@@ -291,7 +299,9 @@ public enum GoodNotesInk {
             let outline = text == nil ? shape(r) : nil
             if let outline, !(outline.id.map { erased.contains($0) } ?? false) { layers.append(.ink(outline)) }
             if text == nil, outline == nil, let f = fill(r), !(f.stroke.id.map { erased.contains($0) } ?? false), !(f.of.map { erased.contains($0) } ?? false) {
-                layers.append(.ink(f.stroke))
+                var fillStroke = f.stroke
+                fillStroke.fillOf = f.of
+                layers.append(.ink(fillStroke))
             }
             if let att = r.uuid(7) ?? r.uuid(4), attachmentIds.contains(att), r.varint(3) != 1,
                let box = imageBox(r) ?? (i + 1 < recs.count ? imageBox(recs[i + 1]) : nil) {
