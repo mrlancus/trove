@@ -738,6 +738,40 @@ questions** like a revision tool, **draws diagrams** and **highlights** what you
   Arrows can point at your own handwriting (by stroke ids).
 - **Battery:** nothing runs until you ask; one request per question; answers stream as text with no
   animation; the cached notebook text is kept on the device so reopening a session doesn't re-read pages.
+- **Not only revision** (user, 2026-11-03): it's a general chat about the notebook too: normal
+  questions, "is this right?" fact checks, summaries. Revision is something you can just ask for in
+  words ("quiz me on chapter 2", "test me on the bits I got wrong") without picking a mode or tool;
+  the modes above are shortcuts, not the only way in.
+- **How it must answer** (user: "fully looks at all the info, doesn't hallucinate, must not be a
+  yes-man, fully factual, concise to cut costs"). One shared system prompt for Ask and notebook chat,
+  in TroveCore (`AIRules`), tested by fixture:
+  - Answer from the notes first and **cite every claim** (page + stroke/word handles). Anything not
+    in the notes is said to be general knowledge, marked as such, and never invented as being in them.
+  - **Say "not in your notes" / "I don't know"** rather than guess. Unreadable handwriting is named
+    ("page 4, line 3 is unclear: 'mitochondr…?'"), not filled in.
+  - **No yes-man**: when the user (or their notes) is wrong, say so plainly with the reason and the
+    source; don't soften a wrong answer into a right one; marking is strict and says exactly what's
+    missing; never praise filler ("Great question!").
+  - **Concise**: shortest complete answer, no preamble, no repeating the question, bullet points over
+    prose; `max_tokens` capped per mode (answers ~300, quiz items ~120, marking ~150).
+  - **Reads all of it**: the whole scope is in context (cached) when it fits; otherwise it must
+    search every chunk before saying something isn't there (the tool results say how many chunks
+    were searched). Fact checks quote the exact line being checked.
+  - Grounding check on the device: every cited handle must exist in the scope; an answer citing a
+    handle that doesn't exist is flagged "couldn't verify" in the UI.
+- **Session memory** (default on): when a chat closes or goes quiet, it's compacted into a short
+  Markdown summary saved **on the device** (`Application Support/Trove/sessions/<notebook>/<date>.md`,
+  file protection on, not synced unless the user turns on "Sync chat summaries"): what was asked,
+  answers in a line each, what you got wrong, what to revise next. The next session sends the
+  summary (a few hundred tokens) instead of the old chat, which saves tokens and lets it say "last
+  time you missed X". Summaries are written by the same model at low effort (~$0.0002), or on the
+  iPad by Foundation Models. **Temporary chat** (like Claude/ChatGPT): a toggle in the panel; nothing
+  is saved, no summary, and old summaries aren't read. Settings → AI → Chat memory: On / Off, with
+  "Show summaries" (open, edit, delete each `.md`).
+- **Diagram preview**: a diagram first appears as a faded **preview** over the page or in the side
+  sheet with **Keep**, **Remove** and a **Tweak** box ("make the arrows go left to right", "add
+  ATP"). A tweak sends only the diagram's JSON and the instruction (~200 tokens in, ~300 out), not
+  the notebook again. Keep turns it into real shapes on the page (one undo step).
 - **UI:** an "Ask" button on the sketch toolbar opens a side panel (iPad: slide-over sheet; Mac:
   inspector) with Ask / Quiz / Find, a scope picker and the running cost (exists in Ask).
 
@@ -915,6 +949,14 @@ tab bar, the pen toolbar, the clipboard palette) float above it as translucent "
 pick up the colour of what's behind them. The OS 18/15 fallback is the same layout with plain material
 backgrounds. Battery rule: glass only on small floating controls, never behind lists, pages or the
 drawing canvas (blur and refraction cost GPU time every frame they're over moving content).
+
+### D1b. Appearance setting **S**
+Settings → Appearance (per device, user request 2026-11-03: "some people don't like Liquid Glass"):
+**Style: Automatic / Liquid Glass / Standard.** Automatic is Liquid Glass on OS 26 and Standard on
+older systems and when Reduce Transparency is on. Standard is the familiar opaque look: solid toolbars,
+plain bars, no refraction. Also **Theme: System / Light / Dark**, **Accent colour**, **Text size in
+notes** and **Card density**. Every floating control reads one `TroveStyle` environment value, so no
+view decides on its own.
 
 ### D2. Liquid Glass done right (OS 26) **M**
 Glass toolbars and the palette behind `#available`, `.glassEffect` only on floating chrome (not on
