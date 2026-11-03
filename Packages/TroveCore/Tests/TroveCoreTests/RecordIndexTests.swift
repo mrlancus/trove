@@ -81,3 +81,21 @@ import Testing
         #expect(strokes.map { $0.record[InkStroke.Field.createdAt]?.number ?? 0 } == strokes.map { $0.record[InkStroke.Field.createdAt]?.number ?? 0 }.sorted())
     }
 }
+
+@Suite struct InkByItemTests {
+    /// A stroke moved to another item (or whose kind changes) leaves the first item's ink.
+    @Test func movingInkLeavesTheOldItem() {
+        var store = RecordStore()
+        func op(_ seq: Int, _ fields: [String: JSONValue], kind: String = "stroke") -> Op {
+            Op(device: "D", seq: seq, hlc: HLC(millis: 1_000 + Int64(seq), counter: 0, device: "D").description, record: "k", recordKind: kind, type: .set, fields: fields, text: nil)
+        }
+        store.apply([op(1, ["on": .string("a"), "page": .string("0")])])
+        store.apply([op(2, ["on": .string("b")])])
+        #expect(store.ink(on: "a").isEmpty)
+        #expect(store.ink(on: "b").map(\.id) == ["k"])
+        #expect(store.ink(on: "a", layer: "", pageKey: "0").isEmpty)
+        #expect(store.ink(on: "b", layer: "", pageKey: "0").map(\.id) == ["k"])
+        store.apply([op(3, [:], kind: "item")])
+        #expect(store.ink(on: "b").isEmpty)
+    }
+}

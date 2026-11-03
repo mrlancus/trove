@@ -236,6 +236,7 @@ public struct RecordStore: Sendable {
         lastApplied = max(lastApplied, op.hlc)
         var record = records[op.record] ?? Record(id: op.record, kind: op.recordKind ?? "item", createdHLC: op.hlc, updatedHLC: op.hlc)
         let oldKind = records[op.record]?.kind
+        let oldOn = records[op.record].flatMap { Self.inkKinds.contains($0.kind) ? $0.fields["on"]?.string : nil }
         let oldPage = records[op.record].flatMap { Self.inkKinds.contains($0.kind) && $0.fields["on"] != nil ? Self.inkPageKey($0) : nil }
         // An op older than what the checkpoint holds for a field (from a device that was offline) loses to it.
         let stamps = base?.stamps[op.record]
@@ -274,6 +275,7 @@ public struct RecordStore: Sendable {
             history[key] = versions
         }
         if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string {
+            if let oldOn, oldOn != on { inkByItem[oldOn]?.remove(op.record) }
             inkByItem[on, default: []].insert(op.record)
             let page = Self.inkPageKey(record)
             if page != oldPage {
@@ -281,8 +283,9 @@ public struct RecordStore: Sendable {
                 inkByPage[page, default: []].insert(op.record)
             }
             noteInkTime(record, on: on)
-        } else if let oldPage {
-            inkByPage[oldPage]?.remove(op.record)
+        } else {
+            if let oldOn { inkByItem[oldOn]?.remove(op.record) }
+            if let oldPage { inkByPage[oldPage]?.remove(op.record) }
         }
         records[op.record] = record
         noteChange(op.record)
