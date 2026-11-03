@@ -659,6 +659,9 @@ struct InkOverlay {
     var reading: InkPoint?
     /// Places the notebook chat pointed at (found, cited): a soft marker over each line.
     var highlights: [InkGeometry.Rect] = []
+    /// Where the AI is reading right now: a thin travelling outline (plan A6), and its dash phase.
+    var looking: [InkGeometry.Rect] = []
+    var lookPhase: Double = 0
 }
 
 extension InkRenderer {
@@ -687,6 +690,19 @@ extension InkRenderer {
                 ctx.addPath(path)
                 ctx.drawPath(using: .fillStroke)
             }
+        }
+        if !o.looking.isEmpty {
+            // Thin, see-through, its dashes moving slowly: noticeable, never in the way.
+            ctx.saveGState()
+            ctx.setStrokeColor(CGColor(red: 10 / 255, green: 132 / 255, blue: 1, alpha: 0.45))
+            ctx.setLineWidth(1.5 * px)
+            ctx.setLineDash(phase: CGFloat(o.lookPhase) * px, lengths: [7 * px, 5 * px])
+            for r in o.looking {
+                ctx.addPath(CGPath(roundedRect: CGRect(x: r.x - 5, y: r.y - 4, width: r.width + 10, height: r.height + 8),
+                                   cornerWidth: 7, cornerHeight: 7, transform: nil))
+            }
+            ctx.strokePath()
+            ctx.restoreGState()
         }
         if let b = o.selection {
             ctx.setLineWidth(1.5 * px)
