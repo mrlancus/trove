@@ -14,6 +14,16 @@ public protocol SyncTransport: Sendable {
     func fetchBlob(_ id: String) async throws -> Data
 }
 
+extension SyncTransport {
+    /// Several segments at once: nil for any that couldn't be fetched. Transports that can do it in
+    /// one request (the relay, MASTER_PLAN P10) do; others fetch one by one.
+    public func fetchSegments(_ refs: [SegmentRef]) async throws -> [Data?] {
+        var out: [Data?] = []
+        for ref in refs { out.append(try? await fetchSegment(ref)) }
+        return out
+    }
+}
+
 /// A checkpoint somewhere (PROTOCOL.md §3 "Checkpoints"), without its contents.
 public struct CheckpointInfo: Codable, Sendable, Equatable {
     public var id: String

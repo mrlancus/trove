@@ -165,6 +165,7 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | `PUT /vaults/:v/segments/:device/:first/:last` | device (must be `:device`) | TRV1 bytes → `{cursor}`. Idempotent: an identical re-upload returns the same cursor; different bytes at the same start → 409 `{error, last}` (the held segment's end: the device counts ops up to `last` as sent and uploads the rest from `last + 1`) |
 | `GET /vaults/:v/segments?after=<cursor>&limit=<n>` | device | → `{segments:[{cursor,device,first,last,size}], more}` |
 | `GET /vaults/:v/segments/:device/:first/:last` | device | → TRV1 bytes |
+| `POST /vaults/:v/segments/batch` | device | `{refs:[{device,first,last}]}` (1–200) → for each ref in order: u32 little-endian length then that many TRV1 bytes, or `0xFFFFFFFF` when missing or past the 8 MiB response cap (fetch those again). Relays without it answer 404: fall back to one `GET` per segment. |
 | `PUT /vaults/:v/blobs/:blobId` | device | TRV1 bytes → `201` (or `200` if it already exists) |
 | `GET /vaults/:v/blobs/:blobId` | device | → TRV1 bytes |
 | `PUT /vaults/:v/checkpoints/:id` | device | TRV1 checkpoint (§3), `id` 8–64 of `[A-Za-z0-9_-]`, up to 95 MB → `201 {id}` (`200` if that id exists). Stored in R2; only the newest 3 are kept |

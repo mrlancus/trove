@@ -24,6 +24,9 @@ export interface Env {
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
 
 const MAX_SEGMENT_BYTES = 1024 * 1024;
+/** One batched segment download: at most this many refs and bytes (the rest come as "missing"). */
+const MAX_BATCH_SEGMENTS = 200;
+const MAX_BATCH_BYTES = 8 * 1024 * 1024;
 /** Checkpoints (PROTOCOL.md §3): the newest few per vault, up to just under the Workers request limit. */
 const MAX_CHECKPOINT_BYTES = 95 * 1024 * 1024;
 const CHECKPOINTS_KEPT = 3;
@@ -265,6 +268,7 @@ export class VaultObject extends DurableObject<Env> {
         break;
       case "segments":
         if (!a && method === "GET") return this.listSegments(url);
+        if (a === "batch" && !b && method === "POST") return this.getSegments(request);
         if (a && b && c && method === "PUT") return this.putSegment(request, deviceId, a, Number(b), Number(c));
         if (a && b && c && method === "GET") return this.getSegment(a, Number(b), Number(c));
         break;
@@ -404,6 +408,39 @@ export class VaultObject extends DurableObject<Env> {
       .toArray()[0];
     if (!row) return error(404, "no such segment");
     return new Response(row.body, { headers: { "content-type": "application/octet-stream" } });
+  }
+
+  /** Many segments in one response (PROTOCOL.md §4): one radio wake per sync instead of one per segment. */
+  private async getSegments(request: Request) {
+    let refs: { device: string; first: number; last: number }[];
+    try {
+      const body = (await request.json()) as { refs?: unknown };
+      refs = Array.isArray(body.refs) ? (body.refs as { device: string; first: number; last: number }[]) : [];
+    } catch {
+      return error(400, "expected {refs: [{device, first, last}]}");
+    }
+    if (refs.length === 0 || refs.length > MAX_BATCH_SEGMENTS) return error(400, `1 to ${MAX_BATCH_SEGMENTS} refs`);
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for (const ref of refs) {
+      const head = new Uint8Array(4);
+      const row = typeof ref?.device === "string" && Number.isInteger(ref.first) && Number.isInteger(ref.last)
+        ? this.sql.exec<{ body: ArrayBuffer }>("SELECT body FROM segments WHERE device = ? AND first = ? AND last = ?", ref.device, ref.first, ref.last).toArray()[0]
+        : undefined;
+      // Past the size cap the rest are marked missing; the client fetches them in the next batch.
+      if (!row || total + row.body.byteLength > MAX_BATCH_BYTES) {
+        new DataView(head.buffer).setUint32(0, 0xffffffff, true);
+        parts.push(head);
+        continue;
+      }
+      new DataView(head.buffer).setUint32(0, row.body.byteLength, true);
+      parts.push(head, new Uint8Array(row.body));
+      total += row.body.byteLength;
+    }
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return new Response(out, { headers: { "content-type": "application/octet-stream" } });
   }
 
   // ---------- checkpoints (PROTOCOL.md §3 "Checkpoints"): opaque TRV1 blobs in R2 ----------

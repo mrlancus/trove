@@ -338,23 +338,37 @@ public actor SyncEngine {
         for t in transports {
             do {
                 var ok = true
+                var wanted: [SegmentRef] = []
                 for ref in try await t.listSegments() where !applied.contains(ref.key) && ref.device != device {
                     // Already inside the checkpoint: no need to download it.
                     if !bridge, let base = store.base, Checkpoint.covers(base.covers, device: ref.device, first: ref.first, last: ref.last) {
                         continue
                     }
-                    do {
-                        let data = try await t.fetchSegment(ref)
-                        let segment = try Segment.decodeAny(data, device: ref.device, keys: keys)
-                        for op in segment.ops { journal.observe(op.hlc) }
-                        unsavedOps += store.apply(segment.ops)
-                        if applied.insert(ref.key).inserted { unsavedApplied.append(ref.key) }
-                        fetched.append((ref, data, t.name))
-                        report.pulled += 1
-                    } catch {
-                        ok = false
-                        report.errors.append("\(t.name) pull \(ref.key): \(error)")
+                    wanted.append(ref)
+                }
+                // Fetched together (one request on the relay), applied together (one rebuild at most).
+                if !wanted.isEmpty {
+                    let datas = try await t.fetchSegments(wanted)
+                    var incoming: [Op] = []
+                    for (ref, data) in zip(wanted, datas) {
+                        guard let data else {
+                            ok = false
+                            report.errors.append("\(t.name) pull \(ref.key): not fetched")
+                            continue
+                        }
+                        do {
+                            let segment = try Segment.decodeAny(data, device: ref.device, keys: keys)
+                            for op in segment.ops { journal.observe(op.hlc) }
+                            incoming += segment.ops
+                            if applied.insert(ref.key).inserted { unsavedApplied.append(ref.key) }
+                            fetched.append((ref, data, t.name))
+                            report.pulled += 1
+                        } catch {
+                            ok = false
+                            report.errors.append("\(t.name) pull \(ref.key): \(error)")
+                        }
                     }
+                    unsavedOps += store.apply(incoming)
                 }
                 if ok, let relay = t as? RelayTransport { relay.commitCursor() }
             } catch {

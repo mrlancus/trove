@@ -97,3 +97,15 @@ extension Library {
         await lib.engine.records(kind: "item").filter { !$0.isStrayItem }.map(Item.init).sorted(by: Library.newestFirst)
     }
 }
+
+/// The relay's batched segment download (MASTER_PLAN P10, PROTOCOL.md §4 `segments/batch`).
+final class SegmentBatchTests: XCTestCase {
+    func testSplitsLengthsAndMissing() throws {
+        var d = Data()
+        func le32(_ v: UInt32) -> Data { Data([UInt8(v & 0xFF), UInt8(v >> 8 & 0xFF), UInt8(v >> 16 & 0xFF), UInt8(v >> 24 & 0xFF)]) }
+        d += le32(3) + Data("abc".utf8) + le32(0xFFFF_FFFF) + le32(0)
+        let parts = try RelayClient.splitBatch(d, count: 3)
+        XCTAssertEqual(parts, [Data("abc".utf8), nil, Data()])
+        XCTAssertThrowsError(try RelayClient.splitBatch(le32(10) + Data("short".utf8), count: 1))
+    }
+}

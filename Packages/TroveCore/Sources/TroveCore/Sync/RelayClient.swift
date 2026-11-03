@@ -220,6 +220,33 @@ public struct RelayClient: Sendable {
         try await raw("GET", vaultPath("segments/\(ref.device)/\(ref.first)/\(ref.last)"))
     }
 
+    /// Many segments in one request (PROTOCOL.md §4 `segments/batch`): one radio wake instead of one
+    /// per segment. nil for each one the relay didn't send (missing, or past its size cap).
+    /// Throws `TransportError.notFound` from a relay that doesn't have the endpoint.
+    public func getSegments(_ refs: [SegmentRef]) async throws -> [Data?] {
+        let body: [String: Any] = ["refs": refs.map { ["device": $0.device, "first": $0.first, "last": $0.last] }]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let out = try await raw("POST", vaultPath("segments/batch"), body: data, headers: ["Content-Type": "application/json"])
+        return try Self.splitBatch(out, count: refs.count)
+    }
+
+    /// Reads a batch: for each ref, a u32 little-endian length then the bytes, or 0xFFFFFFFF.
+    static func splitBatch(_ data: Data, count: Int) throws -> [Data?] {
+        let b = [UInt8](data)
+        var out: [Data?] = []
+        var o = 0
+        while out.count < count {
+            guard o + 4 <= b.count else { throw TransportError.invalidResponse }
+            let n = UInt32(b[o]) | UInt32(b[o + 1]) << 8 | UInt32(b[o + 2]) << 16 | UInt32(b[o + 3]) << 24
+            o += 4
+            if n == 0xFFFF_FFFF { out.append(nil); continue }
+            guard o + Int(n) <= b.count else { throw TransportError.invalidResponse }
+            out.append(Data(b[o..<(o + Int(n))]))
+            o += Int(n)
+        }
+        return out
+    }
+
     @discardableResult
     public func putSegment(_ ref: SegmentRef, data: Data) async throws -> Int {
         struct C: Decodable { var cursor: Int }
@@ -491,6 +518,33 @@ public final class RelayTransport: SyncTransport, CheckpointTransport, @unchecke
     public func pushCheckpoint(_ id: String, data: Data) async throws { try await client.putCheckpoint(id, data: data) }
 
     public func fetchSegment(_ ref: SegmentRef) async throws -> Data { try await client.getSegment(ref) }
+
+    /// Whether the relay has `segments/batch` (an older one answers 404 once; then one GET each).
+    private var batchMissing = false
+
+    public func fetchSegments(_ refs: [SegmentRef]) async throws -> [Data?] {
+        if !lock.withLock({ batchMissing }) {
+            do {
+                var out: [Data?] = []
+                for start in stride(from: 0, to: refs.count, by: Self.batchSize) {
+                    let chunk = Array(refs[start..<min(start + Self.batchSize, refs.count)])
+                    var got = try await client.getSegments(chunk)
+                    // Past the relay's size cap: those come one by one.
+                    for i in got.indices where got[i] == nil { got[i] = try? await client.getSegment(chunk[i]) }
+                    out += got
+                }
+                return out
+            } catch TransportError.notFound {
+                lock.withLock { batchMissing = true }
+            }
+        }
+        var out: [Data?] = []
+        for ref in refs { out.append(try? await client.getSegment(ref)) }
+        return out
+    }
+
+    static let batchSize = 100
+
     public func pushSegment(_ ref: SegmentRef, data: Data) async throws { try await client.putSegment(ref, data: data) }
     public func hasBlob(_ id: String) async throws -> Bool { false } // PUT is idempotent
     public func pushBlob(_ id: String, data: Data) async throws { try await client.putBlob(id, data: data) }

@@ -112,6 +112,31 @@ describe("journal segments", () => {
     const got = await call(`/v1/vaults/${v.vaultId}/segments/${v.deviceId}/1/5`, { headers: auth(v.deviceToken) });
     expect(new Uint8Array(await got.arrayBuffer())).toEqual(body);
   });
+
+  it("hands back many segments in one batch, with missing ones marked", async () => {
+    const v = await createVault();
+    const put = (first: number, last: number, data: string) =>
+      call(`/v1/vaults/${v.vaultId}/segments/${v.deviceId}/${first}/${last}`, { method: "PUT", headers: auth(v.deviceToken), body: enc.encode(data) });
+    await put(1, 2, "one");
+    await put(3, 3, "three!");
+    const res = await call(`/v1/vaults/${v.vaultId}/segments/batch`, {
+      method: "POST", headers: { ...auth(v.deviceToken), "content-type": "application/json" },
+      body: JSON.stringify({ refs: [{ device: v.deviceId, first: 3, last: 3 }, { device: v.deviceId, first: 9, last: 9 }, { device: v.deviceId, first: 1, last: 2 }] }),
+    });
+    expect(res.status).toBe(200);
+    const b = new Uint8Array(await res.arrayBuffer());
+    const dv = new DataView(b.buffer);
+    let o = 0;
+    const out: (string | null)[] = [];
+    while (o < b.length) {
+      const n = dv.getUint32(o, true); o += 4;
+      if (n === 0xffffffff) { out.push(null); continue; }
+      out.push(new TextDecoder().decode(b.slice(o, o + n))); o += n;
+    }
+    expect(out).toEqual(["three!", null, "one"]);
+    const bad = await call(`/v1/vaults/${v.vaultId}/segments/batch`, { method: "POST", headers: auth(v.deviceToken), body: "{}" });
+    expect(bad.status).toBe(400);
+  });
 });
 
 describe("blobs", () => {
