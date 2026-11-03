@@ -701,6 +701,37 @@ final class InkEditorModel {
         page = min(max(0, page), pages.count - 1)
         await reloadInk()
         loaded = true
+        // Opened from a search: the handwritten lines that match are marked, and the first shown.
+        if isSketch, let q = app.searchText.trimmingCharacters(in: .whitespaces).nilIfEmpty {
+            await showSearchMatches(q)
+        }
+    }
+
+    /// Marks handwritten lines (and text boxes) containing the search's words, by the line boxes
+    /// Vision kept, and goes to the first page with one (MASTER_PLAN G6 "jump to").
+    func showSearchMatches(_ query: String) async {
+        let words = Tokenizer.terms(query)
+        guard !words.isEmpty else { return }
+        let known = await HandwritingPages.shared.pages(of: target.itemId)
+        var rects: [String: [InkGeometry.Rect]] = [:]
+        var first: String?
+        for spec in pages {
+            if let page = known[spec.key], let boxes = page.lines {
+                let lines = page.text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                for (i, line) in lines.enumerated() where i < boxes.count && boxes[i].count == 4 {
+                    let terms = Set(Tokenizer.terms(line))
+                    if words.allSatisfy({ w in terms.contains { $0.hasPrefix(w) } }) {
+                        rects[spec.key, default: []].append(InkGeometry.Rect(x: boxes[i][0], y: boxes[i][1], width: boxes[i][2], height: boxes[i][3]))
+                    }
+                }
+            }
+            for box in content[spec.key]?.elements ?? [] where box.kind == .text {
+                let terms = Set(Tokenizer.terms(box.text))
+                if words.allSatisfy({ w in terms.contains { $0.hasPrefix(w) } }) { rects[spec.key, default: []].append(box.frame) }
+            }
+            if first == nil, rects[spec.key] != nil { first = spec.key }
+        }
+        if !rects.isEmpty { highlight(rects, goTo: first) }
     }
 
     private static func signature(_ item: Item) -> String {
@@ -2405,4 +2436,9 @@ enum InkBullets {
         }
         return (ns.replacingCharacters(in: NSRange(location: location, length: 0), with: "\n• "), location + 3)
     }
+}
+
+extension String {
+    /// nil for an empty string.
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
