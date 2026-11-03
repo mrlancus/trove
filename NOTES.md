@@ -39,7 +39,7 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 | Part | State | Tested |
 |---|---|---|
 | `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 172 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed), plus an end-to-end test against `wrangler dev` |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 233 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed; incl. Develop and trove-gen), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
@@ -54,8 +54,8 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 | Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version feab0b38, at 98a39e8, after master plan round 1: `segments/batch`, website batched sync) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
-private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. Ask the user which one to build
-before restyling `App/Sources/Views`. The web app currently uses a neutral style close to Midnight.
+private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. **Decided: A Glass** (MASTER_PLAN §13
+decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_AUDIT.md`. The web app currently uses a neutral style close to Midnight.
 
 ## The user's setup (important)
 - **No Apple Silicon Mac.** The user's Mac is Intel, and current Xcode needs M1 or later. So:
@@ -69,7 +69,40 @@ before restyling `App/Sources/Views`. The web app currently uses a neutral style
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
+## Latest round: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)
+The user: "follow it from the top … don't ask me for permission; log the decisions you take for me". On `main`
+from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" below.**
+- **Part 1 (done, stop point reached):** `docs/DEVELOP_PLAN.md`: what exists (every AI call site), the 12
+  positions, architecture (PROTOCOL §13 draft), roadmap, UX wireframes, decisions (logged above). Doc fixes
+  (ARCHITECTURE: SQLite local copy, record kinds, tool-based Ask; NOTES: relay model is Haiku). Found: the
+  prompt's "no prompt caching anywhere" is wrong (Ask and the notebook chat cache; the relay and
+  `AIProvider.complete` don't).
+- **Part 2 step 0 (done):** `TroveGen` (seeded big vaults, Zipf text; `writeFolderVault`), benchmarks on the
+  budget vault, app **Diagnostics** (hang watchdog, frames/hitches session, Screen signposts, time-to-content,
+  Settings → Battery → Lag and frames → Export), **test targets** `TroveTests` (Mac) and `TroveUITests`
+  (iPhone/iPad) run by job `app-tests` (`scripts/ci-app-tests.sh`; logs and screenshots on branch
+  `ci-logs-tests`), debug-only `-TroveTestVault small|tiny|full`. `docs/PERF_AUDIT.md` is current.
+- **Part 2 fixes (measured, Linux release, budget vault):** one notebook page's ink 113.0 → 0.5 ms (page
+  index, B2); search p90 102 → 65 ms (B3, still over the 5 ms budget); the editor decodes strokes off the
+  main thread (B4, implemented, needs device numbers); `inkByItem` kept strokes moved to other items (Swift
+  and JS fixed).
+- **Part 3 (stop point reached):** `docs/testing/` README, SMOKE (25 tests), critical/high tests for every
+  existing area, RESULTS log. Develop's and the catalogue's tests filed with the code.
+- **Develop's first slice (TroveCore, done):** `Develop/` records, `EdgeIndex`, `ConceptMatch`, `Mastery`,
+  `Practice`, `Difficulty`, `DevelopAI.route`, `Catalogue`, `PaperSplitter`, `AnkiExport`;
+  `catalogue/papers.json` (AQA 7408 2022–23, links checked live); JS `core/develop.js`; PROTOCOL §13;
+  `Fixtures/mastery-cases.json`. 233 TroveCore tests, 73 web unit tests pass on Linux.
+- **Known bugs:** website e2e `pdf.e2e.mjs` is flaky on CI (the Quote button not found within 30 s; it failed
+  on a NOTES-only commit too). Search misses its budget (B3).
+- **Next (in order):** (1) read `ci-logs-tests` (`git fetch origin ci-logs-tests`; `summary.txt`, `perf.json`,
+  `shots/`) and fix what fails; write `docs/UI_AUDIT.md` from the screenshots; (2) B3: search on integer doc
+  ids with top-k (PERF_AUDIT L1, Swift + `core/search.js` + `search-cases.json`); (3) Develop phase 2 in the
+  apps: Develop sidebar entry / iPhone Practise tab, paper download, split review, practise and self-mark,
+  concepts on items (DEVELOP_PLAN §E); (4) AI caching in `AIProvider.complete`, relay cache-read weighting
+  (L2); (5) the editor's visible-pages-first loading; (6) a CI link check for `catalogue/papers.json`;
+  (7) the restyle to A Glass with shared tokens (decision 16) after the UI audit.
+
+## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
 Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
 `workflow_dispatch` (branch builds never publish the `latest` release). Not yet run on a device.
 - **Speed and battery** (P1, P6, P8, P9): TroveCore has a **change feed** (`RecordStore.changes(since:)`,
@@ -1045,6 +1078,17 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
    - Notion and Readwise import UI (parsers exist in TroveCore)
 
 ## Manual steps for the user
+- **Develop, performance and testing (2026-11-03), waiting on you:**
+  1. Run `docs/testing/SMOKE.md` after the next install and add rows to `docs/testing/RESULTS.md` (or tell me the results).
+  2. Settings → Battery → Lag and frames: keep **Watch for lag** on for a day, run **Measure frames** while
+     scrolling, panning and writing, then **Export diagnostics** (or "Save a copy to the vault") and send it.
+     This gives the device numbers `docs/PERF_AUDIT.md` §2 marks pending, and your devices' OS versions.
+  3. On the Intel Mac, run the Terminal commands in PERF_AUDIT §6 while something lags; paste the output.
+  4. For Develop's AI marking check: mark 20–30 of your own attempts by hand, point by point (typed and
+     handwritten, easy and hard, right and wrong). They stay in your vault (not the repo).
+  5. Import a TSV from Trove into Anki Desktop and AnkiMobile once Develop's export is in the apps (TEST-CARD-010).
+  6. **Before any public launch:** legal advice on the paper catalogue, and ask the exam boards (AQA, Pearson,
+     OCR, WJEC/Eduqas, CCEA); BPhO and UKMT papers only as your own uploads (DEVELOP_PLAN Appendix E).
 - **The way back to before the Develop work** (2026-11-03): `main` as it was is saved on the branch
   `archive/main-before-develop` (b5c07b9). To go back: `git checkout -b old archive/main-before-develop`.
   Never delete or force-push it.
