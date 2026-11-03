@@ -217,3 +217,46 @@ public enum MarkdownSyntax {
         return ("\n" + next + (box ? "[ ] " : ""), false)
     }
 }
+
+// MARK: - Slash menu (MASTER_PLAN N3)
+
+extension MarkdownSyntax {
+    public struct SlashCommand: Equatable, Sendable, Identifiable {
+        public var id: String { title }
+        public var title: String
+        /// What replaces "/query"; `{date}` becomes today's date.
+        public var snippet: String
+    }
+
+    public static let slashCommands: [SlashCommand] = [
+        .init(title: "Heading", snippet: "## "),
+        .init(title: "Subheading", snippet: "### "),
+        .init(title: "Checklist", snippet: "- [ ] "),
+        .init(title: "Bullet list", snippet: "- "),
+        .init(title: "Numbered list", snippet: "1. "),
+        .init(title: "Quote", snippet: "> "),
+        .init(title: "Code block", snippet: "```\n\n```"),
+        .init(title: "Table", snippet: "| Column | Column |\n| --- | --- |\n|  |  |"),
+        .init(title: "Divider", snippet: "---\n"),
+        .init(title: "Highlight", snippet: "==text=="),
+        .init(title: "Date", snippet: "{date}"),
+        .init(title: "Link to a note", snippet: "[["),
+    ]
+
+    /// The "/query" typed at the start of the cursor's line, with where the "/" is.
+    public static func openSlash(in text: String, cursor: Int) -> (query: String, start: Int)? {
+        let u = Array(text.utf16)
+        guard cursor <= u.count else { return nil }
+        var lineStart = cursor
+        while lineStart > 0, u[lineStart - 1] != 10 { lineStart -= 1 }
+        guard lineStart < cursor, u[lineStart] == 47 else { return nil }
+        let q = String(utf16CodeUnits: Array(u[(lineStart + 1)..<cursor]), count: cursor - lineStart - 1)
+        guard q.count <= 20, !q.contains(" ") || q.split(separator: " ").count <= 2 else { return nil }
+        return (q, lineStart)
+    }
+
+    public static func slashMatches(_ query: String) -> [SlashCommand] {
+        let q = query.lowercased()
+        return q.isEmpty ? slashCommands : slashCommands.filter { $0.title.lowercased().contains(q) }
+    }
+}

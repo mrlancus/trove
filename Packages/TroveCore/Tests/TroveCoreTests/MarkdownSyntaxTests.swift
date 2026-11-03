@@ -57,3 +57,12 @@ struct MarkdownSyntaxTests {
         #expect(MarkdownSyntax.continuation(of: "plain") == nil)
     }
 }
+
+struct SlashMenuTests {
+    @Test func slashAtLineStart() {
+        #expect(MarkdownSyntax.openSlash(in: "hello\n/che", cursor: 10)?.query == "che")
+        #expect(MarkdownSyntax.openSlash(in: "a/b", cursor: 3) == nil)
+        #expect(MarkdownSyntax.slashMatches("check").map(\.title) == ["Checklist"])
+        #expect(MarkdownSyntax.slashMatches("").count == MarkdownSyntax.slashCommands.count)
+    }
+}

@@ -18,12 +18,23 @@ struct LiveMarkdownEditor: View {
     /// Titles offered after `[[`.
     var titles: [String] = []
     @State private var query: String?
+    @State private var slash: String?
     @State private var controller = LiveMarkdownController()
 
     var body: some View {
         VStack(spacing: 6) {
-            MarkdownTextView(text: $text, query: $query, controller: controller)
+            MarkdownTextView(text: $text, query: $query, slash: $slash, controller: controller)
                 .frame(minHeight: 260)
+            if let slash, !MarkdownSyntax.slashMatches(slash).isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(MarkdownSyntax.slashMatches(slash)) { cmd in
+                            Button(cmd.title) { controller.applySlash(cmd.snippet) }
+                                .buttonStyle(.bordered).controlSize(.small)
+                        }
+                    }
+                }
+            }
             if let query, !suggestions(for: query).isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -66,6 +77,9 @@ final class LiveMarkdownController {
     weak var coordinator: MarkdownTextView.Coordinator?
     func wrap(_ prefix: String, _ suffix: String, atLineStart: Bool) { coordinator?.wrap(prefix, suffix, atLineStart: atLineStart) }
     func completeWikilink(_ title: String) { coordinator?.completeWikilink(title) }
+    func applySlash(_ snippet: String) {
+        coordinator?.applySlash(snippet.replacingOccurrences(of: "{date}", with: Date().formatted(date: .long, time: .omitted)))
+    }
 }
 
 // MARK: - Styling (both platforms)
@@ -212,6 +226,7 @@ enum MarkdownStyler {
 struct MarkdownTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var query: String?
+    @Binding var slash: String?
     let controller: LiveMarkdownController
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -283,6 +298,8 @@ struct MarkdownTextView: UIViewRepresentable {
             let cursor = textView.selectedRange.location
             let q = MarkdownSyntax.openWikilink(in: textView.text, cursor: cursor)?.query
             if parent.query != q { parent.query = q }
+            let sl = MarkdownSyntax.openSlash(in: textView.text, cursor: cursor)?.query
+            if parent.slash != sl { parent.slash = sl }
         }
 
         private func replace(_ range: NSRange, with string: String) {
@@ -304,6 +321,12 @@ struct MarkdownTextView: UIViewRepresentable {
                 replace(sel, with: prefix + selected + suffix)
                 if selected.isEmpty { view.selectedRange = NSRange(location: sel.location + (prefix as NSString).length, length: 0) }
             }
+        }
+
+        func applySlash(_ snippet: String) {
+            guard let view, let open = MarkdownSyntax.openSlash(in: view.text, cursor: view.selectedRange.location) else { return }
+            replace(NSRange(location: open.start, length: view.selectedRange.location - open.start), with: snippet)
+            parent.slash = nil
         }
 
         func completeWikilink(_ title: String) {
@@ -339,6 +362,7 @@ struct MarkdownTextView: UIViewRepresentable {
 struct MarkdownTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var query: String?
+    @Binding var slash: String?
     let controller: LiveMarkdownController
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -414,6 +438,8 @@ struct MarkdownTextView: NSViewRepresentable {
             guard let view else { return }
             let q = MarkdownSyntax.openWikilink(in: view.string, cursor: view.selectedRange().location)?.query
             if parent.query != q { parent.query = q }
+            let sl = MarkdownSyntax.openSlash(in: view.string, cursor: view.selectedRange().location)?.query
+            if parent.slash != sl { parent.slash = sl }
         }
 
         private func replace(_ range: NSRange, with string: String) {
@@ -436,6 +462,12 @@ struct MarkdownTextView: NSViewRepresentable {
                 replace(sel, with: prefix + selected + suffix)
                 if selected.isEmpty { view.setSelectedRange(NSRange(location: sel.location + (prefix as NSString).length, length: 0)) }
             }
+        }
+
+        func applySlash(_ snippet: String) {
+            guard let view, let open = MarkdownSyntax.openSlash(in: view.string, cursor: view.selectedRange().location) else { return }
+            replace(NSRange(location: open.start, length: view.selectedRange().location - open.start), with: snippet)
+            parent.slash = nil
         }
 
         func completeWikilink(_ title: String) {
