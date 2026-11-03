@@ -62,6 +62,27 @@ public enum TroveGen {
                         "invoice", "recipe", "garden", "ticket", "train", "meeting", "notes", "idea", "sketch", "chapter",
                         "momentum", "energy", "vector", "force", "orbit", "photon", "matrix", "theorem", "essay", "poem"]
 
+    /// Text follows Zipf's law like real writing: a 20,000-word vocabulary (the real words above are
+    /// the commonest, the rest made-up words from syllables) where the word of rank r turns up in
+    /// proportion to 1/(r+1)^1.07. So a common word matches many notes and most words match few.
+    static let vocabulary: [String] = {
+        let onsets = ["b", "c", "d", "f", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "v", "w", "z", "br", "st", "tr", "pl", "gr"]
+        let vowels = ["a", "e", "i", "o", "u", "ai", "ou", "ea"]
+        var out = words
+        var seen = Set(words)
+        var r = Seeded(2024)
+        while out.count < 20_000 {
+            let n = 2 + r.int(2)
+            let w = (0..<n).map { _ in onsets[r.int(onsets.count)] + vowels[r.int(vowels.count)] }.joined() + ["", "n", "s", "r", "l"][r.int(5)]
+            if seen.insert(w).inserted { out.append(w) }
+        }
+        return out
+    }()
+    static let zipfCumulative: [Double] = {
+        var total = 0.0
+        return vocabulary.indices.map { i in total += 1 / pow(Double(i + 1), 1.07); return total }
+    }()
+
     /// SplitMix64: small, fast, the same on every platform.
     public struct Seeded: Sendable {
         public var state: UInt64
@@ -75,7 +96,13 @@ public enum TroveGen {
         }
         public mutating func unit() -> Double { Double(next() >> 11) / Double(UInt64(1) << 53) }
         public mutating func int(_ n: Int) -> Int { Int(next() % UInt64(max(1, n))) }
-        mutating func word() -> String { TroveGen.words[int(TroveGen.words.count)] }
+        mutating func word() -> String {
+            let c = TroveGen.zipfCumulative
+            let target = unit() * c[c.count - 1]
+            var lo = 0, hi = c.count - 1
+            while lo < hi { let mid = (lo + hi) / 2; if c[mid] < target { lo = mid + 1 } else { hi = mid } }
+            return TroveGen.vocabulary[lo]
+        }
         mutating func words(_ n: Int) -> String { (0..<n).map { _ in word() }.joined(separator: " ") }
     }
 

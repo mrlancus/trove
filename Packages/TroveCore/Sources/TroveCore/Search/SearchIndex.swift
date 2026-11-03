@@ -76,7 +76,8 @@ public struct SearchIndex: Sendable {
     public func searchWithTotal(_ query: SearchQuery, semantic: [String: Double] = [:], limit: Int = 100, now: Date = Date()) -> (hits: [Hit], total: Int) {
         let plan = self.plan(query)
         let folders = self.folders, inked = self.inked, items = self.items
-        let passes: (String, TermIndex.Doc) -> Bool = { id, doc in
+        let filtered = query.hasFilters || !plan.exclude.isEmpty || !plan.excludePhrases.isEmpty
+        let passes: (String, TermIndex.Doc) -> Bool = !filtered ? { id, _ in items[id] != nil } : { id, doc in
             for t in plan.exclude where doc.terms[t] != nil { return false }
             guard let item = items[id], query.matches(item, folders: folders, inked: inked) else { return false }
             for p in plan.excludePhrases where Self.hasPhrase(item, p) { return false }
@@ -302,6 +303,12 @@ public struct SearchQuery: Sendable, Equatable {
     static let hasNames: Set<String> = ["ink", "audio", "file", "link"]
 
     /// Whether it asks for words (as opposed to only filters).
+    /// Any filter besides words (kinds, tags, dates…): without one, every word match passes.
+    public var hasFilters: Bool {
+        !kinds.isEmpty || !categories.isEmpty || !tags.isEmpty || !sources.isEmpty || collection != nil || space != nil
+            || !has.isEmpty || pinnedOnly || unreadOnly || after != nil || before != nil
+    }
+
     public var hasWords: Bool { !Tokenizer.terms(text).isEmpty || !phrases.isEmpty || !title.isEmpty }
 
     struct Token { var neg: Bool; var phrase: String?; var raw: String }

@@ -43,6 +43,22 @@ struct Benchmarks {
             i.prepare()
             index = i
         }
+        // Each keystroke on its own (typing common, mid and rare words), for p50/p90 against the 5 ms budget.
+        var perKey: [Double] = []
+        let typed = ["plum jam", "momentum", "photon matrix", "lecture notes", "invoice", "orbit", "zz",
+                     TroveGen.vocabulary[300], TroveGen.vocabulary[3_000], TroveGen.vocabulary[15_000]]
+        let clock = ContinuousClock()
+        for phrase in typed {
+            for end in phrase.indices.dropFirst() + [phrase.endIndex] {
+                let q = SearchQuery.parse(String(phrase[..<end]))
+                let d = clock.measure { _ = index.search(q) }
+                perKey.append(Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15)
+            }
+        }
+        perKey.sort()
+        results["searchKeyP50"] = perKey[perKey.count / 2]
+        results["searchKeyP90"] = perKey[Int(Double(perKey.count) * 0.9)]
+        results["searchKeyMax"] = perKey.last ?? 0
         var hits = 0
         results["searchKeystrokes"] = Self.time(5) {
             for query in ["p", "pl", "plu", "plum", "plum j", "plum ja", "plum jam"] { hits += index.search(SearchQuery.parse(query)).count }

@@ -156,18 +156,35 @@ struct TermIndex: Sendable {
     /// The terms of `doc` a matcher matched, with their weight (1 exact, 0.7 prefix, 0.5 typo), in order.
     func matched(_ doc: Doc, _ m: Matcher) -> [(String, Double)] {
         if m.exact, doc.terms[m.word] != nil { return [(m.word, 1)] }
-        var out: [(String, Double)] = []
-        for t in m.prefix where doc.terms[t] != nil { out.append((t, 0.7)) }
+        var out = Self.common(m.prefix, m.prefixSet, doc, weight: 0.7)
         if !out.isEmpty { return out }
-        for t in m.near where doc.terms[t] != nil { out.append((t, 0.5)) }
+        out = Self.common(m.near, m.nearSet, doc, weight: 0.5)
         return out
+    }
+
+    /// The doc's terms that are in `list` (sorted), in `list`'s order. Looks up from whichever side
+    /// is smaller: a two-letter prefix stands for 64 words, a short note has a few dozen
+    /// (docs/PERF_AUDIT.md B3). Same terms, same order, so scores are summed identically.
+    static func common(_ list: [String], _ set: Set<String>, _ doc: Doc, weight: Double) -> [(String, Double)] {
+        if list.count <= doc.terms.count {
+            var out: [(String, Double)] = []
+            for t in list where doc.terms[t] != nil { out.append((t, weight)) }
+            return out
+        }
+        var found: [String] = []
+        for t in doc.terms.keys where set.contains(t) { found.append(t) }
+        return found.sorted().map { ($0, weight) }
     }
 
     func has(_ doc: Doc, _ m: Matcher) -> Bool {
         if m.exact, doc.terms[m.word] != nil { return true }
-        for t in m.prefix where doc.terms[t] != nil { return true }
-        for t in m.near where doc.terms[t] != nil { return true }
-        return false
+        return Self.any(m.prefix, m.prefixSet, doc) || Self.any(m.near, m.nearSet, doc)
+    }
+
+    static func any(_ list: [String], _ set: Set<String>, _ doc: Doc) -> Bool {
+        if list.isEmpty { return false }
+        if list.count <= doc.terms.count { return list.contains { doc.terms[$0] != nil } }
+        return doc.terms.keys.contains { set.contains($0) }
     }
 
     func inTitle(_ doc: Doc, _ m: Matcher) -> Bool {
@@ -205,8 +222,9 @@ struct TermIndex: Sendable {
         }
         guard ms.allSatisfy({ $0.matcher.exact || !$0.matcher.prefix.isEmpty || !$0.matcher.near.isEmpty }) else { return ([], 0) }
         // The rarest word picks the candidates.
-        var lead = ms[0].matcher
-        for x in ms where x.matcher.estimate < lead.estimate { lead = x.matcher }
+        var leadAt = 0
+        for (i, x) in ms.enumerated() where x.matcher.estimate < ms[leadAt].matcher.estimate { leadAt = i }
+        let lead = ms[leadAt].matcher
         var ids = Set<String>()
         if lead.exact { ids.formUnion(postings[lead.word] ?? []) }
         for t in lead.prefix { ids.formUnion(postings[t] ?? []) }
@@ -221,8 +239,9 @@ struct TermIndex: Sendable {
         }
         candidates: for id in ids {
             guard let doc = docs[id] else { continue }
-            for x in ms {
-                if !has(doc, x.matcher) { continue candidates }
+            for (i, x) in ms.enumerated() {
+                // Every candidate came from the lead's postings, so it has the lead word.
+                if i != leadAt, !has(doc, x.matcher) { continue candidates }
                 if x.title, !inTitle(doc, x.matcher) { continue candidates }
             }
             guard passes(id, doc) else { continue }
