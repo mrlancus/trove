@@ -46,7 +46,12 @@ force-push `main`. They are the way back if this work goes wrong.
   I've already made. Where this prompt conflicts with one of them, choose, and log the choice as
   above (the known conflicts are listed under "Facts" below).
 - **Be critical.** Don't agree with an idea just because I wrote it.
-- **Nothing that exists today is lost.** No feature may be removed to make room for something new.
+- **Nothing that exists today is lost.** No feature may be removed to make room for something new,
+  and existing vaults and their data must keep working.
+- **Everything else in the current version is open to change.** Nothing is concrete: the GUI, the
+  layout, navigation, screens, flows, names, settings and how any feature works can all be redesigned
+  if that makes Trove better. Keep what each feature does, not necessarily how it looks or where it
+  lives. Don't treat today's design as a constraint on Develop or on Part 2's UI work.
 - **Never claim anything works, or got faster, without evidence.** Use the evidence words below.
 - **Research with the web, not memory.** For provider docs, Anki formats and exam-board terms, cite
   the URL and the date you read it.
@@ -264,10 +269,48 @@ assessments are flagged for my review and aren't counted as reliable evidence.
 Support exact qualifications, boards and versions, for example AQA versus Edexcel A-level Physics,
 OCR Chemistry, university modules and BPhO. Ground everything in sources ranked in this order:
 official specification, past papers and mark schemes, examiner reports, trusted resources, and AI
-supplements. **AI never invents syllabus requirements.** Content is tagged as required,
+supplements. **AI never invents syllabus requirements.** Specifications, past papers, mark schemes
+and examiner reports reach the device through the paper catalogue below; Trove never hosts them. Content is tagged as required,
 prerequisite, extension, outside the specification, or uncertain. Specifications reference shared
 knowledge objects rather than copying them, and they're versioned so that old assessments stay
 valid.
+
+### Where practice problems come from (decided)
+
+Trove may become public, so it must never host or hand out anyone else's papers. Crediting the
+source isn't enough: exam boards and sites like Physics & Maths Tutor (PMT) forbid redistribution,
+and PMT's terms also forbid storing its files in another "electronic retrieval system". Saying where
+a question came from is still required (provenance), but it's not a licence. Two sources, both
+built:
+
+1. **The paper catalogue (official papers, one tap).** Trove ships a small catalogue of **facts and
+   links only**: board, qualification, specification code and version, series and year, paper,
+   document type (question paper, mark scheme, examiner report, specification, data or formula
+   sheet), and the URL of the PDF **on the exam board's own public website**. No PDFs and no question
+   text are in the catalogue, the app bundle, the relay or R2.
+   - I pick a specification (for example AQA A-level Physics 7408) and Trove downloads its papers
+     straight from the board onto my device, in the background, on Wi-Fi, cancellable, with progress.
+     That's typically 20–40 PDFs and tens of MB. I don't hunt for or upload anything.
+   - On the device, Trove splits each paper into questions (PDF text, with Vision for scans), matches
+     each question to its mark-scheme entry, tags concepts and skills, and saves it all as items in
+     my encrypted vault, with the source URL, board and series as provenance.
+   - Official board sites only. **Never PMT or other third-party mirrors.**
+   - Links break and boards withdraw papers. A missing paper shows as unavailable, never an error
+     that blocks anything. The catalogue is a versioned data file that can update without an app
+     release, and a CI job checks every link and reports the broken ones.
+   - Research each board's terms (AQA, OCR, Edexcel, WJEC/Eduqas, CCEA, plus BPhO and UKMT for
+     competitions) and record what each allows. Leave out any source whose terms forbid this. Before
+     a public launch I'll get legal advice and ask the boards; note that in NOTES.md.
+2. **My own uploads.** Textbook questions (photos or scans), worksheets, PDFs such as a Physics
+   Challenge or BPhO past paper, or anything else I have. They go in through the normal import (share
+   sheet, drag and drop, the camera, Files), get the same on-device splitting, matching and tagging,
+   and are stored like every other item: encrypted, in my vault, synced through iCloud Drive and the
+   relay's R2 storage, so they're on all my devices. They're mine, so nothing about them is shared.
+
+**Not now: AI-generated problems.** Today's affordable models (Haiku on the relay) aren't good enough
+at writing correct exam-style problems, and doing it well costs too many tokens. Don't build it.
+Leave the problem record able to say where a problem came from, so generated problems could be added
+later as their own clearly labelled source.
 
 ### Preparation campaigns
 
@@ -297,10 +340,11 @@ projects.
    wrong. Say whether mastery is **stored** or **derived** from evidence records on each device (a
    derived value can't conflict in sync). Recommend one, explain the trade-offs, and give **three
    worked numeric examples** (inputs → exact outputs) that become Part 3's test values.
-4. **Where practice problems come from.** The worked example needs problems linked to skills. List
-   the options (my textbook and photos of it, past papers I import, problems I write, AI-generated
-   problems) and, for each, who checks the answer is right, what it costs, and what it means for
-   copyright. AI-written problems with wrong answers are worse than none.
+4. **Problems from papers and uploads.** The sources are decided (above). Say how a paper is split
+   into questions and matched to its mark scheme reliably on the device, what happens with diagrams,
+   multi-part questions and scanned papers, how difficulty is estimated (marks, position in the
+   paper, my results), and how I correct a bad split. Design the catalogue's data format and where it
+   lives.
 5. **AI marking reliability.** How do we measure it? For example, use a small set of my own attempts
    marked by hand as a regression eval. What happens when the AI disagrees with a mark scheme? Can
    handwritten working be assessed reliably from Vision output, or does it need page pictures, and
@@ -309,10 +353,11 @@ projects.
    one campaign plan and one concept-linking pass on a photo, for each tier. Then estimate a normal
    week of revision and compare it with the relay's default allowance (1M tokens a month) and with a
    bring-your-own-key bill. Say what runs on the device instead.
-7. **Curriculum content and copyright.** Exam boards' specifications, past papers, mark schemes and
-   examiner reports are copyrighted. Can Trove ship any of it, or do I import my own copies? What
-   does that mean for "official" data? Research the actual terms of AQA, OCR, Edexcel, WJEC/Eduqas
-   and BPhO, and quote them; don't assume.
+7. **Curriculum content and copyright.** Trove ships links, never copies (above). Research the
+   actual terms of AQA, OCR, Edexcel, WJEC/Eduqas, CCEA, BPhO and UKMT, quote them with the URL and
+   date, and say which ones the catalogue may include. Also say whether a specification's list of
+   topics can be shipped as facts (a topic list rather than the document) or must come from the
+   downloaded specification on each device.
 8. **Anki feasibility.** Cover the `.apkg` and `.colpkg` formats (SQLite in a zip, schema versions,
    media), stable GUIDs so that re-export updates cards instead of duplicating them, Anki's built-in
    FSRS and review log, and whether review history can come back into Trove. Say how this sits with
@@ -358,13 +403,13 @@ diagrams. Each section ends with "Decisions taken for you", or with nothing if t
   school. Say which parts of the slice can be proved on Linux and CI, and which need my devices.
 - **E. UX**: how Develop actually feels on iPhone, iPad (with Pencil) and Mac. Use a few key flows
   as text wireframes: what's on screen, what's one tap away, and what's hidden. Answer "what should I
-  do next?" in one place. No dashboards of statistics, and no managing the graph by hand. Use the
-  existing components in `App/Sources/Views` (`Style.swift`, `Glass`). Keep the wireframes
-  independent of the visual direction.
+  do next?" in one place. No dashboards of statistics, and no managing the graph by hand. Today's
+  screens and components (`App/Sources/Views`) are a starting point, not a constraint: redesign them
+  where Develop needs it. Keep the wireframes independent of the visual direction.
 - **F. Decisions taken for you**: one consolidated, numbered list with what you chose for each, the
   alternatives, and what it would take to change it later. You build on these choices straight away.
-  Include at least: which A-level Physics specification to use for the slice; where practice
-  problems come from; how I get specifications and past papers into Trove; whether Develop data
+  Include at least: which A-level Physics specification to use for the slice; which boards the
+  paper catalogue starts with; whether Develop data
   syncs to the website; AI budget defaults; on-device versus cloud marking (decision 9); and whether
   XP exists at all.
 
