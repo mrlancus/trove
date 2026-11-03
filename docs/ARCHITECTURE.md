@@ -56,7 +56,10 @@
 | Concern | File |
 |---|---|
 | Relay: Claude enrich/ask/action (text and page pictures), monthly token allowance per vault, `ai/status` | `server/src/ai.ts`, `vault.ts` (`aiStatus`), tests `server/test/ai.test.ts` |
-| Ask Trove retrieval (local search → best ~20 snippets) | `web/public/core/ask.js` |
+| Ask Trove retrieval on the website (local search → best ~20 snippets) | `web/public/core/ask.js` |
+| Ask in the apps: tools over the whole library (index, search, browse, read, view pages, clipboard), prompt caching | `Packages/TroveCore/Sources/TroveCore/Enrich/AIResearch.swift` |
+| Ask this notebook (rules, context, memory, diagrams; cached notebook) | `Packages/TroveCore/Sources/TroveCore/Enrich/StudyChat.swift`, `App/Sources/Drawing/StudyPanel.swift` |
+| Metering every request (`aiusage` records), keywords from your AI | `Enrich/AIUsage.swift`, `Enrich/AIKeywords.swift`; window `App/Sources/Views/AIActivityView.swift` |
 | Weekly digest (id per ISO week), on this day, possible duplicates (port: `Digest.swift`, `Library+Digest.swift`) | `web/public/core/digest.js` (`Fixtures/digest-cases.json`, `web/test/make-digest-fixture.mjs`) |
 | Suggest links (no AI) | `web/public/core/suggest.js` |
 | Notes: placeholders, daily note, templates, checklists (PROTOCOL.md §12; port: `Model/Notes.swift`, `Library+Notes.swift`) | `web/public/core/notes.js` (`Fixtures/notes-cases.json`, `web/test/make-notes-fixture.mjs`) |
@@ -77,7 +80,10 @@
 | `trove-mcp`: MCP over stdio, joins as an `agent` device | `mcp/bin/trove-mcp.js`, `mcp/src/server.js`, `mcp/src/store.js` |
 
 ## Data model
-- Everything is a **record** (`kind`: `item` or `collection`), materialised from **ops** (PROTOCOL.md §3).
+- Everything is a **record**, materialised from **ops** (PROTOCOL.md §3). Kinds in use: `item`,
+  `collection`, `folder`, `clip`, `stroke`, `element`, `setting`, `card`, `aiChat`, `aiusage` (and the
+  Develop kinds in PROTOCOL.md §13). A `set` op carries only the fields it changes, so clients keep
+  fields and kinds they don't know.
 - Plain fields are last-writer-wins per field, ordered by a hybrid logical clock. Note bodies are a
   text field merged with diff3. When an edit can't be merged, it is kept as a conflict copy, which the
   app shows as "Needs Attention", so nothing is ever silently lost.
@@ -102,8 +108,9 @@
   test fails.
 - Attachments are content-addressed (`HMAC(blobIdKey, bytes)`) and encrypted. They are cached locally
   and uploaded before the records that point at them.
-- `SyncEngine.Snapshot` (local JSON) keeps every op plus unpushed work, so the app opens offline.
-  *Later:* move to SQLite once vaults get big.
+- The local copy is SQLite (`Sync/LocalDatabase.swift`; CSQLite on Linux): ops the checkpoint doesn't
+  cover, applied segment keys and the small engine state, written as deltas (`SyncEngine.takeSaveDelta`),
+  so the app opens offline.
 
 ## Keys
 - Vault key (symmetric) plus an X25519 keypair live in the main app's Keychain only.

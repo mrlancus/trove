@@ -1087,6 +1087,6 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
 - **Name:** working name "Trove". Ask the user for the final name and suggest 5.
 - **Storage:** iCloud Drive vault with per-device journals is the source of truth. The relay is an optional add-on. CloudKit can come later if the user pays for the developer account.
 - **Mac app:** not sandboxed (personal use: iCloud Drive path, AppleScript, Obsidian folder). Extensions are sandboxed.
-- **Relay AI model:** `CLAUDE_MODEL` defaults to `claude-opus-5-5`. The user wants costs at pennies, so suggest `claude-haiku-5-5` when deploying.
+- **Relay AI model:** `CLAUDE_MODEL` defaults to `claude-haiku-5-5` (`server/src/ai.ts` `DEFAULT_MODEL`); the user wants costs at pennies.
 - **Web app keys:** the web app stores derived keys in the browser. That's the one exception to "secrets only in the Keychain". If the user would rather not, remove the `assets` block from `server/wrangler.jsonc`.
 - **Bundle ids:** `com.mrlancus.trove(.share/.widgets/.safari)`. App Group: `group.com.mrlancus.trove`.
