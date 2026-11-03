@@ -371,6 +371,10 @@ final class InkEditorModel {
     var darkPage: Bool { didSet { UserDefaults.standard.set(darkPage, forKey: "ink.darkPage") } }
     /// Screen points per page point, as the canvas shows it (1 = 100 %).
     var zoom = 1.0
+    /// Your own 100 % (plan T5), on this device.
+    var zoomBase = ZoomBase(base: UserDefaults.standard.object(forKey: "zoom.base") as? Double ?? 1) {
+        didSet { UserDefaults.standard.set(zoomBase.base, forKey: "zoom.base") }
+    }
     var zoomRequest: InkZoomRequest?
     /// Where Apple Pencil's squeeze opened the tool palette, in the canvas's on-screen coordinates.
     var palette: CGPoint?
