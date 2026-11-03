@@ -80,7 +80,12 @@ final class ClipboardPaletteController {
         state.tag = nil
         state.newTag = nil
         state.focusRequest += 1
-        state.selection = state.entries(store, thisDevice: thisDevice()).first?.id
+        // The predicted next paste (MASTER_PLAN C3): what you usually paste into the app in front.
+        let entries = state.entries(store, thisDevice: thisDevice())
+        targetApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let kinds = entries.prefix(10).map { $0.clip?.kind ?? .text }
+        let pick = targetApp.map { Self.habits.suggestion(for: $0, kinds: kinds) } ?? 0
+        state.selection = entries.indices.contains(pick) ? entries[pick].id : entries.first?.id
         // Centre on the screen with the mouse, a little above the middle (like Spotlight).
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
@@ -236,7 +241,17 @@ final class ClipboardPaletteController {
 
     // MARK: Pasting
 
+    /// The app the palette opened over (where the paste goes).
+    private var targetApp: String?
+
+    /// Kinds of clips pasted into each app, on this device.
+    static var habits: PasteHabits {
+        get { (UserDefaults.standard.data(forKey: "clipboard.habits")).flatMap { try? JSONDecoder().decode(PasteHabits.self, from: $0) } ?? PasteHabits() }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: "clipboard.habits") }
+    }
+
     private func paste(_ entry: ClipEntry, transform: ClipTransform?, copyOnly: Bool = false) {
+        if !copyOnly, let app = targetApp, let clip = entry.clip { Self.habits.notePaste(kind: clip.kind, app: app) }
         Task {
             switch entry {
             case .clip(let clip): await store.copy(clip, transform: transform, use: copyOnly)
