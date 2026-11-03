@@ -21,6 +21,7 @@ struct TroveApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .troveAppearance()
                 .onOpenURL { handle($0) }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { model.selectedItemID = id }
@@ -59,6 +60,7 @@ struct TroveApp: App {
             if let target {
                 InkEditorView(target: target, app: model)
                     .environment(model)
+                    .troveAppearance()
                     .navigationTitle(target.title)
             }
         }
@@ -69,6 +71,7 @@ struct TroveApp: App {
             if let target {
                 FileViewer(target: target)
                     .environment(model)
+                    .troveAppearance()
                     .navigationTitle(target.title)
             }
         }
@@ -98,7 +101,7 @@ struct TroveApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView().environment(model)
+            SettingsView().environment(model).troveAppearance()
         }
         #endif
     }

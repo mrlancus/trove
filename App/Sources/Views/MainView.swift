@@ -465,6 +465,7 @@ struct SidebarView: View {
 enum LibraryLayout: String { case grid, list }
 
 struct LibraryView: View {
+    @AppStorage(CardDensity.key) private var density = CardDensity.comfortable.rawValue
     @Environment(AppModel.self) private var model
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -551,7 +552,7 @@ struct LibraryView: View {
             if items.isEmpty && model.clipResults.isEmpty {
                 emptyState.padding(.top, 80)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: 14)], spacing: 14) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: (CardDensity(rawValue: density) ?? .comfortable).minimumWidth, maximum: 340), spacing: 14)], spacing: 14) {
                     ForEach(items) { item in
                         Button { tap(item, in: items) } label: { ItemCard(item: item) }
                             .buttonStyle(.plain)

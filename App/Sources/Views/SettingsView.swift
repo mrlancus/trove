@@ -11,7 +11,7 @@ struct SettingsView: View {
         #if os(macOS)
         // A real Settings window with tabs, so it never outgrows the main window.
         TabView {
-            Form { VaultSection(); UpdatesSection(); AboutSection() }.formStyle(.grouped)
+            Form { VaultSection(); AppearanceSection(); UpdatesSection(); AboutSection() }.formStyle(.grouped)
                 .tabItem { Label("General", systemImage: "gearshape") }
             Form { WebSection(); DevicesSection(); RelaySection() }.formStyle(.grouped)
                 .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
@@ -38,6 +38,7 @@ private struct SettingsList: View {
     var body: some View {
         Form {
             VaultSection()
+            AppearanceSection()
             WebSection()
             DevicesSection()
             RelaySection()

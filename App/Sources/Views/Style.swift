@@ -90,18 +90,21 @@ enum ItemStyle {
     }
 }
 
-/// Liquid Glass on OS 26+, a material fallback before that.
+/// Liquid Glass on OS 26+ when Settings → Appearance allows it; otherwise a solid panel
+/// (Standard) or, before OS 26, the system material.
 struct Glass: ViewModifier {
     var cornerRadius: CGFloat = 18
     var interactive = false
+    @Environment(\.usesGlass) private var usesGlass
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
+        if #available(iOS 26.0, macOS 26.0, *), usesGlass {
             content.glassEffect(interactive ? .regular.interactive() : .regular, in: .rect(cornerRadius: cornerRadius))
         } else {
             content
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.white.opacity(0.08)))
+                .background(.background.secondary, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
         }
     }
 }
