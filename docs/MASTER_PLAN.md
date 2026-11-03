@@ -1049,6 +1049,17 @@ note and audio) for G13 and the drawing gaps.
 
 ## 14. Suggested order
 
+**Status (2026-11-03, branch `claude/trove-research-improvements-dwcw63`)**: built and unit-tested:
+P1 (change feed: search index and item list), P6, P7 (disk thumbnails), P8, P9, P10 (batched
+segments; needs a relay deploy), P11 (folder listing cache); G1 (covers), G2 (page names, outline),
+G3 (planners), G4 (audio synced to ink, transcripts), G5 (add/remove space), G6 (search jumps to the
+handwritten line; no word boxes or spellcheck yet), G7 (Math Assist), G8 (study, FSRS), G10
+(presentation), G13 (GoodNotes export, unverified with GoodNotes), G14 (notebook chat, memory,
+diagrams); N1 (live editor, first version), N8 (reminders), N11 (Recently Deleted); O1 (Open Quickly),
+O4 (Link it); C3, C5, C6; X1/X3 (controls, App Shortcuts); D1/D1b (appearance). Still to do: G9 zoom
+window, G11 quadtree, G12, P2–P5, P12–P18, N2–N7, N9–N10 in notes, N12, O2–O3, O5–O10, C1–C2, C4,
+C7–C12, X2, X4–X7, A1–A6, S1–S8, I1–I5, D2–D9, Q1–Q6.
+
 GoodNotes first (decided 2026-11-03): "it really needs to be good enough to replace GoodNotes soon".
 
 | Round | What | Why then |
