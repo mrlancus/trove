@@ -204,6 +204,42 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   the iPhone top bar (U4), checking iPhone landscape (U7), search's remaining 5 ms (MaxScore bound).
 - **Deployed** 2026-11-04 (version dfb1e28e): the relay metering change and the website PDF fix.
 
+## Round before: Sketch 2 (2026-11-03, merged into main 2026-11-04) (user: "everything is so cluttered in the top … the zoom pill hidden … set a new 100% … NEVER see lag … AI writing light blue, looks like handwriting, rub it out normally … Ask box you can move and resize … the AI can't see handwriting … a live outline where the AI is looking … select an area and size for what it makes … handwriting with my pens and colours … new sketch asks for page settings": built on branch `claude/trove-research-improvements-dwcw63` and left unmerged by mistake; replayed onto main 2026-11-04)
+
+Plan: `docs/plans/sketch-2-plan.md` (brief `sketch-2-prompt.md`, review `sketch-2-review.md`). Built:
+- **Lag (S1–S3).**
+  - **Measuring it:** Settings → Diagnostics shows slow frames for the last pan and pinch. It can also make a 30-page stress-test notebook (`InkStress`).
+  - **iPad:** paper, PDF and picture pages, pictures, text and tape are GPU layers inside a host scaled by the zoom (`PageLayers.swift`), so nothing is repainted while you move. PDF detail renders *during* a pinch at 2×.
+  - **Ink:** drawn by Trove's own Metal renderer (`InkMetalView.swift`, `InkTessellator` in TroveCore) at the exact zoom every frame. PencilKit keeps only the live stroke and hands it over in the same frame. Highlighters sit under the ink.
+  - **Fallback:** Settings → Sketch → "Sharp ink at every zoom (GPU)" off, or the editor's More → Classic ink.
+  - **Mac:** the ink cache survives panning. Metal on the Mac is still to do.
+- **Toolbar (T1–T5).**
+  - One slim bar: Done + title menu (page settings, pages, dark page, present, export) · Pens (the six pen types are in its tray) · highlighter, eraser, lasso, shapes, text · Insert (+) · the tool's colours and sizes inline · undo/redo, Ask, More (⋯).
+  - Nothing scrolls. When narrow, sizes fold away first, then colours, then Insert and shapes/text move into More.
+  - Tap the chosen tool again for its tray.
+  - The zoom pill sits inside the safe area. "Make this zoom my 100%" and "Reset 100% to the original" are in its menu. ⌘0, ⌘+ and ⌘- work.
+- **AI.**
+  - The chat now reads handwriting from what this device holds (the synced signature made it skip). It refreshes before every question and reads ink on PDFs and pictures, plus PDF page text per page.
+  - Handwriting synthesis (`InkHandwriting`, EMS Tech / EMS Allure single-line fonts, OFL, `scripts/glyphs.py`) is sized like the writing around it.
+  - **Math Assist** writes light-blue handwriting strokes (`by: assist`). You can rub them out. It won't re-answer over your edits, and its answer goes when you undo the `=`.
+  - **Ask** floats: drag it, resize it from any edge or corner, fold it, or tuck it into a bubble. It fades for a hovering Pencil. On iPhone it's a sheet.
+  - A dashed "AI is looking here" outline shows while it reads and thinks.
+  - **Placing output:** Diagram → "Place on the page…", or an answer → "Write on the page…". Drag a box or tap, see it faintly in your pen and handwriting, drag again to move or resize, then Keep (one undo, grouped, `by: ai`) or Tweak a diagram.
+  - **Page pictures:** Ask may send them for pages that are mostly drawing, after asking (allow, this session, always, not now; Settings → Sketch).
+- **New sketch (T6)** asks first: name, notebook or whiteboard, paper, size, orientation, colour. It starts at your last choice. "Ask every time" can be turned off.
+
+**Try on the iPad** (nothing here has run on a device yet):
+1. Settings → Diagnostics → make the test notebook; pan and pinch it, then read the slow-frame count.
+2. Pinch ink, a PDF and a picture: do they stay sharp?
+3. Write `12×4=`: a blue handwritten 48? Rub half of it out.
+4. Ask about a handwritten page.
+5. Move and resize the Ask box.
+6. Make a diagram and place it.
+7. The toolbar in Split View.
+8. New sketch.
+
+If the GPU ink looks wrong, turn it off in Settings → Sketch and say what you saw.
+
 ## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
 Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
 `workflow_dispatch` (branch builds never publish the `latest` release). Not yet run on a device.
