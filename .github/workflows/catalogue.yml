@@ -1,0 +1,19 @@
+# Checks the paper catalogue's links every week and whenever it changes (docs/DEVELOP_PLAN.md
+# Appendix D). A failure lists the broken links; the apps show them as "Unavailable".
+name: Catalogue links
+
+on:
+  push:
+    branches: [main]
+    paths: ["catalogue/**", "scripts/check-catalogue.py", ".github/workflows/catalogue.yml"]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check every link
+        run: python3 scripts/check-catalogue.py catalogue/papers.json

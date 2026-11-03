@@ -99,7 +99,7 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   ids with top-k (PERF_AUDIT L1, Swift + `core/search.js` + `search-cases.json`); (3) Develop phase 2 in the
   apps: Develop sidebar entry / iPhone Practise tab, paper download, split review, practise and self-mark,
   concepts on items (DEVELOP_PLAN §E); (4) AI caching in `AIProvider.complete`, relay cache-read weighting
-  (L2); (5) the editor's visible-pages-first loading; (6) a CI link check for `catalogue/papers.json`;
+  (L2); (5) the editor's visible-pages-first loading; (6) [done: weekly link check];
   (7) the restyle to A Glass with shared tokens (decision 16) after the UI audit.
 
 ## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
