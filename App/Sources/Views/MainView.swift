@@ -159,6 +159,8 @@ struct MainView: View {
                 }
             } else if let item = model.selectedItem {
                 ItemDetailView(item: item).id(item.id)
+            } else if model.searchResults != nil {
+                EmptyState(symbol: "magnifyingglass", title: "Pick a result", message: "Its matching words are marked in the list.")
             } else {
                 EmptyState(symbol: "sparkles.rectangle.stack", title: "Pick something", message: "Or press ⌘N for a note, or paste a link into Capture.")
             }

@@ -36,8 +36,16 @@ final class TroveUITests: XCTestCase {
     }
 
     /// The library has loaded once its collections show counts (the first launch writes the vault).
+    /// The iPhone opens on Recent; its collections are one tap back.
     func waitForLibrary(_ app: XCUIApplication) -> Bool {
-        app.staticTexts["Sketches"].firstMatch.waitForExistence(timeout: 120)
+        let deadline = Date().addingTimeInterval(120)
+        while Date() < deadline {
+            if app.staticTexts["Sketches"].firstMatch.exists { return true }
+            let back = app.navigationBars.buttons.firstMatch
+            if app.navigationBars["Recent"].exists, back.exists { back.tap() }
+            sleep(1)
+        }
+        return false
     }
 
     /// Opens a collection in the sidebar (iPad, Mac) or the Library tab's list (iPhone).

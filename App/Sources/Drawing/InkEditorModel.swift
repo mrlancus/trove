@@ -774,6 +774,17 @@ final class InkEditorModel {
         let signpost = Perf.begin("Reload ink")
         defer { Perf.end("Reload ink", signpost) }
         app?.power.count { $0.inkReloads += 1 }
+        // Opening: the page on screen first, straight from the page index (a few hundred strokes),
+        // so it shows at once; the rest of the notebook follows (docs/PERF_AUDIT.md B4).
+        if !loaded, content.isEmpty {
+            let key = currentKey
+            let first = await library.strokes(on: target.itemId, layer: target.layer, pageKey: key)
+            if content.isEmpty, !first.isEmpty {
+                content[key] = InkContent(strokes: first.map(InkLine.init))
+                revision += 1
+                Diagnostics.shared.ready("Notebook")
+            }
+        }
         let strokes = await library.strokes(on: target.itemId, layer: target.layer)
         let elements = await library.elements(on: target.itemId, layer: target.layer)
         let stored = Set(strokes.map(\.id))

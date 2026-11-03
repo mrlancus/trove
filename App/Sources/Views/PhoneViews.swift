@@ -17,7 +17,8 @@ struct PhoneRootView: View {
     @Environment(AppModel.self) private var model
     @State private var tab = PhoneTab.library
     @State private var clipState = ClipPaletteState()
-    @State private var libraryPath: [PhoneRoute] = []
+    /// Opens on Recent, with the collections one tap back (UI_AUDIT U2): your things first.
+    @State private var libraryPath: [PhoneRoute] = [.list(.smart(.recent))]
     @State private var searchPath: [PhoneRoute] = []
 
     enum PhoneTab: Hashable { case library, clipboard, practise, search }
