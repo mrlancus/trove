@@ -69,6 +69,12 @@ Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the b
 - **Notebooks** (G1, G2, G5, G10): covers (item menu → Cover; `cover` field), page names + Outline in
   the pages panel (`pageList[].name`, kept by the website), Add/Remove space here, Present (no tools,
   laser).
+- **Study** (G8): `Study.swift` FSRS-5 (card records `card.<note>.<sha12(front)>`, PROTOCOL.md §12
+  "Study"), queue with 20 new cards a day; `StudyView` (item menu → Study these cards, ⇧⌘Y).
+- **Sync** (P10, P11): relay `POST segments/batch` (one request for up to 200 segments; **needs a relay
+  deploy**, older relays fall back), the engine fetches wanted segments together and applies them in
+  one go; iCloud folder listings reused while a device folder's modification date is unchanged.
+- **Cards** (P7): card pictures cached on disk as small JPEGs (`Caches/thumbs`).
 - **Next** (§14): check CI for the later commits; then G9 zoom window, G11 whiteboard quadtree, G3
   planners, GoodNotes library import with folders, G6 word recognition, G4 audio synced to ink, G8 study;
   P10 batched segment fetch (relay + clients), P11 iCloud NSMetadataQuery, P4 binary search index, P7
