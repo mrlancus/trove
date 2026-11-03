@@ -41,3 +41,18 @@ first slice: its tests are TEST-CARD-010 on, written with the code.
 - **Expected**: 20 new cards today; the rest tomorrow.
 - **Failure looks like**: all 30, or fewer than 20.
 - **Automated by**: `StudyTests/queueAndReviewsSync`.
+
+## Built: Anki export (TroveCore)
+
+### TEST-CARD-010: Anki TSV keeps GUIDs so re-importing updates
+- **Feature**: AnkiExport.tsv
+- **Priority**: high
+- **Coverage**: auto-tested (file format); opening in Anki: not tested
+- **Platforms**: core; Anki Desktop, AnkiMobile (you)
+- **Preconditions**: two cards, one with <, tabs and a newline.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter DevelopTests`.
+  2. (You) Import the file into Anki Desktop, edit a card's back in Trove, export and import again.
+- **Expected**: headers `#separator:tab`, `#html:true`, `#guid column:1`, `#tags column:4`; HTML escaped, newlines as <br>; the same GUID after editing; in Anki the second import updates, not duplicates.
+- **Failure looks like**: duplicates in Anki, broken fields.
+- **Automated by**: `DevelopTests/ankiExportKeepsGuidsSoReimportUpdates`; Anki: manual.

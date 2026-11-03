@@ -944,3 +944,56 @@ question stays the same), fields: `note`, `stability` (days), `difficulty` (1–
 (`Study.swift`); Again brings a card back after 10 minutes. Fields are last-writer-wins, so two
 devices reviewing the same card at once keep the later review. Readers that don't know `card`
 ignore it.
+
+
+---
+
+## 13. Develop: concepts, edges, problems, attempts, specifications
+
+Develop (docs/DEVELOP_PLAN.md) adds five record kinds. Mastery, retention and schedules are never
+stored: every device derives them from `attempt` records with `Mastery.evaluate` (Swift
+`Develop/Mastery.swift`, JS `core/develop.js`, shared cases `Fixtures/mastery-cases.json`), so there's
+nothing to conflict in sync. Clients that don't know these kinds ignore them and keep them (a `set` op
+carries only the fields it changes; checkpoints carry every kind). Edges are records of their own,
+never array fields, so two devices adding links at once both keep theirs.
+
+All ids are ASCII. `sha12(x)` = the first 12 lowercase hex characters of SHA-256 of UTF-8 `x`.
+Unknown fields and kinds are kept and ignored by clients that don't know them.
+
+- **`concept`** `concept.<slug>`; slug: NFKD, drop combining marks, lowercase, every run of
+  characters other than `a–z0–9` becomes `-`, trimmed of `-`, at most 64 characters.
+  Fields: `name` (string), `type` (`"concept"` \| `"skill"`), `aliases` ([string]), `mergedInto`
+  (concept id or null), `origin` (`"user"` \| `"ai"` \| `"spec"`), `summary` (string, only the user
+  writes it), `createdAt` (ms).
+- **`edge`** `edge.<sha12(from + "\n" + type + "\n" + to)>`. Fields: `from`, `to` (record ids), `type`
+  (§C1), `state` (`"suggested"` \| `"accepted"` \| `"rejected"`), `origin` (`"user"` \| `"ai"` \|
+  `"rule"` \| `"spec"`), `confidence` (0–1, AI or rule), `why` (string), `at` (ms), `tag` (for
+  `inSpec`). For symmetric types (`confusedWith`) `from` is the smaller id. A client never deletes a
+  rejected edge.
+- **`problem`** `problem.<sha12(sourceKey + "\n" + key)>`, `sourceKey` = `cat:<doc id>` or
+  `item:<item id>`. Fields: `source` (`{"catalogue": docId}` or `{"item": itemId}`), `key`, `parent`,
+  `pages` ([{`page` (0-based), `rect` [x, y, w, h] in PDF points, origin top-left}]), `marks`,
+  `scheme` (`{"catalogue": docId, "key": key}` or `{"item": id, "pages": [...]}`), `level`
+  (`"gcse"` \| `"alevel"` \| `"competition"` \| `"university"` \| `"other"`), `nationalAverage`
+  (fraction 0–1 or null), `splitBy` (`"auto"` \| `"user"`), `label`, `origin` (`"paper"` \| `"upload"`
+  \| `"user"`; `"generated"` is reserved and unused).
+- **`attempt`** `attempt.<uuid>`. Written once, then only `marking`, `score`, `points`, `uncertain`
+  change (when I confirm or remark). Fields: `problem`, `skills` ([concept ids]), `at` (ms),
+  `durationS`, `answer` (`{"text": …}` or `{"attachment": …}`), `hint` (0–5), `marking` (`"self"` \|
+  `"aiScheme"` \| `"aiNoScheme"` \| `"none"`), `score` (0–1 or null), `points` ([{`text`, `got`,
+  `quote`}]), `uncertain` (bool), `ai` ({`model`, `effort`, `tokens`, `cost`, `confidence`,
+  `rationale`}), `b` (difficulty used, number), `level`, `label`, `source` (`sourceKey`, for
+  "where did this come from?" after the problem is gone).
+- **`spec`** `spec.<board>-<code>-<version>` (slugged). Fields: `board`, `code`, `version`, `title`,
+  `catalogue` (spec id in the catalogue), `topics` ([{`ref`, `title`, `concept`}], made on the
+  device).
+
+- **Edge rules.** An edge's id comes from its ends and type, so the same link made on two devices
+  is one record. Changing its `state` is a plain LWW `set`. A client never deletes a `rejected` edge,
+  and nothing but the user's own action changes a rejected edge's state (suggesters check for it).
+- **Concept merges.** `mergedInto` points a duplicate at the concept that stands for it; edges aren't
+  rewritten, readers follow `mergedInto` (stopping on a loop). Concepts whose names have the same set
+  of stemmed content words merge automatically, the smallest id winning on every device.
+- **Catalogue papers** (`catalogue/papers.json`, facts and links only) are downloaded from the board's
+  own site into a local cache on each device and are never synced as attachments; a `problem` from one
+  has `source.catalogue` and no question text.

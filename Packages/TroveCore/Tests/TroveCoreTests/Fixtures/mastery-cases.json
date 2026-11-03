@@ -1,0 +1,1625 @@
+{
+ "note": "docs/DEVELOP_PLAN.md Appendix B worked examples; Swift DevelopTests and web/test/develop.test.mjs both run these. Values rounded to 4 places.",
+ "cases": [
+  {
+   "name": "one unaided success",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.p1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    }
+   ],
+   "expect": {
+    "ability": 0.4,
+    "information": 1.0,
+    "mastery": 0.5987,
+    "stability": 3.1262,
+    "difficulty": 5.3146,
+    "intervalDays": 5.1189,
+    "dueDays": 5,
+    "proficient": false,
+    "attempts": 1,
+    "trivial": 0
+   }
+  },
+  {
+   "name": "success after the approach hint",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.p1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 3,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    }
+   ],
+   "expect": {
+    "ability": 0.0,
+    "information": 1.0,
+    "mastery": 0.5,
+    "stability": 1.1829,
+    "difficulty": 6.5085,
+    "intervalDays": 1.9369,
+    "dueDays": 2,
+    "proficient": false,
+    "attempts": 1,
+    "trivial": 0
+   }
+  },
+  {
+   "name": "farming 100 easy problems counts for nothing",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.p1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.002",
+     "problem": "problem.p2",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700086400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.003",
+     "problem": "problem.p3",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700172800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.004",
+     "problem": "problem.p4",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700259200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.005",
+     "problem": "problem.p5",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700345600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.006",
+     "problem": "problem.p6",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700432000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.007",
+     "problem": "problem.p7",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700518400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.008",
+     "problem": "problem.p8",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700604800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.009",
+     "problem": "problem.p9",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700691200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.010",
+     "problem": "problem.p10",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700777600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.011",
+     "problem": "problem.p11",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700864000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.012",
+     "problem": "problem.p12",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700950400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.013",
+     "problem": "problem.p13",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701036800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.014",
+     "problem": "problem.p14",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701123200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.015",
+     "problem": "problem.p15",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701209600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.016",
+     "problem": "problem.p16",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701296000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.017",
+     "problem": "problem.p17",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701382400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.018",
+     "problem": "problem.p18",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701468800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.019",
+     "problem": "problem.p19",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701555200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.020",
+     "problem": "problem.p20",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701641600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.021",
+     "problem": "problem.p21",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701728000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.022",
+     "problem": "problem.p22",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701814400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.023",
+     "problem": "problem.p23",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701900800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.024",
+     "problem": "problem.p24",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701987200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.025",
+     "problem": "problem.p25",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702073600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.026",
+     "problem": "problem.p26",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702160000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.027",
+     "problem": "problem.p27",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702246400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.028",
+     "problem": "problem.p28",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702332800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.029",
+     "problem": "problem.p29",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702419200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.030",
+     "problem": "problem.p30",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702505600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.031",
+     "problem": "problem.p31",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702592000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.032",
+     "problem": "problem.p32",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702678400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.033",
+     "problem": "problem.p33",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702764800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.034",
+     "problem": "problem.p34",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702851200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.035",
+     "problem": "problem.p35",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1702937600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.036",
+     "problem": "problem.p36",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703024000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.037",
+     "problem": "problem.p37",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703110400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.038",
+     "problem": "problem.p38",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703196800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.039",
+     "problem": "problem.p39",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703283200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.040",
+     "problem": "problem.p40",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703369600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.041",
+     "problem": "problem.p41",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703456000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.042",
+     "problem": "problem.p42",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703542400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.043",
+     "problem": "problem.p43",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703628800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.044",
+     "problem": "problem.p44",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703715200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.045",
+     "problem": "problem.p45",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703801600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.046",
+     "problem": "problem.p46",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703888000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.047",
+     "problem": "problem.p47",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1703974400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.048",
+     "problem": "problem.p48",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704060800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.049",
+     "problem": "problem.p49",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704147200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.050",
+     "problem": "problem.p50",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704233600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.051",
+     "problem": "problem.p51",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704320000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.052",
+     "problem": "problem.p52",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704406400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.053",
+     "problem": "problem.p53",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704492800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.054",
+     "problem": "problem.p54",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704579200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.055",
+     "problem": "problem.p55",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704665600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.056",
+     "problem": "problem.p56",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704752000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.057",
+     "problem": "problem.p57",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704838400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.058",
+     "problem": "problem.p58",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1704924800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.059",
+     "problem": "problem.p59",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705011200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.060",
+     "problem": "problem.p60",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705097600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.061",
+     "problem": "problem.p61",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705184000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.062",
+     "problem": "problem.p62",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705270400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.063",
+     "problem": "problem.p63",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705356800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.064",
+     "problem": "problem.p64",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705443200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.065",
+     "problem": "problem.p65",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705529600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.066",
+     "problem": "problem.p66",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705616000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.067",
+     "problem": "problem.p67",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705702400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.068",
+     "problem": "problem.p68",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705788800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.069",
+     "problem": "problem.p69",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705875200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.070",
+     "problem": "problem.p70",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1705961600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.071",
+     "problem": "problem.p71",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706048000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.072",
+     "problem": "problem.p72",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706134400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.073",
+     "problem": "problem.p73",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706220800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.074",
+     "problem": "problem.p74",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706307200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.075",
+     "problem": "problem.p75",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706393600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.076",
+     "problem": "problem.p76",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706480000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.077",
+     "problem": "problem.p77",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706566400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.078",
+     "problem": "problem.p78",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706652800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.079",
+     "problem": "problem.p79",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706739200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.080",
+     "problem": "problem.p80",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706825600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.081",
+     "problem": "problem.p81",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706912000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.082",
+     "problem": "problem.p82",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1706998400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.083",
+     "problem": "problem.p83",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707084800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.084",
+     "problem": "problem.p84",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707171200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.085",
+     "problem": "problem.p85",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707257600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.086",
+     "problem": "problem.p86",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707344000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.087",
+     "problem": "problem.p87",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707430400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.088",
+     "problem": "problem.p88",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707516800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.089",
+     "problem": "problem.p89",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707603200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.090",
+     "problem": "problem.p90",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707689600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.091",
+     "problem": "problem.p91",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707776000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.092",
+     "problem": "problem.p92",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707862400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.093",
+     "problem": "problem.p93",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1707948800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.094",
+     "problem": "problem.p94",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708035200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.095",
+     "problem": "problem.p95",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708121600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.096",
+     "problem": "problem.p96",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708208000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.097",
+     "problem": "problem.p97",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708294400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.098",
+     "problem": "problem.p98",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708380800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.099",
+     "problem": "problem.p99",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708467200000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.100",
+     "problem": "problem.p100",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1708553600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": -3,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    }
+   ],
+   "expect": {
+    "ability": 0.0,
+    "information": 0.0,
+    "mastery": null,
+    "stability": null,
+    "proficient": false,
+    "attempts": 0,
+    "trivial": 100
+   }
+  },
+  {
+   "name": "three hard problems a week apart from two sources",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.h1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 1.5,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.002",
+     "problem": "problem.h2",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700604800000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 1.5,
+     "source": "cat:aqa-7408-2-2022-06-qp"
+    },
+    {
+     "id": "attempt.003",
+     "problem": "problem.h3",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1701209600000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 1.5,
+     "source": "item:my-worksheet"
+    }
+   ],
+   "expect": {
+    "ability": 1.4042,
+    "information": 2.3975,
+    "mastery": 0.8029,
+    "stability": 36.0517,
+    "difficulty": 5.2206,
+    "intervalDays": 59.0314,
+    "proficient": true,
+    "attempts": 3,
+    "trivial": 0
+   }
+  },
+  {
+   "name": "a later failure marked by AI with the scheme",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.p1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": false,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.002",
+     "problem": "problem.p2",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700864000000,
+     "hint": 0,
+     "marking": "aiScheme",
+     "score": 0.25,
+     "uncertain": false,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    }
+   ],
+   "expect": {
+    "ability": 0.2225,
+    "information": 1.8649,
+    "mastery": 0.5554,
+    "stability": 1.4924,
+    "difficulty": 6.3501,
+    "intervalDays": 2.4437,
+    "proficient": false,
+    "attempts": 2,
+    "trivial": 0
+   }
+  },
+  {
+   "name": "unmarked and uncertain attempts are no evidence",
+   "attempts": [
+    {
+     "id": "attempt.001",
+     "problem": "problem.p1",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700000000000,
+     "hint": 0,
+     "marking": "none",
+     "score": 1,
+     "uncertain": false,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    },
+    {
+     "id": "attempt.002",
+     "problem": "problem.p2",
+     "skills": [
+      "concept.conservation-of-momentum"
+     ],
+     "at": 1700086400000,
+     "hint": 0,
+     "marking": "self",
+     "score": 1,
+     "uncertain": true,
+     "b": 0,
+     "source": "cat:aqa-7408-1-2023-06-qp"
+    }
+   ],
+   "expect": {
+    "ability": 0.0,
+    "information": 0.0,
+    "mastery": null,
+    "stability": null,
+    "proficient": false,
+    "attempts": 0,
+    "trivial": 0
+   }
+  }
+ ]
+}
