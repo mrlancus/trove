@@ -76,9 +76,12 @@ import Testing
             }
         }
         let strokes = await library.strokes(on: "nb", pageKey: "1")
-        #expect(strokes.count == 3 && strokes.allSatisfy { $0.pageKey == "1" })
+        #expect(strokes.count == 3)
+        #expect(strokes.allSatisfy { (s: InkStroke) -> Bool in s.pageKey == "1" })
         // Oldest first, as the editor draws them.
-        #expect(strokes.map { $0.record[InkStroke.Field.createdAt]?.number ?? 0 } == strokes.map { $0.record[InkStroke.Field.createdAt]?.number ?? 0 }.sorted())
+        let times: [Double] = strokes.map { (s: InkStroke) -> Double in s.record[InkStroke.Field.createdAt]?.number ?? 0 }
+        let sortedTimes: [Double] = times.sorted()
+        #expect(times == sortedTimes)
     }
 }
 
