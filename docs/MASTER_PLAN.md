@@ -626,9 +626,59 @@ continuous waveform redraw while recording (an update once a second). This is th
 spellcheck underlines and **word complete** (grey ink suggestion) on OS 27. Recognition runs
 incrementally on changed strokes only (P12), never whole pages.
 
-### G7. Math assist **M**
-Write `=` after an expression: it's recognised (G6), evaluated with the N10 parser, and the answer
-appears in handwriting-style ink. It flags wrong steps when the two sides disagree.
+### G7. Math assist: on the device, light on battery, works with messy writing **L**
+Decided by the user: **on-device only** (no cloud). The user finds GoodNotes' Math Assist drains the
+battery fast, so it must cost close to nothing while you write, and it must cope with bad handwriting.
+
+**Why it's likely costly in GoodNotes, and what Trove does instead.** Math tools usually recognise
+continuously: every stroke re-runs a model over the page or line, the result is animated, and the
+screen stays at 120 Hz. Trove does **no recognition while you write**.
+1. **Trigger by geometry, not ML.** A cheap test on each finished stroke (microseconds, no model)
+   spots `=`: two short, nearly parallel, nearly horizontal strokes stacked within ~0.6 line heights.
+   Only then does anything else run. Also a manual trigger: lasso → "Solve", or tap a line.
+2. **Wait for the pen.** 400 ms after the pen lifts with no new stroke nearby; a new stroke cancels.
+3. **Only the line.** Strokes left of the `=` on the same baseline band (plus anything that overlaps
+   it vertically, for fractions and exponents) are gathered with the page's stroke grid (exists).
+   Nothing else on the page is read.
+4. **Vectors, not pictures.** OS 27: `PKStrokeRecognizer` on those strokes. OS 18–26: Vision on a crop
+   of only that line rendered at ~48 px x-height (a few hundred pixels wide), `.accurate`, language
+   correction off. One request, tens of milliseconds on the Neural Engine.
+5. **Never twice.** Results are cached by a hash of the line's stroke ids and versions; the line is
+   read again only when one of its strokes changes. Lines already solved and untouched cost nothing.
+6. **A still answer.** Drawn once as ink from pre-baked handwriting-style glyph outlines (no font
+   shaping, no animation, no extra display link). Wrong-step marks are static too.
+7. **Power policy.** Auto on `=` normally; Low Power Mode and `thermalState ≥ .serious` → manual only
+   (lasso → Solve). Settings → Sketching → Math: Auto / Only when I ask / Off.
+8. **Budget, measured.** Signposts and the Battery counters count recognitions per hour. Target: at
+   most one recognition per `=` written (plus edits), < 30 ms CPU/ANE each, 0 work between them.
+   A TroveCore test simulates an hour of writing maths and asserts the count.
+
+**Messy handwriting.**
+- **Ask for many guesses, keep the one that's maths.** Take the recogniser's top 10 candidates per
+  line (Vision `topCandidates(10)`, all of the stroke recogniser's alternatives) and expand each with a
+  confusion map of maths look-alikes: `l 1 I |`, `O 0 o`, `S 5`, `z Z 2`, `x X × +`(by stroke count),
+  `t +`, `g 9 q`, `b 6`, `B 8`, `÷ +`, `- −`, `( C`, `) >`, `^`. Score each with the parser (N10):
+  only candidates that parse as valid expressions survive, ranked by recogniser confidence × parse
+  likelihood × consistency with earlier lines (variables already defined, the same digits written
+  before). Grammar-constrained guessing is what makes bad writing readable.
+- **Layout from the strokes**, not the text: exponents from a raised, smaller box; fractions from a
+  horizontal bar with groups above and below; square roots from the radical's shape; matrices from
+  aligned columns. Each group is recognised on its own and assembled into a tree.
+- **A small symbol model of our own** (Core ML, int8, ~100 maths symbols, < 1 MB, ~1 ms per symbol on
+  the Neural Engine) for the symbols general handwriting recognisers are weakest at (×, ÷, √, ∫, π,
+  θ, superscripts). Trained in CI with Create ML on a macOS runner from an openly licensed dataset
+  (CROHME research data; Google's MathWriting is CC BY-NC-SA, fine for personal non-commercial use)
+  plus synthetic strokes. Only ever used inside the line that was triggered.
+- **It learns your writing.** When you tap the answer and correct a symbol, the strokes are saved as
+  your own example (`mathSamples`, synced encrypted, 🔒 new record kind) and matched first by
+  nearest neighbour next time (a few hundred vectors, microseconds).
+- **Shows what it read.** The read expression appears small above the answer; tap to fix any symbol
+  from a picker of the top alternatives. Unsure (low score) → a grey "?" instead of a wrong answer.
+- **What it solves** (N10 parser, TroveCore, tested on Linux): arithmetic, fractions, powers, roots,
+  percentages, units, variables down the page, simple linear equations in one unknown, and checking
+  each line of a worked solution (`2x+3=7` → `2x=4` ✓ → `x=3` ✗). Harder algebra (symbolic
+  simplification, calculus) only via lasso → Ask, and only if the user chooses to send it.
+- Fixtures: `math-cases.json` (candidate lists → chosen expression → answer), shared by Swift and JS.
 
 ### G8. Study mode with spaced repetition **M** 🔒
 Lasso → flashcard (front: the selection; back: what's under tape or typed). A **Study** view with
@@ -646,12 +696,44 @@ page thumbnails on the presenter's screen.
 The quadtree (P13), tile LOD (draw a simplified outline below 25 % zoom), progressive load
 (nearest tiles first). Target: a GoodNotes whiteboard with 20k strokes opens in < 1 s and pans at 120 Hz.
 
-### G12. The iPad canvas: PencilKit or Trove's own renderer ❓
-Today PencilKit draws on the iPad, so Trove's pen styles (dashes, grain, fill, arrows) show as plain
-strokes there (NOTES). Options: (a) keep PencilKit (best latency, least work); (b) a Metal renderer
-with Trove's outlines and predicted touches (`UITouch.predictedTouches`) on the iPad too, so all
-devices look the same. (b) is **L** and must match PencilKit's ~9 ms latency. Recommendation: (a)
-now, (b) only if the styles matter to the user.
+### G12. The iPad canvas: PencilKit (decided)
+**Decided: keep PencilKit** (best latency, least battery). Trove's pen styles (dashes, grain, fill,
+arrows) show as plain strokes on the iPad while drawing. A Metal renderer of our own stays an option
+for later, only if the styles turn out to matter.
+
+### G13. Export to GoodNotes (`.goodnotes`) **L** 🔒(format writer)
+Decided by the user: an **Export to GoodNotes** option for every kind of drawing: notebooks
+(multi-page sketches), whiteboards (endless canvases), single sketches, inked PDFs and inked images,
+and GoodNotes notebooks edited in Trove.
+- **Two writers, picked automatically:**
+  1. **Round-trip** (the item came from a `.goodnotes`, the common case): copy the original zip and
+     patch it. Records Trove didn't change stay byte for byte (including the ones Trove can't
+     read yet: sticky notes, audio, rotated items); erased elements get GoodNotes' erased flag
+     (field 3 = 1); new and changed strokes, shapes, text boxes and pictures are appended as new
+     records with new UUIDs; new pages get `index.events.pb` page-created events and
+     `index.notes.pb` entries. This is the safest path: GoodNotes sees its own notebook with extra records.
+  2. **Fresh** (made in Trove): build a notebook from a **seed**, a minimal notebook GoodNotes itself
+     made (one blank page, one blank whiteboard), kept as a test fixture once the user provides one.
+     Pages are added the way GoodNotes adds them; backgrounds (papers, PDF pages, templates) become
+     PDF attachments in `index.attachments.pb`; strokes are written in the GoodNotes 6 layout Trove
+     already reads (`vuA(v)A(u)A(u)…`, LZ4 `bv41` blocks, TPL image), at 132 dpi.
+- **What maps to what:** pens and ballpoint → pen strokes with width and colour; highlighter → alpha
+  < 0.95; pencil → GoodNotes' pencil layout; shapes → field 7 geometry (paths, rectangles, ellipses)
+  with fills in field 9; text boxes → field 21 rich text; pictures → attachments with frames; tape and
+  Trove-only things (connectors, rulers, links, audio until G4 maps it) → flattened into plain
+  strokes/shapes or left out, listed in an export report ("3 connectors drawn as lines").
+  Whiteboards keep their real coordinates (no `fitToContent`), so they open as endless canvases.
+- **Verified both ways:** every export is read back with Trove's own decoders (`GoodNotesInk.swift`,
+  `goodnotes.js`) and compared with the source in tests (`goodnotes-export-cases.json`). The real test is
+  GoodNotes opening it: needs the user to import a few exports on the iPad (manual step) and send
+  back anything GoodNotes rejects. The format is undocumented and can change with GoodNotes updates,
+  so **PDF export always stays next to it** as the fallback (GoodNotes imports PDFs as notebooks).
+- **Where:** item menu → Export → GoodNotes notebook; a folder or several selected sketches →
+  one `.goodnotes` each (zip of them); the share sheet so it can go straight into GoodNotes ("Open in
+  GoodNotes"). Apps first; the website only if the TroveCore writer ports cheaply to `core/`.
+- **Needs from the user:** a blank notebook and a blank whiteboard exported from GoodNotes
+  (Share → Export → GoodNotes format), plus one notebook with a sticky note and audio
+  (ROADMAP ❓9, still open).
 
 ---
 
@@ -781,14 +863,18 @@ and (via the Files app) iPad.
 
 ### I5. Export **S**
 Any item or folder as Markdown, PDF, HTML or a zip. Sketches as PDF with or without paper.
-Notebooks back to `.goodnotes`? ❓ (hard; probably no).
+Notebooks, whiteboards and every other drawing back to `.goodnotes`: **G13** (decided: yes).
 
 ---
 
 ## 11. Design, accessibility and feel
 
-### D1. Pick the design direction ❓ **(blocks G1 and D2)**
-A Glass, B Editorial or C Midnight (NOTES, artifact link). Everything visual waits on it.
+### D1. Design direction: A Glass (decided by Claude at the user's request; the user can still veto)
+Apple's Liquid Glass look (iOS 26 / macOS 26): content runs edge to edge, and the controls (toolbars,
+tab bar, the pen toolbar, the clipboard palette) float above it as translucent "glass" capsules that
+pick up the colour of what's behind them. The OS 18/15 fallback is the same layout with plain material
+backgrounds. Battery rule: glass only on small floating controls, never behind lists, pages or the
+drawing canvas (blur and refraction cost GPU time every frame they're over moving content).
 
 ### D2. Liquid Glass done right (OS 26) **M**
 Glass toolbars and the palette behind `#available`, `.glassEffect` only on floating chrome (not on
@@ -860,30 +946,39 @@ store boundaries from P3. Swift 6 strict concurrency stays. No new `@unchecked S
 
 ---
 
-## 13. Decisions for the user ❓
-1. **Design direction** (A Glass, B Editorial, C Midnight). It blocks G1, D2 and the notebook shelf.
-2. **iPad pen renderer** (G12): keep PencilKit (recommended) or build Trove's own so styles match everywhere.
-3. **Locked notes password model** (S3): one lock password for all locked notes (Apple Notes' way, recommended) or per note.
-4. **Diagnostics in the vault** (Q4/Q5): OK to store MetricKit and crash payloads in a hidden folder so cloud sessions can read them?
-5. **Segment pruning** (P18): OK to delete relay and iCloud segments older than 30 days once every device has a newer checkpoint? (It saves space and speeds new devices; old history then lives only in checkpoints.)
-6. **Export back to `.goodnotes`** (I5): wanted, or is PDF enough?
-7. **Bases-style Views** (O7) as a headline feature: worth an **L** round now, or after the editor?
-8. **Order**: the suggested order below, or a different first item?
+## 13. Decisions
+The user said "it really needs to be good enough to replace GoodNotes soon … decide what you think is
+best" (2026-11-02), then on 2026-11-03: keep AI on the device, make Math Assist light on battery and
+good with bad handwriting, and add export to GoodNotes.
+1. **Design: A Glass** (D1), glass on floating controls only. The user asked what it means; they can still pick B or C.
+2. **iPad ink: PencilKit** (G12).
+3. **Locked notes: one lock password** for all of them (S3).
+4. **Diagnostics in the vault: yes** (Q4/Q5), in a hidden folder.
+5. **Segment pruning: yes**, 30 days after every device has a newer checkpoint (P18).
+6. **Export to `.goodnotes`: yes** (G13), for notebooks, whiteboards and every drawing; PDF stays as the fallback.
+7. **Views (O7): after the editor.**
+8. **Order: GoodNotes first** (below).
+9. **AI for handwriting and maths: on the device** (G6, G7). Cloud stays opt-in, only through lasso → Ask.
+
+Still open: samples from GoodNotes (a blank notebook, a blank whiteboard, a notebook with a sticky
+note and audio) for G13 and the drawing gaps.
 
 ---
 
 ## 14. Suggested order
 
+GoodNotes first (decided 2026-11-03): "it really needs to be good enough to replace GoodNotes soon".
+
 | Round | What | Why then |
 |---|---|---|
-| **1. Speed core** | P1 change feed · P2 rows · P6 Spotlight · P8 clipboard watcher · P9 sockets/App Nap/tolerance · Q2 big vault · Q3 XCTest perf + simulator UI tests | The biggest speed and battery wins; small protocol risk; CI proves them |
-| **2. Fewer wakes, less memory** | P10 batched segments (relay + clients) · P11 iCloud NSMetadataQuery · P4 search actor + binary save · P7 thumbnails · P15 launch · P16 budgets | Radio and memory; launch under 400 ms |
-| **3. The editor** | N1 TextKit 2 editor · N2 · N3 · N4 · O1 switcher · O2 command palette · O4 backlinks | The largest product gap; built on the fast core |
-| **4. Organise** | O5 embeds/aliases · O6 Properties · O7 Views (table/cards/board) · N5/N6 templates and periodic notes · N11 Recently Deleted · O3 tabs/splits | Obsidian/Notion-level structure |
-| **5. Clipboard** | C1 pinboards · C2 stack · C3 prediction · C4–C7 · C9 palette speed | Paste parity, mostly small items |
-| **6. Capture** | X1 controls/hotkeys/widgets · X3 App Intents · X2 share · X5 scan · X6 reader view | "Save anything" everywhere |
-| **7. Notebooks** (after D1) | G1 shelf · G2 outline/links · G3 planners · G5 insert space · G9 zoom window · G10 present · P13 Mac tiles + page checkpoints · G11 | GoodNotes parity |
-| **8. Beyond** | G4 audio synced to ink · N9 transcripts · G6 word recognition · G7/N10 math · G8 study | Where Trove passes GoodNotes and Apple Notes |
+| **1. Speed core** | P1 change feed · P2 rows · P6 Spotlight · P8 clipboard watcher · P9 sockets/App Nap/tolerance · Q2 big vault · Q3 XCTest perf + simulator UI tests (incl. the sketch editor) | Big notebooks need it; CI catches iPad runtime breakage |
+| **2. Notebooks** | G1 shelf + covers (A Glass) · G2 outline/links · G3 planners/templates · G5 insert space · G9 zoom window · G10 present · G11 + P13 whiteboards, Mac tiles, page checkpoints · whole GoodNotes library import with its folders (ROADMAP S7) | GoodNotes parity, the part people notice first |
+| **3. GoodNotes out and in** | G13 export to `.goodnotes` (round-trip first, then fresh) · GoodNotes gaps: sticky notes, rotated items, audio, pencil texture | Switching both ways without fear |
+| **4. Past GoodNotes** | G6 word recognition + spellcheck/word complete · G7 + N10 math assist (on device, low battery, messy writing) · G4 audio synced to ink + N9 transcripts · G8 study | Where Trove beats GoodNotes |
+| **5. Fewer wakes, less memory** | P10 batched segments (relay + clients) · P11 iCloud NSMetadataQuery · P4 search actor + binary save · P7 thumbnails · P15 launch · P16 budgets | Radio and memory; launch under 400 ms |
+| **6. The editor** | N1 TextKit 2 editor · N2 · N3 · N4 · O1 switcher · O2 command palette · O4 backlinks | The largest notes gap |
+| **7. Organise** | O5 embeds/aliases · O6 Properties · O7 Views · N5/N6 · N11 Recently Deleted · O3 tabs/splits | Obsidian/Notion-level structure |
+| **8. Clipboard and capture** | C1–C9 · X1 controls/hotkeys/widgets · X3 App Intents · X2 share · X5 scan · X6 reader view | Paste parity and "save anything" |
 | **9. Trust** | S1 conflicts · S2 health · S3 locks · S7 backups · S8 integrity · P5 ops out of RAM · P18 pruning | Data safety at scale |
 | **Later** | S4 passkeys · S5 key rotation · S6 shared spaces (collaboration, shared pinboards, remote MCP) · G12 own renderer · I3/I4 | Design docs first |
 

@@ -911,8 +911,11 @@ performance and battery life … must not miss a thing"). It has research into P
 Obsidian and Apple Notes, a performance and battery architecture (P1 change feed: stop rebuilding the whole
 library on every change; P8 Mac clipboard watcher; P10 batched segment fetch; P11 iCloud without directory
 walks…), the TextKit 2 editor, Obsidian-style navigation and Views, Paste-style clipboard, notebooks, capture,
-AI, sync/security, CI performance tests, decisions for the user (§13) and an order (§14). Start with round 1
-unless the user says otherwise.
+AI, sync/security, CI performance tests, decisions for the user (§13) and an order (§14). Decisions are in its §13 (2026-11-03): GoodNotes first, A Glass, PencilKit, on-device
+maths and handwriting (Math Assist must be light on battery and cope with messy writing, G7), export to
+`.goodnotes` for notebooks, whiteboards and every drawing (G13). Order in §14: speed core, then notebooks,
+then GoodNotes export, then past GoodNotes. **Ask the user for** a blank GoodNotes notebook and whiteboard
+exported in GoodNotes format (seeds for G13).
 
 **The earlier plan is `docs/ROADMAP.md`** (mostly landed) (sketching vs GoodNotes, search, performance, AI, bridges to
 other services, GitHub). Its "Decisions for the user" list is still open; ask before starting items marked ❓.
