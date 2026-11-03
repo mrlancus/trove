@@ -172,6 +172,7 @@ public actor SyncEngine {
     public func records(kind: String) -> [Record] { store.visible(kind: kind) }
     /// Strokes and elements on an item (not deleted).
     public func ink(on itemId: String) -> [Record] { store.ink(on: itemId) }
+    public func ink(on itemId: String, layer: String, pageKey: String) -> [Record] { store.ink(on: itemId, layer: layer, pageKey: pageKey) }
     public func newestInkTime(on itemId: String) -> Double? { store.newestInkTime(on: itemId) }
     public func record(_ id: String) -> Record? { store.record(id) }
     /// What changed since `token` (docs/MASTER_PLAN.md P1); -1 for the first look.

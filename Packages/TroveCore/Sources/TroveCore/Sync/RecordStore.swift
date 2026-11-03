@@ -33,6 +33,9 @@ public struct RecordStore: Sendable {
     private var newestByKind: [String: String] = [:]
     /// Ink (strokes and elements) by the item it's on.
     private var inkByItem: [String: Set<String>] = [:]
+    /// Ink by item, layer and page key (`inkPageKey`), so opening one page of a 500-page notebook
+    /// reads that page's strokes, not the notebook's (docs/PERF_AUDIT.md B2).
+    private var inkByPage: [String: Set<String>] = [:]
     /// The latest `createdAt` any ink on an item has had (never lowered, so a deleted stroke may keep
     /// it high): new ink goes after it without scanning the item's ink (docs/ROADMAP.md §3.7 item 8).
     private var newestInk: [String: Double] = [:]
@@ -131,6 +134,7 @@ public struct RecordStore: Sendable {
         byKind = [:]
         newestByKind = [:]
         inkByItem = [:]
+        inkByPage = [:]
         newestInk = [:]
         lastApplied = ""
         if base != nil { applyBase() }
@@ -173,6 +177,7 @@ public struct RecordStore: Sendable {
             if (newestByKind[record.kind] ?? "") < b.updated { newestByKind[record.kind] = b.updated }
             if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string {
                 inkByItem[on, default: []].insert(b.id)
+                inkByPage[Self.inkPageKey(record), default: []].insert(b.id)
                 noteInkTime(record, on: on)
             }
             records[b.id] = record
@@ -197,6 +202,18 @@ public struct RecordStore: Sendable {
         (inkByItem[itemId] ?? []).compactMap { id in records[id].flatMap { $0.isDeleted ? nil : $0 } }
     }
 
+    /// Strokes and elements on one page of an item's layer ("" = the sketch itself), not deleted.
+    public func ink(on itemId: String, layer: String, pageKey: String) -> [Record] {
+        (inkByPage[Self.inkPageKey(on: itemId, layer: layer, pageKey: pageKey)] ?? []).compactMap { id in
+            records[id].flatMap { $0.isDeleted ? nil : $0 }
+        }
+    }
+
+    static func inkPageKey(on: String, layer: String, pageKey: String) -> String { "\(on)\u{1F}\(layer)\u{1F}\(pageKey)" }
+    static func inkPageKey(_ r: Record) -> String {
+        inkPageKey(on: r.fields["on"]?.string ?? "", layer: r.fields["layer"]?.string ?? "", pageKey: InkPage.key(r.fields["page"]))
+    }
+
     /// Every record of these kinds, deleted ones included: their count and newest change.
     public func stamp(of kinds: Set<String>) -> (count: Int, newest: String) {
         var count = 0, newest = ""
@@ -219,6 +236,7 @@ public struct RecordStore: Sendable {
         lastApplied = max(lastApplied, op.hlc)
         var record = records[op.record] ?? Record(id: op.record, kind: op.recordKind ?? "item", createdHLC: op.hlc, updatedHLC: op.hlc)
         let oldKind = records[op.record]?.kind
+        let oldPage = records[op.record].flatMap { Self.inkKinds.contains($0.kind) && $0.fields["on"] != nil ? Self.inkPageKey($0) : nil }
         // An op older than what the checkpoint holds for a field (from a device that was offline) loses to it.
         let stamps = base?.stamps[op.record]
         if let kind = op.recordKind {
@@ -257,7 +275,14 @@ public struct RecordStore: Sendable {
         }
         if Self.inkKinds.contains(record.kind), let on = record.fields["on"]?.string {
             inkByItem[on, default: []].insert(op.record)
+            let page = Self.inkPageKey(record)
+            if page != oldPage {
+                if let oldPage { inkByPage[oldPage]?.remove(op.record) }
+                inkByPage[page, default: []].insert(op.record)
+            }
             noteInkTime(record, on: on)
+        } else if let oldPage {
+            inkByPage[oldPage]?.remove(op.record)
         }
         records[op.record] = record
         noteChange(op.record)

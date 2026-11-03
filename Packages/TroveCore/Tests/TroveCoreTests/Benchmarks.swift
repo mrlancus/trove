@@ -56,6 +56,9 @@ struct Benchmarks {
             for r in strokes { decoded += InkPoints.decode(r["points"]?.string ?? "").count }
         }
         #expect(decoded > 0)
+        results["notebookPageIndexed"] = Self.time(5) {
+            decoded = store.ink(on: TroveGen.notebookId, layer: "", pageKey: "0").map { InkPoints.decode($0["points"]?.string ?? "").count }.reduce(0, +)
+        }
         results["notebookPage"] = Self.time(5) {
             let page = store.ink(on: TroveGen.notebookId).filter { $0["page"]?.string == "0" }
             decoded = page.map { InkPoints.decode($0["points"]?.string ?? "").count }.reduce(0, +)

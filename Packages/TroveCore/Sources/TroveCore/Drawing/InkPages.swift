@@ -94,7 +94,8 @@ extension Library {
 
     /// Strokes on one page of a sketch (or a file's layer), oldest first.
     public func strokes(on itemId: String, layer: String = "", pageKey: String) async -> [InkStroke] {
-        await strokes(on: itemId, layer: layer).filter { $0.pageKey == pageKey }
+        let strokes = await engine.ink(on: itemId, layer: layer, pageKey: pageKey).filter { $0.kind == "stroke" }.map(InkStroke.init)
+        return Self.drawOrder(strokes, createdAt: { $0.record[InkStroke.Field.createdAt]?.number ?? 0 })
     }
 
     /// Adds a stroke on a sketch page by its id. `createdAt` keeps a stroke's place when the partial
