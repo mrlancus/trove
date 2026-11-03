@@ -433,14 +433,19 @@ public struct InkPage: Equatable, Sendable, Identifiable {
     public var color: String?
     /// [width, height] in page points when the page has its own size.
     public var size: [Double]?
+    /// The page's name in the notebook's outline (bookmarks, MASTER_PLAN G2); nil when unnamed.
+    public var name: String?
 
-    public init(id: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) {
+    public init(id: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil, name: String? = nil) {
         self.id = id; self.paper = paper; self.color = color; self.size = Self.valid(size)
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.name = (trimmed?.isEmpty ?? true) ? nil : String(trimmed!.prefix(120))
     }
 
     init?(json: JSONValue) {
         guard let o = json.object, let id = o["id"]?.string, !id.isEmpty else { return nil }
-        self.init(id: id, paper: o["paper"]?.string.flatMap(InkPaper.init(rawValue:)), color: o["color"]?.string, size: o["size"]?.array?.compactMap(\.number))
+        self.init(id: id, paper: o["paper"]?.string.flatMap(InkPaper.init(rawValue:)), color: o["color"]?.string, size: o["size"]?.array?.compactMap(\.number),
+                  name: o["name"]?.string)
     }
 
     var json: JSONValue {
@@ -448,6 +453,7 @@ public struct InkPage: Equatable, Sendable, Identifiable {
         if let paper { o["paper"] = .string(paper.rawValue) }
         if let color { o["color"] = .string(color) }
         if let size { o["size"] = .array(size.map(JSONValue.number)) }
+        if let name { o["name"] = .string(name) }
         return .object(o)
     }
 
@@ -485,6 +491,7 @@ public struct InkPage: Equatable, Sendable, Identifiable {
 
 extension Item {
     public enum SketchField {
+        public static let cover = "cover"
         public static let paper = "paper", pages = "pages", pageSize = "pageSize"
         public static let pageList = "pageList", canvas = "canvas", sketchText = "sketchText", inkText = "inkText"
     }
@@ -499,6 +506,8 @@ extension Item {
         let count = record[SketchField.pages]?.number.flatMap(InkPage.int) ?? 1
         return (0..<min(1000, max(1, count))).map { InkPage(id: String($0)) }
     }
+    /// A notebook's cover on the shelf (MASTER_PLAN G1): a colour and a pattern; nil = the first page.
+    public var cover: NotebookCover? { record[SketchField.cover].flatMap(NotebookCover.init(json:)) }
     /// One endless page instead of pages.
     public var isInfiniteCanvas: Bool { record[SketchField.canvas]?.string == "infinite" }
     /// The words in a sketch's text boxes, and the handwriting an Apple device read, for search.
@@ -605,4 +614,24 @@ extension Library {
         }
         if !fields.isEmpty { await update(id, fields) }
     }
+}
+
+
+/// A notebook cover (MASTER_PLAN G1, PROTOCOL.md §10 `cover`).
+public struct NotebookCover: Equatable, Sendable {
+    public enum Pattern: String, CaseIterable, Sendable { case plain, lines, dots, grid, linen }
+    public var color: String
+    public var pattern: Pattern
+
+    public init(color: String, pattern: Pattern = .plain) { self.color = color; self.pattern = pattern }
+
+    public init?(json: JSONValue) {
+        guard let o = json.object, let c = o["color"]?.string, c.hasPrefix("#"), c.count == 7 else { return nil }
+        self.init(color: c, pattern: Pattern(rawValue: o["pattern"]?.string ?? "") ?? .plain)
+    }
+
+    public var json: JSONValue { .object(["color": .string(color), "pattern": .string(pattern.rawValue)]) }
+
+    /// Colours offered for covers.
+    public static let colors = ["#2f4858", "#33658a", "#86bbd8", "#758e4f", "#f6ae2d", "#f26419", "#b23a48", "#6c4a8a", "#3d3d3d", "#e8e1d4"]
 }

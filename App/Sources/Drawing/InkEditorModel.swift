@@ -678,6 +678,7 @@ final class InkEditorModel {
             guard let item = await library.item(target.itemId) else { failed = "This sketch isn't here any more."; return }
             pages = InkRenderer.sketchPages(item)
             pagesSig = Self.signature(item)
+            pageNames = Self.names(item)
         } else {
             guard let item = await library.item(target.itemId), let att = item.attachments.first(where: { $0.id == target.layer }),
                   let data = try? await library.attachmentData(att) else { failed = "Couldn't open the file. It may still be syncing."; return }
@@ -1428,6 +1429,8 @@ final class InkEditorModel {
         transformSelection(t, sel)
     }
 
+    func transformSelectionPublic(_ t: InkGeometry.Transform, _ sel: InkSelection) { transformSelection(t, sel) }
+
     /// Moves, resizes, turns or flips what's selected with one transform, then brings connectors
     /// joined to it back onto what they join. One undo step.
     private func transformSelection(_ t: InkGeometry.Transform, _ sel: InkSelection) {
@@ -1682,10 +1685,53 @@ final class InkEditorModel {
 
     private func pagesChanged(focus: String? = nil) async {
         await reloadInk()
+        if isSketch, let item = await app?.library?.item(target.itemId) { pageNames = Self.names(item) }
         if let focus, let i = pages.firstIndex(where: { $0.key == focus }) { page = i }
         edited = true
         app?.inkChanged()
     }
+
+    // MARK: Outline, space, presenting (MASTER_PLAN G2, G5, G10)
+
+    /// Named pages (bookmarks): page key → name, for the outline.
+    private(set) var pageNames: [String: String] = [:]
+
+    static func names(_ item: Item) -> [String: String] {
+        Dictionary(item.sketchPageList.compactMap { p in p.name.map { (p.id, $0) } }, uniquingKeysWith: { a, _ in a })
+    }
+
+    func renamePage(_ key: String, to name: String) {
+        guard isSketch, let library = app?.library else { return }
+        let itemId = target.itemId
+        Task {
+            await library.setPageName(key, of: itemId, to: name)
+            await pagesChanged()
+        }
+    }
+
+    /// Opens a gap at `y` on a page, pushing everything below it down by `by` points (up, removing
+    /// space, when negative). One undo step, like a lasso move.
+    func insertSpace(at y: Double, by: Double, pageKey key: String? = nil) {
+        let key = key ?? currentKey
+        guard let c = content[key] else { return }
+        let strokeTops = c.strokes.map { (id: $0.id, top: $0.points.map(\.y).min() ?? 0) }
+        let elementTops = c.elements.map { (id: $0.id, top: $0.frame.y) }
+        let targets = InkEditing.spaceTargets(strokes: strokeTops, elements: elementTops, at: y)
+        guard !targets.strokes.isEmpty || !targets.elements.isEmpty else { return }
+        let highest = (strokeTops.filter { targets.strokes.contains($0.id) }.map(\.top) + elementTops.filter { targets.elements.contains($0.id) }.map(\.top)).min()
+        let dy = InkEditing.clampedSpace(by, at: y, highestBelow: highest)
+        guard dy != 0 else { return }
+        transformSelectionPublic(.move(0, dy), InkSelection(pageKey: key, strokes: Set(targets.strokes), elements: Set(targets.elements)))
+    }
+
+    /// Presentation mode: no toolbars, the laser in hand, the page as big as it goes.
+    var presenting = false {
+        didSet {
+            guard presenting != oldValue else { return }
+            if presenting { toolBeforePresenting = tool; select(.laser) } else if let t = toolBeforePresenting { select(t) }
+        }
+    }
+    @ObservationIgnored private var toolBeforePresenting: InkEditorTool?
 
     func addPage(after: String? = nil) {
         guard isSketch, let library = app?.library else { return }

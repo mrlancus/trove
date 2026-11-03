@@ -451,6 +451,20 @@ extension Library {
         await deleteElements(await elements(on: sketchId, pageKey: pageKey).map(\.id))
     }
 
+    /// Names a page for the notebook's outline ("" removes the name).
+    public func setPageName(_ pageKey: String, of sketchId: String, to name: String) async {
+        guard let sketch = await item(sketchId) else { return }
+        await setPages(sketchId, sketch.sketchPageList.map { page in
+            guard page.id == pageKey else { return page }
+            return InkPage(id: page.id, paper: page.paper, color: page.color, size: page.size, name: name)
+        })
+    }
+
+    /// A notebook's cover (nil: show the first page).
+    public func setCover(_ itemId: String, _ cover: NotebookCover?) async {
+        await update(itemId, [Item.SketchField.cover: cover?.json ?? .null])
+    }
+
     /// One page's paper or colour ("" colour = white).
     public func setPage(_ pageKey: String, of sketchId: String, paper: InkPaper? = nil, color: String? = nil, size: [Double]? = nil) async {
         guard let sketch = await item(sketchId) else { return }

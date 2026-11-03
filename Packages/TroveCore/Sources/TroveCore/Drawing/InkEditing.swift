@@ -388,4 +388,21 @@ public enum InkEditing {
         }
         return picked
     }
+
+    // MARK: Insert space (MASTER_PLAN G5)
+
+    /// What to push down (or up, with a negative `by`) to open a gap at `y`, like GoodNotes' "add
+    /// space": every stroke and box whose top is at or below `y`. Things that straddle the line
+    /// stay, so a tall drawing across it isn't torn apart.
+    public static func spaceTargets(strokes: [(id: String, top: Double)], elements: [(id: String, top: Double)], at y: Double)
+        -> (strokes: [String], elements: [String]) {
+        (strokes.filter { $0.top >= y }.map(\.id), elements.filter { $0.top >= y }.map(\.id))
+    }
+
+    /// Removing space never pulls things above the line they started below, nor past the page top:
+    /// the furthest it can move up is the gap between the line and the highest thing below it.
+    public static func clampedSpace(_ by: Double, at y: Double, highestBelow: Double?) -> Double {
+        guard by < 0, let top = highestBelow else { return by }
+        return max(by, y - top)
+    }
 }

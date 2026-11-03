@@ -28,7 +28,7 @@ import { allTemplates, dailyNote, dailyNoteId, fromTemplate, TEMPLATE_TAG, toggl
 const MAX_FILE_VERSIONS = 50;
 const CLIP_SETTINGS_ID = "settings.clipboard";
 /** Pages as the `pageList` field (InkPage.json: no null paper or colour). */
-const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}), ...(p.size ? { size: p.size } : {}) }));
+const pageJSON = (pages) => pages.map((p) => ({ id: p.id, ...(p.paper ? { paper: p.paper } : {}), ...(p.color ? { color: p.color } : {}), ...(p.size ? { size: p.size } : {}), ...(p.name ? { name: p.name } : {}) }));
 const newId = () => crypto.randomUUID().toLowerCase();
 
 /** An element's optional look (PROTOCOL.md §10); with `all`, off values (false, 0, "sans", "") are written too, to turn them off. */

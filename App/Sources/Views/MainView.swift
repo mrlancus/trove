@@ -789,6 +789,23 @@ struct ItemMenu: View {
         Button { Task { await model.togglePin(item) } } label: {
             Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
         }
+        if item.kind == .sketch {
+            Menu {
+                ForEach(NotebookCover.colors, id: \.self) { c in
+                    Button(c) { Task { await model.library?.setCover(item.id, NotebookCover(color: c, pattern: item.cover?.pattern ?? .plain)) } }
+                }
+                Divider()
+                ForEach(NotebookCover.Pattern.allCases, id: \.self) { p in
+                    Button(p.rawValue.capitalized) {
+                        Task { await model.library?.setCover(item.id, NotebookCover(color: item.cover?.color ?? NotebookCover.colors[1], pattern: p)) }
+                    }
+                }
+                if item.cover != nil {
+                    Divider()
+                    Button("Show the first page") { Task { await model.library?.setCover(item.id, nil) } }
+                }
+            } label: { Label("Cover", systemImage: "book.closed") }
+        }
         if item.kind == .link || item.category == .article {
             Button { Task { await model.markRead(item) } } label: {
                 Label(item.readAt == nil ? "Mark as read" : "Mark as unread", systemImage: "checkmark.circle")

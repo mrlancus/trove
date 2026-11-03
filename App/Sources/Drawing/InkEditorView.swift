@@ -39,8 +39,10 @@ struct InkEditorView: View {
     var body: some View {
         @Bindable var editor = editor
         VStack(spacing: 0) {
-            toolbar
-            Divider()
+            if !editor.presenting {
+                toolbar
+                Divider()
+            }
             ZStack(alignment: .bottom) {
                 Color.gray.opacity(0.18).ignoresSafeArea()
                 if editor.loaded, editor.currentPage != nil {
@@ -51,7 +53,13 @@ struct InkEditorView: View {
                     ProgressView("Opening…")
                 }
                 if let selection = editor.selection { selectionBar(selection).padding(.bottom, 52) } // above the zoom pill
-                if editor.loaded { InkZoomCorner(editor: editor) }
+                if editor.loaded, !editor.presenting { InkZoomCorner(editor: editor) }
+                if editor.presenting {
+                    Button { editor.presenting = false } label: { Label("End presentation", systemImage: "xmark.circle.fill").labelStyle(.iconOnly).font(.title) }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(16)
+                        .keyboardShortcut(.cancelAction)
+                }
                 if let p = editor.palette {
                     GeometryReader { geo in
                         // Tap anywhere else to close it.
@@ -67,10 +75,10 @@ struct InkEditorView: View {
             // The options row lies over the top of the canvas, so showing or hiding it doesn't change
             // the canvas's size (that refitted the pages and moved the sketch).
             .overlay(alignment: .top) {
-                if showOptions, hasOptions { optionsBar }
+                if showOptions, hasOptions, !editor.presenting { optionsBar }
             }
             .clipped()
-            if showsPageBar { pageBar }
+            if showsPageBar, !editor.presenting { pageBar }
         }
         .task { await editor.load() }
         .task(id: app.inkPulledRevision) { if editor.loaded { await editor.reloadInk() } }
@@ -247,6 +255,8 @@ struct InkEditorView: View {
                     }
                     .help(editor.darkPage ? "Show the page light" : "Show the page dark (black page, black and white ink swapped; only on this device)")
                 }
+                Button { editor.presenting = true } label: { Label("Present", systemImage: "play.rectangle") }
+                    .help("Presentation mode: hide the tools, laser in hand")
                 Button { asking.toggle() } label: { Label("Ask", systemImage: "bubble.left.and.text.bubble.right") }
                     .help("Ask about this notebook, check facts, or revise (quiz me)")
                 Menu {
@@ -566,8 +576,21 @@ struct InkPagesPanel: View {
     /// The pages the thumbnails were made for (`pagesRevision`): then every page is redrawn, else only the one being drawn on.
     @State private var thumbsFor = -1
 
+    @State private var renaming: String?
+    @State private var newName = ""
+
     var body: some View {
         List {
+            if !editor.pageNames.isEmpty {
+                Section("Outline") {
+                    ForEach(Array(editor.pages.enumerated()).filter { editor.pageNames[$0.element.key] != nil }, id: \.element.key) { index, page in
+                        Button { editor.page = index } label: {
+                            Label(editor.pageNames[page.key] ?? "", systemImage: index == editor.page ? "bookmark.fill" : "bookmark")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
             Section("Pages") {
                 ForEach(Array(editor.pages.enumerated()), id: \.element.key) { index, page in
                     Button { editor.page = index } label: {
@@ -580,13 +603,19 @@ struct InkPagesPanel: View {
                             .frame(width: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                             .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(index == editor.page ? Color.accentColor : .gray.opacity(0.3), lineWidth: index == editor.page ? 2 : 1))
-                            Text("\(index + 1)").font(.callout.monospacedDigit())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(index + 1)").font(.callout.monospacedDigit())
+                                if let name = editor.pageNames[page.key] { Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                            }
                             Spacer()
                         }
                         .inkTapArea()
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        if editor.isSketch {
+                            Button { renaming = page.key; newName = editor.pageNames[page.key] ?? "" } label: { Label(editor.pageNames[page.key] == nil ? "Name this page…" : "Rename page…", systemImage: "bookmark") }
+                        }
                         Button { editor.addPage(after: page.key) } label: { Label("Add page after", systemImage: "plus") }
                         Button { editor.duplicatePage(page.key) } label: { Label("Duplicate page", systemImage: "plus.square.on.square") }
                         if editor.pages.count > 1 {
@@ -622,6 +651,22 @@ struct InkPagesPanel: View {
                     }
                 }
             }
+            if let page = editor.currentPage {
+                Section {
+                    // Like GoodNotes' add space: everything below the middle of the screen moves.
+                    Button { editor.insertSpace(at: editor.visibleCenter.y, by: 120, pageKey: page.key) } label: { Label("Add space here", systemImage: "arrow.down.to.line") }
+                    Button { editor.insertSpace(at: editor.visibleCenter.y, by: -120, pageKey: page.key) } label: { Label("Remove space here", systemImage: "arrow.up.to.line") }
+                } footer: {
+                    Text("Pushes everything below the middle of the screen down (or pulls it up). Undo puts it back.")
+                }
+            }
+        }
+        .alert("Name this page", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("e.g. Week 3: Enzymes", text: $newName)
+            Button("Save") { if let key = renaming { editor.renamePage(key, to: newName) }; renaming = nil }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: {
+            Text("Named pages show in the outline at the top of this panel.")
         }
         .task(id: "\(editor.revision)-\(editor.pagesRevision)") { await renderThumbs(all: editor.pagesRevision != thumbsFor) }
         .inspectorColumnWidth(min: 200, ideal: 240, max: 320)

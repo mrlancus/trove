@@ -71,7 +71,8 @@ export const pageKey = (v) => (typeof v === "string" ? v : typeof v === "number"
 /** A sketch's pages in order: `pageList`, or "0", "1", … for sketches made before page ids. */
 export function pageListOf(fields) {
   const list = Array.isArray(fields.pageList) ? fields.pageList.filter((p) => p && typeof p.id === "string" && p.id)
-    .map((p) => ({ id: p.id, paper: PAPERS.includes(p.paper) ? p.paper : null, color: typeof p.color === "string" ? p.color : null, size: validSize(p.size) })) : [];
+    .map((p) => ({ id: p.id, paper: PAPERS.includes(p.paper) ? p.paper : null, color: typeof p.color === "string" ? p.color : null, size: validSize(p.size),
+      ...(typeof p.name === "string" && p.name.trim() ? { name: p.name.trim().slice(0, 120) } : {}) })) : [];
   if (list.length) return list;
   const n = Math.max(1, typeof fields.pages === "number" ? Math.floor(fields.pages) : 1);
   return Array.from({ length: n }, (_, i) => ({ id: String(i), paper: null, color: null, size: null }));

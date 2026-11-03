@@ -766,12 +766,14 @@ is a delete (`_deleted: true`), and undo deletes your last stroke. Fields (all `
   handwriting guides, 96 apart). Lines are 32 points apart unless noted. The exact lines and dots
   are `paperShapes` (core/ink.js) and `InkPaperShapes` (Swift), checked against
   `Fixtures/ink-papers.json` (made by `web/test/make-paper-fixture.mjs`). Unknown papers draw blank.
-- `pages`: the page count. `pageList`: the pages in order, `[{id, paper?, color?, size?}]` (a page's
-  own paper, `"#rrggbb"` colour (white when unset) and `[w, h]` size in points (36–4000 a side; the
-  sketch's `pageSize` when unset)). Without `pageList` the pages are `"0"` … `"pages-1"`.
+- `pages`: the page count. `pageList`: the pages in order, `[{id, paper?, color?, size?, name?}]` (a page's
+  own paper, `"#rrggbb"` colour (white when unset), `[w, h]` size in points (36–4000 a side; the
+  sketch's `pageSize` when unset) and `name`, its title in the notebook's outline, up to 120
+  characters; readers keep `name` when they rewrite the list). Without `pageList` the pages are `"0"` … `"pages-1"`.
   Adding (with the size, paper and colour of the page before), duplicating (with everything on the
   page), reordering and deleting pages rewrite the list; the last page can't be deleted. Two
   devices changing the list at once: the last write wins.
+- `cover`: a notebook's cover on the shelf, `{color: "#rrggbb", pattern: "plain"|"lines"|"dots"|"grid"|"linen"}`; absent or null shows the first page.
 - `pageSize` `[w, h]` (optional, 768 × 1024 when unset), and `canvas`: `"infinite"` for one endless
   page `"0"` (any coordinates, paper drawn everywhere; papers that lay out a page are plain lined
   there) instead of pages. Named sizes (scaled so pages are about 768 points wide): iPad 768 × 1024,

@@ -97,7 +97,9 @@ struct Thumbnail: View {
         // From the cache straight away when this file has been shown before (searching, scrolling back).
         let shown = image ?? cacheKey.flatMap(ThumbnailCache.cached)
         Group {
-            if let shown {
+            if item.kind == .sketch, let cover = item.cover {
+                NotebookCoverView(cover: cover, title: square == nil ? item.displayTitle : "")
+            } else if let shown {
                 Image(platformImage: shown).resizable().scaledToFill()
             } else if let s = item.record[Field.imageURL]?.string, let url = URL(string: s) {
                 AsyncImage(url: url) { phase in
@@ -259,5 +261,39 @@ enum SearchSnippetText {
         }
         out += piece(at..<scalars.count)
         return out
+    }
+}
+
+
+/// A notebook's cover (MASTER_PLAN G1): its colour, a quiet pattern, a spine and the title.
+struct NotebookCoverView: View {
+    let cover: NotebookCover
+    var title: String = ""
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color(inkHex: cover.color)
+            Canvas { ctx, size in
+                let ink = GraphicsContext.Shading.color(.white.opacity(0.16))
+                switch cover.pattern {
+                case .plain: break
+                case .lines:
+                    for y in stride(from: 14.0, to: size.height, by: 14) { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: ink) }
+                case .dots:
+                    for y in stride(from: 10.0, to: size.height, by: 14) { for x in stride(from: 10.0, to: size.width, by: 14) { ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 2, height: 2)), with: ink) } }
+                case .grid:
+                    for y in stride(from: 14.0, to: size.height, by: 14) { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: ink) }
+                    for x in stride(from: 14.0, to: size.width, by: 14) { ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: ink) }
+                case .linen:
+                    for y in stride(from: 0.0, to: size.height, by: 3) { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.6)), with: .color(.white.opacity(0.07))) }
+                    for x in stride(from: 0.0, to: size.width, by: 3) { ctx.fill(Path(CGRect(x: x, y: 0, width: 0.6, height: size.height)), with: .color(.black.opacity(0.06))) }
+                }
+                // The spine.
+                ctx.fill(Path(CGRect(x: 0, y: 0, width: 10, height: size.height)), with: .color(.black.opacity(0.18)))
+            }
+            if !title.isEmpty {
+                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2).shadow(radius: 2).padding(.leading, 18).padding(12)
+            }
+        }
     }
 }
