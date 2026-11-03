@@ -698,6 +698,7 @@ struct SelectionBar: View {
     let items: [Item]
     @Binding var confirmDelete: Bool
     @Environment(AppModel.self) private var model
+    @State private var exported: ZipFile?
 
     var body: some View {
         let allPicked = !items.isEmpty && items.allSatisfy { model.picked.contains($0.id) }
@@ -723,6 +724,14 @@ struct SelectionBar: View {
             let allPinned = !none && model.items.filter { model.picked.contains($0.id) }.allSatisfy(\.isPinned)
             Button { Task { await model.pinPicked(!allPinned) } } label: { Label(allPinned ? "Unpin" : "Pin", systemImage: allPinned ? "pin.slash" : "pin") }
                 .disabled(none)
+            Button {
+                Task {
+                    guard let library = model.library else { return }
+                    let out = await library.exportPlain(Array(model.picked))
+                    exported = ZipFile(data: out.data)
+                }
+            } label: { Label("Export as Markdown and files", systemImage: "square.and.arrow.up") }
+            .disabled(none)
             Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
                 .disabled(none)
                 .tint(.red)
@@ -733,6 +742,8 @@ struct SelectionBar: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
         .glass(cornerRadius: 26)
         .padding(.horizontal, 12).padding(.bottom, 8)
+        .fileExporter(isPresented: Binding(get: { exported != nil }, set: { if !$0 { exported = nil } }), document: exported,
+                      contentType: .zip, defaultFilename: "Trove export") { _ in exported = nil }
     }
 }
 
@@ -1089,4 +1100,14 @@ extension View {
         self
         #endif
     }
+}
+
+
+/// A zip for the save panel (Export as Markdown and files).
+struct ZipFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.zip] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
