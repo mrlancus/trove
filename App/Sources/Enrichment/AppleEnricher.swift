@@ -24,6 +24,22 @@ enum AppleEnricher {
         return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
     }
 
+    /// Lines of text with where each is (normalised, origin bottom left), top to bottom: what the
+    /// notebook chat needs to highlight a cited line.
+    static func recognizeLines(in image: CGImage, fast: Bool = false) async -> [(text: String, box: CGRect)] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = fast ? .fast : .accurate
+        request.usesLanguageCorrection = true
+        request.automaticallyDetectsLanguage = true
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        } catch {
+            return []
+        }
+        return (request.results ?? []).compactMap { o in o.topCandidates(1).first.map { (text: $0.string, box: o.boundingBox) } }
+            .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
     /// Typed PDFs give their text directly; scanned/handwritten pages (GoodNotes) are OCR'd.
     static func pdfText(_ data: Data, maxPages: Int = 40) async -> String {
         guard let pdf = PDFDocument(data: data) else { return "" }

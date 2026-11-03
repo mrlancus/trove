@@ -832,7 +832,19 @@ final class InkEditorModel {
         }
         if let t = tapePreview, t.key == key { o.tape = (frame: t.frame, rotate: t.rotate, color: color(for: .tape)) }
         if let h = hoverTip, h.key == key, tool.ink != nil { o.tip = (point: h.point, color: color(for: tool), width: width(for: tool)) }
+        o.highlights = studyHighlights[key] ?? []
         return o
+    }
+
+    /// Lines the notebook chat pointed at, by page (StudyPanel). Static markers, redrawn only when set.
+    var studyHighlights: [String: [InkGeometry.Rect]] = [:] {
+        didSet { overlayChanged() }
+    }
+
+    /// Shows a page (by key) and marks places on it.
+    func highlight(_ rects: [String: [InkGeometry.Rect]], goTo key: String?) {
+        studyHighlights = rects
+        if let key, let i = pages.firstIndex(where: { $0.key == key }), i != page { page = i }
     }
 
     /// Where a hovering Apple Pencil is (page, point), to preview the pen's tip and colour there.

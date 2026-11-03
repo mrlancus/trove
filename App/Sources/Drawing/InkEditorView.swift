@@ -15,6 +15,8 @@ struct InkEditorView: View {
     @State private var exportFile: PDFFile?
     @State private var confirmDeletePage: String?
     @State private var pageSettings = false
+    /// Ask this notebook (StudyPanel, MASTER_PLAN G14).
+    @State private var asking = false
     @State private var penOptions = false
     /// The second row under the tools (the chosen tool's colours, sizes and modes), like GoodNotes.
     @State private var showOptions = true
@@ -73,7 +75,17 @@ struct InkEditorView: View {
         .task(id: app.inkPulledRevision) { if editor.loaded { await editor.reloadInk() } }
         .onAppear { app.drawingOpen += 1 }
         .onDisappear { app.drawingOpen = max(0, app.drawingOpen - 1) }
-        .inspector(isPresented: $editor.showPages) { InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage) }
+        // One side panel: the pages, or Ask this notebook.
+        .inspector(isPresented: Binding(get: { editor.showPages || asking }, set: { if !$0 { editor.showPages = false; asking = false } })) {
+            if asking {
+                StudyPanel(editor: editor)
+                    .inspectorColumnWidth(min: 300, ideal: 360, max: 480)
+            } else {
+                InkPagesPanel(editor: editor, confirmDelete: $confirmDeletePage)
+            }
+        }
+        .onChange(of: asking) { _, on in if on { editor.showPages = false } }
+        .onChange(of: editor.showPages) { _, on in if on { asking = false } }
         .sheet(item: $editor.aiResult) { result in InkAIResultSheet(result: result, editor: editor) }
         .alert("Save as element", isPresented: $savingElement) {
             TextField("Name", text: $elementName)
@@ -226,6 +238,8 @@ struct InkEditorView: View {
                     }
                     .help(editor.darkPage ? "Show the page light" : "Show the page dark (black page, black and white ink swapped; only on this device)")
                 }
+                Button { asking.toggle() } label: { Label("Ask", systemImage: "bubble.left.and.text.bubble.right") }
+                    .help("Ask about this notebook, check facts, or revise (quiz me)")
                 Button { editor.exportPDF() } label: { Label("Export PDF", systemImage: "square.and.arrow.up") }
                     .disabled(editor.exporting)
             }

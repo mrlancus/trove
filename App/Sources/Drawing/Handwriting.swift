@@ -54,17 +54,22 @@ enum Handwriting {
                 InkRenderer.render(plain, content: content, pixelWidth: width, area: box).map(InkImage.init)
             }).value else { continue }
             var text = ""
+            var boxes: [[Double]]?
             var stamp = pageSig
             if let ai, let jpeg = InkRenderer.jpeg(image.image, quality: 0.85),
                let read = try? await ai.readPage(jpeg, mime: "image/jpeg", about: item.displayTitle) {
                 text = read
             } else {
-                text = await AppleEnricher.recognizeText(in: image.image, fast: fast).trimmingCharacters(in: .whitespacesAndNewlines)
+                let found = await AppleEnricher.recognizeLines(in: image.image, fast: fast)
+                text = found.map(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                // Normalised boxes (origin bottom left) to page points over the area that was drawn.
+                let ax = box?.x ?? 0, ay = box?.y ?? 0
+                boxes = found.map { [ax + $0.box.minX * w, ay + (1 - $0.box.maxY) * h, $0.box.width * w, $0.box.height * h] }
                 // Your AI didn't answer (offline, out of credit): Vision's reading for now, AI next time.
                 if ai != nil { aiFailed = true; stamp = String(pageSig.dropLast(reader.count)) }
             }
             read += 1
-            kept[spec.key] = HandwritingPages.Page(sig: stamp, text: text)
+            kept[spec.key] = HandwritingPages.Page(sig: stamp, text: text, lines: boxes)
             if !text.isEmpty { parts.append(text) }
         }
         await HandwritingPages.shared.set(kept, for: itemId)
@@ -82,6 +87,9 @@ actor HandwritingPages {
     struct Page: Codable, Equatable {
         var sig: String
         var text: String
+        /// Where each line of `text` is on the page (x, y, width, height in page points), when Vision
+        /// read it; the notebook chat highlights cited lines with these. Nil when your AI read it.
+        var lines: [[Double]]?
     }
 
     private var sketches: [String: [String: Page]]?

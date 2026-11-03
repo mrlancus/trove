@@ -651,6 +651,8 @@ struct InkOverlay {
     var ruler: InkEditing.Guide?
     var protractor: InkEditing.Guide?
     var reading: InkPoint?
+    /// Places the notebook chat pointed at (found, cited): a soft marker over each line.
+    var highlights: [InkGeometry.Rect] = []
 }
 
 extension InkRenderer {
@@ -669,6 +671,17 @@ extension InkRenderer {
             ctx.drawPath(using: .fillStroke)
         }
         if let line = o.preview { draw([line], in: ctx) }
+        if !o.highlights.isEmpty {
+            ctx.setFillColor(CGColor(red: 1, green: 0.84, blue: 0.2, alpha: 0.32))
+            ctx.setStrokeColor(CGColor(red: 1, green: 0.62, blue: 0, alpha: 0.9))
+            ctx.setLineWidth(2 * px)
+            for r in o.highlights {
+                let path = CGPath(roundedRect: CGRect(x: r.x - 4, y: r.y - 3, width: r.width + 8, height: r.height + 6),
+                                  cornerWidth: 6, cornerHeight: 6, transform: nil)
+                ctx.addPath(path)
+                ctx.drawPath(using: .fillStroke)
+            }
+        }
         if let b = o.selection {
             ctx.setLineWidth(1.5 * px)
             ctx.setStrokeColor(blue)
