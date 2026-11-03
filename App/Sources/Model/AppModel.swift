@@ -121,6 +121,8 @@ final class AppModel {
     @ObservationIgnored private var shownInkStamp = ""
     /// Study mode (StudyView): open, and which deck (nil: everything due).
     var showStudy = false
+    /// Open Quickly (⌘O).
+    var showSwitcher = false
     var studyDeck: String?
     var sync = SyncStatus()
     var enriching = false
