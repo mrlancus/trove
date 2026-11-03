@@ -393,6 +393,33 @@ Mac (window toolbar, unified with the title bar; same order, keyboard shortcuts 
 - **TroveCore `ZoomBase`:** relative ↔ absolute conversion and preset generation, tested on Linux.
 - When a sketch opens, "When a drawing opens" gets a third choice: "At my 100 %".
 
+**T6. A new sketch asks for its page settings first** (the user, 2026-11-03: "when u create a new
+sketch it should immediately ask u about page settings n stuff").
+- Today `AppModel.newSketch` (`AppModel.swift:525`) creates a sketch with defaults and opens it.
+- Now every "New sketch" (sidebar, menus, ⌘ shortcut, command palette, iPhone) first opens a
+  **New sketch** sheet:
+  - **Name** (focused, optional; "Sketch" if left empty).
+  - **Kind:** Notebook (pages) · Whiteboard (one big page) · Endless canvas.
+  - **Paper**, as a row of live thumbnails: blank, ruled (narrow / wide), grid, dots, Cornell, music,
+    and the planners and templates.
+  - **Size and orientation:** A4, A5, Letter, iPad screen; portrait / landscape. Notebooks only.
+  - **Paper colour:** white, cream, grey, dark.
+  - **Cover:** notebooks only; uses the existing `NotebookCover` picker.
+  - **Folder:** preset to where you clicked "New sketch here".
+- **Every choice starts at what you used last time**, so a big **Create** button (Return) makes the
+  usual sketch in one tap. A small preview of the first page updates as you choose.
+- **"Ask every time"** sits at the bottom of the sheet, also in Settings → Sketch. Turning it off
+  makes "New sketch" create with your last choices straight away, as it does now. A long-press or
+  ⌥-click on "New sketch" always shows the sheet.
+- **Shared model.** The sheet uses the same page model as the editor's Page settings
+  (`InkPageSettings`), so the two can't drift.
+  - The "last used" set is a small `NewSketchDefaults` value (TroveCore, Codable, Linux-tested),
+    stored per device.
+- **iPhone:** the same sheet with a medium detent.
+- **Mac:** a sheet on the window.
+- **Verified by:** a V2 screenshot of the sheet at all sizes, and a UI test (New sketch → change
+  paper → Create → the editor opens with that paper).
+
 ### A. AI on the page
 
 **A1. Handwriting synthesis (TroveCore `Drawing/InkHandwriting.swift`).**
@@ -406,13 +433,40 @@ Turns text into real `InkLine` strokes that look handwritten. Entirely on the de
     carry the NBS attribution).
   - Build-time converter (`scripts/glyphs.py`): SVG font → a compact JSON table of polylines per
     glyph, with advance and baseline, at about 60 KB per style, in `Packages/TroveCore/Resources`.
-  - Two styles to start: a neat print and a looser script. **Which is the default is the user's
-    pick (Q2).**
+  - Two styles to start. **The default is natural, neat handwriting** (the user, 2026-11-03: "near
+    handwriting that still looks real"): clearly a person's writing, not a font, but tidy enough
+    to read at a glance. A looser script is the second choice in Settings → AI → Handwriting.
+  - The single-line font is only the skeleton. The humaniser (below) is what makes it look real, and
+    its ranges are tuned on the iPad until it does.
+- **Size: match the writing around it** (the user: "should mimic size of writing around it … like
+  if it's filling out a fill in the gaps it should be a similar size").
+  - `InkHandwriting.sizeNear(rect, strokes:, lines:)` (TroveCore, pure) estimates the local
+    **x-height and slant** from the user's own ink near the target. It looks at strokes within about
+    3 line-heights:
+    - Vision's line boxes when they exist;
+    - otherwise stroke clusters, using the median height of letter-sized strokes, ignoring long
+      lines, arrows and drawings.
+  - Nearer writing counts more. Writing on the same line counts most.
+  - **Gaps** (fill-in-the-blanks: a `____` line, a space between words, an empty table cell or box)
+    take the size of the writing **on the same line**, then sit on the blank's baseline or in the
+    box's middle.
+  - The local slant is copied too, within ±8°, so it leans like the user's writing.
+  - Fallbacks, in order:
+    1. the writing on the same line;
+    2. nearby writing;
+    3. the ruling (x-height ≈ 45 % of the line spacing);
+    4. the target box (A3);
+    5. the median x-height of all ink on the page;
+    6. 5 mm.
+  - When nothing fits (a long answer in a small gap), it shrinks to at least 70 % of the local size,
+    then wraps. Past that it says so and offers to place it next to the gap with an arrow, rather
+    than writing tiny.
+  - Tests (Linux): synthetic pages with writing at 3 sizes. The output's x-height is within ±15 %
+    of the writing on the same line, a gap uses the same line's size, and the fallback order holds.
 - **Layout.**
   - Wrap text to a width.
   - Line height = the page's ruling when the paper is ruled (`InkPaper.lines`), so writing **sits on
-    the lines**. Otherwise it's 1.5× the x-height, chosen from the target box or the neighbouring
-    handwriting's height (median height of Vision's line boxes nearby, A5).
+    the lines**. Otherwise it's 1.6× the x-height from the size rule above.
   - Maths gets its own layout: fractions stacked, superscripts raised. It is a small subset driven by
     `MathExpression`'s tree, so Math Assist answers like `x = 3/4` or `2.5×10⁴` look written.
 - **Humaniser** (deterministic, seeded from the text, the page and the position, so every device
@@ -562,8 +616,16 @@ The fixes, in the order of the findings:
      ≈ 1 100 tokens; a 4:3 page ≈ 1 600. That is **$0.0001–0.0002 per page** at $0.10 per million.
      Cached in the prompt cache for the session. (R13)
    - Capped at 6 pictures per question (the pages nearest the question's scope).
-   - Off when the user turns "Send page pictures" off in Settings → AI (default on, with the cost
-     shown there).
+   - **It asks first** (the user, 2026-11-03). The first time in a session a question would send
+     page pictures, the Ask box shows:
+     > "To answer this I'd look at 3 pages as pictures (≈ $0.0005). **Allow** · **Allow for this
+     > session** · **Always allow** · **Not now**"
+     - "Not now" answers from the text only, and says the answer may miss drawings.
+     - The choices are remembered in Settings → AI → "Page pictures": **Ask each session**
+       (default) · **Always** · **Never**. It can be changed there any time.
+     - A temporary chat follows the same setting.
+     - Test: the consent decision is a pure function (`PictureConsent`) in TroveCore, with Linux
+       tests for session, forever and never.
 - **"What the AI sees"** in the Ask box's menu shows the exact text per page, and which pages go as
   pictures. Transparency, and the user's own way to debug.
 - **Scope chips in the Ask box:** "Whole notebook" · "This page" · "Selection" (enabled when a
@@ -641,7 +703,8 @@ Nothing in `App/` compiles on Linux. So each step:
 2. **A5.1–A5.4**, the AI reads handwriting. Small, a clear bug, and a big user-visible win.
 3. **S2.1–S2.6** iPad layers, then **S2-Mac**.
 4. **T4 + T5**: the HUD solver, zoom cluster and custom 100 %. This fixes "hidden zoom pill" early.
-5. **T1–T3** toolbar, tool tray, customise.
+5. **T1–T3** toolbar, tool tray, customise. **T6** new-sketch sheet (small; it can go any time after
+   T4).
 6. **A1** handwriting synthesis (glyph licence checked first, the Q2 style pick).
 7. **A2** Math Assist in blue handwriting.
 8. **A4** floating Ask box, **A6** looking outline, **A5.5** page pictures, plus "What the AI sees"
@@ -677,14 +740,18 @@ Nothing in `App/` compiles on Linux. So each step:
 
 ## 5. Questions for the user
 
-1. **The new ink renderer (S3)** is the biggest piece. It's the only way to guarantee ink never goes
-   soft while zooming. It will need the user's eye on the iPad before it's the default. OK to build
-   it?
-2. **The default handwriting style for AI writing:** neat print or loose script? A screenshot of
-   both goes in the build, in Settings → AI → Handwriting, and the pick there is the answer.
-   - The glyphs' licence is checked first. If it turns out not to be OFL or public domain, the
-     choice of source comes back to the user. (R14)
-3. **Page pictures for the AI (A5.5):** about $0.0001–0.0002 a page, only when needed. Default on, or off?
+1. **The new ink renderer (S3).** The user asked what it involves and why Apple Notes doesn't need
+   it (answered in chat, 2026-11-03).
+   - **Decision:** S1 and S2 come first. They remove the lag that is Trove's own fault.
+   - Then the user tries it on the iPad and decides whether the remaining PencilKit re-sharpening
+     is worth S3.
+2. ~~Default handwriting style~~ **Answered:** natural, neat handwriting that looks real, sized like
+   the writing around it (A1).
+   - The glyphs' licence is still checked first. If it isn't OFL or public domain, the choice of
+     source comes back to the user. (R14)
+3. ~~Page pictures~~ **Answered:** yes, but ask first. The first ask in each session offers Allow /
+   for this session / always / not now. "Ask each session" is the default and can be changed in
+   Settings (A5.5).
 
 Decided here without asking:
 - the light-blue colour for Math Assist;
@@ -707,3 +774,6 @@ Decided here without asking:
 | 7 | Live "AI is looking" outline | A6 | V2 shot mid-read; V4 |
 | 8 | Choose where AI output goes and its size | A3 | `DiagramSpec.layout(in:)` tests; V4 |
 | 9 | Handwriting style with your pens and colours by default; human-like later | A1, A3, A8 | A1 tests; V4 |
+| 10 | Natural handwriting sized like the writing around it (fill in the gaps) | A1 (size rule) | `sizeNear` tests; V4 |
+| 11 | Ask before sending page pictures; per session, forever or never; editable in Settings | A5.5 | `PictureConsent` tests; V4 |
+| 12 | A new sketch asks for page settings first | T6 | V2 screenshot plus UI test |
