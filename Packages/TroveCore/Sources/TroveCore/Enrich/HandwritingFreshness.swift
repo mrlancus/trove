@@ -63,3 +63,31 @@ public enum PictureConsent {
         }
     }
 }
+
+/// Which pages to show the AI as pictures (plan A5.5): pages with ink that Vision read little text
+/// from (drawings, diagrams, maths layout), the current page first, at most `limit`.
+public enum PagePictures {
+    public struct Page: Sendable {
+        public var key: String
+        public var strokes: Int
+        /// Characters of text read from the page's handwriting.
+        public var textCharacters: Int
+        public init(key: String, strokes: Int, textCharacters: Int) { self.key = key; self.strokes = strokes; self.textCharacters = textCharacters }
+    }
+
+    /// Writing gives a few characters a stroke; a page well under that is mostly drawing.
+    public static func mostlyDrawing(_ p: Page) -> Bool { p.strokes >= 8 && Double(p.textCharacters) < Double(p.strokes) * 0.8 }
+
+    public static func choose(_ pages: [Page], current: String?, limit: Int = 3) -> [String] {
+        let wanted = pages.filter(mostlyDrawing)
+        let ordered = wanted.sorted { a, b in
+            if a.key == current { return true }
+            if b.key == current { return false }
+            return a.strokes > b.strokes
+        }
+        return Array(ordered.prefix(limit).map(\.key))
+    }
+
+    /// About what pictures cost (Haiku-class input price per million tokens): a picture ~1 600 tokens.
+    public static func cost(_ count: Int, pricePerMillion: Double = 0.10) -> Double { Double(count) * 1_600 * pricePerMillion / 1_000_000 }
+}

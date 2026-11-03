@@ -78,10 +78,11 @@ final class FrameMeter {
     }
 
     /// The display link's target (it retains its target, so it's this small object, not the meter).
+    @MainActor
     private final class Ticker: NSObject {
         let action: @MainActor (CADisplayLink) -> Void
         init(_ action: @escaping @MainActor (CADisplayLink) -> Void) { self.action = action }
-        @objc func fire(_ link: CADisplayLink) { MainActor.assumeIsolated { action(link) } }
+        @objc func fire(_ link: CADisplayLink) { action(link) }
     }
 }
 

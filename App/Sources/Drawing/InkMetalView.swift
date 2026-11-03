@@ -46,8 +46,13 @@ final class InkMetalView: MTKView {
     private var pages: [String: PageInk] = [:]
     private var zoom: CGFloat = 1
 
-    init?() {
+    /// Nil when there's no Metal device (then PencilKit draws the ink).
+    static func make() -> InkMetalView? {
         guard let gpu = InkGPU.shared else { return nil }
+        return InkMetalView(gpu: gpu)
+    }
+
+    private init(gpu: InkGPU) {
         super.init(frame: .zero, device: gpu.device)
         isOpaque = false
         backgroundColor = .clear
