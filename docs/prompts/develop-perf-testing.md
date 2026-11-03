@@ -252,7 +252,8 @@ ability.
 - **Tutor**: explains, and gives progressive hints: (1) a nudge, (2) the relevant principle, (3) an
   approach, (4) the next step, (5) a full solution. Hints aren't punished, but they reduce
   independence credit.
-- **Examiner**: marks against explicit criteria. It judges the reasoning as well as the answer,
+- **Examiner**: marks against explicit criteria, and always against the official mark scheme when
+  one has been matched (see "Practising questions"). It judges the reasoning as well as the answer,
   names wrong assumptions and missing steps, says exactly why each mark was lost, distinguishes the
   official requirements from extras, admits uncertainty, and never declares me exam-ready without the
   evidence.
@@ -306,6 +307,36 @@ built:
    sheet, drag and drop, the camera, Files), get the same on-device splitting, matching and tagging,
    and are stored like every other item: encrypted, in my vault, synced through iCloud Drive and the
    relay's R2 storage, so they're on all my devices. They're mine, so nothing about them is shared.
+
+### Practising questions (works without AI)
+
+**AI is never required to practise.** With AI switched off, or with no allowance left, the whole loop
+still works:
+
+1. **Get questions.** "Practise" hands me questions picked pseudo-randomly: weighted towards the
+   skills that are due or weak, never repeating one I've just done, and seeded so a session can be
+   replayed in tests. I can narrow it by specification, topic or skill, paper, year, question type or
+   marks, or ask for "anything from the whole specification". I can also open a whole paper and do it
+   in order, as a timed mock.
+2. **See where it came from, on request.** Each question has a small, unobtrusive source line or
+   button (hidden by default, so it doesn't spoil a "blind" attempt) that shows the board,
+   specification, series and year, paper, and question number, for example "AQA 7408/2, June 2023,
+   Q4.2". One more tap opens the original page of the paper, and the matching mark scheme and
+   examiner report if there are any. My own uploads show their file and page in the same way.
+3. **Answer** by typing, or by writing with the Pencil on the iPad.
+4. **Mark it, my way:**
+   - **Show mark scheme**: the matched mark-scheme entry (and the examiner report's comments on that
+     question, if any), with each marking point as a checkbox. I tick the marks I earned and Trove
+     records the score. No AI involved.
+   - **Mark with AI**: one tap, optional. The AI **always** gets the matched mark scheme and examiner
+     report automatically when they exist, and marks against them point by point, quoting each one.
+     When there's no mark scheme it says so plainly, marks against stated criteria instead, and the
+     mark is labelled as lower confidence.
+   - **Skip marking**: the attempt is kept, but counts as no evidence.
+5. **Evidence is labelled by how it was marked**: self-marked against a mark scheme, AI-marked
+   against a mark scheme, AI-marked without one, or unmarked. The mastery model weighs each kind
+   with a named, explained rule. Self-marking counts, because I'm the one who decides what I got
+   right. Each attempt keeps its source, so "where did this come from?" also works from my history.
 
 **Not now: AI-generated problems.** Today's affordable models (Haiku on the relay) aren't good enough
 at writing correct exam-style problems, and doing it well costs too many tokens. Don't build it.
@@ -819,6 +850,13 @@ cases for each area, not only the happy path.
   - History kept.
   - Farming trivial questions doesn't raise mastery.
   - Uncertain marks go to review.
+  - Practise with AI switched off from start to finish: get questions, show the mark scheme,
+    self-mark, and see the evidence recorded, with **no AI call** in the activity log.
+  - Pseudo-random picks: the same seed gives the same questions, recent questions aren't repeated,
+    and filters (topic, paper, year, marks) are respected.
+  - The source line is hidden until asked for, then shows the right board, paper, year and question,
+    and opens the original page.
+  - AI marking includes the matched mark scheme in its request, and says so when there isn't one.
 - **Curriculum and campaigns** (when built):
   - Choose a board and specification version.
   - Concept mapping.
