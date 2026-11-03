@@ -67,6 +67,14 @@ export interface Metered<T> {
   tokens: number;
 }
 
+/** What a call counts against the monthly allowance: tokens weighted as they're billed, so a cache
+ * read (billed at a tenth of an input token) counts a tenth and a cache write (1.25×) a bit more
+ * (docs/PERF_AUDIT.md L2). Rounded up to whole tokens. */
+export function meteredTokens(u: { input_tokens?: number | null; output_tokens?: number | null; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null } | null | undefined): number {
+  if (!u) return 0;
+  return Math.ceil((u.input_tokens ?? 0) + (u.output_tokens ?? 0) + 1.25 * (u.cache_creation_input_tokens ?? 0) + 0.1 * (u.cache_read_input_tokens ?? 0));
+}
+
 type Content = string | Anthropic.Beta.BetaContentBlockParam[];
 
 async function structured<T>(env: Env, effort: "low" | "medium", schema: Record<string, unknown>, prompt: Content, maxTokens = 8000): Promise<Metered<T>> {
@@ -92,7 +100,7 @@ async function structured<T>(env: Env, effort: "low" | "medium", schema: Record<
     throw e;
   }
   const u = response.usage;
-  const tokens = (u?.input_tokens ?? 0) + (u?.output_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0);
+  const tokens = meteredTokens(u);
   if (response.stop_reason === "refusal") throw new HttpError(422, "Claude declined to process this item", tokens);
   if (response.stop_reason === "max_tokens") throw new HttpError(502, "Claude response was cut off", tokens);
   const text = response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");

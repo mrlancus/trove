@@ -15,3 +15,4 @@ One row per run. Never edit an old row; a re-run is a new row. Who: `Claude` (cl
 | 2026-11-03 | TroveCore suite incl. TEST-DEV-001–012, TEST-GRAPH-010–012, TEST-CUR-001, TEST-CARD-010 (`DevelopTests`, 14 tests) | Develop slice commit | Linux x86-64, Ubuntu 24.04, Swift 6.3.1 | Claude | pass | 233 tests |
 | 2026-11-03 | web unit incl. `develop.test.mjs` (TEST-DEV-001, 003) | Develop slice commit | Linux, Node | Claude | pass | 73 tests |
 | 2026-11-03 | catalogue links (TEST-CUR-001) | after 222109b | Linux, Python 3 | Claude | pass | 20 links, 0 broken (`scripts/check-catalogue.py`) |
+| 2026-11-03 | relay tests (`server`, vitest on the Workers runtime) incl. metered tokens | after 9c1c8c9 | Linux, Node | Claude | pass | 59 tests; tsc clean |

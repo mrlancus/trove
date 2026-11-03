@@ -125,3 +125,14 @@ describe("AI actions", () => {
     expect((await status(v)).used).toBe(42);
   });
 });
+
+describe("metered tokens", () => {
+  it("weighs cache reads and writes as they're billed (PERF_AUDIT L2)", async () => {
+    const { meteredTokens } = await import("../src/ai");
+    expect(meteredTokens({ input_tokens: 100, output_tokens: 50 })).toBe(150);
+    expect(meteredTokens({ input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1000 })).toBe(250);
+    expect(meteredTokens({ input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1000 })).toBe(1250);
+    expect(meteredTokens({ input_tokens: 1, output_tokens: 0, cache_read_input_tokens: 3 })).toBe(2);
+    expect(meteredTokens(null)).toBe(0);
+  });
+});

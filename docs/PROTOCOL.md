@@ -210,7 +210,8 @@ The Anthropic key is a Worker secret (`ANTHROPIC_API_KEY`). Content sent to AI r
 by necessity, and the apps label those items "processed in cloud". The relay never stores it.
 
 Claude routes (`enrich`, `ask`, `action`) also return `tokens` (what the call cost: input + output +
-cache tokens, from the API's usage numbers) and `usage` (the status object). They count against a
+1.25 × cache writes + 0.1 × cache reads, rounded up: tokens weighted as they're billed, from the API's
+usage numbers) and `usage` (the status object). They count against a
 monthly allowance per vault, the Worker var `AI_MONTHLY_LIMIT` in tokens (default 1,000,000; the
 month is the UTC calendar month). Once `used >= limit` they answer `429 {error, ...status}` without
 calling Claude, until `resetsAt`. A refused or cut-off answer still counts what it cost. `enabled`

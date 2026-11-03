@@ -207,7 +207,7 @@ Large changes (made or planned), each with its rollback:
 - **L1 (planned): search engine on integer ids with top-k.** Changes `TermIndex` and its JS twin
   `core/search.js` together, with `search-cases.json`; the saved index format bumps (rebuilt once on
   first launch). Rollback: revert; the old format is rebuilt from the vault.
-- **L2 (planned): relay counts cache reads at 0.1 and caches its instructions.** Changes the relay
+- **L2 (made, not deployed): the relay counts cache reads at 0.1 and cache writes at 1.25 (`meteredTokens`); caching its own instructions waits until they pass Haiku 5.5's 512-token minimum.** Changes the relay
   (`ai.ts`) and PROTOCOL.md §4 "AI" wording, with relay tests. Rollback: revert and redeploy.
 - **L3 (planned): Message Batches for overnight AI jobs.** The app submits and polls with your own
   key (no relay state needed). Rollback: a setting.
