@@ -12,7 +12,8 @@ import Vision
 /// - It waits 0.4 s for the pen to stay up; another stroke cancels.
 /// - Only that one line is read: its strokes drawn ~48 px tall and given to Vision once.
 /// - Lines are cached by their strokes, so an untouched line is never read again.
-/// - The answer is a plain text box, drawn once; nothing animates.
+/// - The answer is written once, as light-blue handwriting (`InkHandwriting`, sized like the line):
+///   real strokes, so the eraser and lasso treat it like any ink (docs/plans/sketch-2-plan.md A2).
 /// - In Low Power Mode or when hot it only runs when asked (`MathAssist.effectiveMode`).
 @MainActor
 final class MathAssistController {
@@ -25,11 +26,18 @@ final class MathAssistController {
         var equals: InkGeometry.Rect
         var equalsIds: Set<String>
         var line: InkGeometry.Rect
-        var answerId: String?
+        /// The answer's strokes, and the line (by its strokes) they answered.
+        var answerIds: [String] = []
+        var answeredKey = ""
     }
     private var solved: [String: Solved] = [:]
     /// Letters defined on each page (`a = 5`), for the lines below.
     private var variables: [String: [String: Double]] = [:]
+
+    /// Math Assist's blue: light on a white page, a little lighter on the dark page (both ≥ 3:1).
+    static let assistBlue = "#5aa9e6"
+    static let assistBlueDark = "#7cc4f5"
+    static let unsureGrey = "#9aa0a6"
 
     static var setting: MathAssist.Mode {
         get { MathAssist.Mode(rawValue: UserDefaults.standard.string(forKey: "ink.math") ?? "") ?? .automatic }
@@ -43,7 +51,8 @@ final class MathAssistController {
         pending?.cancel()
         guard let editor, let app = editor.app else { return }
         guard MathAssist.effectiveMode(Self.setting, policy: app.policy) == .automatic else { return }
-        let strokes = editor.content[key]?.strokes ?? []
+        // Math Assist's own strokes are never read as input (its "=" would answer itself).
+        let strokes = (editor.content[key]?.strokes ?? []).filter { $0.by.isEmpty || $0.id == line.id }
         guard strokes.count >= 2 else { return }
         let newest = Self.mathStroke(line)
         // Writing into a line that's already solved: read it again once the pen rests.
@@ -105,31 +114,76 @@ final class MathAssistController {
             reading = (found?.score ?? 0) >= MathCandidates.minimumScore ? found : nil
             cache.store(reading, for: lineKey)
         }
-        var entry = solved[eqKey] ?? Solved(pageKey: key, equals: eq, equalsIds: equalsIds, line: lineBox, answerId: nil)
+        var entry = solved[eqKey] ?? Solved(pageKey: key, equals: eq, equalsIds: equalsIds, line: lineBox)
         entry.line = lineBox
         let outcome = reading?.outcome ?? .unsure
         if case .assignment(let name, let value) = outcome { variables[key, default: [:]][name] = value }
-        await place(MathAssist.answerText(outcome), for: &entry, color: editor.color(for: .pen))
+        // You rubbed out (some of) its answer to this same line: it's yours now; no new answer
+        // until the line itself changes.
+        let present = Set((editor.content[key]?.strokes ?? []).map(\.id))
+        if entry.answeredKey == lineKey, !entry.answerIds.isEmpty, entry.answerIds.contains(where: { !present.contains($0) }) {
+            solved[eqKey] = entry
+            return
+        }
+        await place(MathAssist.answerText(outcome), for: &entry, lineKey: lineKey)
         solved[eqKey] = entry
     }
 
-    /// Writes (or replaces) the answer box just right of the `=`.
-    private func place(_ text: String?, for entry: inout Solved, color: String) async {
+    /// The ink changed (undo, erase, another device): an answer whose `=` is gone goes too, unless
+    /// you've changed it.
+    func contentChanged() {
+        guard let editor, !solved.isEmpty else { return }
+        for (eqKey, entry) in solved {
+            let present = Set((editor.content[entry.pageKey]?.strokes ?? []).map(\.id))
+            guard !entry.equalsIds.isSubset(of: present) else { continue }
+            solved[eqKey] = nil
+            let untouched = entry.answerIds.filter { present.contains($0) }
+            if !untouched.isEmpty, untouched.count == entry.answerIds.count, let library = editor.app?.library {
+                Task { await library.deleteStrokes(untouched); await editor.reloadInk() }
+            }
+        }
+    }
+
+    /// Writes (or replaces) the answer in light-blue handwriting after the line: right of its
+    /// rightmost ink (after your own answer, if you wrote one), at the size of the writing there.
+    private func place(_ text: String?, for entry: inout Solved, lineKey: String) async {
         guard let editor, let library = editor.app?.library else { return }
-        if let old = entry.answerId {
-            await library.deleteElements([old])
-            entry.answerId = nil
+        if !entry.answerIds.isEmpty {
+            await library.deleteStrokes(entry.answerIds)
+            entry.answerIds = []
         }
         guard let text else { await editor.reloadInk(); return }
-        let lineHeight = max(entry.line.height, entry.equals.width * 1.4)
-        let size = max(10, min(lineHeight * 0.75, 72))
-        let frame = InkGeometry.Rect(x: entry.equals.maxX + entry.equals.width * 0.35, y: entry.equals.y + entry.equals.height / 2 - size * 0.62,
-                                     width: max(size * Double(text.count) * 0.7, size * 2), height: size * 1.25)
-        var style = InkTextStyle()
-        style.font = .rounded
+        let strokes = editor.content[entry.pageKey]?.strokes ?? []
+        let eq = entry.equals
+        let lineHeight = max(entry.line.height, eq.width * 1.4)
+        let midY = eq.y + eq.height / 2
+        let band = InkGeometry.Rect(x: eq.x, y: midY - lineHeight * 0.75, width: 100_000, height: lineHeight * 1.5)
+        // Your own ink right of the "=" on this line (an answer you wrote, to check).
+        let after = strokes.filter { $0.by.isEmpty && !entry.equalsIds.contains($0.id) }
+            .compactMap(\.bounds).filter { $0.intersects(band) && $0.x >= eq.x }
+        let right = max(eq.maxX, after.map(\.maxX).max() ?? eq.maxX)
+        // The size of the writing on this line.
+        let boxes = strokes.filter { $0.by.isEmpty }.compactMap(\.bounds)
+        var o = InkHandwriting.Options()
+        o.xHeight = InkHandwriting.sizeNear(InkGeometry.Rect(x: right, y: entry.line.y, width: lineHeight * 3, height: entry.line.height), strokes: boxes)
+        o.xHeight = min(max(o.xHeight, 3), 40)
+        o.seed = lineKey.stableHash
+        let start = InkPoint(x: right + max(6, o.xHeight * 0.9), y: midY + o.xHeight * 0.5)
+        let written = InkHandwriting.write(text, at: start, options: o)
         let unsure = text == "?"
-        entry.answerId = await library.addElement(on: editor.target.itemId, layer: editor.target.layer, pageKey: entry.pageKey, kind: .text,
-                                                  frame: frame, text: text, size: size, color: unsure ? "#9AA0A6" : color, textStyle: style)
+        let dark = editor.darkPage && editor.isSketch
+        let color = unsure ? Self.unsureGrey : (dark ? Self.assistBlueDark : Self.assistBlue)
+        let width = min(4, max(1, o.xHeight * 0.2))
+        let group = "assist-" + String(UUID().uuidString.prefix(8)).lowercased()
+        var ids: [String] = []
+        for points in written.strokes where !points.isEmpty {
+            if let id = await library.addStroke(on: editor.target.itemId, layer: editor.target.layer, pageKey: entry.pageKey, tool: .pen,
+                                                color: color, width: width, points: points, group: group, by: "assist") {
+                ids.append(id)
+            }
+        }
+        entry.answerIds = ids
+        entry.answeredKey = lineKey
         await editor.reloadInk()
         editor.app?.inkChanged()
     }

@@ -827,6 +827,8 @@ final class InkEditorModel {
             self.selection = kept.count > 0 ? kept : nil
         }
         revision += 1
+        // An answer whose "=" was undone or erased goes too.
+        mathController?.contentChanged()
     }
 
     /// What to draw on a page: its ink with the lasso's move and the eraser's cuts shown as they happen.

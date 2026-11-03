@@ -103,7 +103,7 @@ extension Library {
     @discardableResult
     public func addStroke(id givenId: String? = nil, on itemId: String, layer: String = "", pageKey: String, tool: InkTool, color: String, width: Double,
                           points: [InkPoint], shape: String? = nil, createdAt: Double? = nil, style: InkStrokeStyle? = nil,
-                          group: String = "", from: String = "", to: String = "") async -> String? {
+                          group: String = "", from: String = "", to: String = "", by: String = "") async -> String? {
         guard !points.isEmpty else { return nil }
         let id = givenId ?? newId()
         let created: Double
@@ -120,6 +120,7 @@ extension Library {
         if !group.isEmpty { fields[InkStroke.Field.group] = .string(group) }
         if !from.isEmpty { fields[InkStroke.Field.from] = .string(from) }
         if !to.isEmpty { fields[InkStroke.Field.to] = .string(to) }
+        if !by.isEmpty { fields[InkStroke.Field.by] = .string(by) }
         // `points` can't hold per-point nib angles: keep their average as the stroke's `nib`.
         if !compact, fields[InkStroke.Field.nib] == nil, let nib = InkOutline.meanNib(points) { fields[InkStroke.Field.nib] = .number(nib) }
         await engine.set(fields, record: id, kind: "stroke")

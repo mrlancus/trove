@@ -82,6 +82,8 @@ public struct InkStroke: Identifiable, Sendable {
         public static let points = "points", createdAt = "createdAt", device = "device", shape = "shape"
         public static let points2 = "points2", fill = "fill", dash = "dash", arrow = "arrow", nib = "nib"
         public static let group = "group", from = "from", to = "to"
+        /// Who wrote it, when not the user: "assist" (Math Assist) or "ai" (placed AI output).
+        public static let by = "by"
     }
 
     public let record: Record
@@ -98,6 +100,8 @@ public struct InkStroke: Identifiable, Sendable {
     public var pageKey: String { InkPage.key(record[Field.page]) }
     /// The clean shape this stroke was snapped to, if any.
     public var shape: String? { record[Field.shape]?.string }
+    /// "assist", "ai", or "" for the user's own ink.
+    public var by: String { record[Field.by]?.string ?? "" }
     public var tool: InkTool { InkTool(rawValue: record[Field.tool]?.string ?? "") ?? .pen }
     /// "#rrggbb".
     public var color: String { record[Field.color]?.string ?? "#000000" }

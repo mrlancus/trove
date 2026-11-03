@@ -46,6 +46,8 @@ struct InkLine: Sendable, Identifiable {
     var to = ""
     /// When it was drawn (Unix ms), for audio synced to ink; nil when unknown.
     var createdAt: Double?
+    /// Who wrote it: "assist" (Math Assist), "ai", or "" (you).
+    var by = ""
 
     init(id: String, tool: InkTool, color: String, width: Double, points: [InkPoint], shape: String? = nil, style: InkStrokeStyle = InkStrokeStyle()) {
         self.id = id; self.tool = tool; self.color = color; self.width = width; self.points = points; self.shape = shape; self.style = style
@@ -55,6 +57,7 @@ struct InkLine: Sendable, Identifiable {
         group = s.group
         from = s.from
         to = s.to
+        by = s.by
         createdAt = s.createdAt.timeIntervalSince1970 * 1000
     }
 
