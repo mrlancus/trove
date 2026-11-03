@@ -141,3 +141,45 @@ struct InkTessellatorTests {
         #expect(InkTessellator.parts(tool: .pen, color: "#000", width: 2, points: []).isEmpty)
     }
 }
+
+struct EditorLayoutTests {
+    @Test func customHundredPercent() {
+        var b = ZoomBase()
+        #expect(b.isOriginal && b.label(1.5) == "150%")
+        b = ZoomBase(base: 1.25)
+        #expect(b.label(1.25) == "100%" && b.label(2.5) == "200%")
+        #expect(abs(b.zoom(forPercent: 200) - 2.5) < 1e-9)
+        #expect(b.toggle(from: 2.5, previous: nil) == 1.25)
+        #expect(b.toggle(from: 1.25, previous: 3) == 3)
+        #expect(ZoomBase(base: 50).base == 10 && ZoomBase(base: .nan).base == 1)
+    }
+
+    @Test func toolbarFoldsInOrder() {
+        let widths: [ToolbarFold.Group: Double] = [.core: 400, .sizes: 80, .colours: 120, .insert: 40, .title: 120, .shapesAndText: 80]
+        #expect(ToolbarFold.folded(width: 900, widths: widths).isEmpty)
+        #expect(ToolbarFold.folded(width: 780, widths: widths) == [.sizes])
+        #expect(ToolbarFold.folded(width: 600, widths: widths) == [.sizes, .colours, .insert])
+        #expect(ToolbarFold.folded(width: 390, widths: widths) == Set(ToolbarFold.order))
+    }
+
+    @Test func hudNeverOverlaps() {
+        let area = InkGeometry.Rect(x: 0, y: 0, width: 800, height: 600)
+        let items = [
+            HUDPlacement.Item(id: "zoom", size: .init(140, 36), anchor: .bottomLeading, priority: 10),
+            HUDPlacement.Item(id: "selection", size: .init(700, 80), anchor: .bottomCentre, priority: 5),
+            HUDPlacement.Item(id: "ask", size: .init(300, 400), anchor: .fixed(InkGeometry.Rect(x: 480, y: 40, width: 300, height: 400)), priority: 20),
+        ]
+        let placed = HUDPlacement.place(items, in: area)
+        #expect(placed.count == 3)
+        let rects = Array(placed.values)
+        for i in rects.indices {
+            for j in rects.indices where j > i {
+                let a = rects[i], b = rects[j]
+                #expect(!(a.x < b.maxX && b.x < a.maxX && a.y < b.maxY && b.y < a.maxY))
+            }
+        }
+        // The zoom pill keeps its corner; the selection bar goes above it.
+        #expect(placed["zoom"]!.x == 8 && placed["zoom"]!.maxY == 592)
+        #expect(placed["selection"]!.maxY <= placed["zoom"]!.y)
+    }
+}
