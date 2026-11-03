@@ -210,6 +210,11 @@ struct AddMenu: View {
             .keyboardShortcut("t", modifiers: .command)
         TemplatesMenu()
         Button { Task { await model.newSketch() } } label: { Label("New sketch", systemImage: "scribble.variable") }
+        Menu {
+            ForEach(PlannerKind.allCases, id: \.self) { k in
+                Button(k.label) { Task { await model.newPlanner(k) } }
+            }
+        } label: { Label("New planner", systemImage: "calendar.day.timeline.left") }
             .keyboardShortcut("d", modifiers: [.command, .shift])
         Button { showImporter() } label: { Label("Import files…", systemImage: "square.and.arrow.down") }
             .keyboardShortcut("i", modifiers: [.command, .shift])

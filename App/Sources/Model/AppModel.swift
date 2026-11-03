@@ -528,6 +528,17 @@ final class AppModel {
         inkTarget = InkTarget(itemId: id, layer: "", title: "Sketch")
     }
 
+    /// A generated planner notebook for this year (MASTER_PLAN G3), opened.
+    func newPlanner(_ kind: PlannerKind) async {
+        guard let library else { return }
+        let year = Calendar.current.component(.year, from: Date())
+        toast = "Making your planner…"
+        let id = await library.addPlanner(kind, year: year)
+        await reload()
+        selectedItemID = id
+        inkTarget = InkTarget(itemId: id, layer: "", title: "\(year) planner")
+    }
+
     /// A sketch opens in the editor; a file opens in the viewer (drawing on it is its Edit).
     func draw(on item: Item, page: Int = 0) {
         if item.kind == .sketch {

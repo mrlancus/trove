@@ -401,7 +401,7 @@ extension Library {
 
     // MARK: Pages
 
-    private func setPages(_ id: String, _ pages: [InkPage]) async {
+    func setPages(_ id: String, _ pages: [InkPage]) async {
         await update(id, [Item.SketchField.pageList: .array(pages.map(\.json)), Item.SketchField.pages: .number(Double(pages.count))])
     }
 
