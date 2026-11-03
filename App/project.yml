@@ -79,7 +79,8 @@ targets:
         BGTaskSchedulerPermittedIdentifiers: [com.mrlancus.trove.enrich, com.mrlancus.trove.refresh]
         UIBackgroundModes: [fetch, processing]
         NSCameraUsageDescription: Trove uses the camera to scan pairing QR codes and documents.
-        NSMicrophoneUsageDescription: Trove records voice notes when you ask it to.
+        NSMicrophoneUsageDescription: Trove records voice notes and audio while you write, when you ask it to.
+        NSFaceIDUsageDescription: Trove can ask for Face ID before it opens, if you turn on Lock Trove.
         NSSpeechRecognitionUsageDescription: Trove turns your voice notes into searchable text on this device.
         NSPhotoLibraryUsageDescription: Trove can import your screenshots so their text becomes searchable.
         NSAppleEventsUsageDescription: Trove reads your Apple Notes so they appear in Trove search.

@@ -22,6 +22,7 @@ struct TroveApp: App {
             RootView()
                 .environment(model)
                 .troveAppearance()
+                .modifier(LockCover())
                 .onOpenURL { handle($0) }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { model.selectedItemID = id }
