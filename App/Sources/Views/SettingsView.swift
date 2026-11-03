@@ -11,7 +11,7 @@ struct SettingsView: View {
         #if os(macOS)
         // A real Settings window with tabs, so it never outgrows the main window.
         TabView {
-            Form { VaultSection(); AppearanceSection(); AppLockSection(); UpdatesSection(); AboutSection() }.formStyle(.grouped)
+            Form { VaultSection(); AppearanceSection(); SketchSection(); AppLockSection(); UpdatesSection(); AboutSection() }.formStyle(.grouped)
                 .tabItem { Label("General", systemImage: "gearshape") }
             Form { WebSection(); DevicesSection(); RelaySection() }.formStyle(.grouped)
                 .tabItem { Label("Devices & Web", systemImage: "laptopcomputer.and.iphone") }
@@ -39,6 +39,7 @@ private struct SettingsList: View {
         Form {
             VaultSection()
             AppearanceSection()
+            SketchSection()
             AppLockSection()
             WebSection()
             DevicesSection()
@@ -939,3 +940,28 @@ private struct ClipboardSection: View {
     }
 }
 
+/// Settings → Sketch: the New sketch sheet, the ink renderer, and the AI's handwriting.
+private struct SketchSection: View {
+    @State private var choice = NewSketchChoice.load(UserDefaults.standard.data(forKey: "sketch.new"))
+    @AppStorage("ink.handwriting") private var handwriting = InkHandwriting.Style.neat.rawValue
+    #if os(iOS)
+    @State private var gpuInk = InkMetalView.enabled
+    #endif
+
+    var body: some View {
+        Section {
+            Toggle("Ask for page settings on New sketch", isOn: Binding(get: { choice.ask }, set: { choice.ask = $0; UserDefaults.standard.set(choice.data, forKey: "sketch.new") }))
+            Picker("AI and Math Assist handwriting", selection: $handwriting) {
+                Text("Neat").tag(InkHandwriting.Style.neat.rawValue)
+                Text("Script").tag(InkHandwriting.Style.script.rawValue)
+            }
+            #if os(iOS)
+            Toggle("Sharp ink at every zoom (GPU)", isOn: Binding(get: { gpuInk }, set: { gpuInk = $0; InkMetalView.enabled = $0 }))
+            #endif
+        } header: {
+            Text("Sketch")
+        } footer: {
+            FormFooter("Sharp ink draws your strokes on the GPU so zooming never blurs them; off uses Apple's PencilKit for all ink (reopen a sketch to apply).")
+        }
+    }
+}

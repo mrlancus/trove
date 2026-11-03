@@ -121,6 +121,9 @@ final class AppModel {
     @ObservationIgnored private var shownInkStamp = ""
     /// Study mode (StudyView): open, and which deck (nil: everything due).
     var showStudy = false
+    /// The New sketch sheet, and the folder it was asked for in.
+    var showNewSketch = false
+    var newSketchFolder: String?
     /// Open Quickly (⌘O).
     var showSwitcher = false
     /// Recently Deleted.
@@ -521,14 +524,27 @@ final class AppModel {
         }
     }
 
-    /// A new sketch, opened in the editor (filed in `folder` when given).
-    func newSketch(in folder: String? = nil) async {
+    /// "New sketch": the sheet asking for its pages first (plan T6), or, with asking turned off,
+    /// one made straight away as last time. `ask` true shows the sheet regardless.
+    func newSketch(in folder: String? = nil, ask: Bool = false) async {
+        let choice = NewSketchChoice.load(UserDefaults.standard.data(forKey: "sketch.new"))
+        if choice.ask || ask {
+            newSketchFolder = folder
+            showNewSketch = true
+        } else {
+            await createSketch(choice, title: "", in: folder)
+        }
+    }
+
+    /// Makes the sketch as chosen, remembers the choice for next time, and opens it.
+    func createSketch(_ choice: NewSketchChoice, title: String, in folder: String?) async {
         guard let library else { return }
-        let id = await library.addSketch()
+        UserDefaults.standard.set(choice.data, forKey: "sketch.new")
+        let id = await library.addSketch(choice, title: title)
         if let folder { await library.move(id, to: folder) }
         await reload()
         selectedItemID = id
-        inkTarget = InkTarget(itemId: id, layer: "", title: "Sketch")
+        inkTarget = InkTarget(itemId: id, layer: "", title: title.isEmpty ? "Sketch" : title)
     }
 
     /// A generated planner notebook for this year (MASTER_PLAN G3), opened.
