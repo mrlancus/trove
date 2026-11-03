@@ -7,6 +7,34 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
   Files: `docs/DEVELOP_PLAN.md`, `docs/PERF_AUDIT.md`, `docs/testing/`, `Packages/TroveCore/Sources/TroveCore/Develop/`,
   `Packages/TroveCore/Sources/TroveCore/Gen/`, `App/project.yml`, `App/Sources/Services/Perf.swift`, `MetricsReporter.swift`.
 
+## Decisions taken for you (Develop, performance and testing; overrule any of them)
+From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:
+`docs/DEVELOP_PLAN.md` §F (and `docs/PERF_AUDIT.md` for Part 2). Short form, with how to undo:
+1. **Slice spec: AQA A-level Physics 7408, topic momentum.** Undo: another catalogue entry + mapping.
+2. **Catalogue boards: AQA first; then CCEA, WJEC/Eduqas, Pearson (public papers); OCR once its terms page
+   loads (503 on 2026-11-03); BPhO and UKMT never in the catalogue (your uploads only).** Undo: edit `catalogue/papers.json`.
+3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
+   regions, marks and your attempts. Why: "no PDFs in the relay or R2" and AQA's "must not be reproduced on
+   third party websites – in any format". Undo: `Catalogue.syncPapers = true`.
+4. **Develop data syncs to the website, no website UI yet** (JS port of the formats and mastery only).
+5. **Marking on the device by default** (tick the mark scheme, numeric check); **AI marking only when you tap it**,
+   sending a crop of a handwritten answer. Handwriting reading stays on the device (MASTER_PLAN decision 9 kept).
+6. **No XP.**
+7. **AI defaults: Haiku 5.5 low; medium only for hard questions by a fixed rule; one medium re-check of uncertain
+   marks; never a dearer model by itself.** The relay should cache and count cache reads at a tenth; the 1M-token
+   allowance stays (raising it spends your money).
+8. **Navigation: Develop in the iPad/Mac sidebar, a 4th iPhone tab "Practise", and Practise this on items.**
+9. **Mastery: ability (1PL, information-weighted) + FSRS retention, derived from attempts, never stored.**
+10. **Concept ids from names; automatic merge only for identical word sets.**
+11. **Edges are their own records** (deterministic ids); old `links` and wikilinks read as `related`.
+12. **No topic lists shipped**: parsed on your device from the downloaded spec. Get legal advice and ask the
+    boards before any public launch.
+13. **Anki: TSV with guids first, `.apkg` (legacy schema) next, never `.colpkg`.**
+14. **Develop is designed around the iPad first.**
+15. **Diagnostics: local only, with Export and an optional "Save a copy to the vault"** (overrides MASTER_PLAN
+    decision 4's "always in the vault").
+16. **Design: A Glass** (MASTER_PLAN decision 1; NOTES said it was still open). Tokens in one place.
+
 ## Status
 | Part | State | Tested |
 |---|---|---|
