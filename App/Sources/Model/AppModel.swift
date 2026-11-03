@@ -564,9 +564,9 @@ final class AppModel {
 
     var visibleItems: [Item] {
         if let searchResults { return searchResults }
-        let key = "\(dataVersion)|\(searchVersion)|\(String(describing: selection))"
+        let key = "\(dataVersion)|\(searchVersion)|\(String(describing: selection))|\(sortOrder.rawValue)"
         if let visibleCache, visibleCache.key == key { return visibleCache.items }
-        let out: [Item]
+        var out: [Item]
         switch selection {
         case .smart(let s): out = items.filter(s.contains)
         case .collection(let id): out = items.filter { $0.collections.contains(id) }
@@ -575,8 +575,34 @@ final class AppModel {
         case .unfiled: out = unfiledItems
         case .graph, .importer, .clipboard, nil: out = items
         }
+        // Pinned first, then the chosen order (MASTER_PLAN N12); items are already newest first.
+        switch sortOrder {
+        case .newest: break
+        case .oldest: out.reverse()
+        case .edited: out.sort { $0.record.updatedHLC > $1.record.updatedHLC }
+        case .title: out.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
+        }
+        if sortOrder != .newest { out = out.filter(\.isPinned) + out.filter { !$0.isPinned } }
         visibleCache = (key, out)
         return out
+    }
+
+    enum SortOrder: String, CaseIterable, Identifiable {
+        case newest, oldest, edited, title
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .newest: "Newest first"
+            case .oldest: "Oldest first"
+            case .edited: "Recently edited"
+            case .title: "Title"
+            }
+        }
+    }
+
+    /// How lists are sorted (this device).
+    var sortOrder: SortOrder = SortOrder(rawValue: UserDefaults.standard.string(forKey: "library.sort") ?? "") ?? .newest {
+        didSet { UserDefaults.standard.set(sortOrder.rawValue, forKey: "library.sort") }
     }
 
     /// The sidebar's numbers, worked out once per library change instead of on every draw.

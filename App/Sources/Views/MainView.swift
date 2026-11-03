@@ -499,6 +499,10 @@ struct LibraryView: View {
                     Label("List", systemImage: "list.bullet").tag(LibraryLayout.list)
                 }
                 .pickerStyle(.inline)
+                Picker("Sort", selection: Binding(get: { model.sortOrder }, set: { model.sortOrder = $0 })) {
+                    ForEach(AppModel.SortOrder.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.inline)
             }
             ToolbarItem(placement: .primaryAction) {
                 if !items.isEmpty || model.selecting {
