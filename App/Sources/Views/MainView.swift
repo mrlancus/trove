@@ -47,7 +47,9 @@ struct MainView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Library") }
+
+    @ViewBuilder private var perfBody: some View {
         @Bindable var model = model
         Group {
             #if os(iOS)

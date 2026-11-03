@@ -515,7 +515,9 @@ struct PDFReaderView: View {
         _reader = State(initialValue: reader)
     }
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("PDF") }
+
+    @ViewBuilder private var perfBody: some View {
         VStack(spacing: 0) {
             bar
             if reader.findOpen { findBar }

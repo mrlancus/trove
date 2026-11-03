@@ -230,7 +230,9 @@ struct ClipsView: View {
     }
     private var selected: ClipEntry? { entries.first { $0.id == state.selection } ?? entries.first }
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Clipboard") }
+
+    @ViewBuilder private var perfBody: some View {
         switch style {
         case .palette: palette
         case .list: list

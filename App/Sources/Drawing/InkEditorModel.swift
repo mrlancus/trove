@@ -776,22 +776,30 @@ final class InkEditorModel {
         app?.power.count { $0.inkReloads += 1 }
         let strokes = await library.strokes(on: target.itemId, layer: target.layer)
         let elements = await library.elements(on: target.itemId, layer: target.layer)
-        var next: [String: InkContent] = [:]
         let stored = Set(strokes.map(\.id))
         for id in unsavedStrokes.keys where stored.contains(id) { unsavedStrokes[id] = nil }
-        var cache: [String: (hlc: String, line: InkLine)] = [:]
-        for s in strokes where !unsavedDeletes.contains(s.id) {
-            let hlc = s.record.updatedHLC
-            let line = lineCache[s.id].flatMap { $0.hlc == hlc ? $0.line : nil } ?? InkLine(s)
-            cache[s.id] = (hlc, line)
-            next[s.pageKey, default: InkContent()].strokes.append(line)
-        }
-        lineCache = cache
+        // Decoding every stroke's points (100k strokes in a 500-page notebook) runs off the main
+        // thread, reusing lines that haven't changed (docs/PERF_AUDIT.md B4).
+        let deletes = unsavedDeletes, previous = lineCache
+        let decoded = await Task.detached(priority: .userInitiated) { () -> ([String: InkContent], [String: (hlc: String, line: InkLine)]) in
+            var next: [String: InkContent] = [:]
+            var cache: [String: (hlc: String, line: InkLine)] = [:]
+            for s in strokes where !deletes.contains(s.id) {
+                let hlc = s.record.updatedHLC
+                let line = previous[s.id].flatMap { $0.hlc == hlc ? $0.line : nil } ?? InkLine(s)
+                cache[s.id] = (hlc, line)
+                next[s.pageKey, default: InkContent()].strokes.append(line)
+            }
+            return (next, cache)
+        }.value
+        var next = decoded.0
+        lineCache = decoded.1
         for (_, s) in unsavedStrokes.sorted(by: { $0.key < $1.key }) where !unsavedDeletes.contains(s.line.id) {
             next[s.key, default: InkContent()].strokes.append(s.line)
         }
         for e in elements { next[e.pageKey, default: InkContent()].elements.append(InkBox(e)) }
         content = next
+        Diagnostics.shared.ready("Notebook")
         for e in elements where e.kind == .image {
             guard let att = e.image, pictures[att.id] == nil, let data = try? await library.attachmentData(att) else { continue }
             if let image = await Task.detached(priority: .userInitiated, operation: { InkRenderer.cgImage(data).map(InkImage.init) }).value {

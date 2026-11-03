@@ -24,7 +24,9 @@ struct AskView: View {
     private var ownAI: Bool { model.aiSettings.isReady }
     private var turns: [AIChat.Turn] { chat?.turns ?? [] }
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Ask") }
+
+    @ViewBuilder private var perfBody: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 conversation

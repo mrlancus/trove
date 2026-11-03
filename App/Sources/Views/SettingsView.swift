@@ -7,7 +7,9 @@ import ApplicationServices
 #endif
 
 struct SettingsView: View {
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Settings") }
+
+    @ViewBuilder private var perfBody: some View {
         #if os(macOS)
         // A real Settings window with tabs, so it never outgrows the main window.
         TabView {

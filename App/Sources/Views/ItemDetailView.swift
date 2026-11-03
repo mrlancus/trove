@@ -13,7 +13,9 @@ struct ItemDetailView: View {
     @State private var newTag = ""
     @State private var showHistory = false
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Item") }
+
+    @ViewBuilder private var perfBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header

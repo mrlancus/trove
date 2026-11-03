@@ -12,7 +12,9 @@ struct GraphScreen: View {
 
     private var groups: Set<ClipGraph.Group> { Set(clipGroups.split(separator: ",").compactMap { ClipGraph.Group(rawValue: String($0)) }) }
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Graph") }
+
+    @ViewBuilder private var perfBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) { sourcePicker.fixedSize(); controls }

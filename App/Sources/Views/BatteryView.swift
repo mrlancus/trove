@@ -31,6 +31,7 @@ struct BatterySection: View {
             }
             CountersView(title: "Since Trove opened", counters: model.power.sinceLaunch)
         }
+        DiagnosticsSection()
         BatteryReportSection()
     }
 
@@ -100,5 +101,67 @@ private struct BatteryReportSection: View {
             FormFooter("Daily reports from the system about Trove's energy, CPU, wake-ups and disk writes. They stay on this device until you share one.")
         }
         .task { reports = MetricsReporter.reports() }
+    }
+}
+
+/// Lag measured on this device (docs/PERF_AUDIT.md step 0): hangs over 100 ms, frames and hitches
+/// during a measuring session, how long screens take to show their content; one file to export.
+private struct DiagnosticsSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var watching = Diagnostics.watchEnabled
+    @State private var measuring = Diagnostics.shared.measuringFrames
+    @State private var exported: URL?
+    @State private var savedToVault = false
+    @State private var error: String?
+
+    var body: some View {
+        let d = Diagnostics.shared
+        let week = d.hangs.filter { $0.at > Date().addingTimeInterval(-7 * 86_400) }
+        Section {
+            Toggle("Watch for lag", isOn: $watching)
+                .onChange(of: watching) { _, on in d.setWatching(on) }
+            LabeledContent("Hangs over 100 ms, 7 days", value: week.isEmpty ? "None" : "\(week.count), worst \(Int(week.map(\.ms).max() ?? 0)) ms")
+            ForEach(Self.worstWorkflows(week), id: \.0) { name, count in
+                LabeledContent(name, value: "\(count)").font(.caption)
+            }
+            if let last = d.sessions.last {
+                LabeledContent("Last frames session", value: "\(last.total.hitches) hitches in \(last.total.frames) frames, worst \(Int(last.total.worstMs)) ms")
+            }
+            ForEach(d.navigationSummary(), id: \.workflow) { row in
+                LabeledContent("Open \(row.workflow)", value: "p50 \(Int(row.p50)) ms · p90 \(Int(row.p90)) ms (\(row.count))").font(.caption)
+            }
+            Button(measuring ? "Stop measuring frames" : "Measure frames for 10 minutes") {
+                if measuring { d.stopFrames() } else { d.startFrames() }
+                measuring = d.measuringFrames
+            }
+            Button("Export diagnostics") {
+                do { exported = try d.exportFile() } catch { self.error = error.localizedDescription }
+            }
+            if let exported {
+                ShareLink(item: exported) { Label(exported.lastPathComponent, systemImage: "square.and.arrow.up") }
+                Button(savedToVault ? "Saved to your vault" : "Save a copy to the vault") {
+                    Task { await saveToVault(exported) }
+                }
+                .disabled(savedToVault)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+        } header: {
+            Text("Lag and frames")
+        } footer: {
+            FormFooter("Watch for lag notes every time Trove's main thread is busy for over 100 ms while it's in front, and which screen you were on. Measuring frames counts dropped frames for up to 10 minutes; use it while you scroll, pan or write, then export. Everything stays on this device until you share or save it.")
+        }
+    }
+
+    static func worstWorkflows(_ hangs: [Diagnostics.Hang]) -> [(String, Int)] {
+        Dictionary(grouping: hangs, by: \.workflow).map { ($0.key, $0.value.count) }.sorted { $0.1 > $1.1 }.prefix(3).map { $0 }
+    }
+
+    func saveToVault(_ url: URL) async {
+        guard let library = model.library, let data = try? Data(contentsOf: url) else { return }
+        do {
+            _ = try await library.addFile(data, name: url.lastPathComponent, mime: "application/json", kind: .file, source: .app,
+                                          title: "Trove diagnostics \(Date().formatted(date: .abbreviated, time: .shortened))")
+            savedToVault = true
+        } catch { self.error = error.localizedDescription }
     }
 }

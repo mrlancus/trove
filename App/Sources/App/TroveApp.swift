@@ -12,6 +12,7 @@ struct TroveApp: App {
         BackgroundTasks.register(model: model)
         #endif
         MetricsReporter.shared.start()
+        Diagnostics.shared.start()
         #if os(macOS)
         WindowFocus.start()
         #endif

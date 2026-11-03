@@ -36,7 +36,9 @@ struct InkEditorView: View {
 
     // The canvas, zoom pill and undo buttons are their own views, each watching only what it shows:
     // a stroke then redraws the canvas, not the whole editor with its toolbar.
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Notebook") }
+
+    @ViewBuilder private var perfBody: some View {
         @Bindable var editor = editor
         VStack(spacing: 0) {
             if !editor.presenting {

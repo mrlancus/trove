@@ -14,7 +14,9 @@ struct StudyView: View {
     @State private var done = 0
     @State private var loaded = false
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Study") }
+
+    @ViewBuilder private var perfBody: some View {
         NavigationStack {
             VStack(spacing: 20) {
                 if !loaded {

@@ -51,7 +51,9 @@ struct FileViewer: View {
     private var isPDF: Bool { attachment?.mime == "application/pdf" }
     private var canEdit: Bool { attachment.map(AppModel.canInk) ?? false }
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("File viewer") }
+
+    @ViewBuilder private var perfBody: some View {
         VStack(spacing: 0) {
             bar
             Divider()

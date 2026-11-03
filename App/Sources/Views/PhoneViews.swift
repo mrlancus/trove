@@ -133,7 +133,9 @@ struct PhoneSearch: View {
     @Environment(AppModel.self) private var model
     @Environment(\.showAsk) private var showAsk
 
-    var body: some View {
+    var body: some View { perfBody.perfWorkflow("Search") }
+
+    @ViewBuilder private var perfBody: some View {
         @Bindable var model = model
         List {
             if model.searchText.isEmpty {
