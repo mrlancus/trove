@@ -68,6 +68,8 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.bouncesZoom = true
         canvas.insertSubview(c.paperView, at: 0)
         canvas.insertSubview(c.pagesHost, aboveSubview: c.paperView)
+        // Trove's GPU ink (plan S3): above the pages, under PencilKit's live stroke.
+        if let m = c.metal { canvas.insertSubview(m, aboveSubview: c.pagesHost) }
         canvas.addSubview(c.elementsHost)
         canvas.addSubview(c.overlayView)
         canvas.addInteraction(UIPencilInteraction(delegate: c))
@@ -331,6 +333,8 @@ struct PencilCanvas: UIViewRepresentable {
         let pagesHost = InkZoomHost()
         /// Text boxes and tape over the ink, one small layer each, scaled the same way.
         let elementsHost = InkZoomHost()
+        /// The GPU ink renderer; nil with Settings → Sketch → Classic ink (PencilKit draws all the ink then).
+        let metal: InkMetalView? = InkMetalView.enabled ? InkMetalView() : nil
         private var pageLayers: [String: InkPageLayer] = [:]
         private var elementLayers: [String: InkElementsLayer] = [:]
         /// The content at 100 % (the hosts' size).
@@ -607,6 +611,13 @@ struct PencilCanvas: UIViewRepresentable {
             CATransaction.commit()
             pagesHost.set(size: contentBox, zoom: z)
             elementsHost.set(size: contentBox, zoom: z)
+            if let m = metal {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                if m.frame != visible { m.frame = visible }
+                CATransaction.commit()
+                m.render(visible: visible, zoom: z)
+            }
             overlayView.frame = visible
             overlayView.zoom = z
             // The overlay is usually empty (no lasso or eraser): then it needn't redraw.
@@ -804,6 +815,20 @@ struct PencilCanvas: UIViewRepresentable {
             }
             // The paper (with pictures, under the ink) redraws only when a picture came, went or moved.
             if pictures != shownPictures { shownPictures = pictures; syncPictures() }
+            // GPU ink: every page's strokes go to the renderer, and PencilKit keeps only the strokes
+            // still on their way to the model (it lets them go in the same frame the GPU draws them).
+            if let m = metal {
+                for slot in slots {
+                    let shown = editor.display(slot.spec.key, lifted: true)
+                    let darkSlot = isDark(slot)
+                    let lines = shown.strokes.filter { !$0.points.isEmpty }.map { darkSlot ? InkDark.line($0) : $0 }
+                    m.setPage(slot.spec.key, offset: slot.offset, frame: slot.frame, lines: lines, dark: darkSlot)
+                }
+                m.keep(only: Set(slots.map(\.spec.key)))
+                want = []
+            }
+            // Drawn at the end, in the same transaction as PencilKit's drawing changes.
+            defer { metal?.render(visible: canvas.bounds, zoom: canvas.zoomScale) }
             let modelIds = wanted
             let current = canvas.drawing.strokes
             var onCanvas: [String: PKStroke] = [:]
