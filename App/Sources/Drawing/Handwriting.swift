@@ -64,7 +64,11 @@ enum Handwriting {
                 text = found.map(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
                 // Normalised boxes (origin bottom left) to page points over the area that was drawn.
                 let ax = box?.x ?? 0, ay = box?.y ?? 0
-                boxes = found.map { [ax + $0.box.minX * w, ay + (1 - $0.box.maxY) * h, $0.box.width * w, $0.box.height * h] }
+                boxes = found.map { line -> [Double] in
+                    let b = line.box
+                    let x = ax + Double(b.minX) * w, y = ay + (1 - Double(b.maxY)) * h
+                    return [x, y, Double(b.width) * w, Double(b.height) * h]
+                }
                 // Your AI didn't answer (offline, out of credit): Vision's reading for now, AI next time.
                 if ai != nil { aiFailed = true; stamp = String(pageSig.dropLast(reader.count)) }
             }
