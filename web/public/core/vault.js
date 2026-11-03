@@ -1349,6 +1349,41 @@ export class Vault {
     return decodeSegment(isTRV1(data) ? await decrypt(data, this.keys.segment) : data, device);
   }
 
+  /** Segment bytes for refs, in order (null for any not fetched): `POST segments/batch`
+   * (PROTOCOL.md §4) a hundred at a time, or one GET each from relays without it. */
+  async fetchSegments(refs) {
+    const out = [];
+    if (!refs.length) return out;
+    if (!this.noBatch) {
+      try {
+        for (let i = 0; i < refs.length; i += 100) {
+          const chunk = refs.slice(i, i + 100);
+          const b = await this.api("POST", "segments/batch", { body: { refs: chunk.map((r) => ({ device: r.device, first: r.first, last: r.last })) }, raw: true });
+          const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+          let o = 0;
+          for (const r of chunk) {
+            if (o + 4 > b.length) throw new RangeError("short batch");
+            const n = dv.getUint32(o, true); o += 4;
+            if (n !== 0xffffffff && o + n > b.length) throw new RangeError("short batch");
+            if (n === 0xffffffff) {
+              out.push(await this.api("GET", `segments/${r.device}/${r.first}/${r.last}`, { raw: true }).catch(() => null));
+              continue;
+            }
+            out.push(b.slice(o, o + n)); o += n;
+          }
+        }
+        return out;
+      } catch (e) {
+        // An older relay (404) or an answer that isn't a batch: one GET each from now on.
+        if (e instanceof RelayError && e.status !== 404) throw e;
+        this.noBatch = true;
+        out.length = 0;
+      }
+    }
+    for (const r of refs) out.push(await this.api("GET", `segments/${r.device}/${r.first}/${r.last}`, { raw: true }).catch(() => null));
+    return out;
+  }
+
   /** Pull everyone's new segments, then push ours. */
   async sync() {
     const report = { pulled: 0, pushed: 0, errors: [] };
@@ -1358,13 +1393,19 @@ export class Vault {
     let after = this.cursor, more = true, ok = true;
     while (more) {
       const page = await this.api("GET", `segments?after=${after}&limit=500`);
+      // Wanted segments are fetched together (one request on relays with segments/batch).
+      const wanted = page.segments.filter((s) => {
+        const inBase = this.store.base && coversRange(this.store.base.covers, s.device, s.first, s.last);
+        return !inBase && !this.applied.has(`${s.device}/${s.first}`);
+      });
+      const bodies = await this.fetchSegments(wanted);
       for (const s of page.segments) {
         const key = `${s.device}/${s.first}`;
-        // Already inside the checkpoint: no need to download it.
-        const inBase = this.store.base && coversRange(this.store.base.covers, s.device, s.first, s.last);
-        if (!inBase && !this.applied.has(key)) {
+        const i = wanted.indexOf(s);
+        if (i >= 0) {
           try {
-            const ops = await this.decodeOps(await this.api("GET", `segments/${s.device}/${s.first}/${s.last}`, { raw: true }), s.device);
+            if (!bodies[i]) throw new Error("not fetched");
+            const ops = await this.decodeOps(bodies[i], s.device);
             if (s.device === this.journal.device) this.makeRoomAfter(s.last);
             for (const op of ops) this.journal.observe(op.h);
             this.store.apply(ops);

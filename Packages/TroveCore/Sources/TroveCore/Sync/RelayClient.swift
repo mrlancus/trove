@@ -536,6 +536,9 @@ public final class RelayTransport: SyncTransport, CheckpointTransport, @unchecke
                 return out
             } catch TransportError.notFound {
                 lock.withLock { batchMissing = true }
+            } catch TransportError.invalidResponse {
+                // Not a batch answer (something in between, or an old relay): one GET each from now on.
+                lock.withLock { batchMissing = true }
             }
         }
         var out: [Data?] = []
