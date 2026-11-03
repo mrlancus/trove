@@ -67,7 +67,8 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.maximumZoomScale = InkEditorModel.maxZoom
         canvas.bouncesZoom = true
         canvas.insertSubview(c.paperView, at: 0)
-        canvas.addSubview(c.boxesView)
+        canvas.insertSubview(c.pagesHost, aboveSubview: c.paperView)
+        canvas.addSubview(c.elementsHost)
         canvas.addSubview(c.overlayView)
         canvas.addInteraction(UIPencilInteraction(delegate: c))
         // Apple Pencil hovering (M2 and later iPads, Pencil Pro): preview the tip and colour, or the eraser.
@@ -207,7 +208,7 @@ struct PencilCanvas: UIViewRepresentable {
             c.zoom(zoomRequest.kind, in: canvas)
         }
         if canvas.isRulerActive { canvas.isRulerActive = false }
-        canvas.bringSubviewToFront(c.boxesView)
+        canvas.bringSubviewToFront(c.elementsHost)
         canvas.bringSubviewToFront(c.overlayView)
         c.showText(textEdit, in: canvas)
     }
@@ -323,15 +324,22 @@ struct PencilCanvas: UIViewRepresentable {
         private var textLook = ""
         /// The page a protractor drag started on.
         private var guideSlot: Slot?
-        /// Paper, PDF pages and pictures for what's on screen.
-        let paperView = InkAreaView()
+        /// The grey round the pages: a plain colour moved with the screen (never drawn).
+        let paperView = UIView()
+        /// Paper, PDF and picture pages and pictures, as layers at 100 % scaled by the zoom
+        /// (`PageLayers.swift`, docs/plans/sketch-2-plan.md S2): nothing is repainted while moving.
+        let pagesHost = InkZoomHost()
+        /// Text boxes and tape over the ink, one small layer each, scaled the same way.
+        let elementsHost = InkZoomHost()
+        private var pageLayers: [String: InkPageLayer] = [:]
+        private var elementLayers: [String: InkElementsLayer] = [:]
+        /// The content at 100 % (the hosts' size).
+        private var contentBox: CGSize = .zero
+        /// When the zoom shown bottom left was last updated during a pinch.
+        private var zoomPublished = Date.distantPast
         /// Text boxes, the lasso, the selection, the eraser and the laser, over the ink.
         let overlayView = InkAreaView()
-        /// Text boxes and tape, over the ink and under the overlay: drawn past the screen's edges like the
-        /// paper and redrawn only when they change, not on every lasso or eraser move.
-        let boxesView = InkAreaView()
         private var shownBoxes = ""
-        private var boxesZoom: CGFloat = 0
         var toolGesture: InkToolGesture?
         var holdWatcher: HoldWatcher?
         var swipes: [UISwipeGestureRecognizer] = []
@@ -360,8 +368,6 @@ struct PencilCanvas: UIViewRepresentable {
         /// When PencilKit's pen last lifted: strokes it reports as new are only taken while a pen is in
         /// hand or just after (anything else is the canvas echoing a drawing set from the model).
         private var penLifted = Date.distantPast
-        /// The zoom the paper was last drawn at (it's drawn past the screen's edges and kept while scrolling).
-        private var paperZoom: CGFloat = 0
         /// The pictures the paper was last drawn with (where each is).
         private var shownPictures = ""
         private var shownVersion = -1
@@ -389,11 +395,10 @@ struct PencilCanvas: UIViewRepresentable {
         init(editor: InkEditorModel) {
             self.editor = editor
             super.init()
-            paperView.painter = { [weak self] ctx, area, scale in self?.drawUnder(ctx, area: area, scale: scale) }
+            paperView.isUserInteractionEnabled = false
             overlayView.painter = { [weak self] ctx, area, scale in self?.drawOver(ctx, area: area, scale: scale) }
-            boxesView.painter = { [weak self] ctx, area, scale in self?.drawBoxes(ctx, area: area) }
             editor.overlayListener = { [weak self] in self?.overlayView.setNeedsDisplay() }
-            backdrop.changed = { [weak self] in self?.paperView.setNeedsDisplay() }
+            backdrop.changed = { [weak self] in self?.showBackdrops() }
             textTouches.shouldReceive = { touch in !(touch.view is UITextView) }
             textDelegate.changed = { [weak self] text in
                 guard let self else { return }
@@ -414,10 +419,10 @@ struct PencilCanvas: UIViewRepresentable {
             shownVersion = -1
             shownTool = ""
             textLook = ""
-            paperZoom = 0
-            paperView.setNeedsDisplay()
+            syncPages()
             overlayView.setNeedsDisplay()
-            boxesView.setNeedsDisplay()
+            shownBoxes = ""
+            refreshBoxes()
             if let tv = textView { tv.backgroundColor = Self.textFieldBackground(dark: on) }
         }
 
@@ -464,8 +469,14 @@ struct PencilCanvas: UIViewRepresentable {
                 shownVersion = -1
                 backdrop.keep(only: Set(pages.map(\.key)))
                 if previous.isEmpty || isEndless != wasEndless { fittedSize = .zero }
-                paperZoom = 0
+                // Pages that went away lose their layers; the rest are placed again.
+                let keys = Set(out.map(\.spec.key))
+                for (key, l) in pageLayers where !keys.contains(key) { l.removeFromSuperlayer(); pageLayers[key] = nil }
+                for (key, l) in elementLayers where !keys.contains(key) { l.removeFromSuperlayer(); elementLayers[key] = nil }
                 resize(canvas)
+                syncPages()
+                shownPictures = ""
+                shownBoxes = 
                 if turned {
                     UIView.transition(with: canvas, duration: 0.38, options: [current > shownCurrent ? .transitionCurlUp : .transitionCurlDown, .allowAnimatedContent]) {}
                 }
@@ -527,11 +538,10 @@ struct PencilCanvas: UIViewRepresentable {
             canvas.setZoomScale(min(InkEditorModel.maxZoom, z * 1.001), animated: false)
             canvas.setZoomScale(z, animated: false)
             updating = false
-            paperZoom = 0
-            boxesZoom = 0
             resize(canvas)
-            paperView.setNeedsDisplay()
-            boxesView.setNeedsDisplay()
+            syncPages()
+            shownBoxes = ""
+            refreshBoxes()
             overlayView.setNeedsDisplay()
         }
 
@@ -574,9 +584,8 @@ struct PencilCanvas: UIViewRepresentable {
             guard !slots.isEmpty else { return }
             let z = canvas.zoomScale
             let box = slots.reduce(CGRect.null) { $0.union($1.frame) }
-            let size = isEndless
-                ? CGSize(width: box.width * z, height: box.height * z)
-                : CGSize(width: (box.maxX + Self.margin) * z, height: (box.maxY + Self.margin) * z)
+            contentBox = isEndless ? box.size : CGSize(width: box.maxX + Self.margin, height: box.maxY + Self.margin)
+            let size = CGSize(width: contentBox.width * z, height: contentBox.height * z)
             if canvas.contentSize != size { canvas.contentSize = size }
             // Centre pages smaller than the view.
             let left = isEndless ? 0 : max(0, (canvas.bounds.width - size.width) / 2)
@@ -586,43 +595,103 @@ struct PencilCanvas: UIViewRepresentable {
             follow(canvas)
         }
 
-        /// The paper and overlay cover what's on screen. The paper is drawn a quarter of a screen past
-        /// each edge and redrawn only when scrolling leaves that or the zoom changes (it used to redraw
-        /// on every scroll frame, a big part of the battery a sketch used).
+        /// Keeps the layers with the view: the grey moves with the screen, the hosts take the zoom (one
+        /// property each), and the overlay redraws only while it has something to show. Nothing
+        /// under or over the ink is repainted while panning or pinching (plan S2).
         private func follow(_ canvas: UIScrollView) {
             let visible = canvas.bounds
-            if canvas.zoomScale != paperZoom {
-                // Zooming: just the screen, redrawn each frame of the pinch.
-                paperZoom = canvas.zoomScale
-                paperView.zoom = canvas.zoomScale
-                paperView.frame = visible
-                paperView.setNeedsDisplay()
-            } else if !paperView.frame.contains(visible) {
-                paperView.frame = visible.insetBy(dx: -visible.width / 4, dy: -visible.height / 4)
-                paperView.setNeedsDisplay()
-            }
+            let z = canvas.zoomScale
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if paperView.frame != visible { paperView.frame = visible }
+            CATransaction.commit()
+            pagesHost.set(size: contentBox, zoom: z)
+            elementsHost.set(size: contentBox, zoom: z)
             overlayView.frame = visible
-            overlayView.zoom = canvas.zoomScale
+            overlayView.zoom = z
             // The overlay is usually empty (no lasso or eraser): then it needn't redraw.
-            let z0 = max(0.01, canvas.zoomScale)
+            let z0 = max(0.01, z)
             let area = InkGeometry.Rect(x: visible.minX / z0, y: visible.minY / z0, width: visible.width / z0, height: visible.height / z0)
             if overlayHasContent(area) || overlayView.drewSomething { overlayView.setNeedsDisplay() }
-            let hasBoxes = slots.contains { editor.hasBoxesOver($0.spec.key) }
-            if canvas.zoomScale != boxesZoom {
-                boxesZoom = canvas.zoomScale
-                boxesView.zoom = canvas.zoomScale
-                boxesView.frame = visible
-                if hasBoxes || boxesView.drewSomething { boxesView.setNeedsDisplay() }
-            } else if !boxesView.frame.contains(visible) {
-                boxesView.frame = visible.insetBy(dx: -visible.width / 4, dy: -visible.height / 4)
-                if hasBoxes || boxesView.drewSomething { boxesView.setNeedsDisplay() }
-            }
-            let z = canvas.zoomScale
             if isEndless, let slot = slots.first {
                 editor.visibleCenter = InkPoint(x: visible.midX / z - slot.offset.x, y: visible.midY / z - slot.offset.y)
+                // The endless canvas's paper is built round what's on screen: renewed when it scrolls past.
+                syncPage(slot, zoom: z, visible: visible)
             }
             let density = z * max(1, canvas.traitCollection.displayScale)
             prepareBitmaps(visible: CGRect(x: visible.minX / z, y: visible.minY / z, width: visible.width / z, height: visible.height / z), density: density)
+        }
+
+        /// The screen in canvas points at 100 %.
+        private var visible100: CGRect {
+            guard let canvas = paperView.superview as? UIScrollView else { return .zero }
+            let z = max(0.01, canvas.zoomScale)
+            return CGRect(x: canvas.bounds.minX / z, y: canvas.bounds.minY / z, width: canvas.bounds.width / z, height: canvas.bounds.height / z)
+        }
+
+        /// Places and builds every page's layer (pages changed, dark page, a zoom ended).
+        func syncPages() {
+            guard let canvas = paperView.superview as? UIScrollView else { return }
+            for slot in slots { syncPage(slot, zoom: canvas.zoomScale, visible: canvas.bounds) }
+            showBackdrops()
+        }
+
+        private func syncPage(_ slot: Slot, zoom: CGFloat, visible: CGRect) {
+            let l = pageLayers[slot.spec.key] ?? {
+                let n = InkPageLayer()
+                pagesHost.layer.addSublayer(n)
+                pageLayers[slot.spec.key] = n
+                return n
+            }()
+            let z = max(0.01, zoom)
+            let o = slot.offset
+            let local = CGRect(x: visible.minX / z - o.x, y: visible.minY / z - o.y, width: visible.width / z, height: visible.height / z)
+            l.show(slot.spec, frame: slot.frame, dark: isDark(slot), area: local, zoom: zoom)
+        }
+
+        /// PDF and picture pages show what `InkBackdrop` has ready.
+        func showBackdrops() {
+            for slot in slots {
+                switch slot.spec.background {
+                case .paper: continue
+                case .pdf, .image, .goodnotes:
+                    pageLayers[slot.spec.key]?.showBackdrop(whole: backdrop.wholeImage(slot.spec.key), piece: backdrop.piece(slot.spec.key))
+                }
+            }
+        }
+
+        /// Pictures on the pages, as layers holding the images.
+        private func syncPictures() {
+            for slot in slots {
+                let c = editor.display(slot.spec.key, lifted: true)
+                pageLayers[slot.spec.key]?.showPictures(c.elements, pictures: c.pictures, offset: slot.spec.infinite ? CGFloat(slot.spec.origin) : 0)
+            }
+        }
+
+        /// Text boxes and tape as element layers (sharp to 4× the zoom; far pages at the screen's scale).
+        private func syncElements() {
+            guard let canvas = paperView.superview as? UIScrollView else { return }
+            let z = canvas.zoomScale
+            let near = visible100.insetBy(dx: -visible100.width, dy: -visible100.height)
+            for slot in slots {
+                let stored = editor.display(slot.spec.key, lifted: true)
+                let shown = isDark(slot) ? InkDark.content(stored) : stored
+                let has = shown.elements.contains { $0.kind == .text || $0.kind == .tape }
+                guard has || elementLayers[slot.spec.key] != nil else { continue }
+                let l = elementLayers[slot.spec.key] ?? {
+                    let n = InkElementsLayer()
+                    elementsHost.layer.addSublayer(n)
+                    elementLayers[slot.spec.key] = n
+                    return n
+                }()
+                l.show(shown.elements, peeked: shown.peeked, frame: CGRect(origin: slot.offset, size: slot.frame.size), zoom: z, near: slot.frame.intersects(near))
+            }
+        }
+
+        /// A pinch or scroll finished: text gets its sharpness for the new zoom, lines their width.
+        func settled() {
+            syncPages()
+            syncElements()
         }
 
         /// The page under a canvas point (at 100 %), or the nearest one.
@@ -653,36 +722,6 @@ struct PencilCanvas: UIViewRepresentable {
             return slots.filter { $0.frame.intersects(r) }
         }
 
-        private func drawUnder(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
-            for slot in visibleSlots(area) {
-                let o = slot.offset
-                ctx.saveGState()
-                let darkSlot = isDark(slot)
-                if !slot.spec.infinite {
-                    // A thin edge under the page: a blurred shadow is redrawn on every scroll frame and costs battery.
-                    let edge = 1 / scale
-                    let edgeColor = darkSlot ? UIColor.white.withAlphaComponent(0.12) : UIColor.black.withAlphaComponent(0.08)
-                    ctx.setFillColor(edgeColor.cgColor)
-                    ctx.fill(slot.frame.insetBy(dx: -edge, dy: -edge).offsetBy(dx: 0, dy: edge))
-                    ctx.setFillColor((darkSlot ? UIColor.black : UIColor.white).cgColor)
-                    ctx.fill(slot.frame)
-                    ctx.clip(to: slot.frame)
-                }
-                ctx.translateBy(x: o.x, y: o.y)
-                let local = InkGeometry.Rect(x: area.x - o.x, y: area.y - o.y, width: area.width, height: area.height)
-                switch slot.spec.background {
-                case .paper:
-                    InkRenderer.drawBackground(darkSlot ? InkDark.spec(slot.spec) : slot.spec, area: local, in: ctx)
-                case .pdf, .image, .goodnotes:
-                    backdrop.draw(slot.spec.key, size: CGSize(width: slot.spec.width, height: slot.spec.height), in: ctx)
-                }
-                // Pictures the lasso is dragging are drawn over the ink while they move (`drawOver`).
-                let c = editor.display(slot.spec.key, lifted: true)
-                InkRenderer.drawPictures(c.elements, pictures: c.pictures, in: ctx)
-                ctx.restoreGState()
-            }
-        }
-
         private func overlayHasContent(_ area: InkGeometry.Rect) -> Bool {
             visibleSlots(area).contains { slot in
                 let o = editor.overlay(slot.spec.key)
@@ -692,30 +731,13 @@ struct PencilCanvas: UIViewRepresentable {
         }
 
         /// The text boxes and tape changed (new ink version, a peek, the box being typed in, a drag
-        /// starting or ending): redraw their layer.
+        /// starting or ending): their layers are brought up to date (unchanged ones aren't redrawn).
         func refreshBoxes() {
             let edit = editor.textEdit.map { "\($0.pageKey):\($0.elementId ?? "")" } ?? ""
             let sig = "\(editor.revision)|\(edit)|\(dark)"
             guard sig != shownBoxes else { return }
             shownBoxes = sig
-            boxesView.setNeedsDisplay()
-        }
-
-        private func drawBoxes(_ ctx: CGContext, area: InkGeometry.Rect) {
-            var drew = false
-            for slot in visibleSlots(area) where editor.hasBoxesOver(slot.spec.key) {
-                drew = true
-                let o = slot.offset
-                ctx.saveGState()
-                ctx.translateBy(x: o.x, y: o.y)
-                let stored = editor.display(slot.spec.key, lifted: true)
-                let shown = isDark(slot) ? InkDark.content(stored) : stored
-                InkRenderer.drawTexts(shown.elements, in: ctx)
-                // Tape covers the ink (PencilKit's, underneath this view) too.
-                InkRenderer.drawTapes(shown.elements, peeked: shown.peeked, in: ctx)
-                ctx.restoreGState()
-            }
-            boxesView.drewSomething = drew
+            syncElements()
         }
 
         private func drawOver(_ ctx: CGContext, area: InkGeometry.Rect, scale: Double) {
@@ -751,7 +773,8 @@ struct PencilCanvas: UIViewRepresentable {
                     }
                 }
             }
-            backdrop.refine(seen, density: density)
+            // Twice the screen's density: a pinch up to 2× stays sharp before the next part arrives.
+            backdrop.refine(seen, density: density * 2)
         }
 
         // MARK: Ink
@@ -780,7 +803,7 @@ struct PencilCanvas: UIViewRepresentable {
                 }
             }
             // The paper (with pictures, under the ink) redraws only when a picture came, went or moved.
-            if pictures != shownPictures { shownPictures = pictures; paperView.setNeedsDisplay() }
+            if pictures != shownPictures { shownPictures = pictures; syncPictures() }
             let modelIds = wanted
             let current = canvas.drawing.strokes
             var onCanvas: [String: PKStroke] = [:]
@@ -921,18 +944,26 @@ struct PencilCanvas: UIViewRepresentable {
 
         // Slow frames while panning or pinching, counted for Settings → Diagnostics.
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { FrameMeter.shared.begin("Pan") }
-        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) { if !decelerate { FrameMeter.shared.end() } }
-        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { FrameMeter.shared.end() }
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate { FrameMeter.shared.end(); syncElements() }
+        }
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { FrameMeter.shared.end(); syncElements() }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             resize(scrollView)
             if let canvas = scrollView as? TroveCanvasView { placeText(in: canvas) }
             let z = Double(scrollView.zoomScale)
-            if !updating, abs(z - editor.zoom) > 0.004 { DispatchQueue.main.async { [weak self] in self?.editor.zoom = z } }
+            // The percentage bottom left: at most 10 times a second during a pinch (each update
+            // redraws SwiftUI), exactly when it ends.
+            if !updating, abs(z - editor.zoom) > 0.004, Date().timeIntervalSince(zoomPublished) > 0.1 {
+                zoomPublished = Date()
+                DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
+            }
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
             FrameMeter.shared.end()
+            settled()
             let z = Double(scale)
             DispatchQueue.main.async { [weak self] in self?.editor.zoom = z }
         }

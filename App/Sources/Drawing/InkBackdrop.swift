@@ -70,6 +70,8 @@ final class InkBackdrop {
         pending?.cancel()
         pendingFor = ""
         generation += 1
+        busy = false
+        queued = nil
     }
 
     func keep(only keys: Set<String>) {
@@ -98,15 +100,23 @@ final class InkBackdrop {
         }
         let request = wanted.map { "\($0.spec.key)@\(Int($0.rect.minX)),\(Int($0.rect.minY)),\(Int($0.rect.width)),\(Int($0.rect.height))x\(Int($0.density * 100))" }.joined(separator: ";")
         guard request != pendingFor else { return }
-        pending?.cancel()
         pendingFor = request
-        generation += 1
+        // Throttled, not debounced: while a pinch goes on, each render starts as soon as the last
+        // finishes (with the newest request), so the sharper picture arrives during the gesture
+        // instead of a moment after it ends (docs/plans/sketch-2-plan.md S2.3).
+        if busy { queued = wanted; return }
+        run(wanted)
+    }
+
+    private var busy = false
+    private var queued: [(spec: InkPageSpec, rect: CGRect, density: CGFloat)]?
+
+    private func run(_ wanted: [(spec: InkPageSpec, rect: CGRect, density: CGFloat)]) {
         guard !wanted.isEmpty else { return }
+        busy = true
+        generation += 1
         let ticket = generation
         pending = Task { [weak self] in
-            // Wait for the pinch or scroll to settle.
-            try? await Task.sleep(for: .milliseconds(160))
-            guard !Task.isCancelled else { return }
             for w in wanted {
                 let spec = w.spec, area = w.rect, density = w.density
                 let pixelWidth = max(1, Int((area.width * density).rounded()))
@@ -114,13 +124,22 @@ final class InkBackdrop {
                 let rendered = await Task.detached(priority: .userInitiated) {
                     InkRenderer.render(spec, content: InkContent(), pixelWidth: pixelWidth, area: box).map(InkImage.init)
                 }.value
-                guard let self, !Task.isCancelled, self.generation == ticket else { return }
+                guard let self, self.generation == ticket else { return }
                 if let rendered {
                     self.detail[spec.key] = Piece(rect: area, density: CGFloat(rendered.image.width) / area.width, image: rendered.image)
                     self.changed?()
                 }
             }
-            if let self, self.generation == ticket { self.pendingFor = "" }
+            guard let self, self.generation == ticket else { return }
+            self.busy = false
+            if let next = self.queued {
+                self.queued = nil
+                self.run(next)
+            }
         }
     }
+
+    /// The whole-page picture and the sharp part, for layers that show them (the iPad's page layers).
+    func wholeImage(_ key: String) -> CGImage? { whole[key] }
+    func piece(_ key: String) -> Piece? { detail[key] }
 }

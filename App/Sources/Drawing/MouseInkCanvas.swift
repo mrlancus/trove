@@ -262,11 +262,14 @@ final class InkNSView: NSView {
     private var inkCache: (key: String, rect: CGRect, image: CGImage)?
 
     private func drawInk(_ page: InkPageSpec, editor: InkEditorModel, in ctx: CGContext) {
-        let visible = visibleRect
+        // Drawn a third of a screen past each edge and kept while the view stays inside that: panning
+        // used to re-render every stroke on every frame (docs/plans/sketch-2-plan.md S2-Mac).
+        let shown = visibleRect
         let k = CGFloat(scale) * (window?.backingScaleFactor ?? 2)
         let key = "\(editor.revision)|\(shownKey)|\(scale)|\(darkHere)"
-        if inkCache?.key != key || inkCache?.rect != visible {
+        if inkCache?.key != key || !(inkCache?.rect.contains(shown) ?? false) {
             inkCache = nil
+            let visible = shown.insetBy(dx: -shown.width / 3, dy: -shown.height / 3).intersection(bounds)
             let w = Int((visible.width * k).rounded(.up)), h = Int((visible.height * k).rounded(.up))
             if w > 0, h > 0, w * h <= 40_000_000,
                let bitmap = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
