@@ -446,7 +446,15 @@ final class InkEditorModel {
     /// deleted yet. A reload that lands in between keeps them as drawn, so nothing flickers away.
     @ObservationIgnored private var unsavedStrokes: [String: (key: String, line: InkLine)] = [:]
     @ObservationIgnored private var unsavedDeletes: Set<String> = []
-    @ObservationIgnored private weak var app: AppModel?
+    @ObservationIgnored private(set) weak var app: AppModel?
+    /// Math Assist: answers after a written `=` (MathAssistController, MASTER_PLAN G7).
+    @ObservationIgnored private var mathController: MathAssistController?
+    var math: MathAssistController {
+        if let m = mathController { return m }
+        let m = MathAssistController(editor: self)
+        mathController = m
+        return m
+    }
     private var pagesSig = ""
     /// The item's ink as last loaded (count and newest change), so a reload with nothing new is skipped.
     @ObservationIgnored private var inkSig = ""
@@ -890,6 +898,7 @@ final class InkEditorModel {
         unsavedStrokes[id] = (key, line)
         revision += 1
         record(Action(add: [Ref(id: id, kind: "stroke")]))
+        if tool != .highlighter, snapped == nil || snapped?.shape == .line { math.strokeAdded(line, pageKey: key) }
         let itemId = target.itemId, layer = target.layer
         Task {
             await library.addStroke(id: id, on: itemId, layer: layer, pageKey: key, tool: tool, color: color, width: width, points: pts, shape: shape,

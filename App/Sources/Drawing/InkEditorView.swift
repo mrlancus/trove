@@ -200,6 +200,11 @@ struct InkEditorView: View {
                 Menu {
                     Toggle("Scribble to erase", isOn: $editor.scribbleToErase)
                     Toggle("Shapes come out clean", isOn: $editor.shapeMode)
+                    Picker("Math Assist", selection: Binding(get: { MathAssistController.setting }, set: { MathAssistController.setting = $0 })) {
+                        Text("Answer when I write =").tag(MathAssist.Mode.automatic)
+                        Text("Only when I ask (lasso → Solve)").tag(MathAssist.Mode.onRequest)
+                        Text("Off").tag(MathAssist.Mode.off)
+                    }
                     Toggle("Smaller drawings (every device up to date)", isOn: Binding(get: { editor.inkSettings.compactPoints }, set: { editor.setCompactPoints($0) }))
                     if !editor.inkSettings.favourites.isEmpty {
                         Menu("Remove a favourite pen") {

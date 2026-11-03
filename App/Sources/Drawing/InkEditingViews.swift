@@ -92,6 +92,9 @@ struct InkSelectionArrangeButtons: View {
             icon("square.3.layers.3d.top.filled", "Bring to front") { editor.arrangeSelection(front: true) }
             icon("square.3.layers.3d.bottom.filled", "Send to back") { editor.arrangeSelection(front: false) }
             icon("level", "Straighten") { editor.straightenSelection() }
+            if MathAssistController.setting != .off {
+                icon("equal.square", "Solve (Math Assist)") { if let sel = editor.selection { editor.math.solve(selection: sel) } }
+            }
         }
     }
 
