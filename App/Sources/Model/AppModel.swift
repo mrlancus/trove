@@ -71,7 +71,15 @@ final class AppModel {
 
     // MARK: Published state
     var phase: Phase = .loading
-    var items: [Item] = [] { didSet { dataVersion += 1 } }
+    var items: [Item] = [] {
+        didSet {
+            dataVersion += 1
+            itemPositions = Dictionary(items.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+    }
+    /// id → position in `items`, so finding the open item isn't a walk through the library on every redraw.
+    @ObservationIgnored private var itemPositions: [String: Int] = [:]
+    func item(withID id: String) -> Item? { itemPositions[id].map { items[$0] } }
     var collections: [ItemCollection] = [] { didSet { dataVersion += 1 } }
     var folders: [Folder] = [] { didSet { dataVersion += 1 } }
     /// Bumped when items, folders or collections change: lists and counts worked out from them are
@@ -302,6 +310,49 @@ final class AppModel {
         #endif
     }
 
+    // MARK: Sleep (Mac)
+
+    #if os(macOS)
+    @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
+    /// The screen is off or the Mac is asleep: nothing to show and nobody copying.
+    @ObservationIgnored private(set) var screenAsleep = false
+
+    /// While the screen sleeps the clipboard checks, the live socket and the sync loop stop
+    /// (docs/MASTER_PLAN.md P8, P9); on wake they start again with one sync.
+    private func observeSleep() {
+        guard sleepObservers.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        let sleepNames: [Notification.Name] = [NSWorkspace.screensDidSleepNotification, NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification]
+        let wakeNames: [Notification.Name] = [NSWorkspace.screensDidWakeNotification, NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification]
+        for name in sleepNames {
+            sleepObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.wentToSleep() }
+            })
+        }
+        for name in wakeNames {
+            sleepObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.wokeUp() }
+            })
+        }
+    }
+
+    private func wentToSleep() {
+        guard !screenAsleep else { return }
+        screenAsleep = true
+        clipboardWatcher?.pause()
+        live?.stop()
+        saveNow()
+    }
+
+    private func wokeUp() {
+        guard screenAsleep else { return }
+        screenAsleep = false
+        clipboardWatcher?.resume()
+        connectLive()
+        Task { await syncNow() }
+    }
+    #endif
+
     // MARK: Clipboard
 
     private func startClipboard() {
@@ -311,6 +362,7 @@ final class AppModel {
             clipboardWatcher = watcher
         }
         #if os(macOS)
+        observeSleep()
         if clipboardPalette == nil {
             let palette = ClipboardPaletteController(store: clipboard, thisDevice: { [weak self] in self?.config?.deviceId },
                                                      saveToLibrary: { [weak self] clip in self?.saveClip(clip) })
@@ -532,7 +584,7 @@ final class AppModel {
         return c
     }
 
-    var selectedItem: Item? { selectedItemID.flatMap { id in items.first { $0.id == id } } }
+    var selectedItem: Item? { selectedItemID.flatMap { item(withID: $0) } }
 
     func count(_ smart: SmartCollection) -> Int { sidebarCounts.smart[smart] ?? 0 }
 
@@ -728,7 +780,8 @@ final class AppModel {
         syncTask = Task { [weak self] in
             while !Task.isCancelled {
                 let wait = await self?.syncRound() ?? 60
-                try? await Task.sleep(for: .seconds(wait))
+                // 10 % tolerance lets the system fold the wakeup into others (MASTER_PLAN P9).
+                try? await Task.sleep(for: .seconds(wait), tolerance: .seconds(wait * 0.1))
             }
         }
     }
@@ -739,10 +792,17 @@ final class AppModel {
         let policy = self.policy
         // Very hot while sketching: nothing until the sketch closes or the app goes to the background.
         guard let minPoll = policy.minPoll else { return 60 }
+        #if os(macOS)
+        // Asleep: the wake notification syncs; until then only an occasional look.
+        if screenAsleep { return 900 }
+        #endif
         await syncNow()
         let wait = syncBackoff.next(changed: lastSyncChanged, lowPower: policy.saving)
         // While drawing, others' strokes come with a live ping; polling waits longer.
-        return max(wait, minPoll)
+        // With the live socket up, every change elsewhere arrives as a ping, so polling is only a
+        // safety net (MASTER_PLAN P9): 5 min on the charger, 10 on battery.
+        let safety: Double = sync.live ? (policy.unlimited ? 300 : 600) : 0
+        return max(wait, minPoll, safety)
     }
 
     /// What the device allows right now (`PowerPolicy`, docs/ROADMAP.md §3.7).

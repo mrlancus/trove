@@ -21,17 +21,20 @@ final class ClipboardWatcher {
     private let store: ClipboardStore
     private var timer: Timer?
     private var lastChange = NSPasteboard.general.changeCount
+    private var paused = false
+    private var lastSeenChange = Date()
 
     init(store: ClipboardStore) { self.store = store }
 
+    /// macOS has no pasteboard notification, so the change count is read on a timer. It used to be
+    /// every 0.4 s, all day, with no tolerance (9,000 wakeups an hour, and no App Nap). Now the
+    /// interval follows the user (docs/MASTER_PLAN.md P8): 0.3 s while they're using the Mac or just
+    /// copied something, 1 s after a short pause, 2 s after five idle minutes, nothing while the
+    /// screen sleeps. Each timer has 25 % tolerance so the system can group the wakeups.
     func start() {
+        paused = false
         guard timer == nil else { return }
-        let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.check() }
-        }
-        // Common modes, so copies still register while a menu is open or something is being dragged.
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        schedule()
     }
 
     func stop() {
@@ -39,10 +42,49 @@ final class ClipboardWatcher {
         timer = nil
     }
 
+    /// The screen went to sleep or the Mac is sleeping: no checks until `resume()`.
+    func pause() {
+        paused = true
+        stop()
+    }
+
+    /// Back from sleep: look once at once (a copy may have come from another device), then carry on.
+    func resume() {
+        guard paused else { return }
+        paused = false
+        check()
+        schedule()
+    }
+
+    static func interval(idleSeconds: Double, sinceLastCopy: Double) -> Double {
+        if idleSeconds < 10 || sinceLastCopy < 10 { return 0.3 }
+        if idleSeconds < 300 { return 1 }
+        return 2
+    }
+
+    private func schedule() {
+        guard !paused else { return }
+        let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+        let wait = Self.interval(idleSeconds: idle, sinceLastCopy: Date().timeIntervalSince(lastSeenChange))
+        let timer = Timer(timeInterval: wait, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.timer = nil
+                self.check()
+                self.schedule()
+            }
+        }
+        timer.tolerance = wait * 0.25
+        // Common modes, so copies still register while a menu is open or something is being dragged.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
     private func check() {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
+        lastSeenChange = Date()
         guard store.enabled, pb.changeCount != ClipPasteboard.ownChangeCount else { return }
         let types = Set((pb.types ?? []).map(\.rawValue))
         guard types.isDisjoint(with: Self.skipTypes) else { return }

@@ -10,6 +10,7 @@ final class LiveConnection: @unchecked Sendable {
     private var stopped = false
     private var backoff: TimeInterval = 2
     private var pingTimer: Timer?
+    static let pingEvery: TimeInterval = 50
 
     init(url: URL, onStatus: @escaping @Sendable (Bool) -> Void, onEvent: @escaping @Sendable () -> Void) {
         self.url = url
@@ -37,9 +38,14 @@ final class LiveConnection: @unchecked Sendable {
         receive(on: task)
         DispatchQueue.main.async { [weak self] in
             self?.pingTimer?.invalidate()
-            self?.pingTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
+            // Cloudflare closes a quiet socket after ~100 s; a ping every 50 s (±10 s, so the
+            // system can fold it into other wakeups) keeps it open with half the wakeups of 25 s.
+            let timer = Timer(timeInterval: Self.pingEvery, repeats: true) { [weak self] _ in
                 self?.task?.send(.string("ping")) { _ in }
             }
+            timer.tolerance = 10
+            RunLoop.main.add(timer, forMode: .common)
+            self?.pingTimer = timer
         }
     }
 
