@@ -126,7 +126,7 @@ struct ItemDetailView: View {
                 .fixedSize()
             }
             if editing {
-                MarkdownEditor(text: $body_)
+                LiveMarkdownEditor(text: $body_, titles: model.items.lazy.filter { $0.id != item.id }.prefix(2000).map(\.displayTitle))
                     .frame(minHeight: 260)
                     .onChange(of: body_) { scheduleSave() }
             } else if body_.isEmpty {
