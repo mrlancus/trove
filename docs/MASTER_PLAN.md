@@ -701,6 +701,46 @@ The quadtree (P13), tile LOD (draw a simplified outline below 25 % zoom), progre
 arrows) show as plain strokes on the iPad while drawing. A Metal renderer of our own stays an option
 for later, only if the styles turn out to matter.
 
+### G14. Ask and revise inside a notebook or board **L**
+The user's idea (2026-11-03): AI inside any sketch, notebook or whiteboard that takes in what it's
+allowed to see (default: everything in that notebook), answers questions about it, **asks you
+questions** like a revision tool, **draws diagrams** and **highlights** what you asked it to find.
+- **What it reads (cheap by design):** text, not pictures. The handwriting is read on the device
+  (G6 `inkWords`, words with their boxes), plus typed text, PDF text and picture OCR, cut into
+  chunks per page and section. A 50-page notebook is ~15–20k tokens. Pictures of a page square go
+  only when text can't carry it (a drawing, a graph), through Ask's existing `view` + `section`.
+  Scope: this notebook (default), a selection, chosen pages, or a folder; `aiHidden` still applies.
+- **Cost (Haiku 5.5, $0.10/$0.50 per M, prompt caching):** the notebook text is sent once per session
+  and cached; each question then reads the cache at about a tenth of the price. About $0.002 to load
+  a 50-page notebook, then ~$0.0003 per question or graded answer. A 30-minute revision session of
+  40 questions ≈ $0.01–0.02; revising every day ≈ $0.30–0.60 a month. Very big notebooks or folders
+  use on-device search to send only the relevant chunks (Ask's tool approach).
+- **Haiku vs on-device:**
+  - **No AI at all** (free, instant, on the device): Find and highlight by words (search over
+    `inkWords` boxes), spaced-repetition scheduling (G8 FSRS), and reading your written answers (G6).
+  - **On-device Foundation Models** (iPad only, free, offline): a 4k-token context, so it works a page
+    or section at a time. Good for flashcards from a page, simple questions and checking short
+    answers. Weaker at questions across a whole notebook, fair grading and diagrams. Long answers keep
+    the Neural Engine/GPU busy for seconds, so it isn't automatically kinder to the battery than one small request.
+  - **Haiku (default when your own AI is set):** the whole notebook in context, better questions and
+    grading, diagrams. Setting: Haiku / On-device only (iPad) / Off.
+- **Revision modes:** Quiz me (multiple choice, short answer, or write the answer in ink, read on
+  the device and graded), Explain this, Exam-style question, Socratic (it keeps asking "why?"),
+  **Auto-tape** (it covers key terms with tape, which exists, and you tap to reveal), and Weak spots
+  (what you got wrong comes back sooner through G8). Every question links to the place in the notes
+  it came from. Cards and results are saved to Study (`card` records, G8).
+- **Highlighting:** answers cite page + word/stroke ids (handles like Ask's), never free text, so
+  Trove can glow those strokes, scroll there and step through them ("3 places"). A meaning-based
+  find ("where did I explain osmosis?") is the AI returning those refs.
+- **Diagrams:** the model returns a small structured description (boxes, labels, arrows, a timeline,
+  a table, a cycle), ~300 output tokens (~$0.00015), and Trove lays it out on the device and draws it
+  as **real, editable shapes, text and connectors** (S3) on the page or a side sheet, never a picture.
+  Arrows can point at your own handwriting (by stroke ids).
+- **Battery:** nothing runs until you ask; one request per question; answers stream as text with no
+  animation; the cached notebook text is kept on the device so reopening a session doesn't re-read pages.
+- **UI:** an "Ask" button on the sketch toolbar opens a side panel (iPad: slide-over sheet; Mac:
+  inspector) with Ask / Quiz / Find, a scope picker and the running cost (exists in Ask).
+
 ### G13. Export to GoodNotes (`.goodnotes`) **L** 🔒(format writer)
 Decided by the user: an **Export to GoodNotes** option for every kind of drawing: notebooks
 (multi-page sketches), whiteboards (endless canvases), single sketches, inked PDFs and inked images,
@@ -974,7 +1014,7 @@ GoodNotes first (decided 2026-11-03): "it really needs to be good enough to repl
 | **1. Speed core** | P1 change feed · P2 rows · P6 Spotlight · P8 clipboard watcher · P9 sockets/App Nap/tolerance · Q2 big vault · Q3 XCTest perf + simulator UI tests (incl. the sketch editor) | Big notebooks need it; CI catches iPad runtime breakage |
 | **2. Notebooks** | G1 shelf + covers (A Glass) · G2 outline/links · G3 planners/templates · G5 insert space · G9 zoom window · G10 present · G11 + P13 whiteboards, Mac tiles, page checkpoints · whole GoodNotes library import with its folders (ROADMAP S7) | GoodNotes parity, the part people notice first |
 | **3. GoodNotes out and in** | G13 export to `.goodnotes` (round-trip first, then fresh) · GoodNotes gaps: sticky notes, rotated items, audio, pencil texture | Switching both ways without fear |
-| **4. Past GoodNotes** | G6 word recognition + spellcheck/word complete · G7 + N10 math assist (on device, low battery, messy writing) · G4 audio synced to ink + N9 transcripts · G8 study | Where Trove beats GoodNotes |
+| **4. Past GoodNotes** | G6 word recognition + spellcheck/word complete · G14 ask, quiz, find and diagrams inside notebooks · G7 + N10 math assist (on device, low battery, messy writing) · G4 audio synced to ink + N9 transcripts · G8 study | Where Trove beats GoodNotes |
 | **5. Fewer wakes, less memory** | P10 batched segments (relay + clients) · P11 iCloud NSMetadataQuery · P4 search actor + binary save · P7 thumbnails · P15 launch · P16 budgets | Radio and memory; launch under 400 ms |
 | **6. The editor** | N1 TextKit 2 editor · N2 · N3 · N4 · O1 switcher · O2 command palette · O4 backlinks | The largest notes gap |
 | **7. Organise** | O5 embeds/aliases · O6 Properties · O7 Views · N5/N6 · N11 Recently Deleted · O3 tabs/splits | Obsidian/Notion-level structure |
