@@ -206,7 +206,8 @@ struct CoursePicker: View {
     private func unlistedNote(_ cat: Catalogue) -> String {
         let names = (cat.unlisted ?? []).map { u in u.id == "pearson" ? "Pearson Edexcel" : u.id == "ccea" ? "CCEA" : u.id.uppercased() }
         let missing = names.isEmpty ? "" : "\(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "isn't" : "aren't") listed yet. "
-        return missing + "For anything else, upload the papers yourself: they're saved in your trove and sync to all your devices."
+        return missing + "For CCEA, use Upload → From a board's website in Your own papers: you browse its site and add the papers you want. "
+            + "For anything else, upload the papers yourself: they're saved in your trove and sync to all your devices."
     }
 }
 
@@ -340,6 +341,10 @@ struct UploadsCard: View {
     @Environment(\.pickFiles) private var pickFiles
     @State private var photos: [PhotosPickerItem] = []
     @State private var photosOpen = false
+    @State private var naming: [DevelopModel.PendingUpload] = []
+    @State private var browsing: BoardSite?
+    @State private var renaming: Item?
+    @State private var newName = ""
     #if os(iOS)
     @State private var scanning = false
     #endif
@@ -355,6 +360,11 @@ struct UploadsCard: View {
                     #if os(iOS)
                     Button("Scan with the camera", systemImage: "doc.viewfinder") { scanning = true }
                     #endif
+                    Section("From a board's website") {
+                        ForEach(BoardSite.all) { site in
+                            Button(site.menuTitle, systemImage: "safari") { browsing = site }
+                        }
+                    }
                 } label: { Label("Upload", systemImage: "square.and.arrow.up") }
                 .buttonStyle(.bordered).controlSize(.small)
                 .disabled(develop.splitting)
@@ -368,6 +378,9 @@ struct UploadsCard: View {
                     Text(item.displayTitle).font(.subheadline).lineLimit(1)
                     Spacer()
                     Text("\(develop.problems.filter { $0.sourceKey == "item:\(item.id)" }.count) questions").font(.caption).foregroundStyle(.secondary)
+                }
+                .contextMenu {
+                    Button("Rename…", systemImage: "pencil") { newName = item.displayTitle; renaming = item }
                 }
             }
             let others = develop.myPDFs.filter { !develop.practisedItems.contains($0.id) }
@@ -387,11 +400,25 @@ struct UploadsCard: View {
             guard !picked.isEmpty else { return }
             photos = []
             Task {
+                var files: [DevelopModel.PendingUpload] = []
                 for (i, p) in picked.enumerated() {
                     if let data = try? await p.loadTransferable(type: Data.self) {
-                        await develop.upload(data, name: "Photo \(i + 1).jpg", mime: "image/jpeg")
+                        files.append(develop.pending(data, fileName: "Photo \(i + 1).jpg", mime: "image/jpeg"))
                     }
                 }
+                naming = files
+            }
+        }
+        .sheet(isPresented: Binding(get: { !naming.isEmpty }, set: { if !$0 { naming = [] } })) {
+            NameUploadsSheet(develop: develop, uploads: $naming)
+        }
+        .sheet(item: $browsing) { site in BoardBrowser(develop: develop, site: site) }
+        .alert("Rename paper", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Cancel", role: .cancel) { renaming = nil }
+            Button("Rename") {
+                if let item = renaming { Task { await develop.rename(item, to: newName) } }
+                renaming = nil
             }
         }
         #if os(iOS)
@@ -399,7 +426,7 @@ struct UploadsCard: View {
             DocumentScanner { pdf in
                 scanning = false
                 guard let pdf else { return }
-                Task { await develop.upload(pdf, name: "Scan \(Date().formatted(date: .abbreviated, time: .omitted)).pdf", mime: "application/pdf") }
+                naming = [develop.pending(pdf, fileName: "Scan \(Date().formatted(date: .abbreviated, time: .omitted)).pdf", mime: "application/pdf")]
             }
             .ignoresSafeArea()
         }
@@ -407,13 +434,84 @@ struct UploadsCard: View {
     }
 
     private func upload(_ urls: [URL]) async {
+        var files: [DevelopModel.PendingUpload] = []
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url) else { continue }
             let type = UTType(filenameExtension: url.pathExtension)
-            await develop.upload(data, name: url.lastPathComponent, mime: type?.conforms(to: .pdf) == true ? "application/pdf" : (type?.preferredMIMEType ?? "image/jpeg"))
+            files.append(develop.pending(data, fileName: url.lastPathComponent,
+                                         mime: type?.conforms(to: .pdf) == true ? "application/pdf" : (type?.preferredMIMEType ?? "image/jpeg")))
         }
+        naming = files
+    }
+}
+
+/// Name what you're uploading before it's saved. Trove reads each paper and suggests a name ("CCEA GCSE Physics
+/// Unit 1 Foundation, June 2023"), tidied by Apple Intelligence where the device has it; the board's name is
+/// kept as the board spells it. Type over it to use your own.
+struct NameUploadsSheet: View {
+    @Bindable var develop: DevelopModel
+    @Binding var uploads: [DevelopModel.PendingUpload]
+    var onSave: ((Int) -> Void)? = nil
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                ForEach($uploads) { $u in
+                    Section {
+                        TextField("Name", text: $u.name, axis: .vertical)
+                            .lineLimit(1...3)
+                        HStack(spacing: 6) {
+                            if u.thinking {
+                                ProgressView().controlSize(.small)
+                                Text("Reading the paper…")
+                            } else {
+                                Image(systemName: u.byAI ? "sparkles" : "doc.text.magnifyingglass")
+                                Text(u.byAI ? "Suggested with Apple Intelligence" : "Suggested from the paper")
+                                if u.name != u.suggested {
+                                    Spacer()
+                                    Button("Use suggestion") { u.name = u.suggested }.buttonStyle(.borderless)
+                                }
+                            }
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                    } header: {
+                        Text(u.fileName).textCase(nil).lineLimit(1)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(uploads.count == 1 ? "Name this paper" : "Name these papers")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { uploads = [] } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let chosen = uploads
+                        uploads = []
+                        onSave?(chosen.count)
+                        Task { await develop.save(chosen) }
+                    }
+                    .disabled(uploads.isEmpty)
+                }
+            }
+            .task {
+                for u in uploads where u.thinking {
+                    let named = await develop.suggestName(for: u)
+                    // Apply to the current copy so anything typed meanwhile stays.
+                    if let i = uploads.firstIndex(where: { $0.id == u.id }) {
+                        if uploads[i].name != u.name { uploads[i].suggested = named.suggested; uploads[i].byAI = named.byAI; uploads[i].thinking = false }
+                        else { uploads[i] = named }
+                    }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 460, minHeight: 320)
+        #endif
     }
 }
 

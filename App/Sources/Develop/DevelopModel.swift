@@ -272,9 +272,91 @@ final class DevelopModel {
 
     // MARK: Your own papers
 
+    /// A file waiting for its name before it's saved: what Trove suggests, and what you've typed.
+    struct PendingUpload: Identifiable {
+        let id = UUID()
+        var data: Data
+        var fileName: String
+        var mime: String
+        var source: URL?
+        var name: String
+        var suggested: String
+        /// The suggestion was tidied by Apple Intelligence (on this device).
+        var byAI = false
+        var thinking = true
+    }
+
+    /// Subjects to look for in a paper: the catalogue's, and the common ones.
+    var subjectNames: [String] { Array(Set((catalogue?.specs.map(\.subject) ?? []) + PaperTitle.commonSubjects)) }
+
+    /// A quick suggestion from the file name, before the paper's been read.
+    func pending(_ data: Data, fileName: String, mime: String, source: URL? = nil) -> PendingUpload {
+        let quick = PaperTitle.suggest(text: "", fileName: fileName, source: source, subjects: subjectNames)
+        return PendingUpload(data: data, fileName: fileName, mime: mime, source: source, name: quick, suggested: quick)
+    }
+
+    /// Reads the paper (its first pages, or the picture's text) and suggests a name; Apple Intelligence tidies
+    /// it where it's available, but can't change the board's name. Your typing is never overwritten.
+    func suggestName(for upload: PendingUpload) async -> PendingUpload {
+        var u = upload
+        let data = upload.data, isPDF = upload.mime.contains("pdf")
+        let (text, pdfTitle) = await Task.detached(priority: .userInitiated) { () -> (String, String?) in
+            guard isPDF, let doc = PDFDocument(data: data) else { return ("", nil) }
+            let title = doc.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String
+            return ((0..<min(2, doc.pageCount)).compactMap { doc.page(at: $0)?.string }.joined(separator: "\n"), title)
+        }.value
+        var firstPage = text
+        if firstPage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let image = Self.firstImage(data, isPDF: isPDF) {
+            firstPage = await AppleEnricher.recognizeText(in: image, fast: true)  // a photo or a scan
+        }
+        let guess = PaperTitle.guess(text: firstPage, pdfTitle: pdfTitle, fileName: upload.fileName, source: upload.source, subjects: subjectNames)
+        var suggestion = PaperTitle.suggest(text: firstPage, pdfTitle: pdfTitle, fileName: upload.fileName, source: upload.source, subjects: subjectNames)
+        var byAI = false
+        if OnDeviceAI.isAvailable, !firstPage.isEmpty,
+           let refined = try? await OnDeviceAI.paperTitle(firstPage: firstPage, suggestion: suggestion), PaperTitle.keepsBoard(refined, of: guess) {
+            byAI = refined != suggestion
+            suggestion = refined
+        }
+        if u.name == u.suggested { u.name = suggestion }  // only if you haven't started typing
+        u.suggested = suggestion
+        u.byAI = byAI
+        u.thinking = false
+        return u
+    }
+
+    nonisolated static func firstImage(_ data: Data, isPDF: Bool) -> CGImage? {
+        if isPDF {
+            guard let page = PDFDocument(data: data)?.page(at: 0) else { return nil }
+            let b = page.bounds(for: .mediaBox)
+            let scale = min(2.0, 2000 / max(b.width, b.height, 1))
+            return page.thumbnail(of: CGSize(width: b.width * scale, height: b.height * scale), for: .mediaBox).cgImageForVision
+        }
+        #if os(iOS)
+        return UIImage(data: data)?.cgImage
+        #else
+        return NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #endif
+    }
+
+    /// Saves each named file and splits it.
+    func save(_ uploads: [PendingUpload]) async {
+        for u in uploads {
+            let name = u.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            await upload(u.data, name: u.fileName, mime: u.mime, title: name.isEmpty ? u.suggested : name)
+        }
+    }
+
+    /// Renames one of your uploads (its questions keep the name they were split with until it's split again).
+    func rename(_ item: Item, to title: String) async {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let library = app?.library else { return }
+        await library.update(item.id, [Field.title: .string(t)])
+        await app?.reload()
+    }
+
     /// Saves a file you picked (a PDF, a photo, a scan) as an item in your trove, so it syncs to all your
     /// devices, then splits it into questions. Pictures become a one-page PDF first.
-    func upload(_ data: Data, name: String, mime: String) async {
+    func upload(_ data: Data, name: String, mime: String, title: String? = nil) async {
         guard let library = app?.library else { return }
         var pdf = data, fileName = name
         if !mime.contains("pdf") {
@@ -283,7 +365,7 @@ final class DevelopModel {
             fileName = (name as NSString).deletingPathExtension + ".pdf"
         }
         guard let id = try? await library.addFile(pdf, name: fileName, mime: "application/pdf", kind: .pdf, source: .app,
-                                                  title: (name as NSString).deletingPathExtension, folder: ["Practice papers"]) else {
+                                                  title: title ?? (name as NSString).deletingPathExtension, folder: ["Practice papers"]) else {
             message = "Couldn't save \(name)."; return
         }
         await app?.reload()

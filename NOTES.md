@@ -13,9 +13,9 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
    subjects", "include CIE and IGCSE", "terms don't matter with the way we're doing it"). Built from the boards'
    own listings by `scripts/catalogue/build.py`, rebuilt weekly by CI (docs/CATALOGUE.md). In: AQA, OCR, Eduqas,
    WJEC, Cambridge, **Pearson Edexcel** (through its finder's search service with the key its page gives every
-   visitor: your choice, 2026-11-04; public files only). **Not in: CCEA**: tested 2026-11-04, it answers 403 "Your IP or
-   Country has been blocked" to cloud machines, whatever the request says, so it's not worked around; it's named
-   in the app with uploads offered instead. Ways in: email CCEA, or an in-app browser on your own device.
+   visitor: your choice, 2026-11-04; public files only). **Not in: CCEA**: it answers 403 "Your IP or Country has been
+   blocked" to cloud machines whatever the request says (tested 2026-11-04), so it's not worked around. You
+   chose the in-app browser instead: Upload → From a board's website → CCEA (on your own connection).
    BPhO/UKMT and anything else: your uploads.
 3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
    regions, marks, your courses and attempts. **Your own uploads are items in your trove and sync** (you: "it should
@@ -108,7 +108,16 @@ should sync per trove; "this is to test, not what I'm using".
   aren't questions, "(Total for Question 3 is 1 mark)" for a part-less question): real papers split to their
   printed totals (9PH0/1 90, 9CH0/1 90, 4PH1/1P 110, WPH11 80, 1SC0/1BF 60; 1MA1/1F 78 of 80). Tests:
   `PearsonSplitTests`, `RealPaperSplitTests`. In build.py's FINDERS, so CI rebuilds it weekly.
-- **Not done / next**: CCEA (above); Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
+- **Upload names and board websites** (2026-11-04, your ask; app code never compiled): uploads open a "Name this
+  paper" sheet. `PaperTitle` (TroveCore, tested) reads the first page, the PDF's title and the file name and
+  suggests e.g. "CCEA GCSE Physics Unit 1 Foundation, June 2023"; on the iPad Apple Intelligence tidies it, but
+  its version is used only if the board's name is unchanged (`keepsBoard`). Type over it; Use suggestion puts it
+  back; Rename… on an upload. Catalogue papers keep the board's names. **Upload → From a board's website**
+  (`BoardBrowser.swift`): CCEA and Pearson's newest papers in a web view on your own connection; Add to Trove on
+  a PDF downloads it through the web view (so a Pearson login works) and names it the same way. Tests:
+  TEST-DEV-029/030. Check on a device: does CCEA's site open from home (if it shows "Access Denied", it blocks
+  people too)? CCEA's start page is its home page (its past-papers URL couldn't be checked from here).
+- **Not done / next**: CCEA papers come through the browser only; Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 
 ## Round before: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)

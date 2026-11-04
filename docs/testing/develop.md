@@ -222,3 +222,33 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Expected**: the PDF becomes questions (1, 1(b) → 1.2, Q2, 2 c → 2.3) with their marks; a photo or scan with no readable text becomes one question per page; each upload is an item in your trove (folder "Practice papers"), so on the other device the questions are there and practisable without uploading again; a stray number in the text ("3 kg of water") doesn't start a question.
 - **Failure looks like**: only a dropdown of existing items, an upload only on one device, every line a question.
 - **Automated by**: `UploadSplitTests/numberedWorksheetsSplitAndStrayNumbersStayText`; app: manual.
+
+### TEST-DEV-029: Name an upload: suggested from the paper, yours to change
+- **Feature**: Develop → Your own papers → Upload → the "Name this paper" sheet; Rename… on an upload
+- **Priority**: medium
+- **Coverage**: auto-tested (`PaperTitle`); app: implemented, never run
+- **Platforms**: core; all apps (Apple Intelligence tidying: iPad only)
+- **Preconditions**: a board paper saved as a PDF with an unhelpful file name (e.g. `GPH11_QP_S23.pdf`), a worksheet, a photo of a printed page.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter PaperTitleTests`.
+  2. (You) Upload → From Files… → pick the board paper. Wait for "Suggested from the paper" (on the iPad, "Suggested with Apple Intelligence").
+  3. Change the name, then tap Use suggestion; change it again and Save.
+  4. Upload the worksheet and the photo together; Save without editing.
+  5. Long-press (right-click on the Mac) an upload in Your own papers → Rename….
+- **Expected**: the paper's name reads like "CCEA GCSE Physics Unit 1 Foundation, June 2023" (board, qualification, subject, paper, tier, series; "(mark scheme)" for a scheme), with the board spelt the board's way (Pearson Edexcel, CCEA, OCR) even after Apple Intelligence; typing while it's still reading keeps your text; the worksheet gets its PDF title or a tidy file name; the item in your trove has the name you saved; Rename changes it on every device; catalogue papers keep the board's names.
+- **Failure looks like**: the file name only, a board renamed or invented, your typing overwritten, no way to change the name.
+- **Automated by**: `PaperTitleTests`; app: manual.
+
+### TEST-DEV-030: Add a paper from a board's website (CCEA, Pearson's newest)
+- **Feature**: Develop → Your own papers → Upload → From a board's website
+- **Priority**: medium
+- **Coverage**: app: implemented, never run
+- **Platforms**: all apps
+- **Preconditions**: your own internet connection (CCEA blocks cloud machines, not people); for Pearson's newest series, a Pearson login.
+- **Steps**:
+  1. (You) Upload → From a board's website → CCEA… Find a subject's past papers; open a question paper.
+  2. Tap Add to Trove; check the suggested name; Save. Add a mark scheme too.
+  3. Done; check Your own papers. Repeat with Pearson Edexcel (newest papers) after signing in.
+- **Expected**: CCEA's site loads and works like a browser (links that open new windows open in place, Back works); Add to Trove is enabled only on a PDF; the paper is named "CCEA …" and saved as one of your papers, split into questions, on every device; "N papers added" shows in the browser; a page that isn't a PDF says so; a Pearson login is remembered on that device.
+- **Failure looks like**: CCEA's "Access Denied" page (tell Claude: then it's blocking people too), Add to Trove never enabled on a PDF, a saved file that isn't the paper.
+- **Automated by**: manual.
