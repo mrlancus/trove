@@ -988,7 +988,9 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   `"aiScheme"` \| `"aiNoScheme"` \| `"none"`), `score` (0–1 or null), `points` ([{`text`, `got`,
   `quote`}]), `uncertain` (bool), `ai` ({`model`, `effort`, `tokens`, `cost`, `confidence`,
   `rationale`}), `b` (difficulty used, number), `level`, `label`, `source` (`sourceKey`, for
-  "where did this come from?" after the problem is gone).
+  "where did this come from?" after the problem is gone), `work` (optional: the id of the sketch item
+  the working was written in; it lives in the sketch folder `Practice/<course>/<topic>`, and the
+  question is a picture element on its first page).
 - **`spec`** `spec.<board>-<code>-<version>` (slugged). Fields: `board`, `code`, `version`, `title`,
   `catalogue` (spec id in the catalogue), `topics` ([{`ref`, `title`, `concept`}], made on the
   device).

@@ -115,6 +115,8 @@ final class StudyPanelModel {
             boxes = [:]
         }
         context = StudyContext(title: editor.target.title, pages: pages)
+        // Practising a question: the tutor sees the question and its mark scheme before the working.
+        if let practice = editor.practice, let c = context { context = practice.around(c) }
         lineBoxes = boxes
         // While the AI thinks: the lines it was given (or the page, where none are known).
         var looking: [String: [InkGeometry.Rect]] = [:]
@@ -371,7 +373,7 @@ struct StudyPanel: View {
 
     private var header: some View {
         HStack {
-            Text("Ask this notebook").font(.headline)
+            Text(model.editor.practice == nil ? "Ask this notebook" : "Tutor").font(.headline)
             Spacer()
             if model.usage.calls > 0 {
                 Text(model.usage.cost < 0.01 ? "<1p" : String(format: "%.1fp", model.usage.cost * 100)).font(.caption).foregroundStyle(.secondary)
@@ -386,9 +388,14 @@ struct StudyPanel: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Ask anything about this notebook, check a fact, or say \"quiz me\".").font(.callout)
-            Text("Answers come only from your notes, with the lines they're from. When it isn't in your notes, it says so.")
-                .font(.caption).foregroundStyle(.secondary)
+            if let practice = model.editor.practice {
+                Text("I can see \(PracticeWork.question(of: practice.label).isEmpty ? "the question" : PracticeWork.question(of: practice.label)), its mark scheme and what you've written. Ask me anything, or tap one below. I won't give the answer away unless you ask.")
+                    .font(.callout)
+            } else {
+                Text("Ask anything about this notebook, check a fact, or say \"quiz me\".").font(.callout)
+                Text("Answers come only from your notes, with the lines they're from. When it isn't in your notes, it says so.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if model.temporary { Text("Temporary chat: nothing will be saved.").font(.caption).foregroundStyle(.secondary) }
         }
     }
@@ -396,10 +403,19 @@ struct StudyPanel: View {
     private var shortcuts: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach([StudyShortcut.quiz, .weakSpots, .explain, .exam, .factCheck, .find, .diagram, .summarise], id: \.self) { s in
-                    Button(s.label) { Task { await model.run(s) } }
-                        .buttonStyle(.bordered).controlSize(.small)
-                        .disabled(model.busy)
+                if model.editor.practice != nil {
+                    // Practising: the tutor's buttons (only when you tap one).
+                    ForEach(TutorAction.allCases, id: \.self) { a in
+                        Button { Task { await model.send(a.prompt, maxTokens: 500) } } label: { Label(a.label, systemImage: a.symbol) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(model.busy)
+                    }
+                } else {
+                    ForEach([StudyShortcut.quiz, .weakSpots, .explain, .exam, .factCheck, .find, .diagram, .summarise], id: \.self) { s in
+                        Button(s.label) { Task { await model.run(s) } }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(model.busy)
+                    }
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)

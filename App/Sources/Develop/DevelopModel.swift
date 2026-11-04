@@ -46,6 +46,8 @@ final class DevelopModel {
     @ObservationIgnored private var schemes: [String: [String: String]] = [:]
 
     var session: Session?
+    /// Each question's working sketch this session (problem id → sketch id), kept on its attempt when marked.
+    var workInProgress: [String: String] = [:]
 
     struct Session {
         var problems: [Problem]
@@ -635,7 +637,10 @@ final class DevelopModel {
     func record(_ p: Problem, score: Double?, marking: Marking, hint: Int = 0, uncertain: Bool = false) async {
         guard let library = app?.library else { return }
         let a = Attempt(id: "attempt.\(UUID().uuidString)", problem: p.id, skills: p.skills, at: Date().timeIntervalSince1970 * 1000,
-                        hint: hint, marking: marking, score: score, uncertain: uncertain, b: Difficulty.b(p), sourceKey: p.sourceKey, label: p.label)
+                        hint: hint, marking: marking, score: score, uncertain: uncertain, b: Difficulty.b(p), sourceKey: p.sourceKey, label: p.label,
+                        work: workInProgress[p.id] ?? "")
+        // The next try at the same question gets a fresh page; this one stays with its attempt.
+        workInProgress[p.id] = nil
         await library.recordAttempt(a)
         await reload()
     }

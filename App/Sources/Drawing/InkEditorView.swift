@@ -90,6 +90,10 @@ struct InkEditorView: View {
                     GeometryReader { g in FloatingAskBox(editor: editor, container: g.size) { asking = false } }
                 }
             }
+            // Practising a question: what it is, the tutor, and back to marking.
+            .overlay(alignment: .top) {
+                if let practice = editor.practice, !editor.presenting { practiceBar(practice) }
+            }
             .clipped()
             if showsPageBar, !editor.presenting { pageBar }
         }
@@ -551,6 +555,26 @@ struct InkEditorView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .fixedSize()
+    }
+
+    private func practiceBar(_ practice: PracticeContext) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(PracticeWork.question(of: practice.label).isEmpty ? "Practice" : PracticeWork.question(of: practice.label))
+                    .font(.callout.weight(.semibold))
+                if let marks = practice.marks { Text("\(marks) mark\(marks == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary) }
+            }
+            Divider().frame(height: 24)
+            Button { asking = true } label: { Label("Tutor", systemImage: "graduationcap") }
+                .help("Ask the tutor: it sees the question, the mark scheme and your writing")
+            Button { Task { await editor.finish() }; dismiss() } label: { Label("Mark it", systemImage: "checkmark.circle") }
+                .help("Back to the question to mark it")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .glass(cornerRadius: 16, interactive: true)
+        .padding(.top, 8)
     }
 
     private func selectionIcon(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {

@@ -304,3 +304,36 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   search ignores word order; renames and deletes reach every device; Edit goal opens at once and scrolls smoothly.
 - **Failure looks like**: a freeze, uploads missing, search needing the exact name.
 - **Automated by**: `GoalUploadsTests/manyUploadsMatchQuickly` (the matching behind it); app: manual.
+
+### TEST-DEV-034: Work a question out in a real sketch, then come back to it
+- **Feature**: practice sketches (docs/prompts/practice-space-home.md)
+- **Priority**: critical
+- **Coverage**: auto-tested (folders, titles, the question's frame, `work` on the attempt); in the app: not tested
+- **Platforms**: iPad (Pencil), Mac, iPhone
+- **Preconditions**: a course with a downloaded, split paper.
+- **Steps**:
+  1. Develop → Practise. On the first question, tap the ⋯ menu and pick Whiteboard, then "Open a whiteboard".
+  2. Check the question is on the board as a picture. Lasso-tap it, lock it, and write your working over and around it.
+  3. Tap "Mark it" in the bar at the top, tick the scheme points, Done.
+  4. Next question: "Open a whiteboard" is still the choice (remembered). Switch to Page for this one.
+  5. Open Sketches → Practice → the course → the topic.
+- **Expected**: each question gets its own sketch named "Q… · paper", in Practice/course/topic, with the
+  question at the top and your working kept. Reopening the app shows them all; the attempt opens its working.
+- **Failure looks like**: no question picture, the sketch lost or in the wrong folder, or the choice not remembered.
+- **Automated by**: `PracticeWorkTests` (TroveCore); the flow: manual.
+
+### TEST-DEV-035: The tutor sees the question, the scheme and your handwriting
+- **Feature**: tutor in practice sketches
+- **Priority**: high
+- **Coverage**: auto-tested (the context order, the tutor's prompts); with your AI: not tested
+- **Platforms**: iPad, Mac
+- **Preconditions**: your AI set up; a practice sketch with some handwritten working, one line deliberately wrong.
+- **Steps**:
+  1. In the practice sketch, tap Tutor.
+  2. Tap "Check my working", then "Where did I go wrong?", then "A hint".
+  3. Back on the question, tap "A hint" there too.
+- **Expected**: answers refer to what you actually wrote (quoting the wrong line), use the mark scheme
+  without pasting it, never give the final answer unasked, and say nothing until you tap. The hint on the
+  question screen also reflects your handwriting.
+- **Failure looks like**: "nothing readable", generic answers that ignore your working, or the final answer given away.
+- **Automated by**: `PracticeWorkTests/theTutorSeesTheQuestionAndSchemeFirst`; the replies: manual.

@@ -498,9 +498,14 @@ final class InkEditorModel {
     /// would otherwise read (for undo) and reload positions half-way between the two.
     @ObservationIgnored private var lassoWrites: Task<Void, Never>?
 
+    /// The exam question this sketch is the working for (Develop), so Ask can tutor: nil otherwise.
+    let practice: PracticeContext?
+
     init(target: InkTarget, app: AppModel) {
         self.target = target
         self.app = app
+        let develop = DevelopModel.shared
+        practice = develop.problem(forWork: target.itemId).map { develop.practiceContext($0) }
         page = target.startPage
         let d = UserDefaults.standard
         tool = InkEditorTool(rawValue: d.string(forKey: "ink.tool") ?? "") ?? .pen

@@ -157,11 +157,13 @@ public struct Attempt: Sendable, Equatable, Identifiable {
     public var b: Double
     public var sourceKey: String
     public var label: String
+    /// The sketch the working was written in (an item id), "" for none (PROTOCOL.md §13).
+    public var work: String
 
     public init(id: String, problem: String, skills: [String], at: Double, hint: Int, marking: Marking, score: Double?,
-                uncertain: Bool = false, b: Double, sourceKey: String, label: String = "") {
+                uncertain: Bool = false, b: Double, sourceKey: String, label: String = "", work: String = "") {
         self.id = id; self.problem = problem; self.skills = skills; self.at = at; self.hint = hint; self.marking = marking
-        self.score = score; self.uncertain = uncertain; self.b = b; self.sourceKey = sourceKey; self.label = label
+        self.score = score; self.uncertain = uncertain; self.b = b; self.sourceKey = sourceKey; self.label = label; self.work = work
     }
 
     public init(_ r: Record) {
@@ -169,7 +171,7 @@ public struct Attempt: Sendable, Equatable, Identifiable {
         self.init(id: r.id, problem: f["problem"]?.string ?? "", skills: f["skills"]?.stringArray ?? [], at: f["at"]?.number ?? 0,
                   hint: Int(f["hint"]?.number ?? 0), marking: Marking(rawValue: f["marking"]?.string ?? "") ?? .none,
                   score: f["score"]?.number, uncertain: f["uncertain"]?.bool ?? false, b: f["b"]?.number ?? 0,
-                  sourceKey: f["source"]?.string ?? "", label: f["label"]?.string ?? "")
+                  sourceKey: f["source"]?.string ?? "", label: f["label"]?.string ?? "", work: f["work"]?.string ?? "")
     }
 
     var fields: [String: JSONValue] {
@@ -179,6 +181,7 @@ public struct Attempt: Sendable, Equatable, Identifiable {
             "label": .string(label),
         ]
         out["score"] = score.map(JSONValue.number) ?? .null
+        if !work.isEmpty { out["work"] = .string(work) }
         return out
     }
 }
