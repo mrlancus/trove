@@ -108,8 +108,8 @@ main thread only swaps the result in. **Large change note** (threading of a subs
 where `InkLine`s are built; risk: a sync landing while the detached task runs is applied by the next
 reload (the same as before, since the old code also awaited the library between reading and
 showing); rollback: revert the commit (one hunk). Verified so far: builds on CI; the hang it removes
-should vanish from Settings → Battery → Lag ("Notebook"). Next step (not done): load the visible
-pages first and the rest lazily.
+should vanish from Settings → Battery → Lag ("Notebook"). Then: the page on screen is read from the
+page index and shown first, before the rest of the notebook is decoded (`reloadInk`, first load only).
 
 **B5. Suspects not yet measured** (reading the code finds suspects; only a measurement makes one a
 bottleneck): `AppModel.reload()` builds full `Item` arrays for lists; `Links.graph` is O(all items)
@@ -138,7 +138,7 @@ limit, caching). Findings:
 Strategy (expected saving, trade-off, how measured):
 | Technique | Saving | Trade-off | Measure |
 |---|---|---|---|
-| Cache breakpoints on stable instructions (`AIProvider.complete` for page reading, keywords, Develop marking) | input ×0.1 on the cached part, ~30–60 % per request when instructions dominate | none (5-min TTL default) | `cache_read_input_tokens` in `aiusage` |
+| Cache breakpoints on stable instructions (`AIProvider.complete` for page reading, keywords, Develop marking) | **checked, not worth it now:** each of these prompts' stable part is under Haiku 5.5's 512-token minimum (page reading's instructions ~150 tokens, Develop marking's ~200, after a picture that changes each time), so the API wouldn't cache it. Revisit if the instructions grow. | — | `cache_read_input_tokens` in `aiusage` |
 | Relay: count cache reads at 0.1 | allowance lasts ~1.5× longer for Develop (DEVELOP_PLAN B3.6) | relay change (L2) | relay test on `usage` |
 | Routing table in one place (`DevelopAI.route`, existing tiers) | stops accidental Sonnet/Opus | none | activity window by model |
 | Tight `max_tokens` + structured output for classification (keywords already; page reading 6,000 is generous) | fewer cut-offs, less output | must leave room for low-effort thinking | `stop_reason` counts |

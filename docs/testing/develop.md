@@ -96,3 +96,87 @@ TEST-DEV-004, 005, 006, 009 and 011 are filed in their areas as TEST-GRAPH-010, 
 - **Expected**: the photo's text suggests Momentum and Conservation of momentum; the catalogue question is picked; a self-marked 2/3 gives mastery σ(0.8 × (2/3 − 0.5)); the gap and the card link back both ways; the TSV holds the card's GUID; nothing shows as a library item.
 - **Failure looks like**: any link one-way; Develop records showing as notes.
 - **Automated by**: `DevelopTests/photoToConceptsToPracticeToMasteryToAnki`.
+
+## Built: Develop in the apps (phase 2, first version)
+Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
+
+### TEST-DEV-020: Download the AQA papers and split them into questions
+- **Feature**: Develop → Papers
+- **Priority**: critical
+- **Coverage**: implemented
+- **Platforms**: iPad, iPhone, Mac
+- **Preconditions**: On Wi-Fi. Develop (sidebar on iPad/Mac, Practise tab on iPhone).
+- **Steps**:
+  1. Tap Download papers (Wi-Fi); watch the progress; tap Cancel halfway, then Download again.
+  2. When done, tap Split into questions.
+- **Expected**: "19 of 19 on this device" (the spec too: 20 links in all); a message with how many questions are ready (dozens per paper); Cancel stops after the current paper; on mobile data nothing downloads and it says Wi-Fi only.
+- **Failure looks like**: a spinner for ever, 0 questions, the app freezing while splitting (Settings → Battery → Lag would show a hang in Develop).
+- **Automated by**: manual; TroveCore `DevelopTests/aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme`.
+
+### TEST-DEV-021: Practise with no AI: answer, show the mark scheme, tick, see the evidence
+- **Feature**: practice loop
+- **Priority**: critical
+- **Coverage**: implemented
+- **Platforms**: iPad, iPhone, Mac
+- **Preconditions**: TEST-DEV-020 done; your AI may be on or off.
+- **Steps**:
+  1. Tap Practise anything.
+  2. Read the question (the original page with its diagrams); type an answer.
+  3. Tap Show mark scheme; tick the points you earned; Done.
+  4. Open Settings → AI → Activity and costs.
+- **Expected**: the page picture is sharp and complete; the scheme's points are tickable; the result line says "counted as self-marked against the mark scheme"; Skills shows that skill's mastery and a sentence saying why; **no new row** in Activity and costs.
+- **Failure looks like**: a blank question, a scheme from another question, an AI row appearing.
+- **Automated by**: manual; mastery maths: TEST-DEV-001.
+
+### TEST-DEV-022: The source line is hidden until asked for
+- **Feature**: source line
+- **Priority**: high
+- **Coverage**: implemented
+- **Platforms**: all apps
+- **Preconditions**: a question open.
+- **Steps**:
+  1. Look for the paper and year on screen.
+  2. Tap ⓘ.
+- **Expected**: nothing names the paper until ⓘ; then e.g. "AQA 7408/2 June 2023 Q4.2".
+- **Failure looks like**: the source visible from the start, or the wrong paper.
+- **Automated by**: manual; label format: TEST-CUR-001.
+
+### TEST-DEV-023: Mark with AI quotes the mark scheme; unsure marks go to review
+- **Feature**: AI marking
+- **Priority**: high
+- **Coverage**: implemented
+- **Platforms**: all apps
+- **Preconditions**: your AI set up (Settings → AI).
+- **Steps**:
+  1. Answer a question; tap Mark with AI.
+  2. Open Activity and costs.
+- **Expected**: each point marked ✓/✗ with the scheme's words; "AI marked against the mark scheme"; a Develop marking row with its cost (a fraction of a penny on Haiku); an unsure mark appears under To review and doesn't change mastery until you Confirm.
+- **Failure looks like**: a mark with no points, an AI row with a big cost, uncertain marks counted.
+- **Automated by**: manual; parsing and review rule: `DevelopMarkingTests/aiMarksQuoteTheSchemeOrGoToReview`.
+
+### TEST-DEV-024: Concepts on an item, and No sticks
+- **Feature**: concepts on items
+- **Priority**: high
+- **Coverage**: implemented
+- **Platforms**: all apps
+- **Preconditions**: a note mentioning "conservation of momentum".
+- **Steps**:
+  1. Open the note; look under Concepts.
+  2. Tap ✓ on one suggestion and ✕ on another.
+  3. Close and reopen the note; open it on another device.
+- **Expected**: suggestions appear without any AI call; the accepted one shows as a chip; the rejected one never comes back, on either device.
+- **Failure looks like**: a rejected suggestion returning.
+- **Automated by**: manual; rule: TEST-GRAPH-011.
+
+### TEST-DEV-025: Export cards for Anki
+- **Feature**: Anki export
+- **Priority**: medium
+- **Coverage**: implemented
+- **Platforms**: all apps
+- **Preconditions**: some flashcards (TEST-AI-004).
+- **Steps**:
+  1. Develop → Export cards for Anki → Share → save the file.
+  2. Import it in Anki Desktop (File → Import).
+- **Expected**: Anki imports the cards into a deck called Trove; importing again updates them instead of doubling.
+- **Failure looks like**: duplicates, broken text.
+- **Automated by**: manual; file format: TEST-CARD-010.
