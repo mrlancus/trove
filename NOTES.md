@@ -108,7 +108,7 @@ should sync per trove; "this is to test, not what I'm using".
   aren't questions, "(Total for Question 3 is 1 mark)" for a part-less question): real papers split to their
   printed totals (9PH0/1 90, 9CH0/1 90, 4PH1/1P 110, WPH11 80, 1SC0/1BF 60; 1MA1/1F 78 of 80). Tests:
   `PearsonSplitTests`, `RealPaperSplitTests`. In build.py's FINDERS, so CI rebuilds it weekly.
-- **Upload names and board websites** (2026-11-04, your ask; app code never compiled): uploads open a "Name this
+- **Upload names and board websites** (2026-11-04, your ask; builds on GitHub Actions for macOS and iOS, run 41849975160, published as "latest"; not yet tried on a device): uploads open a "Name this
   paper" sheet. `PaperTitle` (TroveCore, tested) reads the first page, the PDF's title and the file name and
   suggests e.g. "CCEA GCSE Physics Unit 1 Foundation, June 2023"; on the iPad Apple Intelligence tidies it, but
   its version is used only if the board's name is unchanged (`keepsBoard`). Type over it; Use suggestion puts it
