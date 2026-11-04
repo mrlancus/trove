@@ -30,8 +30,8 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -46,8 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -72,7 +72,7 @@ jobs:
         run: node test/bench.mjs || { echo "Retrying once"; node test/bench.mjs; }
       - name: Keep the benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-results
           path: ${{ runner.temp }}/bench-results.json
@@ -85,8 +85,8 @@ jobs:
       TROVE_RELAY_URL: http://127.0.0.1:8787
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -134,10 +134,10 @@ jobs:
       run:
         working-directory: Packages/TroveCore
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: SQLite headers (LocalDatabase links libsqlite3 on Linux)
         run: apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: Packages/TroveCore/.build
           key: trovecore-linux-${{ hashFiles('Packages/TroveCore/Package.swift', 'Packages/TroveCore/Package.resolved') }}

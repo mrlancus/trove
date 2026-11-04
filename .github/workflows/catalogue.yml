@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Rebuild from the boards' listings
         run: python3 scripts/catalogue/build.py
       - name: Commit if changed
@@ -36,7 +36,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: main }
       - name: Check links (a sample of 400, and every spec's newest paper)
         run: python3 scripts/check-catalogue.py catalogue --sample 400

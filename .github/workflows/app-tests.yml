@@ -27,7 +27,7 @@ jobs:
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
 
@@ -58,7 +58,7 @@ jobs:
           git -c user.name=github-actions -c user.email=actions@github.com commit -qm "Test logs for $SHA"
           git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:ci-logs-tests
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: app-test-results
