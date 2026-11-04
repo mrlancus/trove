@@ -56,3 +56,17 @@ first slice: its tests are TEST-CARD-010 on, written with the code.
 - **Expected**: headers `#separator:tab`, `#html:true`, `#guid column:1`, `#tags column:4`; HTML escaped, newlines as <br>; the same GUID after editing; in Anki the second import updates, not duplicates.
 - **Failure looks like**: duplicates in Anki, broken fields.
 - **Automated by**: `DevelopTests/ankiExportKeepsGuidsSoReimportUpdates`; Anki: manual.
+
+### TEST-CARD-011: The .apkg opens in Anki and re-import updates
+- **Feature**: AnkiPackage
+- **Priority**: high
+- **Coverage**: auto-tested (package structure); in Anki: not tested
+- **Platforms**: core; Anki Desktop, AnkiMobile (you)
+- **Preconditions**: flashcards in Trove.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter AnkiPackageTests`.
+  2. (You) Develop → Export cards for Anki (.apkg) → open it in Anki Desktop and AnkiMobile.
+  3. Edit a card's back in Trove, export again, import again.
+- **Expected**: a schema-11 collection with the Trove (Front/Back) note type, the Trove deck and one note per card; in Anki the deck appears; the second import updates the cards instead of adding copies.
+- **Failure looks like**: Anki refusing the file, duplicates after re-import.
+- **Automated by**: `AnkiPackageTests/aPackageHoldsTheCardsWithStableGuidsAndOpens`; Anki: manual.

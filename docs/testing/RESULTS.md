@@ -26,3 +26,4 @@ One row per run. Never edit an old row; a re-run is a new row. Who: `Claude` (cl
 | 2026-11-04 | website e2e, all 25 incl. TEST-PDF-002 | PDF selection fix | Linux, Chromium 1243 | Claude | pass | 25/25 |
 | 2026-11-04 | browser extension tests | 5b97c68 | Linux, Node | Claude | pass | 2 tests |
 | 2026-11-04 | Apple apps build with Develop's screens | b85c164 | macOS 15 runner, Xcode 26.3 | CI | pass | macOS + iOS compiled first time |
+| 2026-11-04 | TroveCore suite incl. AnkiPackageTests (TEST-CARD-011), DevelopHintTests (TEST-DEV-027) | before push | Linux x86-64, Swift 6.3.1 | Claude | pass | with 239 tests |

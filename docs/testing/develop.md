@@ -180,3 +180,29 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Expected**: Anki imports the cards into a deck called Trove; importing again updates them instead of doubling.
 - **Failure looks like**: duplicates, broken text.
 - **Automated by**: manual; file format: TEST-CARD-010.
+
+### TEST-DEV-026: Answer with the Pencil, then Mark with AI
+- **Feature**: Pencil answers
+- **Priority**: critical
+- **Coverage**: implemented
+- **Platforms**: iPad (and iPhone with a finger)
+- **Preconditions**: a question open; your AI set up.
+- **Steps**:
+  1. The answer pad is on by default on the iPad (✎); write your working with the Pencil.
+  2. Tap Mark with AI.
+- **Expected**: the ink appears as you write with no lag; marking quotes the scheme and reads your handwriting; Activity shows one Develop marking row; the attempt is recorded.
+- **Failure looks like**: laggy ink, the pad scrolling instead of drawing, marking that ignores the writing.
+- **Automated by**: manual (needs the Pencil); request building: `DevelopMarkingTests`.
+
+### TEST-DEV-027: The hint ladder, and hints cost credit
+- **Feature**: hints
+- **Priority**: high
+- **Coverage**: auto-tested (prompts); app: implemented
+- **Platforms**: all apps
+- **Preconditions**: your AI set up.
+- **Steps**:
+  1. Tap Hint five times, reading each.
+  2. Tick full marks against the scheme.
+- **Expected**: hint 1 is a nudge and none before 5 gives the answer; 5 is a full solution; the skill's sentence shows the success, but after a full solution it counts for nothing (independence 0) and the skill is due again tomorrow.
+- **Failure looks like**: a hint giving the answer early; full credit after hints.
+- **Automated by**: `DevelopHintTests/eachLevelAsksForOnlyThatMuch`, mastery rule TEST-DEV-002; app: manual.

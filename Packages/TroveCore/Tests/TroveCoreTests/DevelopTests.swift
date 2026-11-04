@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import TroveCore
+import Crypto
 
 /// Develop's first slice (docs/DEVELOP_PLAN.md §D phase 1; docs/testing/develop.md TEST-DEV-001 on).
 @Suite struct DevelopTests {
@@ -374,5 +375,52 @@ extension DevelopAI.Task {
         // An uncertain AI mark counts for nothing in the mastery model.
         let s = Mastery.evaluate(skill: "s", [Attempt(id: "a", problem: "p", skills: ["s"], at: 0, hint: 0, marking: .aiScheme, score: 1, uncertain: true, b: 0, sourceKey: "x")])
         #expect(s.mastery == nil)
+    }
+}
+
+/// The hint ladder (TEST-DEV-015).
+@Suite struct DevelopHintTests {
+    @Test func eachLevelAsksForOnlyThatMuch() {
+        let one = DevelopHints.prompt(level: 1, question: "Find p.", scheme: "p = mv", workSoFar: "", earlier: [])
+        #expect(one.contains("a nudge"))
+        #expect(one.contains("never state the final answer"))
+        #expect(one.contains("(nothing yet)"))
+        let five = DevelopHints.prompt(level: 9, question: "Find p.", scheme: nil, workSoFar: "m = 2", earlier: ["Think about momentum.", "p = mv"])
+        #expect(five.contains("a full worked solution"))
+        #expect(five.contains("1. Think about momentum.\n2. p = mv"))
+        #expect(!five.contains("<mark_scheme>"))
+        #expect(DevelopHints.levels.count == MasteryConstants.standard.independence.count - 1)
+    }
+}
+
+/// The Anki package (TEST-CARD-011).
+@Suite struct AnkiPackageTests {
+    @Test func aPackageHoldsTheCardsWithStableGuidsAndOpens() throws {
+        let cards = [
+            StudyCard(id: "card.n1.aaa", noteId: "n1", noteTitle: "Momentum", front: "p = ?", back: "m × v", state: nil),
+            StudyCard(id: "card.n1.bbb", noteId: "n1", noteTitle: "Momentum", front: "Unit of <impulse>?", back: "N s", state: nil),
+        ]
+        let data = try AnkiPackage.make(cards, now: 1_700_000_000_000)
+        let zip = try ZipArchive(data)
+        #expect(Set(zip.entries.map(\.path)) == ["collection.anki2", "media"])
+        let media = try zip.data(for: try #require(zip.entries.first { $0.path == "media" }))
+        #expect(String(decoding: media, as: UTF8.self) == "{}")
+        let db = try SQLiteReader(try zip.data(for: try #require(zip.entries.first { $0.path == "collection.anki2" })))
+        let col = try db.rows(try #require(db.table("col")))
+        #expect(col.count == 1 && col[0]["ver"].int == 11)
+        let models = try #require(col[0]["models"].string)
+        #expect(models.contains("\"\(AnkiPackage.modelId)\"") && models.contains("{{Front}}"))
+        let notes = try db.rows(try #require(db.table("notes"))).sorted { ($0["id"].int ?? 0) < ($1["id"].int ?? 0) }
+        #expect(notes.map { $0["guid"].string } == cards.map { AnkiExport.guid($0.id) })
+        #expect(notes[0]["flds"].string == "p = ?\u{1F}m × v")
+        #expect(notes[1]["sfld"].string == "Unit of <impulse>?")
+        #expect(notes.allSatisfy { $0["mid"].int == AnkiPackage.modelId })
+        let cardRows = try db.rows(try #require(db.table("cards")))
+        #expect(cardRows.count == 2 && cardRows.allSatisfy { $0["did"].int == AnkiPackage.deckId })
+        // A later export of the same cards has the same GUIDs, so Anki updates them.
+        let again = try SQLiteReader(try ZipArchive(try AnkiPackage.make(cards, now: 1_800_000_000_000)).data(for: try #require(try ZipArchive(try AnkiPackage.make(cards, now: 1_800_000_000_000)).entries.first { $0.path == "collection.anki2" })))
+        #expect(Set(try again.rows(try #require(again.table("notes"))).compactMap { $0["guid"].string }) == Set(notes.compactMap { $0["guid"].string }))
+        // Anki's checksum: the first 8 hex digits of SHA-1 of the stripped first field.
+        #expect(AnkiPackage.checksum("p = ?") == Int64(String(Data(Insecure.SHA1.hash(data: Data("p = ?".utf8))).hex.prefix(8)), radix: 16))
     }
 }

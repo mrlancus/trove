@@ -250,15 +250,22 @@ final class DevelopModel {
     }
 
     /// Marks with your AI (only on a tap). An uncertain low-effort mark is checked once more at medium.
-    func markWithAI(_ p: Problem, answer: String) async throws -> DevelopMarking.Result {
+    /// The next hint (1…5) for a problem, from your AI, only on a tap.
+    func hint(_ p: Problem, level: Int, workSoFar: String, earlier: [String]) async throws -> String {
+        guard let ai = app?.ownAI else { throw DevelopError("Hints use your AI: set it up in Settings → AI.") }
+        return try await ai.developHint(level: level, question: text(of: p), scheme: scheme(of: p), workSoFar: workSoFar, earlier: earlier, about: p.label)
+    }
+
+    func markWithAI(_ p: Problem, answer: String, image: Data? = nil) async throws -> DevelopMarking.Result {
         guard let ai = app?.ownAI else {
             throw DevelopError("Set up your AI in Settings → AI to mark with AI, or show the mark scheme and mark it yourself.")
         }
         let scheme = scheme(of: p), hard = Difficulty.isHard(p)
-        var (result, _) = try await ai.markAttempt(question: text(of: p), scheme: scheme, answer: answer, marks: p.marks, hard: hard, about: p.label)
+        var (result, _) = try await ai.markAttempt(question: text(of: p), scheme: scheme, answer: answer, answerImage: image, marks: p.marks,
+                                                   hard: hard, about: p.label)
         if result.uncertain, !hard {
-            (result, _) = try await ai.markAttempt(question: text(of: p), scheme: scheme, answer: answer, marks: p.marks, hard: hard,
-                                                   retryOfUncertain: true, about: p.label)
+            (result, _) = try await ai.markAttempt(question: text(of: p), scheme: scheme, answer: answer, answerImage: image, marks: p.marks,
+                                                   hard: hard, retryOfUncertain: true, about: p.label)
         }
         return result
     }
@@ -278,13 +285,22 @@ final class DevelopModel {
 
     // MARK: Anki
 
+    /// An Anki package (.apkg); importing a newer one updates the same notes.
     func ankiFile() async -> URL? {
         guard let library = app?.library else { return nil }
         let cards = await library.studyCards()
         guard !cards.isEmpty else { message = "No flashcards yet."; return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Trove cards.txt")
-        try? AnkiExport.tsv(cards).write(to: url, atomically: true, encoding: .utf8)
-        return url
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Trove cards.apkg")
+        do {
+            let data = try AnkiPackage.make(cards, now: Int64(Date().timeIntervalSince1970 * 1000))
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            // The plain-text export imports into Anki too (File → Import).
+            let txt = FileManager.default.temporaryDirectory.appendingPathComponent("Trove cards.txt")
+            try? AnkiExport.tsv(cards).write(to: txt, atomically: true, encoding: .utf8)
+            return txt
+        }
     }
 }
 

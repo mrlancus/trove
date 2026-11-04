@@ -1,6 +1,9 @@
 import PDFKit
 import SwiftUI
 import TroveCore
+#if os(iOS)
+import PencilKit
+#endif
 
 /// Develop's home (docs/DEVELOP_PLAN.md §E): what to do next in one card, then papers, skills and
 /// review. iPad and Mac: the sidebar's Develop; iPhone: the Practise tab.
@@ -144,7 +147,7 @@ struct DevelopView: View {
             if let anki {
                 ShareLink(item: anki) { Label("Share cards for Anki", systemImage: "square.and.arrow.up") }
             } else {
-                Button { Task { anki = await develop.ankiFile() } } label: { Label("Export cards for Anki", systemImage: "rectangle.stack") }
+                Button { Task { anki = await develop.ankiFile() } } label: { Label("Export cards for Anki (.apkg)", systemImage: "rectangle.stack") }
             }
         }
         .buttonStyle(.bordered)
@@ -163,6 +166,11 @@ struct PracticeView: View {
     @State private var error: String?
     @State private var picture: CGImage?
     @State private var done: String?
+    @State private var hints: [String] = []
+    @State private var writing = DeviceInfo.isPad
+    #if os(iOS)
+    @State private var drawing = PKDrawing()
+    #endif
 
     var body: some View {
         if let p = develop.session?.current {
@@ -185,17 +193,42 @@ struct PracticeView: View {
                     } else if marking {
                         schemeChecklist(p)
                     } else {
-                        Text("Your answer").font(.headline)
-                        TextEditor(text: $answer)
-                            .frame(minHeight: 140)
-                            .padding(6)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary.opacity(0.3)))
+                        ForEach(Array(hints.enumerated()), id: \.offset) { i, h in
+                            Label { Text(h).font(.callout) } icon: { Text("\(i + 1)").font(.caption.bold()).foregroundStyle(Theme.accent) }
+                                .padding(10).frame(maxWidth: .infinity, alignment: .leading).card(cornerRadius: Theme.Radius.small)
+                        }
+                        HStack {
+                            Text("Your answer").font(.headline)
+                            Spacer()
+                            #if os(iOS)
+                            Picker("Answer by", selection: $writing) {
+                                Image(systemName: "keyboard").tag(false).accessibilityLabel("Type")
+                                Image(systemName: "pencil.tip").tag(true).accessibilityLabel("Write")
+                            }
+                            .pickerStyle(.segmented).frame(width: 110)
+                            #endif
+                        }
+                        #if os(iOS)
+                        if writing {
+                            AnswerCanvas(drawing: $drawing)
+                                .frame(minHeight: 320)
+                                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small).stroke(.secondary.opacity(0.3)))
+                        } else {
+                            typedAnswer
+                        }
+                        #else
+                        typedAnswer
+                        #endif
                         HStack {
                             Button("Show mark scheme") { marking = true }.buttonStyle(.borderedProminent)
                             Button(working ? "Marking…" : "Mark with AI") { Task { await markWithAI(p) } }
-                                .buttonStyle(.bordered).disabled(working || answer.trimmingCharacters(in: .whitespaces).isEmpty)
+                                .buttonStyle(.bordered).disabled(working || !hasAnswer)
+                            if hints.count < DevelopHints.levels.count {
+                                Button(hints.isEmpty ? "Hint" : "Another hint") { Task { await nextHint(p) } }
+                                    .buttonStyle(.bordered).disabled(working)
+                            }
                             Spacer()
-                            Button("Skip") { Task { await develop.record(p, score: nil, marking: .none); done = "Kept, but it counts as no evidence." } }
+                            Button("Skip") { Task { await develop.record(p, score: nil, marking: .none, hint: hints.count); done = "Kept, but it counts as no evidence." } }
                         }
                     }
                     if let aiResult { aiResultView(aiResult) }
@@ -252,7 +285,7 @@ struct PracticeView: View {
             Button("Done") {
                 let score = DevelopMarking.selfMarkScore(ticked: ticked.count, marks: p.marks, points: points.count)
                 Task {
-                    await develop.record(p, score: score, marking: .selfMarked)
+                    await develop.record(p, score: score, marking: .selfMarked, hint: hints.count)
                     done = "\(min(ticked.count, p.marks ?? ticked.count)) / \(p.marks ?? max(1, points.count)) · counted as self-marked against the mark scheme"
                 }
             }
@@ -279,13 +312,55 @@ struct PracticeView: View {
         .card(cornerRadius: Theme.Radius.medium)
     }
 
+    private var typedAnswer: some View {
+        TextEditor(text: $answer)
+            .frame(minHeight: 140)
+            .padding(6)
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small).stroke(.secondary.opacity(0.3)))
+    }
+
+    private var hasAnswer: Bool {
+        #if os(iOS)
+        if writing { return !drawing.strokes.isEmpty }
+        #endif
+        return !answer.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The handwritten answer as a JPEG (white page, 2× scale), only when writing.
+    private var answerImage: Data? {
+        #if os(iOS)
+        guard writing, !drawing.strokes.isEmpty else { return nil }
+        let bounds = drawing.bounds.insetBy(dx: -12, dy: -12)
+        let ink = drawing.image(from: bounds, scale: 2)
+        let renderer = UIGraphicsImageRenderer(size: bounds.size)
+        let page = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: bounds.size))
+            ink.draw(in: CGRect(origin: .zero, size: bounds.size))
+        }
+        return page.jpegData(compressionQuality: 0.8)
+        #else
+        return nil
+        #endif
+    }
+
+    private func nextHint(_ p: Problem) async {
+        working = true
+        defer { working = false }
+        do {
+            hints.append(try await develop.hint(p, level: hints.count + 1, workSoFar: answer, earlier: hints))
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func markWithAI(_ p: Problem) async {
         working = true
         defer { working = false }
         do {
-            let r = try await develop.markWithAI(p, answer: answer)
+            let r = try await develop.markWithAI(p, answer: answer, image: answerImage)
             aiResult = r
-            await develop.record(p, score: r.score, marking: r.marking, uncertain: r.uncertain)
+            await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain)
             done = "\(Int((r.score * 100).rounded())) % · \(r.marking == .aiScheme ? "AI-marked against the mark scheme" : "AI-marked without one")"
         } catch {
             self.error = error.localizedDescription
@@ -293,7 +368,10 @@ struct PracticeView: View {
     }
 
     private func reset() {
-        answer = ""; showSource = false; marking = false; ticked = []; aiResult = nil; error = nil; picture = nil; done = nil
+        answer = ""; showSource = false; marking = false; ticked = []; aiResult = nil; error = nil; picture = nil; done = nil; hints = []
+        #if os(iOS)
+        drawing = PKDrawing()
+        #endif
     }
 }
 
@@ -351,3 +429,36 @@ struct ItemConceptsSection: View {
         await load()
     }
 }
+
+#if os(iOS)
+/// The answer pad: PencilKit, the Pencil or a finger, a black pen (docs/DEVELOP_PLAN.md §E).
+struct AnswerCanvas: UIViewRepresentable {
+    @Binding var drawing: PKDrawing
+
+    func makeUIView(context: Context) -> PKCanvasView {
+        let view = PKCanvasView()
+        view.drawingPolicy = .anyInput
+        view.tool = PKInkingTool(.pen, color: .black, width: 3)
+        view.backgroundColor = .white
+        view.overrideUserInterfaceStyle = .light
+        view.drawing = drawing
+        view.delegate = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ view: PKCanvasView, context: Context) {
+        if view.drawing != drawing { view.drawing = drawing }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        let parent: AnswerCanvas
+        init(_ parent: AnswerCanvas) { self.parent = parent }
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            let d = canvasView.drawing
+            MainActor.assumeIsolated { parent.drawing = d }
+        }
+    }
+}
+#endif
