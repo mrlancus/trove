@@ -51,9 +51,9 @@ empties it.
 `PaperSplitter.splitBest` tries the board's own layout (AQA's sciences print "0 1 . 1") and the generic
 one ("1 (a) (i)", "1(b)(ii)", "2. (a)", marks "[2]" or "[2 marks]") and keeps whichever finds more marks.
 Parts on their own line belong to the question above; each part carries its stem; page numbers and
-numbers inside the text ("5.6 × 10⁻³") stay text. Checked on real papers from AQA, OCR, Eduqas and WJEC
-(TEST-CUR-004): totals match the paper's or come within a few marks. Papers with no numbered,
-marked questions (essays, listening) are reported, not split. Your uploads with no readable text
+numbers inside the text ("5.6 × 10⁻³") stay text. Checked on real papers from AQA, OCR, Eduqas, WJEC and Cambridge
+(TEST-CUR-004): totals match the paper's or come within a few marks. A paper with numbered questions but no marks printed (multiple choice: Cambridge's Paper 1, OCR's
+section A) gets 1 mark a question. Papers with no numbered questions (essays, listening) are reported, not split. Your uploads with no readable text
 (photos, scans) become one question per page.
 
 ## Terms

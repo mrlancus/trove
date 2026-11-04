@@ -308,7 +308,14 @@ extension PaperSplitter {
             let score = (qs.compactMap(\.marks).reduce(0, +), qs.count)
             if best == nil || score > best!.score { best = (qs, layout, score) }
         }
-        return best.map { ($0.questions, $0.layout) } ?? ([], genericLayout)
+        if let best, best.score.0 > 0 { return (best.questions, best.layout) }
+        // No marks printed anywhere: a multiple-choice paper (Cambridge's Paper 1, OCR's section A). Each
+        // numbered question is worth 1 mark; its answer is the scheme's letter.
+        let numbered = splitPaper(lines, layout: genericLayout, pageHeight: pageHeight, pageWidth: pageWidth).filter { $0.parent == nil }
+        if numbered.count >= 10 {
+            return (numbered.map { var q = $0; q.marks = 1; return q }, genericLayout)
+        }
+        return ([], genericLayout)
     }
 
     /// Mark-scheme entries, with the same numbering step as `splitPaper`.

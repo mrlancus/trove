@@ -12,6 +12,26 @@
 "marks": "\\[(\\d+) marks?\\]",
 "scheme": "^(\\d\\d)\\.(\\d+)(?:\\s|$)"
 }
+},
+{
+"id": "cie",
+"name": "Cambridge International",
+"site": "https://www.cambridgeinternational.org"
+},
+{
+"id": "eduqas",
+"name": "Eduqas",
+"site": "https://www.eduqas.co.uk"
+},
+{
+"id": "ocr",
+"name": "OCR",
+"site": "https://www.ocr.org.uk"
+},
+{
+"id": "wjec",
+"name": "WJEC",
+"site": "https://www.wjec.co.uk"
 }
 ],
 "unlisted": [
@@ -34,11 +54,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-7201",
@@ -49,11 +69,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 2,
 "years": [
 2023,
 2025
-],
-"files": 2
+]
 },
 {
 "id": "aqa-7202",
@@ -64,11 +84,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 1,
 "years": [
 2023,
 2023
-],
-"files": 1
+]
 },
 {
 "id": "aqa-7203",
@@ -79,11 +99,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 1,
 "years": [
 2023,
 2023
-],
-"files": 1
+]
 },
 {
 "id": "aqa-7206",
@@ -94,11 +114,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 1,
 "years": [
 2023,
 2023
-],
-"files": 1
+]
 },
 {
 "id": "aqa-7204",
@@ -109,11 +129,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 1,
 "years": [
 2023,
 2023
-],
-"files": 1
+]
 },
 {
 "id": "aqa-7205",
@@ -124,11 +144,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 1,
+"files": 1,
 "years": [
 2023,
 2023
-],
-"files": 1
+]
 },
 {
 "id": "aqa-7637",
@@ -139,11 +159,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 18,
+"files": 42,
 "years": [
 2020,
 2025
-],
-"files": 42
+]
 },
 {
 "id": "aqa-7402",
@@ -154,11 +174,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 26,
+"files": 75,
 "years": [
 2017,
 2025
-],
-"files": 75
+]
 },
 {
 "id": "aqa-7401",
@@ -169,11 +189,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 15,
+"files": 43,
 "years": [
 2016,
 2025
-],
-"files": 43
+]
 },
 {
 "id": "aqa-7132",
@@ -184,11 +204,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 21,
+"files": 64,
 "years": [
 2020,
 2025
-],
-"files": 64
+]
 },
 {
 "id": "aqa-7131",
@@ -199,11 +219,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 12,
+"files": 40,
 "years": [
 2020,
 2025
-],
-"files": 40
+]
 },
 {
 "id": "aqa-7138",
@@ -214,8 +234,8 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 3,
-"years": [],
-"files": 9
+"files": 9,
+"years": []
 },
 {
 "id": "aqa-7137",
@@ -226,8 +246,8 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
-"years": [],
-"files": 6
+"files": 6,
+"years": []
 },
 {
 "id": "aqa-7405",
@@ -238,11 +258,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 30,
+"files": 115,
 "years": [
 2017,
 2025
-],
-"files": 115
+]
 },
 {
 "id": "aqa-7404",
@@ -253,11 +273,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 20,
+"files": 75,
 "years": [
 2016,
 2025
-],
-"files": 75
+]
 },
 {
 "id": "aqa-7517",
@@ -268,11 +288,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 42,
 "years": [
 2020,
 2025
-],
-"files": 42
+]
 },
 {
 "id": "aqa-7516",
@@ -283,11 +303,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 10,
+"files": 27,
 "years": [
 2020,
 2025
-],
-"files": 27
+]
 },
 {
 "id": "aqa-7237",
@@ -298,11 +318,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 8,
+"files": 25,
 "years": [
 2020,
 2025
-],
-"files": 25
+]
 },
 {
 "id": "aqa-7552",
@@ -313,11 +333,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 40,
 "years": [
 2020,
 2025
-],
-"files": 40
+]
 },
 {
 "id": "aqa-7562",
@@ -328,11 +348,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 40,
 "years": [
 2020,
 2025
-],
-"files": 40
+]
 },
 {
 "id": "aqa-7262",
@@ -343,11 +363,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 7,
+"files": 33,
 "years": [
 2020,
 2025
-],
-"files": 33
+]
 },
 {
 "id": "aqa-7136",
@@ -358,11 +378,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 21,
+"files": 63,
 "years": [
 2020,
 2025
-],
-"files": 63
+]
 },
 {
 "id": "aqa-7135",
@@ -373,11 +393,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 10,
+"files": 38,
 "years": [
 2020,
 2025
-],
-"files": 38
+]
 },
 {
 "id": "aqa-7702",
@@ -388,11 +408,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 52,
 "years": [
 2020,
 2025
-],
-"files": 52
+]
 },
 {
 "id": "aqa-7701",
@@ -403,11 +423,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 10,
+"files": 33,
 "years": [
 2020,
 2025
-],
-"files": 33
+]
 },
 {
 "id": "aqa-7707",
@@ -418,11 +438,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 42,
 "years": [
 2020,
 2025
-],
-"files": 42
+]
 },
 {
 "id": "aqa-7712",
@@ -433,11 +453,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 21,
+"files": 70,
 "years": [
 2020,
 2025
-],
-"files": 70
+]
 },
 {
 "id": "aqa-7711",
@@ -448,11 +468,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 10,
+"files": 27,
 "years": [
 2020,
 2025
-],
-"files": 27
+]
 },
 {
 "id": "aqa-7717",
@@ -463,11 +483,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 28,
+"files": 76,
 "years": [
 2020,
 2025
-],
-"files": 76
+]
 },
 {
 "id": "aqa-7716",
@@ -478,11 +498,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 18,
+"files": 52,
 "years": [
 2020,
 2025
-],
-"files": 52
+]
 },
 {
 "id": "aqa-7447",
@@ -493,11 +513,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-7652",
@@ -508,11 +528,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 15,
+"files": 52,
 "years": [
 2020,
 2025
-],
-"files": 52
+]
 },
 {
 "id": "aqa-7651",
@@ -523,11 +543,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 13,
+"files": 47,
 "years": [
 2020,
 2025
-],
-"files": 47
+]
 },
 {
 "id": "aqa-7367",
@@ -538,11 +558,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 40,
+"files": 105,
 "years": [
 2019,
 2025
-],
-"files": 105
+]
 },
 {
 "id": "aqa-7366",
@@ -553,11 +573,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 36,
+"files": 96,
 "years": [
 2018,
 2025
-],
-"files": 96
+]
 },
 {
 "id": "aqa-7037",
@@ -568,11 +588,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 54,
 "years": [
 2020,
 2025
-],
-"files": 54
+]
 },
 {
 "id": "aqa-7036",
@@ -583,11 +603,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 12,
+"files": 32,
 "years": [
 2020,
 2025
-],
-"files": 32
+]
 },
 {
 "id": "aqa-7662",
@@ -598,11 +618,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 15,
+"files": 51,
 "years": [
 2020,
 2025
-],
-"files": 51
+]
 },
 {
 "id": "aqa-7661",
@@ -613,11 +633,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 13,
+"files": 46,
 "years": [
 2020,
 2025
-],
-"files": 46
+]
 },
 {
 "id": "aqa-7677",
@@ -628,11 +648,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 15,
+"files": 37,
 "years": [
 2022,
 2025
-],
-"files": 37
+]
 },
 {
 "id": "aqa-7672",
@@ -643,11 +663,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 18,
+"files": 47,
 "years": [
 2021,
 2025
-],
-"files": 47
+]
 },
 {
 "id": "aqa-7042",
@@ -658,11 +678,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 231,
+"files": 564,
 "years": [
 2020,
 2025
-],
-"files": 564
+]
 },
 {
 "id": "aqa-7041",
@@ -673,11 +693,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 106,
+"files": 235,
 "years": [
 2020,
 2025
-],
-"files": 235
+]
 },
 {
 "id": "aqa-7162",
@@ -688,11 +708,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 28,
+"files": 72,
 "years": [
 2020,
 2025
-],
-"files": 72
+]
 },
 {
 "id": "aqa-7357",
@@ -703,11 +723,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 27,
+"files": 78,
 "years": [
 2018,
 2025
-],
-"files": 78
+]
 },
 {
 "id": "aqa-7356",
@@ -718,11 +738,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 18,
+"files": 48,
 "years": [
 2018,
 2025
-],
-"files": 48
+]
 },
 {
 "id": "aqa-7572",
@@ -733,11 +753,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 16,
+"files": 44,
 "years": [
 2020,
 2025
-],
-"files": 44
+]
 },
 {
 "id": "aqa-7272",
@@ -748,11 +768,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 7,
+"files": 28,
 "years": [
 2020,
 2025
-],
-"files": 28
+]
 },
 {
 "id": "aqa-7682",
@@ -763,11 +783,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 20,
+"files": 60,
 "years": [
 2020,
 2025
-],
-"files": 60
+]
 },
 {
 "id": "aqa-7172",
@@ -778,11 +798,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 35,
 "years": [
 2020,
 2025
-],
-"files": 35
+]
 },
 {
 "id": "aqa-7582",
@@ -793,11 +813,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 40,
 "years": [
 2020,
 2025
-],
-"files": 40
+]
 },
 {
 "id": "aqa-7408",
@@ -808,11 +828,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 80,
+"files": 259,
 "years": [
 2017,
 2025
-],
-"files": 259
+]
 },
 {
 "id": "aqa-7407",
@@ -823,11 +843,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 20,
+"files": 75,
 "years": [
 2016,
 2025
-],
-"files": 75
+]
 },
 {
 "id": "aqa-7687",
@@ -838,11 +858,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 21,
+"files": 61,
 "years": [
 2020,
 2025
-],
-"files": 61
+]
 },
 {
 "id": "aqa-7152",
@@ -853,11 +873,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 20,
+"files": 53,
 "years": [
 2020,
 2025
-],
-"files": 53
+]
 },
 {
 "id": "aqa-7182",
@@ -868,11 +888,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 23,
+"files": 66,
 "years": [
 2020,
 2025
-],
-"files": 66
+]
 },
 {
 "id": "aqa-7181",
@@ -883,11 +903,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 11,
+"files": 30,
 "years": [
 2020,
 2025
-],
-"files": 30
+]
 },
 {
 "id": "aqa-7062",
@@ -898,11 +918,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 98,
 "years": [
 2020,
 2025
-],
-"files": 98
+]
 },
 {
 "id": "aqa-7061",
@@ -913,11 +933,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 25,
+"files": 58,
 "years": [
 2020,
 2025
-],
-"files": 58
+]
 },
 {
 "id": "aqa-7192",
@@ -928,11 +948,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 21,
+"files": 59,
 "years": [
 2020,
 2025
-],
-"files": 59
+]
 },
 {
 "id": "aqa-7191",
@@ -943,11 +963,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 10,
+"files": 28,
 "years": [
 2020,
 2025
-],
-"files": 28
+]
 },
 {
 "id": "aqa-7692",
@@ -958,11 +978,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 15,
+"files": 51,
 "years": [
 2020,
 2025
-],
-"files": 51
+]
 },
 {
 "id": "aqa-7691",
@@ -973,11 +993,11 @@
 "level": "alevel",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 13,
+"files": 49,
 "years": [
 2020,
 2025
-],
-"files": 49
+]
 },
 {
 "id": "aqa-8201",
@@ -988,11 +1008,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 3,
 "years": [
 2023,
 2025
-],
-"files": 3
+]
 },
 {
 "id": "aqa-8202",
@@ -1003,11 +1023,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 2,
 "years": [
 2023,
 2024
-],
-"files": 2
+]
 },
 {
 "id": "aqa-8203",
@@ -1018,11 +1038,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 2,
 "years": [
 2023,
 2024
-],
-"files": 2
+]
 },
 {
 "id": "aqa-8206",
@@ -1033,11 +1053,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 2,
 "years": [
 2023,
 2024
-],
-"files": 2
+]
 },
 {
 "id": "aqa-8204",
@@ -1048,11 +1068,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 2,
 "years": [
 2023,
 2024
-],
-"files": 2
+]
 },
 {
 "id": "aqa-8205",
@@ -1063,11 +1083,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 2,
+"files": 2,
 "years": [
 2023,
 2024
-],
-"files": 2
+]
 },
 {
 "id": "aqa-8638",
@@ -1078,11 +1098,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 126,
 "years": [
 2020,
 2025
-],
-"files": 126
+]
 },
 {
 "id": "aqa-8461",
@@ -1093,11 +1113,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 29,
+"files": 81,
 "years": [
 2018,
 2025
-],
-"files": 81
+]
 },
 {
 "id": "aqa-8132",
@@ -1108,11 +1128,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-8462",
@@ -1123,11 +1143,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 34,
+"files": 111,
 "years": [
 2018,
 2025
-],
-"files": 111
+]
 },
 {
 "id": "aqa-8673",
@@ -1138,11 +1158,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 41,
+"files": 121,
 "years": [
 2020,
 2025
-],
-"files": 121
+]
 },
 {
 "id": "aqa-8100",
@@ -1153,11 +1173,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-8465",
@@ -1168,11 +1188,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 58,
+"files": 176,
 "years": [
 2018,
 2025
-],
-"files": 176
+]
 },
 {
 "id": "aqa-8464",
@@ -1183,11 +1203,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 98,
+"files": 300,
 "years": [
 2018,
 2025
-],
-"files": 300
+]
 },
 {
 "id": "aqa-8525",
@@ -1198,11 +1218,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 23,
+"files": 46,
 "years": [
 2020,
 2025
-],
-"files": 46
+]
 },
 {
 "id": "aqa-8236",
@@ -1213,11 +1233,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 8,
+"files": 23,
 "years": [
 2020,
 2025
-],
-"files": 23
+]
 },
 {
 "id": "aqa-8552",
@@ -1228,11 +1248,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 7,
+"files": 23,
 "years": [
 2020,
 2025
-],
-"files": 23
+]
 },
 {
 "id": "aqa-8261",
@@ -1243,11 +1263,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 6,
+"files": 24,
 "years": [
 2020,
 2025
-],
-"files": 24
+]
 },
 {
 "id": "aqa-8136",
@@ -1258,11 +1278,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-8852",
@@ -1273,11 +1293,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 7,
+"files": 21,
 "years": [
 2020,
 2025
-],
-"files": 21
+]
 },
 {
 "id": "aqa-8700",
@@ -1288,11 +1308,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 19,
+"files": 84,
 "years": [
 2020,
 2025
-],
-"files": 84
+]
 },
 {
 "id": "aqa-8702",
@@ -1303,11 +1323,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 18,
+"files": 52,
 "years": [
 2020,
 2025
-],
-"files": 52
+]
 },
 {
 "id": "aqa-8585",
@@ -1318,11 +1338,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 8,
+"files": 24,
 "years": [
 2019,
 2025
-],
-"files": 24
+]
 },
 {
 "id": "aqa-8652",
@@ -1333,8 +1353,8 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 6,
-"years": [],
-"files": 13
+"files": 13,
+"years": []
 },
 {
 "id": "aqa-8658",
@@ -1345,11 +1365,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 129,
 "years": [
 2020,
 2025
-],
-"files": 129
+]
 },
 {
 "id": "aqa-8035",
@@ -1360,11 +1380,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 19,
+"files": 71,
 "years": [
 2020,
 2025
-],
-"files": 71
+]
 },
 {
 "id": "aqa-8662",
@@ -1375,8 +1395,8 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 6,
-"years": [],
-"files": 13
+"files": 13,
+"years": []
 },
 {
 "id": "aqa-8668",
@@ -1387,11 +1407,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 45,
+"files": 130,
 "years": [
 2020,
 2025
-],
-"files": 130
+]
 },
 {
 "id": "aqa-8678",
@@ -1402,11 +1422,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 41,
+"files": 107,
 "years": [
 2020,
 2025
-],
-"files": 107
+]
 },
 {
 "id": "aqa-8145",
@@ -1417,11 +1437,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 127,
+"files": 366,
 "years": [
 2020,
 2025
-],
-"files": 366
+]
 },
 {
 "id": "aqa-8633",
@@ -1432,11 +1452,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 132,
 "years": [
 2020,
 2025
-],
-"files": 132
+]
 },
 {
 "id": "aqa-8300",
@@ -1447,11 +1467,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 101,
+"files": 337,
 "years": [
 2017,
 2025
-],
-"files": 337
+]
 },
 {
 "id": "aqa-8572",
@@ -1462,11 +1482,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 13,
+"files": 39,
 "years": [
 2020,
 2025
-],
-"files": 39
+]
 },
 {
 "id": "aqa-8271",
@@ -1477,11 +1497,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 8,
+"files": 26,
 "years": [
 2020,
 2025
-],
-"files": 26
+]
 },
 {
 "id": "aqa-8683",
@@ -1492,11 +1512,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 43,
+"files": 123,
 "years": [
 2020,
 2025
-],
-"files": 123
+]
 },
 {
 "id": "aqa-8582",
@@ -1507,11 +1527,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 40,
 "years": [
 2020,
 2025
-],
-"files": 40
+]
 },
 {
 "id": "aqa-8463",
@@ -1522,11 +1542,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 33,
+"files": 109,
 "years": [
 2018,
 2025
-],
-"files": 109
+]
 },
 {
 "id": "aqa-8688",
@@ -1537,11 +1557,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 130,
 "years": [
 2020,
 2025
-],
-"files": 130
+]
 },
 {
 "id": "aqa-8182",
@@ -1552,11 +1572,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 36,
 "years": [
 2020,
 2025
-],
-"files": 36
+]
 },
 {
 "id": "aqa-8062",
@@ -1567,11 +1587,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 53,
+"files": 148,
 "years": [
 2020,
 2025
-],
-"files": 148
+]
 },
 {
 "id": "aqa-8061",
@@ -1582,11 +1602,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 29,
+"files": 80,
 "years": [
 2020,
 2025
-],
-"files": 80
+]
 },
 {
 "id": "aqa-8063",
@@ -1597,11 +1617,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 33,
+"files": 86,
 "years": [
 2020,
 2025
-],
-"files": 86
+]
 },
 {
 "id": "aqa-8192",
@@ -1612,11 +1632,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 14,
+"files": 35,
 "years": [
 2020,
 2025
-],
-"files": 35
+]
 },
 {
 "id": "aqa-8692",
@@ -1627,8 +1647,8 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 6,
-"years": [],
-"files": 13
+"files": 13,
+"years": []
 },
 {
 "id": "aqa-8698",
@@ -1639,11 +1659,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 42,
+"files": 133,
 "years": [
 2020,
 2025
-],
-"files": 133
+]
 },
 {
 "id": "aqa-8382",
@@ -1654,11 +1674,11 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 41,
+"files": 104,
 "years": [
 2019,
 2025
-],
-"files": 104
+]
 },
 {
 "id": "aqa-8648",
@@ -1669,11 +1689,6131 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 39,
+"files": 118,
 "years": [
 2020,
 2025
+]
+},
+{
+"id": "cie-9706",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Accounting",
+"code": "9706",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-accounting-9706/",
+"papers": 8,
+"years": [
+2023,
+2024
 ],
-"files": 118
+"files": 17
+},
+{
+"id": "cie-9865",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Arabic",
+"code": "9865",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-arabic-9865/",
+"papers": 3,
+"years": [
+2029,
+2029
+],
+"files": 6
+},
+{
+"id": "cie-9479",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Art and Design",
+"code": "9479",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-art-and-design-9479/",
+"papers": 2,
+"years": [
+2024,
+2028
+],
+"files": 8
+},
+{
+"id": "cie-9484",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Biblical Studies",
+"code": "9484",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-biblical-studies-9484/",
+"papers": 8,
+"years": [
+2023,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9700",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Biology",
+"code": "9700",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-biology-9700/",
+"papers": 10,
+"years": [
+2022,
+2024
+],
+"files": 21
+},
+{
+"id": "cie-9609",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Business",
+"code": "9609",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-business-9609/",
+"papers": 8,
+"years": [
+2023,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9680",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Arabic",
+"code": "9680",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-arabic-9680/",
+"papers": 4,
+"years": [
+2024,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-9868",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Chinese - Language & Literature",
+"code": "9868",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-chinese-language-and-literature-9868/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 10
+},
+{
+"id": "cie-9898",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level French Language & Literature",
+"code": "9898",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-french-language-literature-9898/",
+"papers": 3,
+"years": [
+2025,
+2025
+],
+"files": 6
+},
+{
+"id": "cie-9897",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level German Language & Literature",
+"code": "9897",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-german-9897/",
+"papers": 3,
+"years": [
+2025,
+2025
+],
+"files": 6
+},
+{
+"id": "cie-9718",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Portuguese",
+"code": "9718",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-portuguese-9718/",
+"papers": 3,
+"years": [
+2024,
+2024
+],
+"files": 7
+},
+{
+"id": "cie-9844",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Spanish - Language & Literature",
+"code": "9844",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-spanish-language-and-literature-9844/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 10
+},
+{
+"id": "cie-9686",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Urdu - Pakistan only",
+"code": "9686",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-urdu-pakistan-only-9686/",
+"papers": 3,
+"years": [
+2024,
+2024
+],
+"files": 7
+},
+{
+"id": "cie-9866",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International A Level Urdu Language & Literature (9866) – for centres in Pakistan",
+"code": "9866",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-urdu-language-literature-9866/",
+"papers": 3,
+"years": [
+2027,
+2027
+],
+"files": 6
+},
+{
+"id": "cie-9395",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS &amp; A Level Travel and Tourism",
+"code": "9395",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-travel-and-tourism-9395/",
+"papers": 3,
+"years": [
+2024,
+2024
+],
+"files": 7
+},
+{
+"id": "cie-8291",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Environmental Management",
+"code": "8291",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-environmental-management-8291/",
+"papers": 4,
+"years": [
+2022,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-8695",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level - English - Language and Literature -",
+"code": "8695",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-english-language-and-literature-as-level-only-8695/",
+"papers": 6,
+"years": [
+2021,
+2029
+],
+"files": 13
+},
+{
+"id": "cie-8679",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Afrikaans - Language",
+"code": "8679",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-afrikaans-language-as-level-only-8679/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-8680",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Arabic - Language",
+"code": "8680",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-arabic-language-as-level-only-8680/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-8238",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Chinese Language",
+"code": "8238",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-chinese-language-8238/",
+"papers": 13,
+"years": [
+2024,
+2028
+],
+"files": 16
+},
+{
+"id": "cie-8028",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level French Language",
+"code": "8028",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-french-language-8028/",
+"papers": 5,
+"years": [
+2025,
+2028
+],
+"files": 9
+},
+{
+"id": "cie-8021",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level General Paper 8021",
+"code": "8021",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-general-paper-as-level-only-8021/",
+"papers": 5,
+"years": [
+2019,
+2028
+],
+"files": 11
+},
+{
+"id": "cie-8027",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level German Language",
+"code": "8027",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-german-language-8027/",
+"papers": 5,
+"years": [
+2025,
+2028
+],
+"files": 9
+},
+{
+"id": "cie-8684",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Portuguese - Language",
+"code": "8684",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-portuguese-language-as-level-only-8684/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-8022",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Spanish Language (AS Level)",
+"code": "8022",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-spanish-language-8022/",
+"papers": 12,
+"years": [
+2024,
+2028
+],
+"files": 16
+},
+{
+"id": "cie-8386",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Sport & Physical Education",
+"code": "8386",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-level-sport-and-physical-education-8386/",
+"papers": 3,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-8102",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level US History since 1877",
+"code": "8102",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-history-8102/",
+"papers": 2,
+"years": [
+2027,
+2027
+],
+"files": 6
+},
+{
+"id": "cie-8101",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level US History to 1877",
+"code": "8101",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-history-8101/",
+"papers": 2,
+"years": [
+2027,
+2027
+],
+"files": 6
+},
+{
+"id": "cie-8686",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS Level Urdu - Language",
+"code": "8686",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-urdu-language-as-level-only-8686/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-9990",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Cambridge International AS and A Level Psychology",
+"code": "9990",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-psychology-9990/",
+"papers": 8,
+"years": [
+2024,
+2024
+],
+"files": 19
+},
+{
+"id": "cie-9701",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Chemistry",
+"code": "9701",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-chemistry-9701/",
+"papers": 10,
+"years": [
+2022,
+2024
+],
+"files": 21
+},
+{
+"id": "cie-9274",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Classical Studies",
+"code": "9274",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-classical-studies-9274/",
+"papers": 8,
+"years": [
+2022,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9618",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Computer Science",
+"code": "9618",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-computer-science-9618/",
+"papers": 7,
+"years": [
+2021,
+2024
+],
+"files": 16
+},
+{
+"id": "cie-9705",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Design and Technology",
+"code": "9705",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-design-and-technology-9705/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-9481",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Digital Media &amp Design",
+"code": "9481",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-digital-media-design-9481/",
+"papers": 2,
+"years": [
+2024,
+2026
+],
+"files": 7
+},
+{
+"id": "cie-9482",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Drama",
+"code": "9482",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-drama-9482/",
+"papers": 2,
+"years": [
+2021,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-9708",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Economics",
+"code": "9708",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-economics-9708/",
+"papers": 8,
+"years": [
+2023,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9695",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "English - Literature",
+"code": "9695",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-english-literature-9695/",
+"papers": 12,
+"years": [
+2021,
+2029
+],
+"files": 24
+},
+{
+"id": "cie-9093",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "English Language",
+"code": "9093",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-english-language-9093/",
+"papers": 12,
+"years": [
+2021,
+2029
+],
+"files": 25
+},
+{
+"id": "cie-9981",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "European History",
+"code": "9981",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-history-9981/",
+"papers": 4,
+"years": [
+2027,
+2027
+],
+"files": 8
+},
+{
+"id": "cie-9696",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Geography",
+"code": "9696",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-geography-9696/",
+"papers": 8,
+"years": [
+2024,
+2027
+],
+"files": 17
+},
+{
+"id": "cie-9239",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Global Perspectives & Research",
+"code": "9239",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-global-perspectives-and-research-9239/",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 11
+},
+{
+"id": "cie-9487",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Hinduism",
+"code": "9487",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-hinduism-9487/",
+"papers": 8,
+"years": [
+2021,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9489",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "History",
+"code": "9489",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-history-9489/",
+"papers": 8,
+"years": [
+2024,
+2027
+],
+"files": 17
+},
+{
+"id": "cie-9626",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Information Technology",
+"code": "9626",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-information-technology-9626/",
+"papers": 8,
+"years": [
+2023,
+2025
+],
+"files": 17
+},
+{
+"id": "cie-9982",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "International History",
+"code": "9982",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-history-9982/",
+"papers": 4,
+"years": [
+2027,
+2027
+],
+"files": 8
+},
+{
+"id": "cie-9488",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Islamic Studies",
+"code": "9488",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-islamic-studies-9488/",
+"papers": 8,
+"years": [
+2021,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9084",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Law",
+"code": "9084",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-law-9084/",
+"papers": 8,
+"years": [
+2023,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9693",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Marine Science",
+"code": "9693",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-marine-science-9693/",
+"papers": 8,
+"years": [
+2022,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9709",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Mathematics",
+"code": "9709",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-mathematics-9709/",
+"papers": 12,
+"years": [
+2020,
+2024
+],
+"files": 25
+},
+{
+"id": "cie-9231",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Mathematics - Further",
+"code": "9231",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-mathematics-further-9231/",
+"papers": 8,
+"years": [
+2020,
+2024
+],
+"files": 17
+},
+{
+"id": "cie-9607",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Media Studies",
+"code": "9607",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-media-studies-9607/",
+"papers": 4,
+"years": [
+2021,
+2028
+],
+"files": 10
+},
+{
+"id": "cie-9483",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Music",
+"code": "9483",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-music-9483/",
+"papers": 2,
+"years": [
+2019,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-9702",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Physics",
+"code": "9702",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-physics-9702/",
+"papers": 10,
+"years": [
+2022,
+2024
+],
+"files": 21
+},
+{
+"id": "cie-9699",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Sociology",
+"code": "9699",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-sociology-9699/",
+"papers": 12,
+"years": [
+2021,
+2029
+],
+"files": 25
+},
+{
+"id": "cie-9689",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Tamil -",
+"code": "9689",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-tamil-9689/",
+"papers": 4,
+"years": [
+2024,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-8689",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Tamil - Language",
+"code": "8689",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-tamil-language-as-level-only-8689/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-9694",
+"board": "cie",
+"qualification": "International AS & A Level",
+"subject": "Thinking Skills",
+"code": "9694",
+"level": "alevel",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-thinking-skills-9694/",
+"papers": 12,
+"years": [
+2020,
+2028
+],
+"files": 25
+},
+{
+"id": "cie-0452",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Accounting",
+"code": "0452",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-accounting-0452/",
+"papers": 6,
+"years": [
+2020,
+2027
+],
+"files": 13
+},
+{
+"id": "cie-0548",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Afrikaans - Second Language",
+"code": "0548",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-afrikaans-second-language-0548/",
+"papers": 4,
+"years": [
+2023,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-0600",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Agriculture",
+"code": "0600",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-agriculture-0600/",
+"papers": 1,
+"years": [
+2024,
+2024
+],
+"files": 3
+},
+{
+"id": "cie-0508",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Arabic - First Language",
+"code": "0508",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-arabic-first-language-0508/",
+"papers": 6,
+"years": [
+2008,
+2027
+],
+"files": 13
+},
+{
+"id": "cie-0544",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Arabic - Foreign Language",
+"code": "0544",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-arabic-foreign-language-0544/",
+"papers": 11,
+"years": [
+2021,
+2028
+],
+"files": 21
+},
+{
+"id": "cie-0400",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Art &amp Design",
+"code": "0400",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-art-and-design-0400/",
+"papers": 2,
+"years": [
+2024,
+2028
+],
+"files": 7
+},
+{
+"id": "cie-0538",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Bahasa Indonesia - 0538",
+"code": "0538",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-bahasa-indonesia-0538/",
+"papers": 4,
+"years": [
+2022,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0610",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Biology",
+"code": "0610",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-biology-0610/",
+"papers": 12,
+"years": [
+2023,
+2024
+],
+"files": 25
+},
+{
+"id": "cie-0264",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Business",
+"code": "0264",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-business-0264/",
+"papers": 2,
+"years": [
+2027,
+2027
+],
+"files": 4
+},
+{
+"id": "cie-0450",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Business Studies",
+"code": "0450",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-business-studies-0450/",
+"papers": 4,
+"years": [
+2020,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0620",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Chemistry",
+"code": "0620",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-chemistry-0620/",
+"papers": 12,
+"years": [
+2023,
+2024
+],
+"files": 25
+},
+{
+"id": "cie-0547",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Chinese (Mandarin) - Foreign Language",
+"code": "0547",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-chinese-mandarin-foreign-language-0547/",
+"papers": 14,
+"years": [
+2022,
+2028
+],
+"files": 21
+},
+{
+"id": "cie-0509",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Chinese - First Language",
+"code": "0509",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-chinese-first-language-0509/",
+"papers": 4,
+"years": [
+2020,
+2024
+],
+"files": 7
+},
+{
+"id": "cie-0523",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Chinese - Second Language",
+"code": "0523",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-chinese-second-language-0523/",
+"papers": 4,
+"years": [
+2020,
+2024
+],
+"files": 10
+},
+{
+"id": "cie-0715",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Commerce",
+"code": "0715",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-commerce-0715/",
+"papers": 2,
+"years": [
+2028,
+2028
+],
+"files": 4
+},
+{
+"id": "cie-0478",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Computer Science",
+"code": "0478",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-computer-science-0478/",
+"papers": 8,
+"years": [
+2023,
+2029
+],
+"files": 17
+},
+{
+"id": "cie-0465",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Core English as a Second Language",
+"code": "0465",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-core-english-as-second-language-0465/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0445",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Design &amp; Technology",
+"code": "0445",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-design-and-technology-0445/",
+"papers": 11,
+"years": [
+2020,
+2028
+],
+"files": 23
+},
+{
+"id": "cie-0411",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Drama",
+"code": "0411",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-drama-0411/",
+"papers": 2,
+"years": [
+2022,
+2029
+],
+"files": 6
+},
+{
+"id": "cie-0455",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Economics",
+"code": "0455",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-economics-0455/",
+"papers": 6,
+"years": [
+2020,
+2027
+],
+"files": 13
+},
+{
+"id": "cie-0472",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "English (as an Additional Language) 0472",
+"code": "0472",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-as-an-additional-language-0472/",
+"papers": 9,
+"years": [
+2023,
+2024
+],
+"files": 16
+},
+{
+"id": "cie-0500",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "English - First Language",
+"code": "0500",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-first-language-0500/",
+"papers": 7,
+"years": [
+2020,
+2027
+],
+"files": 13
+},
+{
+"id": "cie-0524",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "English - First Language (US)",
+"code": "0524",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-first-language-us-0524/",
+"papers": 3,
+"years": [
+2020,
+2024
+],
+"files": 6
+},
+{
+"id": "cie-0511",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "English as a Second Language (Count-in speaking)",
+"code": "0511",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-second-language-count-in-oral-0511/",
+"papers": 7,
+"years": [
+2024,
+2024
+],
+"files": 11
+},
+{
+"id": "cie-0510",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "English as a Second Language (Speaking endorsement)",
+"code": "0510",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-second-language-oral-endorsement-0510/",
+"papers": 8,
+"years": [
+2024,
+2024
+],
+"files": 12
+},
+{
+"id": "cie-0454",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Enterprise",
+"code": "0454",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-enterprise-0454/",
+"papers": 2,
+"years": [
+2020,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0680",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Environmental Management",
+"code": "0680",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-environmental-management-0680/",
+"papers": 6,
+"years": [
+2019,
+2027
+],
+"files": 9
+},
+{
+"id": "cie-0648",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Food and Nutrition",
+"code": "0648",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-food-and-nutrition-0648/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0501",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "French - First Language",
+"code": "0501",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-french-first-language-0501/",
+"papers": 4,
+"years": [
+2023,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0520",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "French - Foreign Language",
+"code": "0520",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-french-foreign-language-0520/",
+"papers": 12,
+"years": [
+2021,
+2028
+],
+"files": 22
+},
+{
+"id": "cie-0460",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Geography",
+"code": "0460",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-geography-0460/",
+"papers": 9,
+"years": [
+2020,
+2027
+],
+"files": 19
+},
+{
+"id": "cie-0505",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "German - First Language",
+"code": "0505",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-german-first-language-0505/",
+"papers": 4,
+"years": [
+2023,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0525",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "German - Foreign Language",
+"code": "0525",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-german-foreign-language-0525/",
+"papers": 11,
+"years": [
+2021,
+2028
+],
+"files": 21
+},
+{
+"id": "cie-0457",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Global Perspectives",
+"code": "0457",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-global-perspectives-0457/",
+"papers": 2,
+"years": [
+2024,
+2025
+],
+"files": 7
+},
+{
+"id": "cie-0549",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Hindi as a Second Language",
+"code": "0549",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-hindi-as-a-second-language-0549/",
+"papers": 6,
+"years": [
+2019,
+2027
+],
+"files": 9
+},
+{
+"id": "cie-0470",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "History",
+"code": "0470",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-history-0470/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 13
+},
+{
+"id": "cie-0409",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "History - American (US)",
+"code": "0409",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-history-american-us-0409/",
+"papers": 4,
+"years": [
+2018,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0417",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Information and Communication Technology",
+"code": "0417",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-information-and-communication-technology-0417/",
+"papers": 6,
+"years": [
+2023,
+2024
+],
+"files": 13
+},
+{
+"id": "cie-0607",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "International Mathematics",
+"code": "0607",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-international-mathematics-0607/",
+"papers": 12,
+"years": [
+2024,
+2025
+],
+"files": 25
+},
+{
+"id": "cie-0531",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "IsiZulu as a Second Language",
+"code": "0531",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-isizulu-as-a-second-language-0531/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-0493",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Islamiyat",
+"code": "0493",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-islamiyat-0493/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0535",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Italian - Foreign Language",
+"code": "0535",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-italian-foreign-language-0535/",
+"papers": 11,
+"years": [
+2021,
+2028
+],
+"files": 21
+},
+{
+"id": "cie-0716",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Japanese - Foreign Language",
+"code": "0716",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-japanese-0716/",
+"papers": 4,
+"years": [
+2027,
+2027
+],
+"files": 7
+},
+{
+"id": "cie-0480",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Latin",
+"code": "0480",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-latin-0480/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0992",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Literature in English",
+"code": "0992",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-english-literature-0992/",
+"papers": 10,
+"years": [
+2020,
+2028
+],
+"files": 21
+},
+{
+"id": "cie-0474",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Literature in Spanish",
+"code": "0474",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-literature-in-spanish-0474/",
+"papers": 2,
+"years": [
+2025,
+2025
+],
+"files": 4
+},
+{
+"id": "cie-0696",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Malay - First Language",
+"code": "0696",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-malay-0696/",
+"papers": 4,
+"years": [
+2021,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0546",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Malay - Foreign Language",
+"code": "0546",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-malay-foreign-language-0546/",
+"papers": 11,
+"years": [
+2022,
+2029
+],
+"files": 24
+},
+{
+"id": "cie-0697",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Marine Science - 0697",
+"code": "0697",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-marine-science-0697/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0580",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Mathematics",
+"code": "0580",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-mathematics-0580/",
+"papers": 8,
+"years": [
+2024,
+2025
+],
+"files": 17
+},
+{
+"id": "cie-0444",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Mathematics (US)",
+"code": "0444",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-mathematics-us-0444/",
+"papers": 6,
+"years": [
+2020,
+2024
+],
+"files": 12
+},
+{
+"id": "cie-0606",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Mathematics - Additional",
+"code": "0606",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-mathematics-additional-0606/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 8
+},
+{
+"id": "cie-0410",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Music",
+"code": "0410",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-music-0410/",
+"papers": 2,
+"years": [
+2024,
+2026
+],
+"files": 5
+},
+{
+"id": "cie-0448",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Pakistan Studies",
+"code": "0448",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-pakistan-studies-0448/",
+"papers": 5,
+"years": [
+2015,
+2028
+],
+"files": 11
+},
+{
+"id": "cie-0413",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Physical Education",
+"code": "0413",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-physical-education-0413/",
+"papers": 3,
+"years": [
+2019,
+2029
+],
+"files": 6
+},
+{
+"id": "cie-0995",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Physical Education 0995",
+"code": "0995",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-physical-education-0995/",
+"papers": 2,
+"years": [
+2019,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0652",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Physical Science",
+"code": "0652",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-physical-science-0652/",
+"papers": 12,
+"years": [
+2019,
+2024
+],
+"files": 25
+},
+{
+"id": "cie-0625",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Physics",
+"code": "0625",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-physics-0625/",
+"papers": 12,
+"years": [
+2023,
+2024
+],
+"files": 25
+},
+{
+"id": "cie-0504",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Portuguese - First Language",
+"code": "0504",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-portuguese-first-language-0504/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-0266",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Psychology",
+"code": "0266",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-psychology-0266/",
+"papers": 2,
+"years": [
+2027,
+2027
+],
+"files": 4
+},
+{
+"id": "cie-0490",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Religious Studies",
+"code": "0490",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-religious-studies-0490/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-0499",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Sanskrit",
+"code": "0499",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-sanskrit-0499/",
+"papers": 4,
+"years": [
+2019,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0653",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Science - Combined",
+"code": "0653",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-science-combined-0653/",
+"papers": 12,
+"years": [
+2024,
+2025
+],
+"files": 25
+},
+{
+"id": "cie-0654",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Sciences - Co-ordinated (Double)",
+"code": "0654",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-sciences-co-ordinated-double-0654/",
+"papers": 12,
+"years": [
+2024,
+2025
+],
+"files": 25
+},
+{
+"id": "cie-0495",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Sociology",
+"code": "0495",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-sociology-0495/",
+"papers": 6,
+"years": [
+2024,
+2025
+],
+"files": 9
+},
+{
+"id": "cie-0502",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Spanish - First Language",
+"code": "0502",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-spanish-first-language-0502/",
+"papers": 4,
+"years": [
+2022,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0530",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Spanish - Foreign Language",
+"code": "0530",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-spanish-foreign-language-0530/",
+"papers": 11,
+"years": [
+2021,
+2029
+],
+"files": 24
+},
+{
+"id": "cie-0479",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Statistics",
+"code": "0479",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-statistics-0479/",
+"papers": 2,
+"years": [
+2027,
+2027
+],
+"files": 4
+},
+{
+"id": "cie-0262",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Swahili",
+"code": "0262",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-swahili-0262/",
+"papers": 4,
+"years": [
+2021,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0518",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Thai - First Language -",
+"code": "0518",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-thai-first-language-0518/",
+"papers": 2,
+"years": [
+2024,
+2024
+],
+"files": 5
+},
+{
+"id": "cie-0471",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Travel and Tourism",
+"code": "0471",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-travel-and-tourism-0471/",
+"papers": 6,
+"years": [
+2024,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0513",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Turkish - First Language",
+"code": "0513",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-turkish-first-language-0513/",
+"papers": 4,
+"years": [
+2024,
+2025
+],
+"files": 6
+},
+{
+"id": "cie-0539",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Urdu as a Second Language",
+"code": "0539",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-urdu-as-a-second-language-0539/",
+"papers": 4,
+"years": [
+2021,
+2024
+],
+"files": 9
+},
+{
+"id": "cie-0695",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "Vietnamese - First Language",
+"code": "0695",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-vietnamese-0695/",
+"papers": 2,
+"years": [
+2025,
+2025
+],
+"files": 4
+},
+{
+"id": "cie-0408",
+"board": "cie",
+"qualification": "IGCSE",
+"subject": "World Literature",
+"code": "0408",
+"level": "igcse",
+"url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-world-literature-0408/",
+"papers": 6,
+"years": [
+2022,
+2028
+],
+"files": 13
+},
+{
+"id": "eduqas-a650",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Art and Design",
+"code": "A650",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/art-and-design-asa-level/",
+"papers": 8,
+"years": [
+2017,
+2025
+],
+"files": 8
+},
+{
+"id": "eduqas-a400",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Biology",
+"code": "A400",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/biology-asa-level/",
+"papers": 27,
+"years": [
+2017,
+2025
+],
+"files": 54
+},
+{
+"id": "eduqas-b400",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Biology",
+"code": "B400",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/biology-asa-level/",
+"papers": 22,
+"years": [
+2016,
+2025
+],
+"files": 40
+},
+{
+"id": "eduqas-a510",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Business",
+"code": "A510",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/business-asa-level/",
+"papers": 27,
+"years": [
+2017,
+2025
+],
+"files": 54
+},
+{
+"id": "eduqas-b510",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Business",
+"code": "B510",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/business-asa-level/",
+"papers": 18,
+"years": [
+2016,
+2025
+],
+"files": 35
+},
+{
+"id": "eduqas-a410",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Chemistry",
+"code": "A410",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/chemistry-asa-level/",
+"papers": 21,
+"years": [
+2017,
+2025
+],
+"files": 60
+},
+{
+"id": "eduqas-b410",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Chemistry",
+"code": "B410",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/chemistry-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 42
+},
+{
+"id": "eduqas-a500",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Computer Science",
+"code": "A500",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/computer-science-asa-level/",
+"papers": 18,
+"years": [
+2017,
+2025
+],
+"files": 36
+},
+{
+"id": "eduqas-b500",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Computer Science",
+"code": "B500",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/computer-science-asa-level/",
+"papers": 17,
+"years": [
+2016,
+2025
+],
+"files": 36
+},
+{
+"id": "eduqas-a601",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "A601",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/design-and-technology-as-and-a-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 22
+},
+{
+"id": "eduqas-a602",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "A602",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/design-and-technology-as-and-a-level/",
+"papers": 3,
+"years": [
+2019,
+2025
+],
+"files": 10
+},
+{
+"id": "eduqas-b602",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "B602",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/design-and-technology-as-and-a-level/",
+"papers": 7,
+"years": [
+2019,
+2025
+],
+"files": 12
+},
+{
+"id": "eduqas-b601",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "B601",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/design-and-technology-as-and-a-level/",
+"papers": 3,
+"years": [
+2023,
+2025
+],
+"files": 6
+},
+{
+"id": "eduqas-a690",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Drama and Theatre",
+"code": "A690",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/drama-and-theatre-asa-level/",
+"papers": 10,
+"years": [
+2018,
+2025
+],
+"files": 22
+},
+{
+"id": "eduqas-b690",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Drama and Theatre",
+"code": "B690",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/drama-and-theatre-asa-level/",
+"papers": 8,
+"years": [
+2017,
+2025
+],
+"files": 16
+},
+{
+"id": "eduqas-a520",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Economics",
+"code": "A520",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/economics-asa-level/",
+"papers": 27,
+"years": [
+2017,
+2025
+],
+"files": 54
+},
+{
+"id": "eduqas-b520",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Economics",
+"code": "B520",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/economics-asa-level/",
+"papers": 18,
+"years": [
+2016,
+2025
+],
+"files": 36
+},
+{
+"id": "eduqas-a490",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Electronics",
+"code": "A490",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/electronics-asa-level/",
+"papers": 12,
+"years": [
+2019,
+2025
+],
+"files": 32
+},
+{
+"id": "eduqas-b490",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Electronics",
+"code": "B490",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/electronics-asa-level/",
+"papers": 6,
+"years": [
+2018,
+2025
+],
+"files": 14
+},
+{
+"id": "eduqas-a700",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "English Language",
+"code": "A700",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-language-asa-level/",
+"papers": 28,
+"years": [
+2017,
+2025
+],
+"files": 55
+},
+{
+"id": "eduqas-b700",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "English Language",
+"code": "B700",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-language-asa-level/",
+"papers": 20,
+"years": [
+2016,
+2025
+],
+"files": 38
+},
+{
+"id": "eduqas-a710",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "English Language and Literature",
+"code": "A710",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-language-and-literature-asa-level/",
+"papers": 29,
+"years": [
+2017,
+2025
+],
+"files": 59
+},
+{
+"id": "eduqas-b710",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "English Language and Literature",
+"code": "B710",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-language-and-literature-asa-level/",
+"papers": 18,
+"years": [
+2016,
+2025
+],
+"files": 35
+},
+{
+"id": "eduqas-a720",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "English Literature",
+"code": "A720",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-literature-asa-level/",
+"papers": 30,
+"years": [
+2017,
+2025
+],
+"files": 57
+},
+{
+"id": "eduqas-b720",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "English Literature",
+"code": "B720",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/english-literature-asa-level/",
+"papers": 20,
+"years": [
+2016,
+2025
+],
+"files": 39
+},
+{
+"id": "eduqas-a670",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Film Studies",
+"code": "A670",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/film-studies-asa-level/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-b670",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Film Studies",
+"code": "B670",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/film-studies-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-a800",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "French",
+"code": "A800",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/french-asa-level/",
+"papers": 24,
+"years": [
+2018,
+2025
+],
+"files": 62
+},
+{
+"id": "eduqas-b800",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "French",
+"code": "B800",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/french-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 63
+},
+{
+"id": "eduqas-a110",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Geography",
+"code": "A110",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/geography-asa-level/",
+"papers": 22,
+"years": [
+2018,
+2025
+],
+"files": 48
+},
+{
+"id": "eduqas-b110",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Geography",
+"code": "B110",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/geography-asa-level/",
+"papers": 15,
+"years": [
+2017,
+2025
+],
+"files": 33
+},
+{
+"id": "eduqas-a480",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Geology",
+"code": "A480",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/geology-asa-level/",
+"papers": 20,
+"years": [
+2019,
+2025
+],
+"files": 67
+},
+{
+"id": "eduqas-b480",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Geology",
+"code": "B480",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/geology-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 49
+},
+{
+"id": "eduqas-a820",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "German",
+"code": "A820",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/german-asa-level/",
+"papers": 20,
+"years": [
+2018,
+2025
+],
+"files": 54
+},
+{
+"id": "eduqas-b820",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "German",
+"code": "B820",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/german-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 52
+},
+{
+"id": "eduqas-a150",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Law",
+"code": "A150",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/law-asa-level/",
+"papers": 21,
+"years": [
+2019,
+2025
+],
+"files": 42
+},
+{
+"id": "eduqas-b150",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Law",
+"code": "B150",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/law-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-a680",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Media Studies",
+"code": "A680",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/media-studies-asa-level/",
+"papers": 12,
+"years": [
+2019,
+2025
+],
+"files": 32
+},
+{
+"id": "eduqas-b680",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Media Studies",
+"code": "B680",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/media-studies-asa-level/",
+"papers": 13,
+"years": [
+2018,
+2025
+],
+"files": 33
+},
+{
+"id": "eduqas-a660",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Music",
+"code": "A660",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/music-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-b660",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Music",
+"code": "B660",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/music-asa-level/",
+"papers": 9,
+"years": [
+2017,
+2025
+],
+"files": 18
+},
+{
+"id": "eduqas-a550",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Physical Education",
+"code": "A550",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/physical-education-asa-level/",
+"papers": 16,
+"years": [
+2018,
+2025
+],
+"files": 32
+},
+{
+"id": "eduqas-b550",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Physical Education",
+"code": "B550",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/physical-education-asa-level/",
+"papers": 7,
+"years": [
+2017,
+2025
+],
+"files": 14
+},
+{
+"id": "eduqas-a420",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Physics",
+"code": "A420",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/physics-asa-level/",
+"papers": 24,
+"years": [
+2017,
+2025
+],
+"files": 61
+},
+{
+"id": "eduqas-b420",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Physics",
+"code": "B420",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/physics-asa-level/",
+"papers": 30,
+"years": [
+2016,
+2025
+],
+"files": 48
+},
+{
+"id": "eduqas-a290",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Psychology",
+"code": "A290",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/psychology-asa-level/",
+"papers": 18,
+"years": [
+2017,
+2025
+],
+"files": 42
+},
+{
+"id": "eduqas-b290",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Psychology",
+"code": "B290",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/psychology-asa-level/",
+"papers": 28,
+"years": [
+2016,
+2025
+],
+"files": 47
+},
+{
+"id": "eduqas-a120",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Religious Studies",
+"code": "A120",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/religious-studies-asa-level/",
+"papers": 60,
+"years": [
+2018,
+2025
+],
+"files": 120
+},
+{
+"id": "eduqas-b120",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Religious Studies",
+"code": "B120",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/religious-studies-asa-level/",
+"papers": 52,
+"years": [
+2017,
+2025
+],
+"files": 108
+},
+{
+"id": "eduqas-a200",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Sociology",
+"code": "A200",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/sociology-asa-level/",
+"papers": 15,
+"years": [
+2017,
+2025
+],
+"files": 40
+},
+{
+"id": "eduqas-b200",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Sociology",
+"code": "B200",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/sociology-asa-level/",
+"papers": 30,
+"years": [
+2016,
+2025
+],
+"files": 50
+},
+{
+"id": "eduqas-a810",
+"board": "eduqas",
+"qualification": "A-level",
+"subject": "Spanish",
+"code": "A810",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/spanish-asa-level/",
+"papers": 21,
+"years": [
+2018,
+2025
+],
+"files": 57
+},
+{
+"id": "eduqas-b810",
+"board": "eduqas",
+"qualification": "AS",
+"subject": "Spanish",
+"code": "B810",
+"level": "alevel",
+"url": "https://www.eduqas.co.uk/qualifications/spanish-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 52
+},
+{
+"id": "eduqas-c650",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Art and Design",
+"code": "C650",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/art-and-design-gcse/",
+"papers": 7,
+"years": [
+2018,
+2025
+],
+"files": 7
+},
+{
+"id": "eduqas-c510",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Business",
+"code": "C510",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/business-gcse/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 35
+},
+{
+"id": "eduqas-c500",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Computer Science",
+"code": "C500",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/computer-science-gcse/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 30
+},
+{
+"id": "eduqas-c600",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "C600",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/design-and-technology-gcse/",
+"papers": 12,
+"years": [
+2019,
+2025
+],
+"files": 21
+},
+{
+"id": "eduqas-c690",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Drama",
+"code": "C690",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/drama-gcse/",
+"papers": 13,
+"years": [
+2018,
+2025
+],
+"files": 21
+},
+{
+"id": "eduqas-c490",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Electronics",
+"code": "C490",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/electronics-gcse/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-c700",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "English Language",
+"code": "C700",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/english-language-gcse/",
+"papers": 46,
+"years": [
+2017,
+2025
+],
+"files": 89
+},
+{
+"id": "eduqas-c720",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "English Literature",
+"code": "C720",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/english-literature-gcse/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "eduqas-c722",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "English Literature",
+"code": "C722",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/english-literature-gcse/",
+"papers": 5,
+"years": [
+2022,
+2022
+],
+"files": 10
+},
+{
+"id": "eduqas-c670",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Film Studies",
+"code": "C670",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/film-studies-gcse/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-c560",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Food Preparation and Nutrition",
+"code": "C560",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/food-preparation-and-nutrition-gcse/",
+"papers": 10,
+"years": [
+2018,
+2025
+],
+"files": 26
+},
+{
+"id": "eduqas-c111",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Geography",
+"code": "C111",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/geography-gcse-a/",
+"papers": 19,
+"years": [
+2018,
+2025
+],
+"files": 49
+},
+{
+"id": "eduqas-c112",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Geography",
+"code": "C112",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/geography-gcse-b/",
+"papers": 15,
+"years": [
+2018,
+2025
+],
+"files": 53
+},
+{
+"id": "eduqas-c480",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Geology",
+"code": "C480",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/geology-gcse/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 31
+},
+{
+"id": "eduqas-c100",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "History",
+"code": "C100",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/history-gcse/",
+"papers": 124,
+"years": [
+2018,
+2025
+],
+"files": 240
+},
+{
+"id": "eduqas-c990",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Latin",
+"code": "C990",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/latin-gcse/",
+"papers": 30,
+"years": [
+2018,
+2025
+],
+"files": 72
+},
+{
+"id": "eduqas-c300",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Mathematics",
+"code": "C300",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/mathematics-gcse/",
+"papers": 64,
+"years": [
+2017,
+2025
+],
+"files": 139
+},
+{
+"id": "eduqas-c680",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Media Studies",
+"code": "C680",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/media-studies-gcse/",
+"papers": 13,
+"years": [
+2019,
+2025
+],
+"files": 32
+},
+{
+"id": "eduqas-c660",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Music",
+"code": "C660",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/music-gcse/",
+"papers": 13,
+"years": [
+2018,
+2025
+],
+"files": 23
+},
+{
+"id": "eduqas-c550",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Physical Education",
+"code": "C550",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/physical-education-gcse/",
+"papers": 11,
+"years": [
+2018,
+2025
+],
+"files": 18
+},
+{
+"id": "eduqas-c555",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Physical Education",
+"code": "C555",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/physical-education-gcse/",
+"papers": 3,
+"years": [
+2018,
+2025
+],
+"files": 10
+},
+{
+"id": "eduqas-c120",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "C120",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/religious-studies-gcse/",
+"papers": 101,
+"years": [
+2018,
+2025
+],
+"files": 172
+},
+{
+"id": "eduqas-c125",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "C125",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/religious-studies-gcse/",
+"papers": 28,
+"years": [
+2018,
+2025
+],
+"files": 28
+},
+{
+"id": "eduqas-c200",
+"board": "eduqas",
+"qualification": "GCSE",
+"subject": "Sociology",
+"code": "C200",
+"level": "gcse",
+"url": "https://www.eduqas.co.uk/qualifications/sociology-gcse/",
+"papers": 15,
+"years": [
+2019,
+2025
+],
+"files": 31
+},
+{
+"id": "ocr-h407",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Ancient History",
+"code": "H407",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/ancient-history-h007-h407-from-2017/",
+"papers": 30,
+"files": 84,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h007",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Ancient History",
+"code": "H007",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/ancient-history-h007-h407-from-2017/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h600",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Art and Design",
+"code": "H600",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/art-and-design-h200-h600-from-2015/",
+"papers": 1,
+"files": 1,
+"years": [
+2019,
+2019
+]
+},
+{
+"id": "ocr-h420",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Biology A",
+"code": "H420",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/biology-a-h020-h420-from-2015/",
+"papers": 35,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h020",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Biology A",
+"code": "H020",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/biology-a-h020-h420-from-2015/",
+"papers": 24,
+"files": 58,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h422",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Biology B (Advancing Biology)",
+"code": "H422",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/biology-b-advancing-biology-h022-h422-from-2015/",
+"papers": 39,
+"files": 87,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h022",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Biology B (Advancing Biology)",
+"code": "H022",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/biology-b-advancing-biology-h022-h422-from-2015/",
+"papers": 24,
+"files": 44,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h431",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Business",
+"code": "H431",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/business-h031-h431-from-2015/",
+"papers": 30,
+"files": 57,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h031",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Business",
+"code": "H031",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/business-h031-h431-from-2015/",
+"papers": 16,
+"files": 26,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h432",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Chemistry A",
+"code": "H432",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/chemistry-a-h032-h432-from-2015/",
+"papers": 28,
+"files": 78,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h032",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Chemistry A",
+"code": "H032",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/chemistry-a-h032-h432-from-2015/",
+"papers": 20,
+"files": 55,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h433",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Chemistry B (Salters)",
+"code": "H433",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/chemistry-b-salters-h033-h433-from-2015/",
+"papers": 38,
+"files": 94,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h033",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Chemistry B (Salters)",
+"code": "H033",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/chemistry-b-salters-h033-h433-from-2015/",
+"papers": 24,
+"files": 57,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h408",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Classical Civilisation",
+"code": "H408",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/classical-civilisation-h008-h408-from-2017/",
+"papers": 45,
+"files": 126,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h008",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Classical Civilisation",
+"code": "H008",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/classical-civilisation-h008-h408-from-2017/",
+"papers": 8,
+"files": 32,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h444",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Classical Greek",
+"code": "H444",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/classical-greek-h044-h444-from-2016/",
+"papers": 20,
+"files": 56,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h446",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Computer Science",
+"code": "H446",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/computer-science-h046-h446-from-2015/",
+"papers": 10,
+"files": 30,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h046",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Computer Science",
+"code": "H046",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/computer-science-h046-h446-from-2015/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h404",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "H404",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/design-and-technology-h004-h006-h404-h406-from-2017/",
+"papers": 15,
+"files": 34,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h406",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "H406",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/design-and-technology-h004-h006-h404-h406-from-2017/",
+"papers": 33,
+"files": 66,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h004",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "H004",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/design-and-technology-h004-h006-h404-h406-from-2017/",
+"papers": 4,
+"files": 8,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h006",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "H006",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/design-and-technology-h004-h006-h404-h406-from-2017/",
+"papers": 4,
+"files": 8,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h459",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Drama and Theatre",
+"code": "H459",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/drama-and-theatre-h059-h459-from-2016/",
+"papers": 30,
+"files": 80,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h460",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Economics",
+"code": "H460",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/economics-h060-h460-from-2019/",
+"papers": 17,
+"files": 44,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h060",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Economics",
+"code": "H060",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/economics-h060-h460-from-2019/",
+"papers": 8,
+"files": 22,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h470",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "English Language",
+"code": "H470",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-language-h070-h470-from-2015/",
+"papers": 20,
+"files": 38,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h070",
+"board": "ocr",
+"qualification": "AS",
+"subject": "English Language",
+"code": "H070",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-language-h070-h470-from-2015/",
+"papers": 16,
+"files": 32,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h474",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "English Language and Literature (EMC)",
+"code": "H474",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-language-and-literature-emc-h074-h474-from-2015/",
+"papers": 15,
+"files": 42,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h074",
+"board": "ocr",
+"qualification": "AS",
+"subject": "English Language and Literature (EMC)",
+"code": "H074",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-language-and-literature-emc-h074-h474-from-2015/",
+"papers": 8,
+"files": 20,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h472",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "English Literature",
+"code": "H472",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-literature-h072-h472-from-2015/",
+"papers": 10,
+"files": 34,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h072",
+"board": "ocr",
+"qualification": "AS",
+"subject": "English Literature",
+"code": "H072",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/english-literature-h072-h472-from-2015/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h410",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Film Studies",
+"code": "H410",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/film-studies-h010-h410-from-2017/",
+"papers": 10,
+"files": 20,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h010",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Film Studies",
+"code": "H010",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/film-studies-h010-h410-from-2017/",
+"papers": 4,
+"files": 8,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h245",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Further Mathematics A",
+"code": "H245",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/further-mathematics-a-h235-h245-from-2017/",
+"papers": 162,
+"files": 300,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h645",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Further Mathematics B (MEI)",
+"code": "H645",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/further-mathematics-b-mei-h635-h645-from-2017/",
+"papers": 141,
+"files": 301,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h481",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Geography",
+"code": "H481",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/geography-h081-h481-from-2016/",
+"papers": 33,
+"files": 63,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h081",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Geography",
+"code": "H081",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/geography-h081-h481-from-2016/",
+"papers": 18,
+"files": 36,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h414",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Geology",
+"code": "H414",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/geology-h014-h414-from-2017/",
+"papers": 20,
+"files": 49,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h014",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Geology",
+"code": "H014",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/geology-h014-h414-from-2017/",
+"papers": 4,
+"files": 8,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h505",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "History A",
+"code": "H505",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/history-a-h105-h505-from-2015/",
+"papers": 318,
+"files": 807,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h443",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Latin",
+"code": "H443",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/latin-h043-h443-from-2016/",
+"papers": 20,
+"files": 56,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h043",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Latin",
+"code": "H043",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/latin-h043-h443-from-2016/",
+"papers": 8,
+"files": 18,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h418",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Law",
+"code": "H418",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/law-h018-h418-from-2020/",
+"papers": 16,
+"files": 48,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h018",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Law",
+"code": "H018",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/law-h018-h418-from-2020/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h240",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Mathematics A",
+"code": "H240",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/mathematics-a-h230-h240-from-2017/",
+"papers": 48,
+"files": 95,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h230",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Mathematics A",
+"code": "H230",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/mathematics-a-h230-h240-from-2017/",
+"papers": 32,
+"files": 62,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h640",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Mathematics B (MEI)",
+"code": "H640",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/mathematics-b-mei-h630-h640-from-2017/",
+"papers": 57,
+"files": 105,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h630",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Mathematics B (MEI)",
+"code": "H630",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/mathematics-b-mei-h630-h640-from-2017/",
+"papers": 32,
+"files": 62,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-h409",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Media Studies",
+"code": "H409",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/media-studies-h009-h409-from-2023/",
+"papers": 8,
+"files": 21,
+"years": [
+2023,
+2025
+]
+},
+{
+"id": "ocr-h009",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Media Studies",
+"code": "H009",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/media-studies-h009-h409-from-2023/",
+"papers": 5,
+"files": 12,
+"years": [
+2023,
+2025
+]
+},
+{
+"id": "ocr-h543",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Music",
+"code": "H543",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/music-h143-h543-from-2016/",
+"papers": 10,
+"files": 20,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h143",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Music",
+"code": "H143",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/music-h143-h543-from-2016/",
+"papers": 8,
+"files": 13,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h555",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Physical Education",
+"code": "H555",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physical-education-h155-h555-from-2016/",
+"papers": 15,
+"files": 42,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h155",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Physical Education",
+"code": "H155",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physical-education-h155-h555-from-2016/",
+"papers": 12,
+"files": 31,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h556",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Physics A",
+"code": "H556",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physics-a-h156-h556-from-2015/",
+"papers": 27,
+"files": 78,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h156",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Physics A",
+"code": "H156",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physics-a-h156-h556-from-2015/",
+"papers": 20,
+"files": 55,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h557",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Physics B (Advancing Physics)",
+"code": "H557",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physics-b-advancing-physics-h157-h557-from-2015/",
+"papers": 32,
+"files": 80,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-h157",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Physics B (Advancing Physics)",
+"code": "H157",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/physics-b-advancing-physics-h157-h557-from-2015/",
+"papers": 21,
+"files": 46,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "ocr-h567",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Psychology",
+"code": "H567",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/psychology-h167-h567-from-2015/",
+"papers": 16,
+"files": 43,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h167",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Psychology",
+"code": "H167",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/psychology-h167-h567-from-2015/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h573",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Religious Studies",
+"code": "H573",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/religious-studies-h173-h573-from-2016/",
+"papers": 34,
+"files": 93,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h173",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Religious Studies",
+"code": "H173",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/religious-studies-h173-h573-from-2016/",
+"papers": 23,
+"files": 58,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-h580",
+"board": "ocr",
+"qualification": "A-level",
+"subject": "Sociology",
+"code": "H580",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/sociology-h180-h580-from-2015/",
+"papers": 15,
+"files": 42,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-h180",
+"board": "ocr",
+"qualification": "AS",
+"subject": "Sociology",
+"code": "H180",
+"level": "alevel",
+"url": "https://www.ocr.org.uk/qualifications/as-and-a-level/sociology-h180-h580-from-2015/",
+"papers": 8,
+"files": 22,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-j198",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Ancient History (9-1)",
+"code": "J198",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/ancient-history-j198-from-2017/",
+"papers": 14,
+"files": 38,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j247",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Biology A (9-1)",
+"code": "J247",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/gateway-science-suite-biology-a-j247-from-2016/",
+"papers": 32,
+"files": 90,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j257",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Biology B (9-1)",
+"code": "J257",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/twenty-first-century-science-suite-biology-b-j257-from-2016/",
+"papers": 32,
+"files": 88,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j204",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Business (9-1)",
+"code": "J204",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/business-j204-from-2017/",
+"papers": 10,
+"files": 28,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j248",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Chemistry A (9-1)",
+"code": "J248",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/gateway-science-suite-chemistry-a-j248-from-2016/",
+"papers": 34,
+"files": 92,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j258",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Chemistry B (9-1)",
+"code": "J258",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/twenty-first-century-science-suite-chemistry-b-j258-from-2016/",
+"papers": 32,
+"files": 88,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j270",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Citizenship Studies (9-1)",
+"code": "J270",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/citizenship-studies-j270-from-2016/",
+"papers": 15,
+"files": 42,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j199",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Classical Civilisation (9-1)",
+"code": "J199",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/classical-civilisation-j199-from-2017/",
+"papers": 50,
+"files": 95,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j292",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Classical Greek (9-1)",
+"code": "J292",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/classical-greek-j292-from-2016/",
+"papers": 35,
+"files": 90,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j250",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Combined Science A (9-1)",
+"code": "J250",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/gateway-science-suite-combined-science-a-j250-from-2016/",
+"papers": 36,
+"files": 214,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j260",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Combined Science B (9-1)",
+"code": "J260",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/twenty-first-century-science-suite-combined-science-b-j260-from-2016/",
+"papers": 64,
+"files": 194,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j277",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Computer Science (9-1)",
+"code": "J277",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/computer-science-j277-from-2020/",
+"papers": 8,
+"files": 24,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "ocr-j310",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Design and Technology (9-1)",
+"code": "J310",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/design-and-technology-j310-from-2017/",
+"papers": 10,
+"files": 20,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j316",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Drama (9-1)",
+"code": "J316",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/drama-j316-from-2016/",
+"papers": 5,
+"files": 18,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j205",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Economics (9-1)",
+"code": "J205",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/economics-j205-from-2017/",
+"papers": 11,
+"files": 29,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j351",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "English Language (9-1)",
+"code": "J351",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/english-language-j351-from-2015/",
+"papers": 32,
+"files": 65,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j352",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "English Literature (9-1)",
+"code": "J352",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/english-literature-j352-from-2015/",
+"papers": 15,
+"files": 39,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j309",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Food Preparation and Nutrition (9-1)",
+"code": "J309",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/food-preparation-and-nutrition-j309-from-2016/",
+"papers": 5,
+"files": 14,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j383",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Geography A (Geographical Themes) (9-1)",
+"code": "J383",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/geography-a-geographical-themes-j383-from-2016/",
+"papers": 31,
+"files": 58,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j384",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Geography B (Geography for Enquiring Minds) (9-1)",
+"code": "J384",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/geography-b-geography-for-enquiring-minds-j384-from-2016/",
+"papers": 30,
+"files": 60,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j410",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "History A (Explaining the Modern World) (9-1)",
+"code": "J410",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/history-a-explaining-the-modern-world-j410-from-2016/",
+"papers": 57,
+"files": 150,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j411",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "History B (Schools History Project) (9-1)",
+"code": "J411",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/history-b-schools-history-project-j411-from-2016/",
+"papers": 71,
+"files": 183,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j282",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Latin (9-1)",
+"code": "J282",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/latin-j282-from-2016/",
+"papers": 35,
+"files": 90,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j560",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Maths (9-1)",
+"code": "J560",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/mathematics-j560-from-2015/",
+"papers": 114,
+"files": 280,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "ocr-j200",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Media Studies (9-1)",
+"code": "J200",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/media-studies-j200-from-2023/",
+"papers": 9,
+"files": 22,
+"years": [
+2023,
+2025
+]
+},
+{
+"id": "ocr-j536",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Music (9-1)",
+"code": "J536",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/music-j536-from-2016/",
+"papers": 6,
+"files": 15,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j587",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Physical Education (9-1)",
+"code": "J587",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/physical-education-j587-from-2016/",
+"papers": 10,
+"files": 28,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j249",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Physics A (9-1)",
+"code": "J249",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/gateway-science-suite-physics-a-j249-from-2016/",
+"papers": 34,
+"files": 94,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j259",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Physics B (9-1)",
+"code": "J259",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/twenty-first-century-science-suite-physics-b-j259-from-2016/",
+"papers": 32,
+"files": 88,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "ocr-j203",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Psychology (9-1)",
+"code": "J203",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/psychology-j203-from-2017/",
+"papers": 11,
+"files": 29,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j625",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Religious Studies (9-1)",
+"code": "J625",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/religious-studies-j625-j125-from-2016/",
+"papers": 39,
+"files": 106,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "ocr-j125",
+"board": "ocr",
+"qualification": "GCSE",
+"subject": "Religious Studies (9-1)",
+"code": "J125",
+"level": "gcse",
+"url": "https://www.ocr.org.uk/qualifications/gcse/religious-studies-j625-j125-from-2016/",
+"papers": 5,
+"files": 14,
+"years": [
+2021,
+2025
+]
+},
+{
+"id": "wjec-1650",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Art and Design",
+"code": "1650",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/art-and-design-asa-level/",
+"papers": 6,
+"years": [
+2017,
+2025
+],
+"files": 6
+},
+{
+"id": "wjec-1400",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Biology",
+"code": "1400",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/biology-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 58
+},
+{
+"id": "wjec-2400",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Biology",
+"code": "2400",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/biology-asa-level/",
+"papers": 18,
+"years": [
+2016,
+2025
+],
+"files": 38
+},
+{
+"id": "wjec-1509",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Built Environment",
+"code": "1509",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/built-environment-asa-level/",
+"papers": 2,
+"years": [
+2024,
+2025
+],
+"files": 4
+},
+{
+"id": "wjec-2509",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Built Environment",
+"code": "2509",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/built-environment-asa-level/",
+"papers": 5,
+"years": [
+2023,
+2025
+],
+"files": 9
+},
+{
+"id": "wjec-1510",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Business",
+"code": "1510",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/business-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 28
+},
+{
+"id": "wjec-2510",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Business",
+"code": "2510",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/business-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-1410",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Chemistry",
+"code": "1410",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/chemistry-asa-level/",
+"papers": 13,
+"years": [
+2017,
+2025
+],
+"files": 66
+},
+{
+"id": "wjec-2410",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Chemistry",
+"code": "2410",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/chemistry-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 42
+},
+{
+"id": "wjec-1500",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Computer Science",
+"code": "1500",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/computer-science-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2500",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Computer Science",
+"code": "2500",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/computer-science-asa-level/",
+"papers": 15,
+"years": [
+2016,
+2025
+],
+"files": 34
+},
+{
+"id": "wjec-1601",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "1601",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 9,
+"years": [
+2019,
+2025
+],
+"files": 13
+},
+{
+"id": "wjec-1602",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "1602",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 3,
+"years": [
+2019,
+2025
+],
+"files": 8
+},
+{
+"id": "wjec-1603",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "1603",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 3,
+"years": [
+2019,
+2025
+],
+"files": 8
+},
+{
+"id": "wjec-2601",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "2601",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 12,
+"years": [
+2018,
+2025
+],
+"files": 18
+},
+{
+"id": "wjec-2602",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "2602",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 3,
+"years": [
+2018,
+2025
+],
+"files": 9
+},
+{
+"id": "wjec-2603",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Design and Technology",
+"code": "2603",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-asa-level/",
+"papers": 3,
+"years": [
+2018,
+2025
+],
+"files": 9
+},
+{
+"id": "wjec-1540",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Digital Technology",
+"code": "1540",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/digital-technology-asa-level/",
+"papers": 2,
+"years": [
+2024,
+2025
+],
+"files": 4
+},
+{
+"id": "wjec-2540",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Digital Technology",
+"code": "2540",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/digital-technology-asa-level/",
+"papers": 3,
+"years": [
+2023,
+2025
+],
+"files": 6
+},
+{
+"id": "wjec-1690",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Drama and Theatre",
+"code": "1690",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/drama-and-theatre-asa-level/",
+"papers": 10,
+"years": [
+2018,
+2025
+],
+"files": 16
+},
+{
+"id": "wjec-2690",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Drama and Theatre",
+"code": "2690",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/drama-and-theatre-asa-level/",
+"papers": 7,
+"years": [
+2017,
+2025
+],
+"files": 14
+},
+{
+"id": "wjec-1520",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Economics",
+"code": "1520",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/economics-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2520",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Economics",
+"code": "2520",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/economics-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 34
+},
+{
+"id": "wjec-a490",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Electronics",
+"code": "A490",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/electronics-asa-level/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 36
+},
+{
+"id": "wjec-b490",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Electronics",
+"code": "B490",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/electronics-asa-level/",
+"papers": 8,
+"years": [
+2018,
+2025
+],
+"files": 18
+},
+{
+"id": "wjec-1700",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "English Language",
+"code": "1700",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-language-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2700",
+"board": "wjec",
+"qualification": "AS",
+"subject": "English Language",
+"code": "2700",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-language-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-1710",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "English Language and Literature",
+"code": "1710",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-language-and-literature-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2710",
+"board": "wjec",
+"qualification": "AS",
+"subject": "English Language and Literature",
+"code": "2710",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-language-and-literature-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-1720",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "English Literature",
+"code": "1720",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-literature-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2720",
+"board": "wjec",
+"qualification": "AS",
+"subject": "English Literature",
+"code": "2720",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/english-literature-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-a670",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Film Studies",
+"code": "A670",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/film-studies-asa-level/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 28
+},
+{
+"id": "wjec-b670",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Film Studies",
+"code": "B670",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/film-studies-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 28
+},
+{
+"id": "wjec-1800",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "French",
+"code": "1800",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/french-asa-level/",
+"papers": 17,
+"years": [
+2018,
+2025
+],
+"files": 40
+},
+{
+"id": "wjec-2800",
+"board": "wjec",
+"qualification": "AS",
+"subject": "French",
+"code": "2800",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/french-asa-level/",
+"papers": 15,
+"years": [
+2017,
+2025
+],
+"files": 42
+},
+{
+"id": "wjec-1110",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Geography",
+"code": "1110",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/geography-asa-level/",
+"papers": 12,
+"years": [
+2018,
+2025
+],
+"files": 24
+},
+{
+"id": "wjec-2110",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Geography",
+"code": "2110",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/geography-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 29
+},
+{
+"id": "wjec-a480",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Geology",
+"code": "A480",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/geology-asa-level/",
+"papers": 20,
+"years": [
+2019,
+2025
+],
+"files": 67
+},
+{
+"id": "wjec-b480",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Geology",
+"code": "B480",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/geology-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 49
+},
+{
+"id": "wjec-1820",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "German",
+"code": "1820",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/german-asa-level/",
+"papers": 14,
+"years": [
+2018,
+2025
+],
+"files": 39
+},
+{
+"id": "wjec-2820",
+"board": "wjec",
+"qualification": "AS",
+"subject": "German",
+"code": "2820",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/german-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 39
+},
+{
+"id": "wjec-1160",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Government and Politics",
+"code": "1160",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/government-and-politics-asa-level/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 20
+},
+{
+"id": "wjec-2160",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Government and Politics",
+"code": "2160",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/government-and-politics-asa-level/",
+"papers": 12,
+"years": [
+2018,
+2025
+],
+"files": 24
+},
+{
+"id": "wjec-1100",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "History",
+"code": "1100",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/history-asa-level/",
+"papers": 126,
+"years": [
+2017,
+2025
+],
+"files": 228
+},
+{
+"id": "wjec-2100",
+"board": "wjec",
+"qualification": "AS",
+"subject": "History",
+"code": "2100",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/history-asa-level/",
+"papers": 127,
+"years": [
+2016,
+2025
+],
+"files": 246
+},
+{
+"id": "wjec-1150",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Law",
+"code": "1150",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/law-asa-level/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 20
+},
+{
+"id": "wjec-2150",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Law",
+"code": "2150",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/law-asa-level/",
+"papers": 12,
+"years": [
+2018,
+2025
+],
+"files": 26
+},
+{
+"id": "wjec-1680",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Media Studies",
+"code": "1680",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/media-studies-asa-level/",
+"papers": 5,
+"years": [
+2019,
+2025
+],
+"files": 11
+},
+{
+"id": "wjec-2680",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Media Studies",
+"code": "2680",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/media-studies-asa-level/",
+"papers": 6,
+"years": [
+2018,
+2025
+],
+"files": 15
+},
+{
+"id": "wjec-1660",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Music",
+"code": "1660",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/music-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 23
+},
+{
+"id": "wjec-2660",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Music",
+"code": "2660",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/music-asa-level/",
+"papers": 9,
+"years": [
+2017,
+2025
+],
+"files": 18
+},
+{
+"id": "wjec-1550",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Physical Education",
+"code": "1550",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/physical-education-asa-level/",
+"papers": 6,
+"years": [
+2018,
+2025
+],
+"files": 13
+},
+{
+"id": "wjec-2550",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Physical Education",
+"code": "2550",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/physical-education-asa-level/",
+"papers": 7,
+"years": [
+2017,
+2025
+],
+"files": 15
+},
+{
+"id": "wjec-1420",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Physics",
+"code": "1420",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/physics-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 68
+},
+{
+"id": "wjec-2420",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Physics",
+"code": "2420",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/physics-asa-level/",
+"papers": 19,
+"years": [
+2016,
+2025
+],
+"files": 42
+},
+{
+"id": "wjec-1290",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Psychology",
+"code": "1290",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/psychology-asa-level/",
+"papers": 14,
+"years": [
+2017,
+2025
+],
+"files": 28
+},
+{
+"id": "wjec-2290",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Psychology",
+"code": "2290",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/psychology-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-1120",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Religious Studies",
+"code": "1120",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/religious-studies-asa-level/",
+"papers": 54,
+"years": [
+2018,
+2025
+],
+"files": 108
+},
+{
+"id": "wjec-2120",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Religious Studies",
+"code": "2120",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/religious-studies-asa-level/",
+"papers": 49,
+"years": [
+2017,
+2025
+],
+"files": 103
+},
+{
+"id": "wjec-1200",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Sociology",
+"code": "1200",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/sociology-asa-level/",
+"papers": 16,
+"years": [
+2017,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-2200",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Sociology",
+"code": "2200",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/sociology-asa-level/",
+"papers": 16,
+"years": [
+2016,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-1810",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Spanish",
+"code": "1810",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/spanish-asa-level/",
+"papers": 16,
+"years": [
+2018,
+2025
+],
+"files": 37
+},
+{
+"id": "wjec-2810",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Spanish",
+"code": "2810",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/spanish-asa-level/",
+"papers": 18,
+"years": [
+2017,
+2025
+],
+"files": 47
+},
+{
+"id": "wjec-1020",
+"board": "wjec",
+"qualification": "A-level",
+"subject": "Welsh Second Language",
+"code": "1020",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/welsh-second-language-asa-level/",
+"papers": 12,
+"years": [
+2018,
+2025
+],
+"files": 22
+},
+{
+"id": "wjec-2020",
+"board": "wjec",
+"qualification": "AS",
+"subject": "Welsh Second Language",
+"code": "2020",
+"level": "alevel",
+"url": "https://www.wjec.co.uk/qualifications/welsh-second-language-asa-level/",
+"papers": 7,
+"years": [
+2017,
+2025
+],
+"files": 12
+},
+{
+"id": "wjec-3509",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "",
+"code": "3509",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/gcse-built-environment/",
+"papers": 4,
+"years": [
+2022,
+2025
+],
+"files": 8
+},
+{
+"id": "wjec-3445",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Applied Science",
+"code": "3445",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/applied-science-gcse-double-award-legacy/",
+"papers": 40,
+"years": [
+2017,
+2025
+],
+"files": 128
+},
+{
+"id": "wjec-3440",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Applied Science",
+"code": "3440",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/applied-science-gcse-single-award-legacy/",
+"papers": 32,
+"years": [
+2017,
+2025
+],
+"files": 93
+},
+{
+"id": "wjec-3650",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Art and Design",
+"code": "3650",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/art-and-design-gcse-legacy/",
+"papers": 5,
+"years": [
+2018,
+2025
+],
+"files": 5
+},
+{
+"id": "wjec-3400",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Biology",
+"code": "3400",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/biology-gcse/",
+"papers": 30,
+"years": [
+2017,
+2025
+],
+"files": 61
+},
+{
+"id": "wjec-3510",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Business",
+"code": "3510",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/business-gcse-legacy/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 25
+},
+{
+"id": "wjec-3410",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Chemistry",
+"code": "3410",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/chemistry-gcse/",
+"papers": 29,
+"years": [
+2017,
+2025
+],
+"files": 56
+},
+{
+"id": "wjec-3500",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Computer Science",
+"code": "3500",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/computer-science-gcse-legacy/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 24
+},
+{
+"id": "wjec-3601",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "3601",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-gcse-legacy/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 19
+},
+{
+"id": "wjec-3602",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "3602",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-gcse-legacy/",
+"papers": 3,
+"years": [
+2019,
+2025
+],
+"files": 8
+},
+{
+"id": "wjec-3603",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "3603",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/design-and-technology-gcse-legacy/",
+"papers": 3,
+"years": [
+2019,
+2025
+],
+"files": 8
+},
+{
+"id": "wjec-3540",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Digital Technology",
+"code": "3540",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/digital-technology-gcse-legacy/",
+"papers": 3,
+"years": [
+2023,
+2025
+],
+"files": 6
+},
+{
+"id": "wjec-3690",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Drama",
+"code": "3690",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/drama-gcse-legacy/",
+"papers": 10,
+"years": [
+2018,
+2025
+],
+"files": 16
+},
+{
+"id": "wjec-c490",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Electronics",
+"code": "C490",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/electronics-gcse/",
+"papers": 16,
+"years": [
+2019,
+2025
+],
+"files": 32
+},
+{
+"id": "wjec-3700",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "English Language",
+"code": "3700",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/english-language-gcse-legacy/",
+"papers": 50,
+"years": [
+2017,
+2025
+],
+"files": 99
+},
+{
+"id": "wjec-3720",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "English Literature",
+"code": "3720",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/english-literature-gcse-legacy/",
+"papers": 61,
+"years": [
+2017,
+2025
+],
+"files": 119
+},
+{
+"id": "wjec-c670",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Film Studies",
+"code": "C670",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/film-studies-gcse/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 28
+},
+{
+"id": "wjec-3560",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Food and Nutrition",
+"code": "3560",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/food-and-nutrition-gcse-legacy/",
+"papers": 13,
+"years": [
+2018,
+2025
+],
+"files": 19
+},
+{
+"id": "wjec-3800",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "French",
+"code": "3800",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/french-gcse-legacy/",
+"papers": 48,
+"years": [
+2018,
+2025
+],
+"files": 163
+},
+{
+"id": "wjec-3110",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Geography",
+"code": "3110",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/geography-gcse-legacy/",
+"papers": 16,
+"years": [
+2018,
+2025
+],
+"files": 39
+},
+{
+"id": "wjec-c480",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Geology",
+"code": "C480",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/geology-gcse/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 31
+},
+{
+"id": "wjec-3820",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "German",
+"code": "3820",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/german-gcse-legacy/",
+"papers": 54,
+"years": [
+2018,
+2025
+],
+"files": 152
+},
+{
+"id": "wjec-3100",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "History",
+"code": "3100",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/history-gcse-legacy/",
+"papers": 65,
+"years": [
+2018,
+2025
+],
+"files": 128
+},
+{
+"id": "wjec-c990",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Latin",
+"code": "C990",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/latin-gcse/",
+"papers": 30,
+"years": [
+2018,
+2025
+],
+"files": 72
+},
+{
+"id": "wjec-3300",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Mathematics",
+"code": "3300",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/mathematics-gcse-legacy/",
+"papers": 161,
+"years": [
+2016,
+2025
+],
+"files": 281
+},
+{
+"id": "wjec-3310",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Mathematics",
+"code": "3310",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/mathematics-gcse-legacy/",
+"papers": 40,
+"years": [
+2016,
+2025
+],
+"files": 112
+},
+{
+"id": "wjec-3680",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Media Studies",
+"code": "3680",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/media-studies-gcse/",
+"papers": 10,
+"years": [
+2019,
+2025
+],
+"files": 22
+},
+{
+"id": "wjec-3660",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Music",
+"code": "3660",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/music-gcse-legacy/",
+"papers": 11,
+"years": [
+2018,
+2025
+],
+"files": 19
+},
+{
+"id": "wjec-3550",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Physical Education",
+"code": "3550",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/physical-education-gcse-legacy/",
+"papers": 6,
+"years": [
+2018,
+2025
+],
+"files": 14
+},
+{
+"id": "wjec-3555",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Physical Education (Short Course)",
+"code": "3555",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/physical-education-short-course-gcse-legacy/",
+"papers": 6,
+"years": [
+2018,
+2025
+],
+"files": 12
+},
+{
+"id": "wjec-3420",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Physics",
+"code": "3420",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/physics-gcse/",
+"papers": 29,
+"years": [
+2017,
+2025
+],
+"files": 65
+},
+{
+"id": "wjec-3120",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "3120",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/religious-studies-gcse-legacy/",
+"papers": 56,
+"years": [
+2018,
+2025
+],
+"files": 111
+},
+{
+"id": "wjec-3121",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "3121",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/religious-studies-gcse-legacy/",
+"papers": 6,
+"years": [
+2019,
+2025
+],
+"files": 11
+},
+{
+"id": "wjec-3430",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Science Double",
+"code": "3430",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/science-double-gcse-award-legacy/",
+"papers": 90,
+"years": [
+2017,
+2025
+],
+"files": 164
+},
+{
+"id": "wjec-c200",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Sociology",
+"code": "C200",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/sociology-gcse/",
+"papers": 14,
+"years": [
+2019,
+2025
+],
+"files": 30
+},
+{
+"id": "wjec-3810",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Spanish",
+"code": "3810",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/spanish-gcse-legacy/",
+"papers": 48,
+"years": [
+2018,
+2025
+],
+"files": 161
+},
+{
+"id": "wjec-3020",
+"board": "wjec",
+"qualification": "GCSE",
+"subject": "Welsh Second Language",
+"code": "3020",
+"level": "gcse",
+"url": "https://www.wjec.co.uk/qualifications/welsh-second-language-gcse-legacy/",
+"papers": 46,
+"years": [
+2019,
+2025
+],
+"files": 72
 }
 ]
 }

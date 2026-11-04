@@ -17,6 +17,7 @@ def lines(pdf):
     """pdftotext -bbox-layout → [{page, x, y, width, height, text}] in points, origin top-left."""
     xml = subprocess.run(["pdftotext", "-bbox-layout", pdf, "-"], capture_output=True, check=True).stdout
     xml = re.sub(rb"<!DOCTYPE[^>]*>", b"", xml)
+    xml = re.sub(rb"[\x00-\x08\x0b\x0c\x0e-\x1f]", b"", xml)
     root = ET.fromstring(xml)
     ns = {"x": "http://www.w3.org/1999/xhtml"}
     out = []
@@ -35,9 +36,10 @@ def main(folder, spec_ids):
     os.makedirs(folder, exist_ok=True)
     index = json.load(open(os.path.join(ROOT, "index.json")))
     boards = {b["id"]: b for b in index["boards"]}
-    for sid in spec_ids:
+    for arg in spec_ids:
+        sid, _, paper = arg.partition("@")  # "cie-9702@4": the newest paper whose number starts with 4
         spec = json.load(open(os.path.join(ROOT, "specs", f"{sid}.json")))
-        qp = next(d for d in spec["docs"] if d["type"] == "qp" and d.get("year"))
+        qp = next(d for d in spec["docs"] if d["type"] == "qp" and d.get("year") and (d.get("paper") or "").startswith(paper))
         pdf = os.path.join(folder, f"{qp['id']}.pdf")
         if not os.path.exists(pdf):
             req = urllib.request.Request(qp["url"], headers={"User-Agent": "Trove split check"})
