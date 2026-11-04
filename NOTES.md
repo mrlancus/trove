@@ -79,6 +79,13 @@ decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_A
   - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
     1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
+    3. **Since 2026-11-04 a push runs only the build (~9 min once it has a Mac).** The app tests (Mac unit +
+       iPhone/iPad UI, 30–45 min) run nightly at 02:17 UTC, or by hand: Actions → Apple apps → Run workflow →
+       tick "Also run the app tests". Their logs: `ci-logs-tests` branch.
+  - **The user's Windows 11 PC** can't build the apps (no Xcode), but can run TroveCore's tests in WSL2:
+    Swift 6.3.1 is ~1 GB to download, 3.3 GB unpacked; the repo ~0.2 GB; a build folder ~0.4 GB. To keep it on
+    D: `wsl --install --no-distribution`, restart, then `wsl --install -d Ubuntu-24.04 --location D:\WSL\Ubuntu`
+    (or move an existing one: `wsl --manage Ubuntu-24.04 --move D:\WSL\Ubuntu`).
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 

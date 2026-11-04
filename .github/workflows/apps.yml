@@ -13,7 +13,17 @@ on:
   push:
     branches: [main]
     paths: ["App/**", "Packages/**", "extensions/browser/**", "scripts/ci-build-apps.sh", ".github/workflows/apps.yml"]
+  # Run it by hand (Actions → Apple apps → Run workflow): the build, plus the UI tests if you tick them.
   workflow_dispatch:
+    inputs:
+      ui_tests:
+        description: "Also run the app tests (Mac unit + iPhone/iPad UI, 30–45 minutes)"
+        type: boolean
+        default: false
+  # The app tests run once a night instead of on every push: they take 30–45 minutes and held one of the
+  # free Macs, so the 9-minute build queued behind them or was cancelled (2026-11-04).
+  schedule:
+    - cron: "17 2 * * *"
 
 permissions:
   contents: write
@@ -26,6 +36,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -116,6 +127,7 @@ jobs:
   # The apps' tests (docs/PERF_AUDIT.md step 0), apart from the build so a failing test never holds up
   # the release. Logs, perf.json and the UI screenshots go to the ci-logs-tests branch.
   app-tests:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.ui_tests)
     runs-on: macos-15
     timeout-minutes: 120
     steps:
