@@ -10,14 +10,14 @@ the device. A board whose site fails keeps its previous files, so a bad week nev
 """
 import json, os, sys, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import aqa, ocr, wjec, cie  # noqa: E402
+import aqa, ocr, wjec, cie, pearson  # noqa: E402
 from common import dedupe, sort_docs  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "catalogue")
-FINDERS = {"aqa": aqa.find, "ocr": ocr.find, "eduqas": wjec.find_eduqas, "wjec": wjec.find_wjec, "cie": cie.find}
+FINDERS = {"aqa": aqa.find, "ocr": ocr.find, "eduqas": wjec.find_eduqas, "wjec": wjec.find_wjec, "cie": cie.find,
+           "pearson": pearson.find}
 # Boards that can't be read automatically, and why (shown in the app so it can say so).
 NOT_LISTED = {
-    "pearson": "Pearson Edexcel's past-paper search needs its own search service key; not read automatically yet.",
     "ccea": "CCEA's website blocks automated requests.",
 }
 

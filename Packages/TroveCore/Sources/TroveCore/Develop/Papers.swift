@@ -146,9 +146,15 @@ public struct Catalogue: Codable, Sendable, Equatable {
     public func label(_ doc: Doc, in spec: Spec, question key: String) -> String {
         let board = board(spec.board)?.name ?? spec.board.uppercased()
         let tier = doc.tier.map { String($0.prefix(1)) } ?? ""
-        let paper = doc.paper.map { "\(spec.code)/\($0)\(tier)" } ?? spec.code
+        // A unit code that names the paper on its own (Pearson's International A level "WMA11") stands alone.
+        let paper = doc.paper.map { Self.isUnitCode($0) ? $0 : "\(spec.code)/\($0)\(tier)" } ?? spec.code
         let when = [doc.series, doc.year.map(String.init)].compactMap { $0 }.joined(separator: " ")
         return "\(board) \(paper)\(when.isEmpty ? "" : " " + when) Q\(key)"
+    }
+
+    static func isUnitCode(_ s: String) -> Bool {
+        let c = Array(s.unicodeScalars)
+        return c.count == 5 && c.prefix(3).allSatisfy { ("A"..."Z").contains($0) } && c.suffix(2).allSatisfy { ("0"..."9").contains($0) }
     }
 }
 

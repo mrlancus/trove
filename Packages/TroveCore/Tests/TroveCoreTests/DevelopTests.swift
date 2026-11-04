@@ -230,7 +230,7 @@ import Crypto
     @Test func theCatalogueIsLinksOnBoardSitesOnly() throws {
         let cat = try Catalogue.decode(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("index.json")))
         let hosts = ["aqa": ["aqa.org.uk", "cdn.sanity.io"], "ocr": ["ocr.org.uk"], "eduqas": ["wjec.co.uk", "eduqas.co.uk"],
-                     "wjec": ["wjec.co.uk"], "cie": ["cambridgeinternational.org"]]
+                     "wjec": ["wjec.co.uk"], "cie": ["cambridgeinternational.org"], "pearson": ["pearson.com"]]
         #expect(Set(cat.specs.map(\.board)).isSubset(of: Set(hosts.keys)))
         #expect(cat.specs.allSatisfy { $0.docs.isEmpty }, "the index carries no documents")
         #expect(Set(cat.specs.map(\.id)).count == cat.specs.count)

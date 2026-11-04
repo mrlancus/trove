@@ -16,7 +16,7 @@ GCSE, IGCSE and AS/A-level (and International AS & A Level), every subject each 
 | OCR | each qualification's Assessment page on ocr.org.uk | the series OCR publishes; the newest are only on Teach Cambridge for teachers |
 | Eduqas, WJEC | each qualification page's Past papers tab (`/umbraco/surface/TabSurface/GetpastpapersTab`) | papers and mark schemes on pastpapers.download.wjec.co.uk |
 | Cambridge International | each IGCSE and International AS & A Level syllabus's past-papers page | one recent series and the specimen papers; the rest are on School Support Hub for schools |
-| Pearson Edexcel (incl. International GCSE) | not yet | its finder searches through a third-party search service with its own key; reading that from a script was stopped in the build session as using a key that isn't ours. Asking Pearson, or another public listing, is open |
+| Pearson Edexcel | the hosted search behind Pearson's past-paper finder (the search-only key the finder page gives every visitor, read from the page on each run) | GCSE, International GCSE, AS/A level and International A level papers, mark schemes and examiner reports that are public on qualifications.pearson.com; the newest series need a Pearson login (`/content/dam/secure/`) and are left out, as are specs with nothing since 2019 |
 | CCEA | not yet | its website blocks automated requests; not worked around |
 
 Modified (large-print, braille) papers, sound files, transcripts and confidential instructions are left out.
