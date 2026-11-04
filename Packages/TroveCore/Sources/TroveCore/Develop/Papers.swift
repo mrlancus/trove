@@ -173,6 +173,9 @@ public enum PaperSplitter {
         public var regions: [PageRegion]
         public var marks: Int?
         public var text: String
+        public init(key: String, parent: String?, regions: [PageRegion], marks: Int?, text: String) {
+            self.key = key; self.parent = parent; self.regions = regions; self.marks = marks; self.text = text
+        }
     }
 
     /// A question number counts only this close to the page's left margin (points).
