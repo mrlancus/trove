@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 scripts/catalogue/build.py pearson*)",
+      "Bash(python3 scripts/catalogue/pearson.py*)"
+    ]
+  }
+}
