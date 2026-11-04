@@ -47,6 +47,11 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
     stems; uploads without readable text become one question per page.
 19. **The apps fetch the catalogue from this repo** (`raw.githubusercontent.com/mrlancus/trove/main/catalogue/`) at
     most once a day, with the bundled copy as the fallback, so new series arrive without an app update.
+20. **The tutor speaks only when you tap** (you, 2026-11-04).
+21. **One sketch per attempt**, in Sketches → Practice → course → topic; Try again makes a new one, so
+    attempts can be compared. Undo: none needed; delete the folder to clear them.
+22. **The question is an unlocked picture** on the page (you can lock it); on a whiteboard it's 520 points wide.
+23. **The app opens on Home** (was Recent; UI_AUDIT U2 said Recent on iPhone). Undo: `AppModel.selection`'s default.
 
 ## Status
 | Part | State | Tested |
@@ -92,7 +97,32 @@ decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_A
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: every exam board, courses, uploads from anywhere (2026-11-04)
+## Latest round: practice in real sketches, a tutor, locked pictures, Home (2026-11-04, `docs/prompts/practice-space-home.md`)
+Your words are saved in that prompt first. Also this round: **Sketch 2 was merged** (it had been left on
+`claude/trove-research-improvements-dwcw63`; see "Round before: Sketch 2" below), plus one merge fix
+(two `DiagnosticsSection`s: the Sketch 2 one is now Settings → Sketch frames).
+- **Lock pictures** (every sketch): lasso-tap a picture, text box or tape → the lock button. Locked: the loop
+  and Select All leave it out (so they pick the writing on it), it can't be moved, resized or deleted, and you
+  write over it. Lasso-tap it (where there's no ink) to unlock. Synced (`locked`, PROTOCOL §10); the website
+  respects it. `LockTests`, TEST-NB-011.
+- **Practise in a real sketch**: each question opens a page or a whiteboard (⋯ to switch; remembered), with the
+  question as a picture across the top (move it, or lock it). Kept in Sketches → Practice → course → topic and
+  linked from the attempt (`work`, PROTOCOL §13), so you can go back. A bar on the sketch: the question, Tutor,
+  Mark it (back to marking). `PracticeWork`, `PracticeWorkTests`, TEST-DEV-034.
+- **Tutor**: Ask in a practice sketch is the tutor: it gets the question and the mark scheme before your
+  handwriting, with Check my working, A hint, Where did I go wrong?, Explain the idea, Next step. Only when you
+  tap (your choice). Hints and Mark with AI on the question screen read your handwriting too. TEST-DEV-035.
+- **Your work**: Develop shows every attempt by course and topic, folded until opened, with average rings,
+  trend, "try 1 of 2", open the working, Try again. Topic = the question's skill, else the paper without its
+  series (every year of 7408/2 together). TEST-DEV-036.
+- **Look**: Develop has an Up next card in Trove's colours, three numbers (this week, days in a row, recent
+  average), and a redesigned practice screen (progress segments, question card, Work it out, result ring).
+- **Home**: the app opens on Home (sidebar top; the iPhone's first tab): greeting, New note / New sketch /
+  Practise / Import, three numbers, Develop's next step, Jump back in, Pinned. TEST-HOME-001.
+- **Not done / next**: topics from the course's spec (on the device) instead of the paper; thumbnails of the
+  working in Your work; the rest of the app on `Theme` (Library, Settings); a Lock button on the website.
+
+## Round before: every exam board, courses, uploads from anywhere (2026-11-04)
 User: "how can we add all the other exam boards" → A-level, GCSE and IGCSE, all subjects, Cambridge too; uploads
 should sync per trove; "this is to test, not what I'm using".
 - **Catalogue** (docs/CATALOGUE.md): `scripts/catalogue/` finders for AQA (its finder's search service), OCR
