@@ -269,3 +269,20 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   stays on A only; the button says what it will do and shows Splitting… and a result on the course screen.
 - **Failure looks like**: B downloads from the board again, duplicate items, the button doing nothing visible.
 - **Automated by**: `DevelopTests/aDownloadedBoardPaperSyncsLikeAnUpload`; app: manual.
+
+### TEST-DEV-032: A goal practises from your own papers; change it by chatting; upload from the goal
+- **Feature**: a goal → Edit goal → Your own papers; Change it by chatting with your AI
+- **Priority**: high
+- **Coverage**: auto-tested (`GoalUploadsTests`: matching, picking, turning off, the chat's uploads and edits); app: implemented, never run
+- **Platforms**: core; all apps (the chat needs your AI)
+- **Preconditions**: uploads named e.g. "CCEA GCSE Physics Unit 1, June 2023", "AQA A-level Physics Paper 1, June 2023", a worksheet.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter GoalUploadsTests`.
+  2. (You) New goal "CCEA GCSE Physics" (no course). Edit it: the CCEA physics upload is on with "Matches this goal".
+  3. Turn on the worksheet; turn off the match; Save. Start: questions come only from the worksheet.
+  4. In the goal, Upload papers… → From Files…; name it; Save: it's on in the goal.
+  5. Change it by chatting: "add my chemistry paper and move it to 12 June"; Use these changes; check the form; Save.
+  6. A goal with an AQA course: the AQA upload matches, the CCEA one doesn't.
+- **Expected**: matches by board, level and subject (not CCEA GCSE for an AQA A-level goal); your choices are kept and sync; a goal with no course and nothing chosen practises from everything; uploading from the goal adds the paper to it; the chat changes only what you asked and nothing is saved until you Save.
+- **Failure looks like**: uploads never offered, a match you turned off coming back, the chat overwriting the rest of the goal.
+- **Automated by**: `GoalUploadsTests`; app: manual.

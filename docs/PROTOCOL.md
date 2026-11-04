@@ -990,7 +990,10 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   device).
 
 - **`campaign`** `campaign.<uuid>`: `name`, `deadline` (ms), `skills` ([concept ids]; empty = every skill),
-  `minutesPerDay`. The plan isn't stored: `CampaignPlanner.plan` works it out from the attempts each time.
+  `minutesPerDay`, `courses` ([catalogue spec ids]), `papers`, `uploads` ([item ids] you picked),
+  `excludedUploads` ([item ids] that matched by name and you turned off; `GoalUploads.effective`), `target`,
+  `summary`, `todayDate`, `todayMinutes`, `active`. Practice comes from `cat:<course>-…` and `item:<upload>`
+  problems; with neither, from anything. The plan isn't stored: `CampaignPlanner.plan` works it out from the attempts each time.
 - **`course`** `course.<catalogue spec id>` (slugged): `spec` (catalogue spec id, e.g. `aqa-7408`), `name`
   ("AQA A-level Physics (7408)", for readers without the catalogue), `active` (bool; removing a course sets
   it false, so the removal syncs). Problems from a course's papers have `sourceKey` `cat:<doc id>`.

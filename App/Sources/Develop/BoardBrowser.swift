@@ -148,10 +148,12 @@ private struct WebViewHost: NSViewRepresentable {
 struct BoardBrowser: View {
     @Bindable var develop: DevelopModel
     let site: BoardSite
+    /// The ids of papers added here (a goal takes them).
+    var added: (([String]) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var browser: BoardBrowserState?
     @State private var naming: [DevelopModel.PendingUpload] = []
-    @State private var added = 0
+    @State private var count = 0
 
     var body: some View {
         Group {
@@ -166,7 +168,7 @@ struct BoardBrowser: View {
             browser = made
         }
         .sheet(isPresented: Binding(get: { !naming.isEmpty }, set: { if !$0 { naming = [] } })) {
-            NameUploadsSheet(develop: develop, uploads: $naming, onSave: { added += $0 })
+            NameUploadsSheet(develop: develop, uploads: $naming, onSaved: { ids in count += ids.count; added?(ids) })
         }
         #if os(macOS)
         .frame(minWidth: 760, minHeight: 640)
@@ -211,8 +213,8 @@ struct BoardBrowser: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if added > 0 {
-                    Text("\(added) paper\(added == 1 ? "" : "s") added to Your own papers")
+                if count > 0 {
+                    Text("\(count) paper\(count == 1 ? "" : "s") added to Your own papers")
                         .font(.footnote.weight(.medium))
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(.thinMaterial, in: Capsule())

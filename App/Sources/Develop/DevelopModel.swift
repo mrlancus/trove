@@ -396,12 +396,15 @@ final class DevelopModel {
         #endif
     }
 
-    /// Saves each named file and splits it.
-    func save(_ uploads: [PendingUpload]) async {
+    /// Saves each named file and splits it; the new items' ids.
+    @discardableResult
+    func save(_ uploads: [PendingUpload]) async -> [String] {
+        var ids: [String] = []
         for u in uploads {
             let name = u.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            await upload(u.data, name: u.fileName, mime: u.mime, title: name.isEmpty ? u.suggested : name)
+            if let id = await upload(u.data, name: u.fileName, mime: u.mime, title: name.isEmpty ? u.suggested : name) { ids.append(id) }
         }
+        return ids
     }
 
     /// Renames one of your uploads (its questions keep the name they were split with until it's split again).
@@ -414,20 +417,22 @@ final class DevelopModel {
 
     /// Saves a file you picked (a PDF, a photo, a scan) as an item in your trove, so it syncs to all your
     /// devices, then splits it into questions. Pictures become a one-page PDF first.
-    func upload(_ data: Data, name: String, mime: String, title: String? = nil) async {
-        guard let library = app?.library else { return }
+    @discardableResult
+    func upload(_ data: Data, name: String, mime: String, title: String? = nil) async -> String? {
+        guard let library = app?.library else { return nil }
         var pdf = data, fileName = name
         if !mime.contains("pdf") {
-            guard let made = Self.pdf(fromImage: data) else { message = "Couldn't read \(name)."; return }
+            guard let made = Self.pdf(fromImage: data) else { message = "Couldn't read \(name)."; return nil }
             pdf = made
             fileName = (name as NSString).deletingPathExtension + ".pdf"
         }
         guard let id = try? await library.addFile(pdf, name: fileName, mime: "application/pdf", kind: .pdf, source: .app,
                                                   title: title ?? (name as NSString).deletingPathExtension, folder: ["Practice papers"]) else {
-            message = "Couldn't save \(name)."; return
+            message = "Couldn't save \(name)."; return nil
         }
         await app?.reload()
         if let item = await library.item(id) { await split(item: item) }
+        return id
     }
 
     nonisolated static func pdf(fromImage data: Data) -> Data? {
@@ -534,7 +539,22 @@ final class DevelopModel {
     var practisable: [Problem] { problems.filter { docId($0).map(cached.contains) ?? (itemId($0) != nil) } }
 
     /// Your PDF items that can be split into questions.
-    var myPDFs: [Item] { (app?.items ?? []).filter { $0.attachments.contains { $0.mime == "application/pdf" } } }
+    var myPDFs: [Item] { (app?.items ?? []).filter { $0.attachments.contains { $0.mime == "application/pdf" } && !$0.id.hasPrefix("paper.") } }
+
+    /// Your own papers (PDFs in your trove, not the board papers kept for syncing), as goals see them.
+    var uploadList: [(id: String, title: String)] { myPDFs.map { ($0.id, $0.displayTitle) } }
+
+    /// What a goal is about, for matching uploads: its courses, else its name and notes.
+    func goalTargets(courses: [String], name: String, summary: String?) -> [GoalUploads.Target] {
+        let info = courses.compactMap { id in catalogue?.spec(id).map { (board: boardName($0.board), subject: $0.subject, qualification: $0.qualification) } }
+        return GoalUploads.targets(courses: info, goalText: [name, summary ?? ""].joined(separator: "\n"), subjects: subjectNames)
+    }
+
+    /// The uploads a goal practises from: the ones you picked and the ones whose name matches it.
+    func goalUploads(_ goal: CampaignPlanner.Goal) -> [String] {
+        GoalUploads.effective(picked: goal.uploads, excluded: goal.excludedUploads, uploads: uploadList,
+                              targets: goalTargets(courses: goal.courses, name: goal.name, summary: goal.summary), subjects: subjectNames)
+    }
 
     /// Your uploaded papers that are split already (by item id).
     var practisedItems: Set<String> { Set(problems.compactMap(itemId)) }
@@ -629,6 +649,10 @@ final class DevelopModel {
             if let s = catalogue?.spec(spec) { await addCourse(s) }
         }
         await reload()
+        // Its uploads are practised from their questions: split any that aren't yet.
+        for id in goalUploads(goal) where !practisedItems.contains(id) {
+            if let item = myPDFs.first(where: { $0.id == id }) { await split(item: item) }
+        }
     }
 
     func removeGoal(_ goal: CampaignPlanner.Goal) async {
@@ -647,7 +671,7 @@ final class DevelopModel {
     func startGoal(_ goal: CampaignPlanner.Goal) {
         let plan = plan(goal)
         var filter = Practice.Filter()
-        filter.sourcePrefixes = goal.sourcePrefixes
+        filter.sourcePrefixes = goal.sourcePrefixes(uploads: goalUploads(goal))
         if let today = plan.days.first, !today.skills.isEmpty, !goal.courses.isEmpty || !goal.skills.isEmpty { filter.skills = Set(today.skills) }
         let count = max(1, plan.days.first?.questions ?? 3)
         let seed = UInt64.random(in: 1...UInt64.max)
@@ -658,7 +682,10 @@ final class DevelopModel {
             picked = Practice.pick(count, from: practisable, attempts: attempts, skills: skills, filter: filter, now: now, seed: seed)
         }
         session = picked.isEmpty ? nil : Session(problems: picked, seed: seed)
-        if picked.isEmpty { message = goal.courses.isEmpty ? "Add a course to this goal, or download some papers first." : "Download some of this course's papers first." }
+        if picked.isEmpty {
+            message = goal.courses.isEmpty && goalUploads(goal).isEmpty ? "Add a course or your own papers to this goal, or download some papers first."
+                : "Nothing to practise yet: download some of its course's papers, or add your own papers to the goal."
+        }
     }
 
     /// Courses the AI may put in a goal: yours, then catalogue specs matching words of the conversation.
@@ -685,12 +712,22 @@ final class DevelopModel {
         return out
     }
 
-    func clarifyGoal(_ messages: [GoalChat.Message]) async throws -> GoalChat.Reply {
+    func clarifyGoal(_ messages: [GoalChat.Message], current: GoalChat.Proposal? = nil) async throws -> GoalChat.Reply {
         guard let ai = app?.ownAI else { throw DevelopError("Set up your AI in Settings → AI, or fill the goal in yourself.") }
+        var candidates = goalCandidates(messages)
+        for spec in current?.courses ?? [] where !candidates.contains(where: { $0.spec == spec }) {  // the goal's own courses stay choosable
+            if let s = catalogue?.spec(spec) { candidates.append(.init(spec: spec, name: "\(boardName(s.board)) \(s.name)", yours: false)) }
+        }
+        return try await ai.clarifyGoal(messages, candidates: candidates, today: Self.day(Date()),
+                                        uploads: uploadList.map { GoalChat.Upload(id: $0.id, title: $0.title) }, current: current)
+    }
+
+    /// "2027-06-14", as the goal chat writes dates.
+    static func day(_ date: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_GB")
-        return try await ai.clarifyGoal(messages, candidates: goalCandidates(messages), today: f.string(from: Date()))
+        return f.string(from: date)
     }
 
     func plan(_ goal: CampaignPlanner.Goal) -> CampaignPlanner.Plan {

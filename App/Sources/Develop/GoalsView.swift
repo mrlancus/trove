@@ -105,7 +105,7 @@ struct GoalCard: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Today: \(first.questions) question\(first.questions == 1 ? "" : "s")").font(.subheadline.weight(.semibold))
-                        Text(first.skills.isEmpty ? (goal.courses.isEmpty ? "From anything you've downloaded." : "From this goal's papers.")
+                        Text(first.skills.isEmpty ? (goal.courses.isEmpty && develop.goalUploads(goal).isEmpty ? "From anything you've downloaded." : "From this goal's papers.")
                              : first.skills.map(develop.name).joined(separator: ", ") + (first.diagnostic ? " (a first check)" : ""))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
@@ -153,6 +153,9 @@ struct ReadinessRing: View {
 /// Making a goal by talking it through: your AI asks until it's sure, then shows the goal to confirm.
 struct GoalChatSheet: View {
     let develop: DevelopModel
+    /// Editing a goal: what it is now; the chat changes it and `apply` gets the result (nothing is saved here).
+    var editing: GoalChat.Proposal? = nil
+    var apply: ((GoalChat.Proposal) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var messages: [GoalChat.Message] = []
     @State private var options: [String] = []
@@ -168,7 +171,9 @@ struct GoalChatSheet: View {
                 ScrollViewReader { reader in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
-                            bubble(.ai, "What are you preparing for? Say it however you like: \"physics A-level next June\", \"BPhO round 1\", \"my chemistry mocks\".")
+                            bubble(.ai, editing == nil
+                                   ? "What are you preparing for? Say it however you like: \"physics A-level next June\", \"BPhO round 1\", \"my chemistry mocks\"."
+                                   : "What would you like to change? For example: \"move it to 12 June\", \"add my uploaded chemistry papers\", \"only Paper 2\", \"aim for an A*\".")
                             ForEach(Array(messages.enumerated()), id: \.offset) { _, m in bubble(m.role, m.text) }
                             if thinking { ProgressView().padding(.leading, 12) }
                             if let error { Text(error).font(.caption).foregroundStyle(.red) }
@@ -182,13 +187,15 @@ struct GoalChatSheet: View {
                 }
                 if proposal == nil { composer }
             }
-            .navigationTitle("New goal")
+            .navigationTitle(editing == nil ? "New goal" : "Change this goal")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) { Button("Fill in myself") { form = true } }
+                if editing == nil {
+                    ToolbarItem(placement: .primaryAction) { Button("Fill in myself") { form = true } }
+                }
             }
             .sheet(isPresented: $form) { GoalForm(develop: develop, goal: nil) { dismiss() } }
         }
@@ -246,13 +253,22 @@ struct GoalChatSheet: View {
                       systemImage: "graduationcap").font(.subheadline)
             }
             if !p.papers.isEmpty { Label(p.papers.joined(separator: ", "), systemImage: "doc.text").font(.subheadline) }
+            if !p.uploads.isEmpty {
+                let names = develop.uploadList.filter { p.uploads.contains($0.id) }.map(\.title)
+                Label(names.joined(separator: ", "), systemImage: "doc.richtext").font(.subheadline).lineLimit(3)
+            }
             if let t = p.target { Label("Aiming for \(t)", systemImage: "target").font(.subheadline) }
             if !p.summary.isEmpty { Text(p.summary).font(.caption).foregroundStyle(.secondary) }
             HStack {
-                Button("Add goal") {
+                Button(editing == nil ? "Add goal" : "Use these changes") {
+                    if let apply {
+                        apply(p)
+                        dismiss()
+                        return
+                    }
                     Task {
                         await develop.saveGoal(.init(id: "campaign.\(UUID().uuidString)", name: p.name, deadline: GoalChat.deadline(p.date) ?? 0,
-                                                     courses: p.courses, papers: p.papers, target: p.target, summary: p.summary))
+                                                     courses: p.courses, papers: p.papers, uploads: p.uploads, target: p.target, summary: p.summary))
                         dismiss()
                     }
                 }
@@ -276,7 +292,7 @@ struct GoalChatSheet: View {
         Task {
             defer { thinking = false }
             do {
-                switch try await develop.clarifyGoal(messages) {
+                switch try await develop.clarifyGoal(messages, current: editing) {
                 case .ask(let q, let opts):
                     messages.append(.init(.ai, q))
                     options = opts
@@ -303,10 +319,20 @@ struct GoalForm: View {
     @State private var papers = ""
     @State private var target = ""
     @State private var summary = ""
+    @State private var picked: Set<String> = []
+    @State private var excluded: Set<String> = []
+    @State private var chatting = false
 
     var body: some View {
         NavigationStack {
             Form {
+                if develop.hasAI {
+                    Section {
+                        Button { chatting = true } label: {
+                            Label(goal == nil ? "Talk it through with your AI" : "Change it by chatting with your AI", systemImage: "bubble.left.and.bubble.right")
+                        }
+                    } footer: { Text("Say what to change (the date, papers, your own papers, the target); you check it here before saving.") }
+                }
                 Section {
                     TextField("Goal (e.g. AQA A-level Physics)", text: $name)
                     DatePicker("Date", selection: $date, in: Date()..., displayedComponents: .date)
@@ -320,7 +346,14 @@ struct GoalForm: View {
                             Text(c.name)
                         }
                     }
+                    // A course the chat added that isn't one of yours yet (saving adds it).
+                    ForEach(courses.filter { id in !develop.courses.contains { $0.spec == id } }.sorted(), id: \.self) { id in
+                        Toggle(isOn: Binding(get: { courses.contains(id) }, set: { on in if on { courses.insert(id) } else { courses.remove(id) } })) {
+                            Text(develop.catalogue?.spec(id).map { "\(develop.boardName($0.board)) \($0.name)" } ?? id)
+                        }
+                    }
                 } header: { Text("Courses") } footer: { Text("Practice for this goal comes from these courses' papers.") }
+                uploadsSection
                 Section {
                     TextField("Papers (e.g. Paper 1, Paper 2)", text: $papers)
                     TextField("Target (e.g. A*, grade 7)", text: $target)
@@ -341,9 +374,10 @@ struct GoalForm: View {
                 }
             }
             .onAppear(perform: load)
+            .sheet(isPresented: $chatting) { GoalChatSheet(develop: develop, editing: current, apply: use) }
         }
         #if os(macOS)
-        .frame(minWidth: 440, minHeight: 480)
+        .frame(minWidth: 460, minHeight: 600)
         #endif
     }
 
@@ -355,13 +389,97 @@ struct GoalForm: View {
         papers = goal.papers.joined(separator: ", ")
         target = goal.target ?? ""
         summary = goal.summary ?? ""
+        picked = Set(goal.uploads)
+        excluded = Set(goal.excludedUploads)
+    }
+
+    // MARK: Your own papers
+
+    private var automatic: Set<String> {
+        GoalUploads.automatic(uploads: develop.uploadList, targets: develop.goalTargets(courses: Array(courses), name: name, summary: summary),
+                              subjects: develop.subjectNames)
+    }
+
+    private func isOn(_ id: String) -> Bool { picked.contains(id) || automatic.contains(id) && !excluded.contains(id) }
+
+    private func turn(_ id: String, _ on: Bool) {
+        if on {
+            excluded.remove(id)
+            if !automatic.contains(id) { picked.insert(id) }
+        } else {
+            picked.remove(id)
+            if automatic.contains(id) { excluded.insert(id) }
+        }
+    }
+
+    /// Your uploads: the ones in this goal or matching it first, then the rest of your practised ones;
+    /// any other PDF in your trove from the menu; and Upload right here.
+    private var uploadsSection: some View {
+        let auto = automatic
+        let all = develop.myPDFs
+        let shown = all.filter { isOn($0.id) || auto.contains($0.id) || develop.practisedItems.contains($0.id) }
+            .sorted { (isOn($0.id) ? 0 : 1, $0.displayTitle) < (isOn($1.id) ? 0 : 1, $1.displayTitle) }
+        let others = all.filter { item in !shown.contains { $0.id == item.id } }
+        return Section {
+            if shown.isEmpty {
+                Text("None yet. Upload a paper here, or from a board's website, and it's added to this goal.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(shown) { item in
+                Toggle(isOn: Binding(get: { isOn(item.id) }, set: { turn(item.id, $0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.displayTitle).lineLimit(2)
+                        if auto.contains(item.id) && !excluded.contains(item.id) {
+                            Text("Matches this goal").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if !others.isEmpty {
+                Menu {
+                    ForEach(others.prefix(60)) { item in Button(item.displayTitle) { turn(item.id, true) } }
+                } label: { Label("Add a PDF from your trove…", systemImage: "doc.text.magnifyingglass") }
+            }
+            UploadMenu(develop: develop, added: { ids in for id in ids { turn(id, true) } }) {
+                Label("Upload papers…", systemImage: "square.and.arrow.up")
+            }
+        } header: { Text("Your own papers") } footer: {
+            Text("Uploads whose name matches this goal's course (or, without one, its name) join it automatically; turn off any you don't want.")
+        }
+    }
+
+    // MARK: Chat
+
+    /// The goal as it is in the form, for the chat to change.
+    private var current: GoalChat.Proposal {
+        let uploads = develop.uploadList.map(\.id).filter(isOn)
+        return GoalChat.Proposal(name: name, date: DevelopModel.day(date), courses: Array(courses).sorted(),
+                                 papers: papers.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
+                                 target: target.isEmpty ? nil : target, summary: summary, uploads: uploads)
+    }
+
+    /// What the chat settled on, into the form (you still Save).
+    private func use(_ p: GoalChat.Proposal) {
+        if !p.name.isEmpty { name = p.name }
+        if let d = GoalChat.deadline(p.date) { date = Date(timeIntervalSince1970: d / 1000) }
+        courses = Set(p.courses)
+        papers = p.papers.joined(separator: ", ")
+        target = p.target ?? ""
+        summary = p.summary
+        // Exactly the uploads it chose: picked, and any other automatic match turned off.
+        picked = Set(p.uploads)
+        excluded = automatic.subtracting(p.uploads)
     }
 
     private func save() async {
         var g = goal ?? .init(id: "campaign.\(UUID().uuidString)", name: "", deadline: 0)
         g.name = name.trimmingCharacters(in: .whitespaces)
         g.deadline = date.timeIntervalSince1970 * 1000
-        g.courses = develop.courses.map(\.spec).filter(courses.contains)
+        let mine = develop.courses.map(\.spec)
+        g.courses = mine.filter(courses.contains) + courses.subtracting(mine).sorted()
+        // Only what's needed: picks that aren't automatic, and automatic matches turned off.
+        let auto = automatic
+        g.uploads = picked.subtracting(auto).sorted()
+        g.excludedUploads = excluded.intersection(auto).sorted()
         g.papers = papers.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         g.target = target.trimmingCharacters(in: .whitespaces).isEmpty ? nil : target.trimmingCharacters(in: .whitespaces)
         g.summary = summary.trimmingCharacters(in: .whitespaces).isEmpty ? nil : summary

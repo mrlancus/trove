@@ -361,36 +361,16 @@ struct PaperRow: View {
 /// every device) and split into questions.
 struct UploadsCard: View {
     @Bindable var develop: DevelopModel
-    @Environment(\.pickFiles) private var pickFiles
-    @State private var photos: [PhotosPickerItem] = []
-    @State private var photosOpen = false
-    @State private var naming: [DevelopModel.PendingUpload] = []
-    @State private var browsing: BoardSite?
     @State private var renaming: Item?
     @State private var newName = ""
-    #if os(iOS)
-    @State private var scanning = false
-    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Your own papers").font(.headline)
                 Spacer()
-                Menu {
-                    Button("From Files…", systemImage: "folder") { pickFiles(FilePick(types: [.pdf, .image], multiple: true) { urls in Task { await upload(urls) } }) }
-                    Button("From Photos…", systemImage: "photo.on.rectangle") { photosOpen = true }
-                    #if os(iOS)
-                    Button("Scan with the camera", systemImage: "doc.viewfinder") { scanning = true }
-                    #endif
-                    Section("From a board's website") {
-                        ForEach(BoardSite.all) { site in
-                            Button(site.menuTitle, systemImage: "safari") { browsing = site }
-                        }
-                    }
-                } label: { Label("Upload", systemImage: "square.and.arrow.up") }
-                .buttonStyle(.bordered).controlSize(.small)
-                .disabled(develop.splitting)
+                UploadMenu(develop: develop) { Label("Upload", systemImage: "square.and.arrow.up") }
+                    .buttonStyle(.bordered).controlSize(.small)
             }
             Text("Competition papers, worksheets, papers from other boards, a page of a textbook. Saved in your trove, so they're on all your devices.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -418,6 +398,56 @@ struct UploadsCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(cornerRadius: Theme.Radius.large)
+        .alert("Rename paper", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Cancel", role: .cancel) { renaming = nil }
+            Button("Rename") {
+                if let item = renaming { Task { await develop.rename(item, to: newName) } }
+                renaming = nil
+            }
+        }
+    }
+}
+
+/// Upload your own papers: from Files, Photos, the camera, or a board's website; each is named (suggested
+/// from the paper) before it's saved. `added` gets the new items' ids, e.g. so a goal can take them.
+struct UploadMenu<Content: View>: View {
+    let develop: DevelopModel
+    var sites = true
+    var added: (([String]) -> Void)? = nil
+    let label: () -> Content
+    @Environment(\.pickFiles) private var pickFiles
+    @State private var photos: [PhotosPickerItem] = []
+    @State private var photosOpen = false
+    @State private var naming: [DevelopModel.PendingUpload] = []
+    @State private var browsing: BoardSite?
+    #if os(iOS)
+    @State private var scanning = false
+    #endif
+
+    init(develop: DevelopModel, sites: Bool = true, added: (([String]) -> Void)? = nil, @ViewBuilder label: @escaping () -> Content) {
+        self.develop = develop
+        self.sites = sites
+        self.added = added
+        self.label = label
+    }
+
+    var body: some View {
+        Menu {
+            Button("From Files…", systemImage: "folder") { pickFiles(FilePick(types: [.pdf, .image], multiple: true) { urls in Task { await upload(urls) } }) }
+            Button("From Photos…", systemImage: "photo.on.rectangle") { photosOpen = true }
+            #if os(iOS)
+            Button("Scan with the camera", systemImage: "doc.viewfinder") { scanning = true }
+            #endif
+            if sites {
+                Section("From a board's website") {
+                    ForEach(BoardSite.all) { site in
+                        Button(site.menuTitle, systemImage: "safari") { browsing = site }
+                    }
+                }
+            }
+        } label: { label() }
+        .disabled(develop.splitting)
         .photosPicker(isPresented: $photosOpen, selection: $photos, maxSelectionCount: 20, matching: .images)
         .onChange(of: photos) { _, picked in
             guard !picked.isEmpty else { return }
@@ -433,17 +463,9 @@ struct UploadsCard: View {
             }
         }
         .sheet(isPresented: Binding(get: { !naming.isEmpty }, set: { if !$0 { naming = [] } })) {
-            NameUploadsSheet(develop: develop, uploads: $naming)
+            NameUploadsSheet(develop: develop, uploads: $naming, onSaved: added)
         }
-        .sheet(item: $browsing) { site in BoardBrowser(develop: develop, site: site) }
-        .alert("Rename paper", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $newName)
-            Button("Cancel", role: .cancel) { renaming = nil }
-            Button("Rename") {
-                if let item = renaming { Task { await develop.rename(item, to: newName) } }
-                renaming = nil
-            }
-        }
+        .sheet(item: $browsing) { site in BoardBrowser(develop: develop, site: site, added: added) }
         #if os(iOS)
         .fullScreenCover(isPresented: $scanning) {
             DocumentScanner { pdf in
@@ -476,7 +498,8 @@ struct UploadsCard: View {
 struct NameUploadsSheet: View {
     @Bindable var develop: DevelopModel
     @Binding var uploads: [DevelopModel.PendingUpload]
-    var onSave: ((Int) -> Void)? = nil
+    /// The saved items' ids, once they're saved.
+    var onSaved: (([String]) -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -515,8 +538,10 @@ struct NameUploadsSheet: View {
                     Button("Save") {
                         let chosen = uploads
                         uploads = []
-                        onSave?(chosen.count)
-                        Task { await develop.save(chosen) }
+                        Task {
+                            let ids = await develop.save(chosen)
+                            onSaved?(ids)
+                        }
                     }
                     .disabled(uploads.isEmpty)
                 }

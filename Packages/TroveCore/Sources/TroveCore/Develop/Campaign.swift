@@ -19,6 +19,10 @@ public enum CampaignPlanner {
         public var courses: [String]
         /// Which papers or components ("Paper 1", "Component 2"), when only some.
         public var papers: [String]
+        /// Your own papers (upload item ids) you picked for it.
+        public var uploads: [String]
+        /// Uploads that matched it automatically and you turned off.
+        public var excludedUploads: [String]
         /// "A*", "grade 7", "a gold certificate".
         public var target: String?
         /// What the goal is, in a sentence (written when your AI clarified it, or by you).
@@ -30,24 +34,27 @@ public enum CampaignPlanner {
         public var active: Bool
 
         public init(id: String, name: String, deadline: Double, skills: [String] = [], minutesPerDay: Int = 30, courses: [String] = [],
-                    papers: [String] = [], target: String? = nil, summary: String? = nil, todayDate: Double? = nil, todayMinutes: Int? = nil,
-                    active: Bool = true) {
+                    papers: [String] = [], uploads: [String] = [], excludedUploads: [String] = [], target: String? = nil, summary: String? = nil,
+                    todayDate: Double? = nil, todayMinutes: Int? = nil, active: Bool = true) {
             self.id = id; self.name = name; self.deadline = deadline; self.skills = skills; self.minutesPerDay = minutesPerDay
-            self.courses = courses; self.papers = papers; self.target = target; self.summary = summary
+            self.courses = courses; self.papers = papers; self.uploads = uploads; self.excludedUploads = excludedUploads
+            self.target = target; self.summary = summary
             self.todayDate = todayDate; self.todayMinutes = todayMinutes; self.active = active
         }
         public init?(_ r: Record) {
             guard let deadline = r.fields["deadline"]?.number else { return nil }
             self.init(id: r.id, name: r.fields["name"]?.string ?? "", deadline: deadline, skills: r.fields["skills"]?.stringArray ?? [],
                       minutesPerDay: Int(r.fields["minutesPerDay"]?.number ?? 30), courses: r.fields["courses"]?.stringArray ?? [],
-                      papers: r.fields["papers"]?.stringArray ?? [], target: r.fields["target"]?.string, summary: r.fields["summary"]?.string,
+                      papers: r.fields["papers"]?.stringArray ?? [], uploads: r.fields["uploads"]?.stringArray ?? [],
+                      excludedUploads: r.fields["excludedUploads"]?.stringArray ?? [], target: r.fields["target"]?.string, summary: r.fields["summary"]?.string,
                       todayDate: r.fields["todayDate"]?.number, todayMinutes: r.fields["todayMinutes"]?.number.map { Int($0) },
                       active: r.fields["active"]?.bool ?? true)
         }
         public var fields: [String: JSONValue] {
             var f: [String: JSONValue] = ["name": .string(name), "deadline": .number(deadline), "skills": JSONValue(skills),
                                           "minutesPerDay": .number(Double(minutesPerDay)), "courses": JSONValue(courses),
-                                          "papers": JSONValue(papers), "active": .bool(active)]
+                                          "papers": JSONValue(papers), "uploads": JSONValue(uploads),
+                                          "excludedUploads": JSONValue(excludedUploads), "active": .bool(active)]
             f["target"] = target.map { .string($0) } ?? .null
             f["summary"] = summary.map { .string($0) } ?? .null
             f["todayDate"] = todayDate.map { .number($0) } ?? .null
@@ -70,6 +77,9 @@ public enum CampaignPlanner {
 
         /// Problems from the goal's courses: their catalogue papers' source keys start with these.
         public var sourcePrefixes: Set<String> { Set(courses.map { "cat:\($0)-" }) }
+
+        /// Its courses' papers and its uploads (`GoalUploads.effective`). Empty: anything you have.
+        public func sourcePrefixes(uploads: [String]) -> Set<String> { sourcePrefixes.union(uploads.map { "item:\($0)" }) }
 
         /// Days left, counting today.
         public func daysLeft(now: Double) -> Int {

@@ -135,6 +135,13 @@ should sync per trove; "this is to test, not what I'm using".
   screen. Now it says what it'll do ("Split 3 papers into questions"), shows "Splitting…", reports on the course
   screen, and reads "Every paper is split" when there's nothing left. Board-paper sync: `Library+BoardPapers.swift`
   (test `aDownloadedBoardPaperSyncsLikeAnUpload`, TEST-DEV-031), `DevelopModel.syncPapers()`.
+- **Goals take your own papers** (2026-11-04, your ask): Edit goal → Your own papers. Uploads whose name matches
+  the goal (its course's board, level and subject; without a course, its name, e.g. "CCEA GCSE Physics" or "BPhO
+  round 1") join automatically ("Matches this goal"); tick others, untick matches (`uploads` / `excludedUploads`
+  on the campaign record, `GoalUploads`). Upload papers… and Add a PDF from your trove… are right there. "Change it
+  by chatting with your AI" opens the goal chat on the current goal (it may change anything, uploads too; you
+  still Save). A goal with no course and no uploads still practises from everything. Tests: `GoalUploadsTests`,
+  TEST-DEV-032.
 - **Not done / next**: CCEA papers come through the browser only; Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 
