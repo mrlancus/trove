@@ -84,7 +84,8 @@ decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_A
        iPhone/iPad UI, 30–45 min) starts when each build succeeds, so it runs for every build without delaying
        one; a newer build cancels older tests. It can be cancelled any time (the user may ask, e.g. after testing
        on their PC) and run by hand from Actions. Logs: `ci-logs-tests` branch.
-  - **The user's Windows 11 PC** can't build the apps (no Xcode), but can run TroveCore's tests in WSL2:
+  - **The user's Windows 11 PC: not used** (decided 2026-11-04: the sessions and GitHub already run TroveCore's
+    tests, and the PC can't build the apps). Only if the user starts editing code themselves, WSL2 could run them:
     Swift 6.3.1 is ~1 GB to download, 3.3 GB unpacked; the repo ~0.2 GB; a build folder ~0.4 GB. To keep it on
     D: `wsl --install --no-distribution`, restart, then `wsl --install -d Ubuntu-24.04 --location D:\WSL\Ubuntu`
     (or move an existing one: `wsl --manage Ubuntu-24.04 --move D:\WSL\Ubuntu`).
