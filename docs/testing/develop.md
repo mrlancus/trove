@@ -252,3 +252,20 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Expected**: CCEA's site loads and works like a browser (links that open new windows open in place, Back works); Add to Trove is enabled only on a PDF; the paper is named "CCEA …" and saved as one of your papers, split into questions, on every device; "N papers added" shows in the browser; a page that isn't a PDF says so; a Pearson login is remembered on that device.
 - **Failure looks like**: CCEA's "Access Denied" page (tell Claude: then it's blocking people too), Add to Trove never enabled on a PDF, a saved file that isn't the paper.
 - **Automated by**: manual.
+
+### TEST-DEV-031: A board paper downloaded on one device is on the others
+- **Feature**: a course → Download every paper / a paper; "Sync downloaded papers to my other devices"
+- **Priority**: high
+- **Coverage**: auto-tested (`saveBoardPaper` across two devices); app: implemented, never run
+- **Platforms**: core; all apps
+- **Preconditions**: two devices on the same trove, both with the same course.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter aDownloadedBoardPaperSyncsLikeAnUpload`.
+  2. (You) On device A, open the course and download two papers. Wait for sync.
+  3. On device B, open Develop, then the course.
+  4. Turn the switch off on A, download another paper; check B again.
+- **Expected**: on B the two papers show as on this device and ready to practise without downloading (they come
+  from your trove, also over mobile data); they appear once each in Practice papers → the board; the third paper
+  stays on A only; the button says what it will do and shows Splitting… and a result on the course screen.
+- **Failure looks like**: B downloads from the board again, duplicate items, the button doing nothing visible.
+- **Automated by**: `DevelopTests/aDownloadedBoardPaperSyncsLikeAnUpload`; app: manual.

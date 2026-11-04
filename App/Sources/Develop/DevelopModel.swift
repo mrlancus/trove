@@ -31,6 +31,15 @@ final class DevelopModel {
     private(set) var goals: [CampaignPlanner.Goal] = []
     var downloading: (done: Int, total: Int)?
     var splitting = false
+    /// Board papers you download are kept in your trove, so your other devices get them without downloading
+    /// again (you, 2026-11-04). Off: they stay on the device that downloaded them.
+    var syncBoardPapers = UserDefaults.standard.object(forKey: "develop.syncBoardPapers") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(syncBoardPapers, forKey: "develop.syncBoardPapers")
+            if syncBoardPapers { Task { await syncPapers() } }
+        }
+    }
+    @ObservationIgnored private var syncingPapers = false
     var message: String?
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
     @ObservationIgnored private var questionText: [String: [String: String]] = [:]
@@ -75,6 +84,42 @@ final class DevelopModel {
         await seedConcepts()
         await reload()
         await readUploadTexts()
+        await syncPapers()
+    }
+
+    /// Board papers in your trove ↔ this device's paper folder: papers another device downloaded are copied
+    /// here (once their file has synced), and ones downloaded here before syncing was on are saved to the trove.
+    func syncPapers() async {
+        guard let library = app?.library, !syncingPapers else { return }
+        syncingPapers = true
+        defer { syncingPapers = false }
+        var arrived = 0
+        let saved = await library.boardPaperDocIds()
+        for spec in courseSpecs {
+            for doc in spec.docs where doc.type != .spec && (saved.contains(doc.id) != cached.contains(doc.id)) {
+                if cached.contains(doc.id) {
+                    if syncBoardPapers, let data = try? Data(contentsOf: Self.file(doc.id)) {
+                        _ = try? await library.saveBoardPaper(data, docId: doc.id, title: paperName(doc, in: spec), folder: ["Practice papers", boardName(spec.board)])
+                    }
+                } else if let data = await library.boardPaperData(doc.id) {
+                    try? data.write(to: Self.file(doc.id), options: .atomic)
+                    arrived += 1
+                }
+            }
+        }
+        guard arrived > 0 else { return }
+        refreshCache()
+        for spec in courseSpecs { await split(spec) }  // reads their text and mark schemes on this device
+    }
+
+    /// "AQA A-level Physics Paper 1, June 2023 (mark scheme)", for a board paper saved in your trove.
+    func paperName(_ doc: Catalogue.Doc, in spec: Catalogue.Spec) -> String {
+        var paper = doc.title ?? doc.paper.map { "Paper \($0)" } ?? ""
+        if let p = doc.paper, !paper.isEmpty, !paper.localizedCaseInsensitiveContains(p) { paper = "Paper \(p): \(paper)" }
+        let when = [doc.series, doc.year.map(String.init)].compactMap { $0 }.joined(separator: " ")
+        let kind = ["ms": " (mark scheme)", "er": " (examiner report)", "data": " (insert)"][doc.type.rawValue] ?? ""
+        let head = ["\(boardName(spec.board)) \(spec.qualification) \(spec.subject)", paper, doc.tier].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+        return head + (when.isEmpty ? "" : ", " + when) + kind
     }
 
     func refreshCache() {
@@ -202,10 +247,18 @@ final class DevelopModel {
             for (i, doc) in missing.enumerated() {
                 if Task.isCancelled { break }
                 guard let url = URL(string: doc.url) else { failed += 1; continue }
+                // Already in your trove from another device: copy it from there instead of the board's site.
+                if let data = await app?.library?.boardPaperData(doc.id), (try? data.write(to: Self.file(doc.id), options: .atomic)) != nil {
+                    downloading = (i + 1, missing.count)
+                    continue
+                }
                 do {
                     let (tmp, response) = try await session.download(from: url)
                     let ok = (response as? HTTPURLResponse)?.statusCode == 200
                     if ok { try? FileManager.default.removeItem(at: Self.file(doc.id)); try FileManager.default.moveItem(at: tmp, to: Self.file(doc.id)) } else { failed += 1 }
+                    if ok, syncBoardPapers, let library = app?.library, let data = try? Data(contentsOf: Self.file(doc.id)) {
+                        _ = try? await library.saveBoardPaper(data, docId: doc.id, title: paperName(doc, in: spec), folder: ["Practice papers", boardName(spec.board)])
+                    }
                 } catch {
                     failed += 1
                 }
@@ -265,8 +318,13 @@ final class DevelopModel {
                 savePaperCache(entries, name: "\(ms.id)-scheme")
             }
         }
-        message = made == 0 && unsplit == 0 ? nil
-            : "\(made) questions ready to practise" + (unsplit > 0 ? "; \(unsplit) paper\(unsplit == 1 ? "" : "s") had no questions Trove could find (essay or listening papers, or scans)." : ".")
+        if made == 0 && unsplit == 0 {
+            let ready = problems.filter { $0.sourceKey.hasPrefix("cat:\(spec.id)-") }.count
+            message = ready > 0 ? "Already split: \(ready) questions from \(spec.subject) are ready to practise." : "Download a paper first, then it's split into questions."
+        } else {
+            message = (made > 0 ? "\(made) new questions ready to practise" : "No new questions")
+                + (unsplit > 0 ? "; \(unsplit) paper\(unsplit == 1 ? "" : "s") had no questions Trove could find (essay or listening papers, or scans)." : ".")
+        }
         await reload()
     }
 

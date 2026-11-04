@@ -242,14 +242,30 @@ struct CourseView: View {
                             Text("\(d.done) of \(d.total)").font(.caption).monospacedDigit()
                             Button("Cancel") { develop.cancelDownload() }
                         }
-                    } else {
-                        Button { develop.download(spec) } label: {
-                            Label(have == total ? "Split into questions" : "Download every paper", systemImage: have == total ? "scissors" : "arrow.down.circle")
+                    } else if develop.splitting {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Splitting papers into questions…").font(.callout)
                         }
-                        .disabled(develop.splitting)
+                    } else {
+                        let unsplit = spec.questionPapers.filter { qp in develop.cached.contains(qp.id) && !develop.problems.contains { $0.sourceKey == "cat:\(qp.id)" } }.count
+                        Button { develop.download(spec) } label: {
+                            if have < total {
+                                Label("Download every paper", systemImage: "arrow.down.circle")
+                            } else if unsplit > 0 {
+                                Label("Split \(unsplit) paper\(unsplit == 1 ? "" : "s") into questions", systemImage: "scissors")
+                            } else {
+                                Label("Every paper is split", systemImage: "checkmark.circle")
+                            }
+                        }
+                        .disabled(have == total && unsplit == 0)
                     }
-                    Text("Downloads come from \(develop.boardName(spec.board))'s own website, on Wi-Fi only, and stay on this device.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if let message = develop.message {
+                        Text(message).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Text(about(spec)).font(.caption).foregroundStyle(.secondary)
+                    Toggle("Sync downloaded papers to my other devices", isOn: $develop.syncBoardPapers)
+                        .font(.callout)
                 }
                 if tiers(spec).count > 1 {
                     Picker("Tier", selection: $tier) {
@@ -280,6 +296,13 @@ struct CourseView: View {
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
+    }
+
+    private func about(_ spec: Catalogue.Spec) -> String {
+        let board = develop.boardName(spec.board)
+        let keep = develop.syncBoardPapers ? "and kept in your trove, so your other devices have them too." : "and stay on this device."
+        return "Splitting cuts each paper into its questions and parts, with their marks, so you can practise one question at a time "
+            + "and check it against the mark scheme. Papers download from \(board)'s own website, on Wi-Fi only, " + keep
     }
 
     private func ready(_ spec: Catalogue.Spec) -> Int {

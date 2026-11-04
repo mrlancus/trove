@@ -1,10 +1,12 @@
 # The paper catalogue
 
-Develop's past papers come from the exam boards' own websites. Trove keeps **links and facts only**
-(board, qualification, subject, spec code, paper, tier, series, year, URL); it never hosts, copies or
-syncs a board's paper. Each device downloads the papers you choose straight from the board's site,
-on Wi-Fi only, into a local cache. Your **own uploads** (anything else: competition papers, other
-boards, worksheets) are different: they're items in your trove and sync to every device.
+Develop's past papers come from the exam boards' own websites. The catalogue is **links and facts only**
+(board, qualification, subject, spec code, paper, tier, series, year, URL); Trove never hosts a board's
+paper. A device downloads the papers you choose straight from the board's site, on Wi-Fi only. Since
+2026-11-04 (your call: "can't it technically count as an upload") a paper you download is also kept in
+your own trove, like an upload, so your other devices get it from there (PROTOCOL.md: `paper.<doc id>`
+items); the switch "Sync downloaded papers to my other devices" on a course turns that off. Your **own
+uploads** (anything else: competition papers, other boards, worksheets) are items in your trove too.
 
 ## Coverage
 

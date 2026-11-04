@@ -28,7 +28,7 @@ struct DevelopView: View {
             await develop.start(model)
             Diagnostics.shared.ready("Develop")
         }
-        .onChange(of: model.dataVersion) { _, _ in Task { await develop.reload() } }
+        .onChange(of: model.dataVersion) { _, _ in Task { await develop.reload(); await develop.syncPapers() } }
     }
 
     private var home: some View {

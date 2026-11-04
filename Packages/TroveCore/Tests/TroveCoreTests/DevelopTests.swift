@@ -92,6 +92,29 @@ import Crypto
         #expect(await la.concepts().count == 1)
     }
 
+    // TEST-DEV-031: a board paper downloaded on one device reaches the other through the trove, once.
+    @Test func aDownloadedBoardPaperSyncsLikeAnUpload() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("develop-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let a = SyncEngine(device: "A", keys: nil, encrypted: false, transports: [FolderTransport(root: root)])
+        let b = SyncEngine(device: "B", keys: nil, encrypted: false, transports: [FolderTransport(root: root)])
+        let la = Library(engine: a), lb = Library(engine: b)
+        let pdf = Data("%PDF-1.4 written for this test".utf8)
+        let id = try await la.saveBoardPaper(pdf, docId: "aqa-7408-1-2023-06-qp", title: "AQA A-level Physics Paper 1, June 2023",
+                                             folder: ["Practice papers", "AQA"])
+        #expect(id == "paper.aqa-7408-1-2023-06-qp")
+        // B downloaded the same paper before syncing: still one item, one file.
+        _ = try await lb.saveBoardPaper(pdf, docId: "aqa-7408-1-2023-06-qp", title: "AQA A-level Physics Paper 1, June 2023", folder: ["Practice papers", "AQA"])
+        _ = await a.sync(); _ = await b.sync(); _ = await a.sync()
+        #expect(await lb.boardPaperData("aqa-7408-1-2023-06-qp") == pdf)
+        #expect(await la.items().filter { $0.id.hasPrefix("paper.") }.count == 1)
+        let item = try #require(await lb.boardPaper("aqa-7408-1-2023-06-qp"))
+        #expect(item.displayTitle == "AQA A-level Physics Paper 1, June 2023")
+        #expect(!(await lb.enrichmentQueue(below: .cloud)).contains { $0.id == item.id }, "board papers aren't sent for enrichment")
+        #expect(await lb.boardPaperData("ocr-h556-1-2023-06-qp") == nil)
+        #expect(await lb.boardPaperDocIds() == ["aqa-7408-1-2023-06-qp"])
+    }
+
     // TEST-DEV-005 (TEST-GRAPH-011)
     @Test func aRejectedLinkStaysRejected() async {
         let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))

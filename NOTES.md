@@ -17,9 +17,11 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
    blocked" to cloud machines whatever the request says (tested 2026-11-04), so it's not worked around. You
    chose the in-app browser instead: Upload → From a board's website → CCEA (on your own connection).
    BPhO/UKMT and anything else: your uploads.
-3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
-   regions, marks, your courses and attempts. **Your own uploads are items in your trove and sync** (you: "it should
-   be per trove, not per device"). Undo for board papers: sync them as attachments.
+3. **Board papers you download sync too** (changed by you, 2026-11-04: "can't it technically count as an
+   upload"): each is kept as a `paper.<doc id>` item in your trove (Practice papers → the board, not sent for
+   enrichment), so another device copies it instead of downloading. A switch on each course ("Sync downloaded
+   papers to my other devices", on by default) turns it off. Your own uploads were already items and sync.
+   Cost: iCloud Drive space, roughly 1–3 MB a file. Undo: turn the switch off.
 4. **Develop data syncs to the website, no website UI yet** (JS port of the formats and mastery only).
 5. **Marking on the device by default** (tick the mark scheme, numeric check); **AI marking only when you tap it**,
    sending a crop of a handwritten answer. Handwriting reading stays on the device (MASTER_PLAN decision 9 kept).
@@ -117,6 +119,12 @@ should sync per trove; "this is to test, not what I'm using".
   a PDF downloads it through the web view (so a Pearson login works) and names it the same way. Tests:
   TEST-DEV-029/030. Check on a device: does CCEA's site open from home (if it shows "Access Denied", it blocks
   people too)? CCEA's start page is its home page (its past-papers URL couldn't be checked from here).
+- **Split into questions, explained** (2026-11-04): the course button downloads every paper, then splits each into
+  its questions and parts with marks (so you practise one question at a time with its mark scheme). It looked
+  dead because once everything was split it did nothing visible, and its message only showed on the Develop
+  screen. Now it says what it'll do ("Split 3 papers into questions"), shows "Splitting…", reports on the course
+  screen, and reads "Every paper is split" when there's nothing left. Board-paper sync: `Library+BoardPapers.swift`
+  (test `aDownloadedBoardPaperSyncsLikeAnUpload`, TEST-DEV-031), `DevelopModel.syncPapers()`.
 - **Not done / next**: CCEA papers come through the browser only; Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 

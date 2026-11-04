@@ -1001,5 +1001,9 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   rewritten, readers follow `mergedInto` (stopping on a loop). Concepts whose names have the same set
   of stemmed content words merge automatically, the smallest id winning on every device.
 - **Catalogue papers** (`catalogue/index.json` + `catalogue/specs/<id>.json`, facts and links only; docs/CATALOGUE.md) are downloaded from the board's
-  own site into a local cache on each device and are never synced as attachments; a `problem` from one
-  has `source.catalogue` and no question text.
+  own site into a local cache on each device; a `problem` from one has `source.catalogue` and no question text.
+  With "Sync downloaded papers" on (the default since 2026-11-04), a downloaded paper is also saved as an
+  `item` with id `paper.<doc id>`: a `pdf` with the file as its attachment (content-addressed, so two devices
+  saving it store one blob), `boardPaper` (the doc id), `needsEnrichment` false and a `basic` enrichment (never
+  sent for enrichment), filed under Practice papers → the board. Another device copies it into its cache
+  instead of downloading it again.
