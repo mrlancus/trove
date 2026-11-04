@@ -36,11 +36,14 @@ final class TroveUITests: XCTestCase {
     }
 
     /// The library has loaded once its collections show counts (the first launch writes the vault).
-    /// The iPhone opens on Recent; its collections are one tap back.
+    /// The app opens on Home; the iPhone's library is its Library tab, opening on Recent with its
+    /// collections one tap back.
     func waitForLibrary(_ app: XCUIApplication) -> Bool {
         let deadline = Date().addingTimeInterval(120)
         while Date() < deadline {
             if app.staticTexts["Sketches"].firstMatch.exists { return true }
+            let library = app.tabBars.buttons["Library"]
+            if library.exists, !library.isSelected { library.tap() }
             let back = app.navigationBars.buttons.firstMatch
             if app.navigationBars["Recent"].exists, back.exists { back.tap() }
             sleep(1)
@@ -56,6 +59,9 @@ final class TroveUITests: XCTestCase {
 
     func testLibraryScrollsAndShows() {
         let app = launch()
+        // Where the app opens (docs/prompts/practice-space-home.md).
+        XCTAssertTrue(app.staticTexts["New sketch"].firstMatch.waitForExistence(timeout: 60), "the app didn't open on Home")
+        shot(app, "home")
         XCTAssertTrue(waitForLibrary(app), "the generated vault never showed")
         shot(app, "sidebar")
         open(app, "Notes")

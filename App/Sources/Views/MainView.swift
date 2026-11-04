@@ -99,6 +99,7 @@ struct MainView: View {
     @ViewBuilder private var split: some View {
         if model.selection == .graph, model.searchText.isEmpty { graphSplit }
         else if model.selection == .develop, model.searchText.isEmpty { developSplit }
+        else if model.selection == .home, model.searchText.isEmpty { homeSplit }
         else { columnsSplit }
     }
 
@@ -132,6 +133,18 @@ struct MainView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             NavigationStack { DevelopView() }
+                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
+                .toolbar { toolbar }
+        }
+    }
+
+    private var homeSplit: some View {
+        @Bindable var model = model
+        return NavigationSplitView(columnVisibility: $columns) {
+            SidebarView(showSettings: $showSettings)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } detail: {
+            NavigationStack { HomeView() }
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
                 .toolbar { toolbar }
         }
@@ -342,6 +355,8 @@ struct SidebarView: View {
         @Bindable var model = model
         List(selection: onPick.map { pick in Binding(get: { nil }, set: { if let s = $0 { pick(s) } }) } ?? $model.selection) {
             Section {
+                Label("Home", systemImage: "house")
+                    .tag(AppModel.Selection.home)
                 ForEach(primary) { s in row(s) }
                 // Right under Sketches.
                 Label("Clipboard", systemImage: "doc.on.clipboard")
@@ -695,6 +710,7 @@ struct LibraryView: View {
         case .importer: return "Import"
         case .clipboard: return "Clipboard"
         case .develop: return "Develop"
+        case .home: return "Home"
         case nil: return "Trove"
         }
     }

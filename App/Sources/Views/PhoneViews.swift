@@ -15,17 +15,20 @@ struct PhoneRootView: View {
     @Binding var showSettings: Bool
     @Binding var showClipboard: Bool
     @Environment(AppModel.self) private var model
-    @State private var tab = PhoneTab.library
+    @State private var tab = PhoneTab.home
     @State private var clipState = ClipPaletteState()
     /// Opens on Recent, with the collections one tap back (UI_AUDIT U2): your things first.
     @State private var libraryPath: [PhoneRoute] = [.list(.smart(.recent))]
     @State private var searchPath: [PhoneRoute] = []
 
-    enum PhoneTab: Hashable { case library, clipboard, practise, search }
+    enum PhoneTab: Hashable { case home, library, clipboard, practise, search }
 
     var body: some View {
         @Bindable var model = model
         TabView(selection: $tab) {
+            Tab("Home", systemImage: "house", value: PhoneTab.home) {
+                NavigationStack { HomeView() }
+            }
             Tab("Library", systemImage: "square.grid.2x2", value: PhoneTab.library) {
                 NavigationStack(path: $libraryPath) {
                     SidebarView(showSettings: $showSettings, onPick: { selection in
@@ -62,7 +65,7 @@ struct PhoneRootView: View {
         }
         .onChange(of: model.selectedItemID) { _, id in
             guard let id else { return }
-            if tab == .clipboard || tab == .practise { tab = .library }
+            if tab == .clipboard || tab == .practise || tab == .home { tab = .library }
             if tab == .search { open(id, on: &searchPath) } else { open(id, on: &libraryPath) }
         }
         .onChange(of: libraryPath) { _, path in if tab == .library { follow(path) } }
@@ -80,6 +83,7 @@ struct PhoneRootView: View {
         case .list(.importer): ImportView()
         case .list(.clipboard): ClipboardScreen(embedded: true)
         case .list(.develop): DevelopView()
+        case .list(.home): HomeView()
         case .list(let selection):
             LibraryView()
                 .onAppear { if model.selection != selection { model.selection = selection } }

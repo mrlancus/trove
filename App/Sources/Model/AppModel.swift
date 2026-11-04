@@ -13,6 +13,8 @@ final class AppModel {
     enum Phase: Equatable { case loading, onboarding, ready, failed(String) }
 
     enum Selection: Hashable {
+        /// Where the app opens: a greeting, things to start, a few numbers, what you were doing.
+        case home
         case smart(SmartCollection)
         case collection(String)
         case source(ItemSource)
@@ -92,7 +94,7 @@ final class AppModel {
     @ObservationIgnored private var countsCache: (version: Int, counts: SidebarCounts)?
     /// Wikilinks and hand-made connections between items, rebuilt on every reload.
     var links = Links.Graph()
-    var selection: Selection? = .smart(.recent) {
+    var selection: Selection? = .home {
         didSet {
             guard selection != oldValue else { return }
             // Connections wants the whole window: what was open on the right closes.
@@ -591,7 +593,7 @@ final class AppModel {
         case .source(let src): out = items.filter { $0.sources.contains(src) }
         case .folder(let id): out = items.filter { $0.folder == id }
         case .unfiled: out = unfiledItems
-        case .graph, .importer, .clipboard, .develop, nil: out = items
+        case .home, .graph, .importer, .clipboard, .develop, nil: out = items
         }
         // Pinned first, then the chosen order (MASTER_PLAN N12); items are already newest first.
         switch sortOrder {

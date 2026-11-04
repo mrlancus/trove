@@ -353,3 +353,17 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   question on a fresh page. Nothing jumps or lags when a topic opens.
 - **Failure looks like**: all attempts shown at once, wrong grouping, a working that won't open.
 - **Automated by**: `PracticeWorkTests`, `PracticeStatsTests`; the screen: manual.
+
+### TEST-HOME-001: The app opens on Home
+- **Feature**: Home (docs/prompts/practice-space-home.md)
+- **Priority**: high
+- **Coverage**: UI test `testLibraryScrollsAndShows` checks it opens on Home and screenshots it
+- **Platforms**: iPhone (Home tab), iPad and Mac (Home at the top of the sidebar)
+- **Steps**:
+  1. Launch the app.
+  2. Tap each of New note, New sketch, Practise and Import, coming back to Home each time.
+  3. Tap a card under Jump back in.
+- **Expected**: Home shows a greeting, four tiles, three numbers, Develop's next step (with a course) and
+  recent and pinned items; each tile does what it says; a card opens that item.
+- **Failure looks like**: the app opens on Recent or notes, a tile does nothing, or the shelf lags while scrolling.
+- **Automated by**: `TroveUITests.testLibraryScrollsAndShows` (opening only); the rest: manual.
