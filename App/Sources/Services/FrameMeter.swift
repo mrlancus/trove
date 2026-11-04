@@ -9,7 +9,7 @@ import AppKit
 #endif
 
 /// Counts slow frames while a sketch is panned or pinched (docs/plans/sketch-2-plan.md S1), so lag
-/// is a number in Settings → Diagnostics, not a feeling. Its display link runs only between the
+/// is a number in Settings → Sketch frames, not a feeling. Its display link runs only between the
 /// start and end of a gesture: nothing ticks while the page is still.
 @MainActor
 @Observable
@@ -86,8 +86,8 @@ final class FrameMeter {
     }
 }
 
-/// Settings → Diagnostics: the frame meter's last readings and the test notebook.
-struct DiagnosticsSection: View {
+/// Settings → Sketch frames: the frame meter's last readings and the test notebook.
+struct SketchFramesSection: View {
     @Environment(AppModel.self) private var model
     @State private var making = false
     private let meter = FrameMeter.shared
@@ -115,7 +115,7 @@ struct DiagnosticsSection: View {
             }
             .disabled(making)
         } header: {
-            Text("Diagnostics")
+            Text("Sketch frames")
         } footer: {
             FormFooter("Pan or pinch a sketch, then look here: a slow frame is one that took more than 1½ times the screen's frame time. 0 slow frames means no lag.")
         }

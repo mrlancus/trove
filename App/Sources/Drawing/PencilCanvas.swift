@@ -993,7 +993,7 @@ struct PencilCanvas: UIViewRepresentable {
             FrameMeter.shared.begin("Pinch")
         }
 
-        // Slow frames while panning or pinching, counted for Settings → Diagnostics.
+        // Slow frames while panning or pinching, counted for Settings → Sketch frames.
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { FrameMeter.shared.begin("Pan") }
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             if !decelerate { FrameMeter.shared.end(); syncElements() }

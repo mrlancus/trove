@@ -208,7 +208,7 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
 
 Plan: `docs/plans/sketch-2-plan.md` (brief `sketch-2-prompt.md`, review `sketch-2-review.md`). Built:
 - **Lag (S1–S3).**
-  - **Measuring it:** Settings → Diagnostics shows slow frames for the last pan and pinch. It can also make a 30-page stress-test notebook (`InkStress`).
+  - **Measuring it:** Settings → Sketch frames shows slow frames for the last pan and pinch. It can also make a 30-page stress-test notebook (`InkStress`).
   - **iPad:** paper, PDF and picture pages, pictures, text and tape are GPU layers inside a host scaled by the zoom (`PageLayers.swift`), so nothing is repainted while you move. PDF detail renders *during* a pinch at 2×.
   - **Ink:** drawn by Trove's own Metal renderer (`InkMetalView.swift`, `InkTessellator` in TroveCore) at the exact zoom every frame. PencilKit keeps only the live stroke and hands it over in the same frame. Highlighters sit under the ink.
   - **Fallback:** Settings → Sketch → "Sharp ink at every zoom (GPU)" off, or the editor's More → Classic ink.
@@ -229,7 +229,7 @@ Plan: `docs/plans/sketch-2-plan.md` (brief `sketch-2-prompt.md`, review `sketch-
 - **New sketch (T6)** asks first: name, notebook or whiteboard, paper, size, orientation, colour. It starts at your last choice. "Ask every time" can be turned off.
 
 **Try on the iPad** (nothing here has run on a device yet):
-1. Settings → Diagnostics → make the test notebook; pan and pinch it, then read the slow-frame count.
+1. Settings → Sketch frames → make the test notebook; pan and pinch it, then read the slow-frame count.
 2. Pinch ink, a PDF and a picture: do they stay sharp?
 3. Write `12×4=`: a blue handwritten 48? Rub half of it out.
 4. Ask about a handwritten page.

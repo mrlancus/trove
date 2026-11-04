@@ -33,7 +33,7 @@ struct MouseInkCanvas: NSViewRepresentable {
     final class Coordinator {
         var handledZoom: UUID?
         var observer: NSObjectProtocol?
-        /// The frame meter's start and end (Settings → Diagnostics).
+        /// The frame meter's start and end (Settings → Sketch frames).
         var meterObservers: [NSObjectProtocol] = []
         var editor: InkEditorModel?
         /// The page to fit once the window has its real size.
@@ -95,7 +95,7 @@ struct MouseInkCanvas: NSViewRepresentable {
                 editor.zoom = z
             }
         }
-        // Slow frames while panning or pinching, counted for Settings → Diagnostics.
+        // Slow frames while panning or pinching, counted for Settings → Sketch frames.
         let starts: [(Notification.Name, String)] = [(NSScrollView.willStartLiveScrollNotification, "Pan"), (NSScrollView.willStartLiveMagnifyNotification, "Pinch")]
         for (name, kind) in starts {
             context.coordinator.meterObservers.append(NotificationCenter.default.addObserver(forName: name, object: scroll, queue: .main) { [weak scroll] _ in
