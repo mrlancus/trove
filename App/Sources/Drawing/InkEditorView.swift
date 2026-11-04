@@ -50,7 +50,7 @@ struct InkEditorView: View {
         @Bindable var editor = editor
         VStack(spacing: 0) {
             if !editor.presenting {
-                toolbar
+                AnyView(toolbar)
                 Divider()
             }
             ZStack(alignment: .bottom) {
@@ -281,8 +281,10 @@ struct InkEditorView: View {
     }
 
     /// The middle of the bar at a level of folding: 0 shows everything, 3 the least.
-    private func middle(_ level: Int) -> some View {
-        HStack(spacing: 8) {
+    /// Type-erased: `ViewThatFits` holds four of these, and with their full types the toolbar's type got so
+    /// deep that building its metadata overflowed the main thread's stack (a crash on opening any sketch, 2026-11-04).
+    private func middle(_ level: Int) -> AnyView {
+        AnyView(HStack(spacing: 8) {
             tools(shapesAndText: level < 3)
             if level < 3 { insertMenu }
             if level < 2 {
@@ -290,7 +292,7 @@ struct InkEditorView: View {
                 inlineOptions(sizes: level < 1)
             }
             Spacer(minLength: 0)
-        }
+        })
     }
 
     private var toolbar: some View {
@@ -304,7 +306,7 @@ struct InkEditorView: View {
                 .keyboardShortcut(.cancelAction)
                 .help("Done")
             }
-            titleMenu
+            AnyView(titleMenu)
             Divider().frame(height: 26)
             ViewThatFits(in: .horizontal) {
                 middle(0)
@@ -318,7 +320,7 @@ struct InkEditorView: View {
                 Button { asking.toggle() } label: { Label("Ask", systemImage: "sparkles").labelStyle(.titleAndIcon).font(.callout.weight(.semibold)) }
                     .buttonStyle(.bordered)
                     .help("Ask about this notebook, check facts, or revise (⌘K)")
-                moreMenu
+                AnyView(moreMenu)
             }
             .fixedSize()
         }
@@ -328,7 +330,7 @@ struct InkEditorView: View {
         // Keys (the Mac and iPad keyboards): the lasso's, and ⌘K for Ask. (Single-letter tool keys
         // would fire while typing in a text box or the Ask box, so there are none.)
         .background {
-            Group {
+            AnyView(Group {
                 Button("Select all") { editor.selectAll() }.keyboardShortcut("a", modifiers: .command)
                 Button("Copy") { editor.copySelection() }.keyboardShortcut("c", modifiers: .command).disabled(editor.selection == nil)
                 Button("Cut") { editor.cutSelection() }.keyboardShortcut("x", modifiers: .command).disabled(editor.selection == nil)
@@ -336,7 +338,7 @@ struct InkEditorView: View {
                 Button("Ask") { asking.toggle() }.keyboardShortcut("k", modifiers: .command)
             }
             .opacity(0)
-            .allowsHitTesting(false)
+            .allowsHitTesting(false))
         }
     }
 

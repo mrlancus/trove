@@ -646,8 +646,10 @@ extension DevelopAI.Task {
         // "(a)" on its own line is part 1.1 of the question above it.
         #expect(qs.map(\.key) == ["1", "1.1", "1.2", "2", "2.3"])
         #expect(qs.map(\.marks) == [nil, 2, 3, nil, 4])
-        #expect(qs[1].text.contains("3 kg of water"))
-        #expect(qs.last?.text.contains("7 apples") == true)
+        // Stray numbers stay text. Since splitting v2 a sentence after a part's marks introduces the next part
+        // of the same question, so "3 kg of water…" goes with 1(b); one after the last marks is left out.
+        #expect(qs[2].text.contains("3 kg of water") && !qs[1].text.contains("3 kg of water"))
+        #expect(!qs.contains { $0.text.contains("7 apples") })
     }
 }
 
