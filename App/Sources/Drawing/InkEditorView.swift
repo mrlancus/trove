@@ -517,6 +517,9 @@ struct InkEditorView: View {
                               editor.selectionGroup.isEmpty ? "Group" : "Ungroup") { editor.toggleGroup() }
                     .disabled(editor.selectionGroup.isEmpty && selection.count < 2)
                 selectionIcon("plus.square.on.square", "Duplicate") { editor.duplicateSelection() }
+                if !selection.elements.isEmpty {
+                    selectionIcon(editor.selectionLocked ? "lock.open" : "lock", editor.selectionLocked ? "Unlock" : "Lock in place") { editor.toggleLock() }
+                }
                 selectionIcon("xmark", "Deselect") { editor.clearSelection() }
             }
             HStack(spacing: 4) {

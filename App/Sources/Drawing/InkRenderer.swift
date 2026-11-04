@@ -95,12 +95,14 @@ struct InkBox: Sendable, Identifiable {
     var flip = false
     var textStyle = InkTextStyle()
     var group = ""
+    /// Locked in place: the lasso can't move, resize or delete it until it's unlocked.
+    var locked = false
     /// A text highlight's pieces on a PDF, in page points (PROTOCOL.md §10).
     var pieces: [InkGeometry.Rect] = []
 
     init(_ e: InkElement) {
         id = e.id; kind = e.kind; frame = e.frame; text = e.text; size = e.size; color = e.color; image = e.image
-        rotate = e.rotate; flip = e.flip; textStyle = e.textStyle; group = e.group
+        rotate = e.rotate; flip = e.flip; textStyle = e.textStyle; group = e.group; locked = e.locked
         if kind == .highlight { pieces = e.highlightPieces }
     }
 

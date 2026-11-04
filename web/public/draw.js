@@ -1478,7 +1478,7 @@ export function openInkEditor({ vault, itemId, layer = "", title = "Drawing", pa
     const b = bounds(l.points);
     if (l.points.length < 3 || Math.max(b.w, b.h) * cssScale(v) < 6) { selectIds(v, pickAt(v, l.points[0])); renderLive(v); return; }
     const strokes = picksStrokes() ? strokesNear(v, b).filter((s) => lassoSelects(s.points, l.points)).map((s) => s.id) : [];
-    const elements = vault.elements(itemId, layer, v.key).filter((e) => picksElement(e) && lassoSelectsBox(boxOf(e), l.points)).map((e) => e.id);
+    const elements = vault.elements(itemId, layer, v.key).filter((e) => !e.locked && picksElement(e) && lassoSelectsBox(boxOf(e), l.points)).map((e) => e.id);
     selectIds(v, [...strokes, ...elements]);
     renderLive(v);
   }

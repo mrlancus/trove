@@ -1481,7 +1481,8 @@ final class InkEditorModel {
         let kinds = lassoKinds
         let near: [InkLine] = kinds.picksInk ? self.strokes(near: InkGeometry.bounds(loop), key: key) : []
         let strokes = near.filter { InkGeometry.lassoSelects($0.points, lasso: loop) }.map(\.id)
-        let boxes = c.elements.filter { kinds.picks($0.kind) && InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
+        // Locked pictures and boxes stay out of a loop, so it picks the writing on top of them.
+        let boxes = c.elements.filter { !$0.locked && kinds.picks($0.kind) && InkGeometry.lassoSelects($0.drawnFrame, lasso: loop) }.map(\.id)
         selection = grown(key, ids: strokes + boxes)
         return true
     }
@@ -1495,15 +1496,19 @@ final class InkEditorModel {
         guard let p else { return }
         let c = content[key] ?? InkContent()
         let kinds = lassoKinds
-        if let box = c.elements.last(where: { b in kinds.picks(b.kind) && b.contains(p) }) {
+        let box = c.elements.last(where: { b in kinds.picks(b.kind) && b.contains(p) })
+        if let box, !box.locked {
             selection = grown(key, ids: [box.id])
             return
         }
-        guard kinds.picksInk else { return }
-        let r = 8 / max(0.05, zoom)
-        let hit = strokes(near: InkGeometry.Rect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r), key: key)
-            .filter { InkGeometry.hits($0.points, width: $0.width, x: p.x, y: p.y, radius: r) }.map(\.id)
-        if !hit.isEmpty { selection = grown(key, ids: hit) }
+        // On a locked picture, the writing under the tap comes first; the picture itself (to unlock it) if there's none.
+        var hit: [String] = []
+        if kinds.picksInk {
+            let r = 8 / max(0.05, zoom)
+            hit = strokes(near: InkGeometry.Rect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r), key: key)
+                .filter { InkGeometry.hits($0.points, width: $0.width, x: p.x, y: p.y, radius: r) }.map(\.id)
+        }
+        if !hit.isEmpty { selection = grown(key, ids: hit) } else if let box { selection = InkSelection(pageKey: key, strokes: [], elements: [box.id]) }
     }
 
     /// The box around the selection, moved by the drag in progress.
@@ -1549,8 +1554,11 @@ final class InkEditorModel {
 
     /// Moves, resizes, turns or flips what's selected with one transform, then brings connectors
     /// joined to it back onto what they join. One undo step.
-    private func transformSelection(_ t: InkGeometry.Transform, _ sel: InkSelection) {
+    private func transformSelection(_ t: InkGeometry.Transform, _ selected: InkSelection) {
         guard t.isUsable, let library = app?.library else { return }
+        var sel = selected
+        sel.elements.subtract(lockedIds(in: selected))
+        guard sel.count > 0 else { return }
         // Show it where it landed straight away.
         content[sel.pageKey]?.strokes = (content[sel.pageKey]?.strokes ?? []).map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
         content[sel.pageKey]?.elements = (content[sel.pageKey]?.elements ?? []).map { sel.elements.contains($0.id) ? $0.transformed(t) : $0 }
@@ -1631,7 +1639,10 @@ final class InkEditorModel {
     }
 
     func deleteSelection() {
-        guard let sel = selection, let library = app?.library else { return }
+        guard var sel = selection, let library = app?.library else { return }
+        let locked = lockedIds(in: sel)
+        sel.elements.subtract(locked)
+        guard sel.count > 0 else { app?.toast = "Unlock it to delete it"; return }
         content[sel.pageKey]?.strokes.removeAll { sel.strokes.contains($0.id) }
         content[sel.pageKey]?.elements.removeAll { sel.elements.contains($0.id) }
         selection = nil
@@ -1646,9 +1657,44 @@ final class InkEditorModel {
 
     func cutSelection() { copySelection(); deleteSelection() }
 
+    // MARK: Locking
+
+    /// The locked pictures, text boxes and tape in a selection.
+    func lockedIds(in sel: InkSelection) -> Set<String> {
+        Set((content[sel.pageKey]?.elements ?? []).filter { sel.elements.contains($0.id) && $0.locked }.map(\.id))
+    }
+
+    /// The selection has pictures or boxes and every one of them is locked.
+    var selectionLocked: Bool {
+        guard let sel = selection, !sel.elements.isEmpty else { return false }
+        return lockedIds(in: sel).count == sel.elements.count
+    }
+
+    /// Locks the selection's pictures, text boxes and tape in place, or unlocks them. One undo step.
+    func toggleLock() {
+        guard let sel = selection, !sel.elements.isEmpty, let library = app?.library else { return }
+        let lock = !selectionLocked
+        let ids = Array(sel.elements)
+        content[sel.pageKey]?.elements = (content[sel.pageKey]?.elements ?? []).map { b in
+            var b = b
+            if sel.elements.contains(b.id) { b.locked = lock }
+            return b
+        }
+        if lock { selection = sel.strokes.isEmpty ? nil : InkSelection(pageKey: sel.pageKey, strokes: sel.strokes, elements: []) }
+        revision += 1
+        app?.toast = lock ? "Locked: write over it; tap it with the lasso to unlock" : "Unlocked"
+        Task {
+            let before = await snapshot(sel, strokeFields: [], elementFields: ["locked"])
+            await library.setLocked(ids, lock)
+            record(Action(before: before, after: await snapshot(sel, strokeFields: [], elementFields: ["locked"])))
+            await reloadInk()
+            app?.inkChanged()
+        }
+    }
+
     func selectAll() {
         let c = content[currentKey] ?? InkContent()
-        selectIds(c.strokes.map(\.id) + c.elements.map(\.id), key: currentKey)
+        selectIds(c.strokes.map(\.id) + c.elements.filter { !$0.locked }.map(\.id), key: currentKey)
     }
 
     func clearSelection() {

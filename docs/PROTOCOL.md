@@ -802,6 +802,9 @@ Optional (readers that don't know them draw the box upright and plain):
 - Text style: `font` (`sans` (unset), `serif`, `mono` or `rounded`), `bold`, `italic` (booleans).
   Bullet lists are plain text: lines starting "• ".
 - `group`: as for strokes.
+- `locked`: `true` keeps it in place. The lasso's loop and Select All leave it out (so they pick the
+  writing on top of it), moving, resizing, turning and deleting skip it, and pens write over it as
+  usual. A lasso tap on it with no ink under the tap picks it alone, to unlock it. Unset is unlocked.
 **Tape** (`type: "tape"`, with `color`) covers its box with an opaque strip (faint diagonal stripes)
 drawn over everything else on the page, so what's under it is hidden until tapped. Tapping it (any
 pen, or the tape tool) opens it on that device only (a faint dashed outline); it isn't synced, so

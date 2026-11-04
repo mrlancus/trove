@@ -902,7 +902,7 @@ export class Vault {
   transformElements(ids, t) {
     for (const id of ids) {
       const e = this.element(id);
-      if (!e) continue;
+      if (!e || e.locked) continue; // locked in place (PROTOCOL.md §10)
       const next = transformElement(t, e);
       const style = {};
       if (next.rotate !== e.rotate) style.rotate = next.rotate;

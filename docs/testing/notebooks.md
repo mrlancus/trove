@@ -182,3 +182,22 @@ pages, tools, lasso, shapes, Math Assist, audio synced to ink, GoodNotes import 
 - **Expected**: the notebook opens at that page, the line highlighted.
 - **Failure looks like**: no hit, the wrong page.
 - **Automated by**: manual.
+
+### TEST-NB-011: Lock a picture and write over it
+- **Feature**: locked elements (PROTOCOL.md §10 `locked`)
+- **Priority**: high
+- **Coverage**: auto-tested (moving skips it, unlock, undo's snapshot); in the app: not tested
+- **Platforms**: iPad, Mac, website (the website respects locks; it has no Lock button yet)
+- **Preconditions**: a sketch with a picture on it.
+- **Steps**:
+  1. Lasso-tap the picture, then tap the lock button in the selection bar.
+  2. Write over the picture with the Pencil.
+  3. Lasso a loop round the picture and the writing; drag the selection.
+  4. Select All, then Delete.
+  5. Lasso-tap a clear part of the picture, tap Unlock, then drag it.
+  6. Undo twice.
+- **Expected**: step 3 moves only the writing, step 4 deletes the writing and leaves the picture,
+  step 5 moves the picture, and undo puts it back and locks it again. The lock syncs to other devices.
+- **Failure looks like**: the picture moves or is deleted while locked, a loop can't pick the
+  writing on it, or it can't be unlocked.
+- **Automated by**: `LockTests` (TroveCore); the gestures: manual.

@@ -11,6 +11,8 @@ public struct InkElement: Identifiable, Sendable {
         public static let text = "text", size = "size", color = "color", image = "image", createdAt = "createdAt", device = "device"
         public static let rotate = "rotate", flip = "flip", font = "font", bold = "bold", italic = "italic", group = "group"
         public static let quote = "quote", rects = "rects", name = "name", value = "value"
+        /// true: it can't be moved, resized, turned or deleted until unlocked; you still write over it.
+        public static let locked = "locked"
     }
 
     public let record: Record
@@ -45,6 +47,8 @@ public struct InkElement: Identifiable, Sendable {
     public var textStyle: InkTextStyle { InkTextStyle(font: font, bold: bold, italic: italic) }
     /// Strokes and elements sharing a group id are picked and moved as one; "" for none.
     public var group: String { record[Field.group]?.string ?? "" }
+    /// Locked in place (PROTOCOL.md §10): the lasso leaves it where it is.
+    public var locked: Bool { record[Field.locked]?.bool == true }
     /// The box, its turn and (pictures) mirroring, for hit tests and the lasso.
     public var editFrame: InkEditing.Frame { InkEditing.Frame(frame, rotate: rotate, flip: flip) }
 }
@@ -316,9 +320,18 @@ extension Library {
         for id in ids {
             guard let r = await engine.record(id), r.kind == "element", !r.isDeleted else { continue }
             let e = InkElement(r)
+            guard !e.locked else { continue }
             let next = InkEditing.transform(transform, e.editFrame, image: e.kind == .image)
             let size: Double? = e.kind == .text && transform.widthScale != 1 ? e.size * transform.widthScale : nil
             await updateElement(id, frame: next.rect, size: size, rotate: next.rotate != e.rotate ? next.rotate : nil, flip: next.flip != e.flip ? next.flip : nil)
+        }
+    }
+
+    /// Locks or unlocks pictures, text boxes and tape in place.
+    public func setLocked(_ ids: [String], _ locked: Bool) async {
+        for id in ids {
+            guard let r = await engine.record(id), r.kind == "element", !r.isDeleted, InkElement(r).locked != locked else { continue }
+            await engine.set([InkElement.Field.locked: .bool(locked)], record: id, kind: "element")
         }
     }
 
@@ -378,6 +391,7 @@ extension Library {
         InkStroke.Field.points: .string(""), InkStroke.Field.points2: .string(""), InkStroke.Field.group: .string(""),
         InkStroke.Field.shape: .null, InkStroke.Field.nib: .null, InkElement.Field.rotate: .number(0), InkElement.Field.flip: .bool(false),
         InkElement.Field.font: .string("sans"), InkElement.Field.bold: .bool(false), InkElement.Field.italic: .bool(false),
+        InkElement.Field.locked: .bool(false),
     ]
 
     public func setInkFields(_ id: String, kind: String, _ fields: [String: JSONValue]) async {

@@ -880,7 +880,7 @@ export function elementView(record) {
     image: f.image && typeof f.image.id === "string" ? f.image : null, createdAt: num(f.createdAt, 0),
     rotate: typeof f.rotate === "number" && Number.isFinite(f.rotate) ? f.rotate : 0, flip: f.flip === true,
     font: TEXT_FONTS.includes(f.font) ? f.font : "sans", bold: f.bold === true, italic: f.italic === true,
-    group: typeof f.group === "string" ? f.group : "",
+    group: typeof f.group === "string" ? f.group : "", locked: f.locked === true,
     // Text highlights and form values on a PDF (core/pdfmarks.js).
     quote: typeof f.quote === "string" ? f.quote : "", rects: Array.isArray(f.rects) ? f.rects : null,
     name: typeof f.name === "string" ? f.name : "", value: f.value ?? null,
