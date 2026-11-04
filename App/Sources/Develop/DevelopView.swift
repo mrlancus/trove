@@ -494,3 +494,59 @@ struct PracticeView: View {
 }
 
 /// Adding a goal: a name, a date, how long a day.
+
+/// An item's concepts (docs/DEVELOP_PLAN.md §B3 point 1): suggested from its text on this device (no
+/// AI), each accepted or rejected in place; a rejection sticks.
+struct ItemConceptsSection: View {
+    let item: Item
+    @Environment(AppModel.self) private var model
+    @State private var accepted: [Concept] = []
+    @State private var suggested: [Concept] = []
+
+    var body: some View {
+        Group {
+            if !accepted.isEmpty || !suggested.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Concepts").font(.headline)
+                    FlowRow {
+                        ForEach(accepted) { c in
+                            Label(c.name, systemImage: "graduationcap").font(.callout)
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(.tint.opacity(0.12), in: Capsule())
+                        }
+                    }
+                    ForEach(suggested) { c in
+                        HStack {
+                            Text("About \(c.name)?").font(.callout)
+                            Spacer()
+                            Button { Task { await set(c, .accepted) } } label: { Image(systemName: "checkmark") }.accessibilityLabel("Yes, it's about \(c.name)")
+                            Button { Task { await set(c, .rejected) } } label: { Image(systemName: "xmark") }.accessibilityLabel("No")
+                        }
+                        .buttonStyle(.bordered).controlSize(.small)
+                    }
+                }
+            }
+        }
+        .task(id: "\(item.id)|\(model.dataVersion)") { await load() }
+    }
+
+    private func load() async {
+        guard let library = model.library else { return }
+        let concepts = await library.concepts()
+        let index = EdgeIndex(edges: await library.edges(), concepts: concepts)
+        let byId = Dictionary(concepts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let mine = index.from(item.id, type: .about)
+        accepted = mine.filter { $0.state == .accepted }.compactMap { byId[index.resolve($0.to)] }
+        let text = item.displayTitle + "\n" + item.body + "\n" + (item.ocrText ?? "")
+        let linked = Set(mine.map(\.to))
+        let found = await Task.detached(priority: .utility) { ConceptMatch.mentioned(in: text, concepts: concepts) }.value
+        suggested = found.filter { !linked.contains($0) && !index.isRejected(from: item.id, type: .about, to: $0) }.prefix(3).compactMap { byId[$0] }
+    }
+
+    private func set(_ c: Concept, _ state: EdgeState) async {
+        guard let library = model.library else { return }
+        await library.setEdge(from: item.id, to: c.id, type: .about, state: state, origin: .user)
+        await load()
+    }
+}
+
