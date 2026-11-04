@@ -282,10 +282,22 @@ depend on exam boards. What's missing is a way to make a course and questions wi
 3. **New questions in the style of your real papers** (your choice, 2026-11-04: "always use examples from
    existing pdfs uploaded and make questions in that style not random generated ones … not the same but
    similar style … realistic mark schemes").
-   - **Model**: Haiku 5.5 through the relay, only when you tap. Costs are in §C4.
+   - **Model**: Haiku 5.5, only when you tap. Costs are in §C4.
+     - It runs through **your own key** (Settings → AI, `AppModel+OwnAI.swift`), straight from the device,
+       under your own limits.
+     - The relay's AI is only a fallback, and it isn't switched on today. The relay's secrets are
+       `AI_MONTHLY_LIMIT` and `BRIDGE_KEY`, with no `ANTHROPIC_API_KEY` (checked 2026-11-04).
+   - **Effort: low for everything, A-level included** (your call, 2026-11-04: "is medium even needed for a
+     level?").
+     - Medium is used only to **retry once** when the checking pass rejects a question written at low.
+     - For generation, this replaces decision 7's "medium for hard questions by a fixed rule". Marking keeps
+       decision 7's one medium re-check of uncertain marks.
+     - Measure how often the retry happens on the first real sets. If it's rare, low is enough.
    - **Always from real examples.**
      - Each request carries 3–5 real questions on the same topic, with their real mark schemes, from the
        downloaded board papers and your uploads. Same course first, then the same board and level.
+     - **The specification statements for the topic** (§C6), so each new question tests a named spec point.
+       That also shows which spec points have no past questions yet, the best ones to make questions for.
      - Plus your own material for the topic (notes, transcript), if there is any.
      - No examples, no generation: the course asks you to download or upload a paper first.
    - **Similar, not copied**:
@@ -347,19 +359,61 @@ tokens). Cached input is cheaper still.
 - **Caching**: a topic's examples are the same every time. Repeat requests read them from the cache, which
   the relay counts at a tenth. Output dominates the cost anyway.
 
-**The relay's allowance is the real limit, not the money**:
-- 1,000,000 metered tokens per vault per month (`DEFAULT_MONTHLY_TOKENS`, `server/src/ai.ts:19`).
-- Input and output count the same; cache reads count a tenth (`meteredTokens`, line 73).
-- A set uses ~24k, so the allowance covers **about 40 sets (~200 questions) a month**, shared with AI marking
-  and the tutor.
-- With Haiku 5.5 the whole allowance costs at most about $0.50 a month.
-- Raising it to 5M (`AI_MONTHLY_LIMIT`) would cost at most about $2.50 a month. That's your money, so it's
-  your call (§10 Q6).
+By kind of question (sets of 5, estimates):
+| Kind | Cost per set | Wait |
+|---|---|---|
+| Simple (1–3 marks: state, define, recall) | ~0.1p | a few seconds |
+| Typical structured (4–6 marks) | ~½p | ~10–20 s |
+| Hard multi-step (9+ marks, competition) | ~1p | ~30–60 s |
+
+The next set is written in the background while you work on the current one, so there's rarely a wait.
+
+**Limits**:
+- **Your own key** (the main path) has only your limits: Settings → AI, and the spend limit in your
+  Anthropic console. The relay's allowance doesn't apply to it.
+- **The relay's allowance** (the fallback) is now **10,000,000 metered tokens per vault per month** (your
+  choice, 2026-11-04).
+  - It's set as the Worker secret `AI_MONTHLY_LIMIT`, with no code deployed. The code default
+    `DEFAULT_MONTHLY_TOKENS` (`server/src/ai.ts:19`) stays at 1M.
+  - Input and output count the same; cache reads count a tenth (`meteredTokens`, line 73).
+  - With Haiku 5.5 the whole allowance costs at most about $5 a month.
+  - It's counted in tokens, not money, so a hard set uses about five times what a simple one does.
 
 ### C5. A plan that gets finished
 Campaigns already plan towards a goal. For self-learners add:
 - **Checkpoints**: a short mixed quiz every few sessions. Its result re-plans.
 - **Small sessions**: every plan step is at most 20 minutes.
+
+### C6. Download the full specification with each course (your request, 2026-11-04)
+"when we download entire specs and stuff we should also download like the full specification of it cus it
+says all possible questions and it gives ideas for possible questions to make and makes everything easier"
+
+- **Today the catalogue has no specification documents.**
+  - `Catalogue.DocType` has a `spec` case (`Papers.swift:34`), but the 2026-11-04 catalogue lists none.
+  - What it does list: 15,806 question papers, 15,186 mark schemes, 9,676 examiner reports and 1,470 data
+    sheets.
+  - The finders in `scripts/catalogue/` collect only past-paper documents.
+- **The fix**:
+  1. **Catalogue**: each finder also records the course's specification PDF, from the qualification page the
+     catalogue already links (`url` in `catalogue/specs/*.json`).
+     - It also records the specimen/sample assessment materials where the board publishes them.
+     - Each is a `spec` doc. The weekly rebuild checks the links.
+  2. **Download**: choosing a course downloads its specification first, before any paper. It's kept and
+     synced like a downloaded paper (decision 3: a `paper.<doc id>` item, and the per-course switch).
+  3. **On the device, read it into spec statements**:
+     - Topic → subtopic → statement ("4.1.2 Momentum: use p = mv; apply conservation…"), each a `spec`
+       record with `inSpec` edges.
+     - This is the NOTES item "topics from the course's spec (on the device) instead of the paper". Decision
+       12 holds: nothing is shipped, everything is read from your own download.
+  4. **Use them everywhere**:
+     - **Topics in Your work** come from the spec.
+     - **Coverage**: practised, not yet practised, and no past questions at all.
+     - **Generation** (§C2.3): each new question targets a spec statement.
+     - **The tutor** gets the statement with the question.
+     - **Campaigns** plan by spec point.
+- **Own courses** (§C1): an uploaded syllabus or contents page is read the same way.
+- **Copyright**: specifications are public documents on the boards' sites. They're downloaded from the board
+  by each device, as papers are (DEVELOP_PLAN Appendix E), and never shipped or shared.
 
 ---
 
@@ -399,6 +453,30 @@ Campaigns already plan towards a goal. For self-learners add:
 - Study with friends stays invite-only, as designed in its prompt.
 - Nothing else changes: no analytics, no ads, no profiling outside the device.
 
+### E2. New vaults on the relay need an 8-digit code (your choice, 2026-11-04)
+- **Today** the relay accepts a new vault from anyone: `ALLOW_NEW_VAULTS: "true"` in `server/wrangler.jsonc`,
+  checked in `server/src/index.ts:32` (PROTOCOL §2, `POST /vaults`).
+  - NOTES says to set it to `"false"` once your vault exists, which hasn't been done.
+  - Anyone who finds the URL can make vaults, which use your relay's storage, and its AI if a key is ever
+    added there.
+- **The change** is a relay change, so PROTOCOL.md and the relay tests change in the same commit (CLAUDE.md).
+  - **The code is a Worker secret**, `VAULT_CREATE_CODE`, that you set yourself. It's never in the repo, a
+    chat or a log.
+    - Dashboard: Workers → trove-relay → Settings → Variables and Secrets → Add → Secret.
+    - Or: `npx wrangler secret put VAULT_CREATE_CODE` in `server/`.
+  - **`POST /vaults` needs it** in a header, `x-trove-create-code`. Without it, or with a wrong code, the
+    answer is `403`.
+  - The comparison is constant-time (both sides hashed, then compared).
+  - **Guessing is limited**:
+    - An 8-digit code has 100 million possibilities, so tries are limited to 5 wrong codes per IP an hour.
+    - And 50 wrong codes an hour across the whole relay, after which creation pauses for an hour.
+    - Kept in a small Durable Object.
+  - **Order of checks**: `ALLOW_NEW_VAULTS: "false"` still turns creation off completely. If the secret
+    isn't set, the relay behaves as today, so nothing breaks before you set it.
+  - **Clients**: the website's and the apps' "create a vault on the relay" screens get a code field. It's
+    only asked for when the relay says it's needed: the `403` carries `"code": "create_code_required"`.
+  - **Existing vaults and adding devices** are unaffected. Setup codes already protect joining.
+
 ---
 
 ## 8. The website
@@ -417,6 +495,8 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 | 0 | **Wait for the other session**, then: a NOTES pointer and your §10 decisions; the README's first paragraph and list order, `CLAUDE.md`'s first line and `docs/RESEARCH.md`'s pitch lead with learning (review R7) | S | NOTES says nobody is in progress; docs agree |
 | 1 | **Hide** (§3): `Features` with test overrides, every entry point, the GitHub and Telegram bridges paused, the website; the Markdown copy off by default (§3 A3) | S | UI tests show no Connections, no Obsidian setting and no GitHub bridge with the flags off; a Mac unit test shows `mirrorIfOwner` leaves the Obsidian folder alone (review R10); existing graph tests pass with `-TroveFeatures all` / `trove.features` |
 | 2 | **Privacy default** (§7) | XS | A new vault has `recordPlaces: false` written; the Swift and JS defaults are off |
+| 2b | **Relay: an 8-digit code to create a vault** (§7 E2), with PROTOCOL.md, relay tests, website + app field; you set the secret | S | Relay tests: no code, a wrong code and the 6th try are refused, the right code works, no secret behaves as today; deployed only when you say "publish" |
+| 2c | **The specification with each course** (§5 C6): catalogue finders, download, spec statements | M | Every catalogue course with a public spec has a `spec` doc; spec-statement tests on real specs (fetched by a script, never committed, like `RealPaperSplitTests`) |
 | 3 | **Navigation, Home, first launch** (§4 B1–B3), and the name (§10 Q1) | M | iPhone and iPad UI tests; TEST-HOME updated |
 | 4 | **Half-built Develop items** (§4 B4) | M | NOTES "Not done" items closed |
 | 5 | **Own courses** (§5 C1) with PROTOCOL §13, Swift, JS, fixtures; campaigns and the course screen | M | `CourseTests` and campaign tests for own courses; interop fixture; no spinner for a course outside the catalogue |
@@ -438,10 +518,13 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 - Q4: Haiku 5.5 writes the questions, when you tap, in the style of real papers (§C2.3).
 - Q5: the Clipboard keeps its own iPhone tab.
 
-**Still open:**
+- Q6: the relay's AI allowance is **10M tokens a month**. It's set as the Worker secret `AI_MONTHLY_LIMIT`
+  on 2026-11-04, with no code deployed. Your own key has your own limits.
+- Q7: questions are written at **low effort, A-level included**; medium is used only to retry a question the
+  check rejected (§C2.3).
+- Q8: **new vaults on the relay need an 8-digit code** (§7 E2). You set it yourself as a Cloudflare secret.
 
-6. **The AI allowance**: keep 1M tokens a month (about 200 Trove-made questions, plus marking and the tutor),
-   or raise it (5M costs at most about $2.50 a month with Haiku 5.5)? See §C4.
+**Still open:** nothing.
 
 **The original options, for the record:**
 1. **The name of the section.** Options:

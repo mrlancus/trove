@@ -164,3 +164,17 @@ These are the user's decisions, not review fixes. They're now in the plan:
   - Checked: the relay's allowance is 1M metered tokens a month, and cache reads count a tenth
     (`server/src/ai.ts:19,73`).
   - Costs (plan §C4) are estimates from the published Haiku 5.5 prices. Measure them on the first real sets.
+
+## Second round of answers (2026-11-04)
+- **The relay's AI isn't switched on.**
+  - `wrangler secret list` shows only `AI_MONTHLY_LIMIT` and `BRIDGE_KEY`, with no `ANTHROPIC_API_KEY`.
+  - Question writing therefore runs on the user's own key (`AppModel+OwnAI.swift`), with the relay as a
+    fallback. Plan §C2.3 and §C4 are corrected.
+- **The relay allowance is set to 10M.** Done as the secret `AI_MONTHLY_LIMIT=10000000` on `trove-relay`. No
+  code was deployed, so nothing else from `main` went live.
+- **The catalogue has no specification documents.**
+  - Counted across `catalogue/specs/*.json`: `qp` 15,806, `ms` 15,186, `er` 9,676, `data` 1,470, `spec` 0.
+  - Plan §C6 adds them.
+- **Low effort for A-level.** Plan §C2.3, with medium only as a retry after a failed check.
+- **An 8-digit code to create vaults.** Plan §7 E2: a Worker secret, a constant-time comparison and attempt
+  limits (100 million codes can be guessed quickly without limits).
