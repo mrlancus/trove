@@ -1,0 +1,66 @@
+# The app tests: Mac unit + performance tests and the iPhone/iPad UI tests (scripts/ci-app-tests.sh, 30–45
+# minutes). They start when an "Apple apps" build of main finishes, so they run for every build without
+# delaying it; a newer build cancels tests still running for an older one. Run by hand: Actions → App tests
+# → Run workflow. Logs, perf.json and the UI screenshots go to the ci-logs-tests branch.
+name: App tests
+
+on:
+  workflow_run:
+    workflows: ["Apple apps"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-tests-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-tests:
+    # After a build that compiled (a cancelled or failed build has nothing worth testing).
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Pick the newest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: App tests (Mac unit + performance, iPhone and iPad UI)
+        id: tests
+        run: ./scripts/ci-app-tests.sh
+
+      - name: Publish test logs to the ci-logs-tests branch
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf /tmp/ct && mkdir -p /tmp/ct
+          rsync -a --exclude '*.xcresult' build/tests/ /tmp/ct/ 2>/dev/null || true
+          echo "$SHA ${{ steps.tests.outcome }}" > /tmp/ct/RESULT
+          cd /tmp/ct
+          git init -q && git checkout -qb ci-logs-tests
+          git -c user.name=github-actions -c user.email=actions@github.com add -A
+          git -c user.name=github-actions -c user.email=actions@github.com commit -qm "Test logs for $SHA"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:ci-logs-tests
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-test-results
+          path: build/tests
+          if-no-files-found: ignore

@@ -13,17 +13,9 @@ on:
   push:
     branches: [main]
     paths: ["App/**", "Packages/**", "extensions/browser/**", "scripts/ci-build-apps.sh", ".github/workflows/apps.yml"]
-  # Run it by hand (Actions → Apple apps → Run workflow): the build, plus the UI tests if you tick them.
   workflow_dispatch:
-    inputs:
-      ui_tests:
-        description: "Also run the app tests (Mac unit + iPhone/iPad UI, 30–45 minutes)"
-        type: boolean
-        default: false
-  # The app tests run once a night instead of on every push: they take 30–45 minutes and held one of the
-  # free Macs, so the 9-minute build queued behind them or was cancelled (2026-11-04).
-  schedule:
-    - cron: "17 2 * * *"
+# The app tests (Mac unit + iPhone/iPad UI, 30–45 minutes) are their own workflow, app-tests.yml, which
+# starts when this build finishes: the build never waits behind them (2026-11-04).
 
 permissions:
   contents: write
@@ -36,7 +28,6 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -123,46 +114,3 @@ jobs:
           gh release create latest build/out/* \
             --prerelease --target "${{ github.sha }}" --title "Latest build" \
             --notes "Built from ${{ github.sha }}. iPhone/iPad: in SideStore add the source https://github.com/${{ github.repository }}/releases/download/latest/sidestore.json (or install Trove.ipa with Sideloadly). Mac: unzip, then System Settings → Privacy & Security → Open Anyway the first time; after that it updates itself."
-
-  # The apps' tests (docs/PERF_AUDIT.md step 0), apart from the build so a failing test never holds up
-  # the release. Logs, perf.json and the UI screenshots go to the ci-logs-tests branch.
-  app-tests:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.ui_tests)
-    runs-on: macos-15
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Pick the newest Xcode
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: App tests (Mac unit + performance, iPhone and iPad UI)
-        id: tests
-        run: ./scripts/ci-app-tests.sh
-
-      - name: Publish test logs to the ci-logs-tests branch
-        if: always()
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          rm -rf /tmp/ct && mkdir -p /tmp/ct
-          rsync -a --exclude '*.xcresult' build/tests/ /tmp/ct/ 2>/dev/null || true
-          echo "${{ github.sha }} ${{ steps.tests.outcome }}" > /tmp/ct/RESULT
-          cd /tmp/ct
-          git init -q && git checkout -qb ci-logs-tests
-          git -c user.name=github-actions -c user.email=actions@github.com add -A
-          git -c user.name=github-actions -c user.email=actions@github.com commit -qm "Test logs for ${{ github.sha }}"
-          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:ci-logs-tests
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: app-test-results
-          path: build/tests
-          if-no-files-found: ignore

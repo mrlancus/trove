@@ -79,9 +79,11 @@ decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_A
   - **The Apple apps are built on GitHub Actions** (`.github/workflows/apps.yml`, Xcode 26.3 on `macos-15`; the repo is public, so it's free). Compile errors are fixed from cloud sessions:
     1. `git fetch origin ci-logs` then `git show origin/ci-logs:macos-errors.txt` (and `ios-errors.txt`, the full `*.log`, `RESULT`).
     2. Run status: `gh api repos/mrlancus/trove/actions/runs`.
-    3. **Since 2026-11-04 a push runs only the build (~9 min once it has a Mac).** The app tests (Mac unit +
-       iPhone/iPad UI, 30–45 min) run nightly at 02:17 UTC, or by hand: Actions → Apple apps → Run workflow →
-       tick "Also run the app tests". Their logs: `ci-logs-tests` branch.
+    3. **Since 2026-11-04 the build and the app tests are separate workflows.** "Apple apps" (`apps.yml`) is the
+       build (~9 min once it has a Mac) and publishes `latest`. "App tests" (`app-tests.yml`: Mac unit +
+       iPhone/iPad UI, 30–45 min) starts when each build succeeds, so it runs for every build without delaying
+       one; a newer build cancels older tests. It can be cancelled any time (the user may ask, e.g. after testing
+       on their PC) and run by hand from Actions. Logs: `ci-logs-tests` branch.
   - **The user's Windows 11 PC** can't build the apps (no Xcode), but can run TroveCore's tests in WSL2:
     Swift 6.3.1 is ~1 GB to download, 3.3 GB unpacked; the repo ~0.2 GB; a build folder ~0.4 GB. To keep it on
     D: `wsl --install --no-distribution`, restart, then `wsl --install -d Ubuntu-24.04 --location D:\WSL\Ubuntu`
