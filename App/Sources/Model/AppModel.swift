@@ -768,34 +768,52 @@ final class AppModel {
 
     // MARK: Search
 
-    /// Keyword results straight away, on every keystroke; "search by meaning" is blended in a
-    /// moment later when typing pauses.
+    /// Keyword results on every keystroke, worked out off the main thread so typing never waits for
+    /// them (a 50k-item vault takes tens of ms; docs/PERF_AUDIT.md B3); a keystroke that's been
+    /// overtaken is dropped. "Search by meaning" is blended in a moment later when typing pauses.
     private func searchNow() {
         searchTask?.cancel()
         let text = searchText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { searchResults = nil; clipResults = []; return }
         let query = SearchQuery.parse(text)
-        showResults(index.searchWithTotal(query), query: query)
         clipResults = clipboard.matches(ClipQuery(text), limit: 8)
-        guard query.text.count >= 3 else { return }
+        let index = self.index
         searchTask = Task { [weak self] in
+            let found = await Task.detached(priority: .userInitiated) { Self.results(index, query, semantic: [:]) }.value
+            guard let self, !Task.isCancelled, self.searchText.trimmingCharacters(in: .whitespaces) == text else { return }
+            self.showResults(found)
+            guard query.text.count >= 3 else { return }
             try? await Task.sleep(for: .milliseconds(250))
-            guard let self, !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
             let scores = await self.semantic.scores(for: query.text)
             guard !Task.isCancelled, !scores.isEmpty, self.searchText.trimmingCharacters(in: .whitespaces) == text else { return }
-            self.showResults(self.index.searchWithTotal(query, semantic: scores), query: query)
+            let blended = await Task.detached(priority: .userInitiated) { Self.results(index, query, semantic: scores) }.value
+            guard !Task.isCancelled, self.searchText.trimmingCharacters(in: .whitespaces) == text else { return }
+            self.showResults(blended)
         }
     }
 
+    struct SearchOutcome: Sendable {
+        var hits: [SearchIndex.Hit]
+        var total: Int
+        var snippets: [String: SearchSnippet]
+    }
+
     /// Results plus the matching passage (bold words) of the first ones, for the cards and rows.
-    private func showResults(_ found: (hits: [SearchIndex.Hit], total: Int), query: SearchQuery) {
-        searchTotal = found.total
+    nonisolated static func results(_ index: SearchIndex, _ query: SearchQuery, semantic: [String: Double]) -> SearchOutcome {
+        let found = index.searchWithTotal(query, semantic: semantic)
         var snippets: [String: SearchSnippet] = [:]
         if query.hasWords {
             for hit in found.hits.prefix(60) {
                 if let s = index.snippet(for: hit.item.id, query: query) { snippets[hit.item.id] = s }
             }
         }
+        return SearchOutcome(hits: found.hits, total: found.total, snippets: snippets)
+    }
+
+    private func showResults(_ found: SearchOutcome) {
+        searchTotal = found.total
+        let snippets = found.snippets
         searchSnippets = snippets
         searchResults = found.hits.map(\.item)
     }

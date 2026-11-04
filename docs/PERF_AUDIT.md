@@ -101,8 +101,9 @@ Zipf text the commonest content words sit in 40–80 % of 50k notes, so a keystr
 candidates. Real notes are likely kinder (the commonest words are stopwords, already dropped), so
 this vault is a worst case; your diagnostics export will tell. Next options, each a large change:
 (1) score at most the 2,000 candidates with the highest lead-term frequency first and stop when no
-later one can enter the top 100 (MaxScore-style bound; same results); (2) search on a background
-actor and drop stale keystrokes, so typing never waits (P4: the budget is about blocking typing).
+later one can enter the top 100 (MaxScore-style bound; same results); (2) done in the apps: keyword search and snippets
+now run off the main thread and a keystroke that's been overtaken is dropped (`AppModel.searchNow`), so
+results never block typing; the 5 ms figure is still missed as a computation.
 
 **B4. Opening a notebook decoded every stroke on the main thread.** `InkEditorModel` is
 `@MainActor`; its ink reload (`Drawing/InkEditorModel.swift`, "Reload ink") turned every stroke into
