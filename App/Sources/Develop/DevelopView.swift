@@ -30,11 +30,13 @@ struct DevelopView: View {
 
     private var home: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 nextCard
                 if let message = develop.message {
-                    Text(message).font(.callout).foregroundStyle(.secondary)
+                    Label(message, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
                 }
+                if !develop.attempts.isEmpty { statsStrip }
+                YourWorkCard(develop: develop)
                 CoursesCard(develop: develop)
                 GoalsCard(develop: develop)
                 UploadsCard(develop: develop)
@@ -48,27 +50,64 @@ struct DevelopView: View {
         }
     }
 
+    /// The one thing to do next, large, in Trove's colours.
     private var nextCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             if let next = develop.next, !develop.practisable.isEmpty {
-                Text("Next").font(.caption).foregroundStyle(.secondary)
-                Text(next.skill.name).font(.title2.weight(.semibold))
-                Text(next.why).font(.callout).foregroundStyle(.secondary)
-                HStack {
-                    Button("Start 3 questions") { develop.startSession(count: 3, skill: next.skill.id) }
-                        .buttonStyle(.borderedProminent)
+                Label("Up next", systemImage: "sparkle").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+                Text(next.skill.name).font(.largeTitle.weight(.bold)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.7)
+                Text(next.why).font(.callout).foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: Theme.Space.s) {
+                    Button { develop.startSession(count: 3, skill: next.skill.id) } label: {
+                        Label("Start 3 questions", systemImage: "play.fill").font(.body.weight(.semibold)).padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Theme.accent).controlSize(.large)
                     Button("Practise anything") { develop.startSession(count: 5) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.bordered).tint(.white).controlSize(.large)
                 }
+                .padding(.top, Theme.Space.xs)
+            } else if !develop.practisable.isEmpty {
+                Label("Ready", systemImage: "sparkle").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+                Text("Pick up where you left off").font(.largeTitle.weight(.bold)).foregroundStyle(.white).minimumScaleFactor(0.7)
+                Button { develop.startSession(count: 5) } label: {
+                    Label("Practise 5 questions", systemImage: "play.fill").font(.body.weight(.semibold)).padding(.horizontal, 6)
+                }
+                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Theme.accent).controlSize(.large)
             } else {
-                Text("Practise with real papers").font(.title3.weight(.semibold))
-                Text("Add your courses, download their past papers from the exam board's own website, and Trove splits them into questions. Mark yourself against the mark scheme, or with your AI if you want. You can also upload your own papers.")
-                    .font(.callout).foregroundStyle(.secondary)
+                Label("Develop", systemImage: "graduationcap.fill").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+                Text("Practise with real papers").font(.largeTitle.weight(.bold)).foregroundStyle(.white).minimumScaleFactor(0.7)
+                Text("Add a course below and Trove downloads its past papers from the exam board and splits them into questions. Work each one out on a page or a whiteboard, mark it against the mark scheme, and ask the tutor when you're stuck.")
+                    .font(.callout).foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
+        .padding(Theme.Space.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: Theme.Radius.large)
+        .background(
+            LinearGradient(colors: [Brand.amber, Brand.coral], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Theme.Radius.large + 4, style: .continuous)
+        )
+        .shadow(color: Brand.coral.opacity(0.25), radius: 16, y: 8)
+    }
+
+    /// Three numbers, never more.
+    private var statsStrip: some View {
+        let s = develop.stats
+        return HStack(spacing: Theme.Space.m) {
+            stat("\(s.thisWeek)", "this week", symbol: "calendar")
+            stat("\(s.streak)", s.streak == 1 ? "day in a row" : "days in a row", symbol: "flame")
+            stat(s.recentAverage.map { "\(Int(($0 * 100).rounded()))%" } ?? "–", "recent average", symbol: "chart.line.uptrend.xyaxis")
+        }
+    }
+
+    private func stat(_ value: String, _ label: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: symbol).font(.callout).foregroundStyle(Theme.accent)
+            Text(value).font(.title2.weight(.semibold).monospacedDigit())
+            Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(Theme.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(cornerRadius: Theme.Radius.medium)
     }
 
     private var skillsList: some View {

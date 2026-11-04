@@ -192,3 +192,31 @@ public struct PracticeContext: Sendable, Equatable {
         return c
     }
 }
+
+/// The few numbers Develop's home shows: never a wall of statistics.
+public struct PracticeStats: Sendable, Equatable {
+    /// Questions marked or worked in the last 7 days.
+    public var thisWeek: Int
+    /// Days in a row with at least one question, ending today or yesterday.
+    public var streak: Int
+    /// The average of the last 20 marked scores (0…1), nil before any.
+    public var recentAverage: Double?
+
+    /// `now` and the attempts' `at` in Unix ms; days are local calendar days.
+    public init(_ attempts: [Attempt], now: Double, calendar: Calendar = .current) {
+        let counted = attempts.filter { $0.score != nil || !$0.work.isEmpty }
+        thisWeek = counted.filter { now - $0.at < 7 * 86_400_000 && $0.at <= now }.count
+        let scores = counted.filter { $0.score != nil }.sorted { $0.at > $1.at }.prefix(20).compactMap(\.score)
+        recentAverage = scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count)
+        let days = Set(counted.map { calendar.startOfDay(for: Date(timeIntervalSince1970: $0.at / 1000)) })
+        var day = calendar.startOfDay(for: Date(timeIntervalSince1970: now / 1000))
+        if !days.contains(day), let y = calendar.date(byAdding: .day, value: -1, to: day) { day = y }
+        var n = 0
+        while days.contains(day) {
+            n += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = prev
+        }
+        streak = n
+    }
+}

@@ -114,6 +114,18 @@ extension DevelopModel {
         return nil
     }
 
+    /// One question again, on a fresh page (Your work → Try again).
+    func practise(problem id: String) {
+        guard let p = problems.first(where: { $0.id == id }) else {
+            message = "That question's paper isn't on this device any more: download it again from its course."
+            return
+        }
+        workInProgress[p.id] = nil
+        session = Session(problems: [p], seed: 1)
+    }
+
+    var stats: PracticeStats { PracticeStats(attempts, now: Date().timeIntervalSince1970 * 1000) }
+
     /// The working sketch made for this question in this session, if any.
     func work(for p: Problem) -> String? { workInProgress[p.id] }
 }

@@ -337,3 +337,19 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   question screen also reflects your handwriting.
 - **Failure looks like**: "nothing readable", generic answers that ignore your working, or the final answer given away.
 - **Automated by**: `PracticeWorkTests/theTutorSeesTheQuestionAndSchemeFirst`; the replies: manual.
+
+### TEST-DEV-036: Your work groups your attempts and opens them again
+- **Feature**: Develop → Your work, the Up next card, three stats
+- **Priority**: high
+- **Coverage**: auto-tested (grouping, trend, tries, stats); the screen: not tested
+- **Platforms**: iPad, Mac, iPhone
+- **Preconditions**: a few marked questions from two papers, one question done twice.
+- **Steps**:
+  1. Open Develop. Look at the top: the Up next card, then this week / days in a row / recent average.
+  2. In Your work, open a topic, then another; close the first.
+  3. On an attempt, tap the working button, then go back and tap Try again.
+- **Expected**: topics are folded until tapped, each with its average ring, count and when; the
+  question done twice says "try 1 of 2" / "try 2 of 2"; the working opens; Try again starts that
+  question on a fresh page. Nothing jumps or lags when a topic opens.
+- **Failure looks like**: all attempts shown at once, wrong grouping, a working that won't open.
+- **Automated by**: `PracticeWorkTests`, `PracticeStatsTests`; the screen: manual.

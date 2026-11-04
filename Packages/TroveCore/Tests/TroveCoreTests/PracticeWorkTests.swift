@@ -81,3 +81,31 @@ struct PracticeWorkTests {
         for a in TutorAction.allCases { #expect(!a.prompt.isEmpty && !a.label.isEmpty) }
     }
 }
+
+struct PracticeStatsTests {
+    private let day = 86_400_000.0
+    private func a(_ at: Double, _ score: Double?) -> Attempt {
+        Attempt(id: "\(at)", problem: "p", skills: [], at: at, hint: 0, marking: .selfMarked, score: score, b: 0, sourceKey: "")
+    }
+
+    @Test func weekStreakAndAverage() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let now = 20 * day + 12 * 3_600_000 // noon on day 20
+        let attempts = [a(now - 1000, 1), a(now - day, 0.5), a(now - 2 * day, 0), a(now - 9 * day, 1), a(now - 3000, nil)]
+        let s = PracticeStats(attempts, now: now, calendar: utc)
+        #expect(s.thisWeek == 3) // the unmarked one without working doesn't count
+        #expect(s.streak == 3)
+        #expect(s.recentAverage == 0.625)
+    }
+
+    @Test func aStreakSurvivesUntilTheDayIsOver() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let now = 20 * day + 12 * 3_600_000
+        // Nothing today yet, but yesterday and the day before: still 2.
+        #expect(PracticeStats([a(now - day, 1), a(now - 2 * day, 1)], now: now, calendar: utc).streak == 2)
+        #expect(PracticeStats([a(now - 3 * day, 1)], now: now, calendar: utc).streak == 0)
+        #expect(PracticeStats([], now: now, calendar: utc).recentAverage == nil)
+    }
+}
