@@ -186,9 +186,17 @@ public enum PaperSplitter {
     /// The page's left text margin: near the left of almost every line, ignoring a few stray bits further
     /// left (a barcode's digits, a vertical label on the cover).
     static func leftMargin(_ lines: [Line]) -> Double {
-        let xs = lines.map(\.x).sorted()
+        let xs = lines.filter { !isVertical($0) }.map(\.x).sorted()
         return xs.isEmpty ? 0 : xs[xs.count / 50]
     }
+
+    /// Text running up the page edge (Pearson's "DO NOT WRITE IN THIS AREA" on every page): far taller than
+    /// wide. It's left out, so it neither pulls the margin left nor lands in a question's text.
+    static func isVertical(_ l: Line) -> Bool { l.text.count > 3 && l.height > 3 * max(l.width, 1) }
+
+    /// "(Total for Question 3 is 1 mark)", "(Total for Question 1 = 7 marks)": Pearson prints only this for a
+    /// question without parts, so it's that question's marks when no part marks are printed.
+    static let totalMarks = try! NSRegularExpression(pattern: #"\(Total for Question \d{1,2}\s*(?:is|=)\s*(\d{1,3}) marks?\)"#)
 
     /// The key from a match's groups: group 1 is the question number (spaces dropped, so AQA's
     /// "0 1" is 1), later groups are its parts ("0 1 . 2" → "1.2").
@@ -209,7 +217,7 @@ public enum PaperSplitter {
 
     public static func split(_ lines: [Line], layout: Catalogue.Layout, pageHeight: Double = 842, pageWidth: Double = 595) -> [Question] {
         guard let q = try? NSRegularExpression(pattern: layout.question), let mk = try? NSRegularExpression(pattern: layout.marks) else { return [] }
-        let ordered = lines.sorted { ($0.page, $0.y, $0.x) < ($1.page, $1.y, $1.x) }
+        let ordered = lines.filter { !isVertical($0) }.sorted { ($0.page, $0.y, $0.x) < ($1.page, $1.y, $1.x) }
         let margin = leftMargin(ordered) + marginSlack
         var starts: [(index: Int, key: String)] = []
         // Parts ("1.2" after numberParts) may sit a little in from the margin, as OCR, WJEC and Cambridge print them.
@@ -233,7 +241,10 @@ public enum PaperSplitter {
                 let nextOnPage = n + 1 < starts.count && ordered[starts[n + 1].index].page == page ? ordered[starts[n + 1].index].y : pageHeight
                 return PageRegion(page: page, rect: [0, top, pageWidth, max(0, nextOnPage - top)])
             }
-            let marks = body.compactMap { groups(mk, $0.text).flatMap { $0.first }.flatMap { Int($0) } }.reduce(0, +)
+            var marks = body.compactMap { groups(mk, $0.text).flatMap { $0.first }.flatMap { Int($0) } }.reduce(0, +)
+            if marks == 0, !start.key.contains(".") {
+                marks = body.lazy.compactMap { groups(totalMarks, $0.text)?.first.flatMap { Int($0) } }.first ?? 0
+            }
             let parent = start.key.contains(".") ? String(start.key[..<start.key.lastIndex(of: ".")!]) : nil
             out.append(Question(key: start.key, parent: parent, regions: regions, marks: marks > 0 ? marks : nil,
                                 text: body.map(\.text).joined(separator: "\n")))
@@ -332,7 +343,7 @@ extension PaperSplitter {
     /// wasn't read), and isn't followed by a lowercase word, so "3 kg of water" and page numbers stay text.
     /// In a mark scheme (`schemes`) "1ai" and "1(a)(i)" are keys too.
     public static func numberParts(_ lines: [PaperSplitter.Line], schemes: Bool = false) -> [PaperSplitter.Line] {
-        let ordered = lines.sorted { ($0.page, $0.y, $0.x) < ($1.page, $1.y, $1.x) }
+        let ordered = lines.filter { !isVertical($0) }.sorted { ($0.page, $0.y, $0.x) < ($1.page, $1.y, $1.x) }
         let margin = leftMargin(ordered) + marginSlack
         let roman = #"(viii|vii|vi|iv|ix|v|x|iii|ii|i)"#
         let full = try! NSRegularExpression(pattern: #"^(?:Q\.?\s?)?(\d{1,2})\.?\s?\(([a-h])\)\s?(?:\("# + roman + #"\))?"#)
@@ -342,6 +353,9 @@ extension PaperSplitter {
         let romanAlone = try! NSRegularExpression(pattern: #"^\("# + roman + #"\)(?=\s|$)"#)
         let bare = try! NSRegularExpression(pattern: #"^(?:Q\.?\s?)?(\d{1,2})[.)*]?(?=\s|$)"#)
         let romans = ["i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10]
+        // A page number in the footer ("2" at the foot of an even page, inside the margin) isn't question 2.
+        var foot: [Int: Double] = [:]
+        for l in ordered { foot[l.page] = max(foot[l.page] ?? 0, l.y) }
         var q = 0, part = 0
         func match(_ r: NSRegularExpression, _ t: String) -> (end: String.Index, groups: [String])? {
             let ns = t as NSString
@@ -365,7 +379,8 @@ extension PaperSplitter {
                 l.text = key(q, part, m.groups[0]) + " " + t[m.end...]
             } else if let m = match(bare, t), let n = Int(m.groups[0]) {
                 let rest = t[m.end...].drop { $0 == " " }
-                if line.x <= margin, n > q, n <= q + 2, !(rest.first?.isLowercase ?? false) {
+                let pageNumber = rest.isEmpty && line.y >= (foot[line.page] ?? 0) - 30
+                if line.x <= margin, n > q, n <= q + 2, !pageNumber, !(rest.first?.isLowercase ?? false) {
                     q = n; part = 0
                     l.text = "\(n) " + rest
                 } else {

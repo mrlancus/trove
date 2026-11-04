@@ -29,16 +29,17 @@
 "site": "https://www.ocr.org.uk"
 },
 {
+"id": "pearson",
+"name": "Pearson Edexcel",
+"site": "https://qualifications.pearson.com"
+},
+{
 "id": "wjec",
 "name": "WJEC",
 "site": "https://www.wjec.co.uk"
 }
 ],
 "unlisted": [
-{
-"id": "pearson",
-"why": "Pearson Edexcel's past-paper search needs its own search service key; not read automatically yet."
-},
 {
 "id": "ccea",
 "why": "CCEA's website blocks automated requests."
@@ -6283,6 +6284,2466 @@
 "years": [
 2021,
 2025
+]
+},
+{
+"id": "pearson-ial-accounting",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Accounting",
+"code": "WAC",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 63,
+"files": 195,
+"years": [
+2014,
+2025
+]
+},
+{
+"id": "pearson-9aa0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Arabic",
+"code": "9AA0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-ial-arabic",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Arabic",
+"code": "WAA",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 35,
+"files": 99,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-ial18-biology",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Biology",
+"code": "WBI",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 110,
+"files": 330,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9bn0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Biology A (Salters-Nuffield)",
+"code": "9BN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8bn0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Biology A (Salters-Nuffield)",
+"code": "8BN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 21,
+"files": 59,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9bi0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Biology B",
+"code": "9BI0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8bi0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Biology B",
+"code": "8BI0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 20,
+"files": 60,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9bs0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Business",
+"code": "9BS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 21,
+"files": 82,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8bs0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Business",
+"code": "8BS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial18-business",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Business",
+"code": "WBS",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 74,
+"files": 220,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9ch0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Chemistry",
+"code": "9CH0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8ch0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Chemistry",
+"code": "8CH0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 20,
+"files": 59,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial18-chemistry",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Chemistry",
+"code": "WCH",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 114,
+"files": 339,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9cn0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Chinese",
+"code": "9CN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 20,
+"files": 57,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8cn0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Chinese",
+"code": "8CN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 24,
+"years": [
+2018,
+2020
+]
+},
+{
+"id": "pearson-9dt0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Design and Technology Product Design",
+"code": "9DT0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 7,
+"files": 27,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9dr0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Drama and Theatre",
+"code": "9DR0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 34,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8dr0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Drama and Theatre",
+"code": "8DR0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 3,
+"files": 10,
+"years": [
+2017,
+2019
+]
+},
+{
+"id": "pearson-ial18-economics",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Economics",
+"code": "WEC",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 77,
+"files": 241,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9ec0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Economics A",
+"code": "9EC0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 84,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8ec0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Economics A",
+"code": "8EC0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9eb0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Economics B",
+"code": "9EB0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8eb0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Economics B",
+"code": "8EB0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 10,
+"files": 30,
+"years": [
+2016,
+2020
+]
+},
+{
+"id": "pearson-9en0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "English Language",
+"code": "9EN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 88,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8en0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "English Language",
+"code": "8EN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial-englang",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "English Language",
+"code": "WEN",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 69,
+"files": 199,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9el0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "English Language and Literature",
+"code": "9EL0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 62,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8el0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "English Language and Literature",
+"code": "8EL0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9et0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "English Literature",
+"code": "9ET0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 28,
+"files": 88,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8et0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "English Literature",
+"code": "8ET0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 19,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial-englit",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "English Literature",
+"code": "WET",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 67,
+"files": 197,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9fr0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "French",
+"code": "9FR0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 19,
+"files": 65,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8fr0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "French",
+"code": "8FR0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 9,
+"files": 31,
+"years": [
+2017,
+2020
+]
+},
+{
+"id": "pearson-ial-french",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "French",
+"code": "WFR",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 38,
+"files": 134,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9fm0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Further Mathematics",
+"code": "9FM0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 71,
+"files": 212,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8fm0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Further Mathematics",
+"code": "8FM0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 63,
+"files": 188,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-9ge0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Geography",
+"code": "9GE0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 25,
+"files": 82,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8ge0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Geography",
+"code": "8GE0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 49,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-ial-geography",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Geography",
+"code": "WGE",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 61,
+"files": 182,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9gn0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "German",
+"code": "9GN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 64,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8gn0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "German",
+"code": "8GN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 31,
+"years": [
+2017,
+2020
+]
+},
+{
+"id": "pearson-ial-german",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "German",
+"code": "WGN",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 35,
+"files": 137,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9gk0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Greek",
+"code": "9GK0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 15,
+"files": 45,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-ial-greek",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Greek",
+"code": "WGK",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 24,
+"files": 73,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9gu0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Gujarati",
+"code": "9GU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 12,
+"files": 36,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "pearson-9hi0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "History",
+"code": "9HI0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 231,
+"files": 699,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8hi0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "History",
+"code": "8HI0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 135,
+"files": 409,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial-history",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "History",
+"code": "WHI",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 283,
+"files": 832,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9ht0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "History of Art",
+"code": "9HT0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 40,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-ial18-it",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Information Technology",
+"code": "WIT",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 90,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9in0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Italian",
+"code": "9IN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 53,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8in0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Italian",
+"code": "8IN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 6,
+"files": 23,
+"years": [
+2018,
+2020
+]
+},
+{
+"id": "pearson-9ja0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Japanese",
+"code": "9JA0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-9ma0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Mathematics",
+"code": "9MA0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 32,
+"files": 97,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8ma0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Mathematics",
+"code": "8MA0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 23,
+"files": 68,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-ial18-mathematics",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Mathematics",
+"code": "WMA",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 251,
+"files": 732,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9mu0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Music",
+"code": "9MU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 36,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8mu0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Music",
+"code": "8MU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 3,
+"files": 14,
+"years": [
+2017,
+2019
+]
+},
+{
+"id": "pearson-9mt0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Music Technology",
+"code": "9MT0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 55,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8mt0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Music Technology",
+"code": "8MT0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 13,
+"files": 47,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-9pn0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Persian",
+"code": "9PN0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-9pe0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Physical Education",
+"code": "9PE0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 60,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8pe0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Physical Education",
+"code": "8PE0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 29,
+"years": [
+2017,
+2020
+]
+},
+{
+"id": "pearson-9ph0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Physics",
+"code": "9PH0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 83,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8ph0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Physics",
+"code": "8PH0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 20,
+"files": 60,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial18-physics",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Physics",
+"code": "WPH",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 113,
+"files": 335,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-9pl0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Politics",
+"code": "9PL0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 28,
+"files": 83,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8pl0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Politics",
+"code": "8PL0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 42,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-9pg0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Portuguese",
+"code": "9PG0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-8dt0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Product Design",
+"code": "8DT0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 2,
+"files": 7,
+"years": [
+2018,
+2019
+]
+},
+{
+"id": "pearson-9ps0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Psychology",
+"code": "9PS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 80,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-8ps0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Psychology",
+"code": "8PS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-ial-psychology",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Psychology",
+"code": "WPS",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 84,
+"files": 254,
+"years": [
+2016,
+2025
+]
+},
+{
+"id": "pearson-9rs0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Religious Studies",
+"code": "9RS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 65,
+"files": 192,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8rs0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Religious Studies",
+"code": "8RS0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 58,
+"files": 177,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9ru0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Russian",
+"code": "9RU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 52,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8ru0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Russian",
+"code": "8RU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 6,
+"files": 20,
+"years": [
+2018,
+2020
+]
+},
+{
+"id": "pearson-9sp0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Spanish",
+"code": "9SP0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 19,
+"files": 64,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-8sp0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Spanish",
+"code": "8SP0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 6,
+"files": 24,
+"years": [
+2017,
+2019
+]
+},
+{
+"id": "pearson-ial-spanish",
+"board": "pearson",
+"qualification": "International AS & A Level",
+"subject": "Spanish",
+"code": "WSP",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 41,
+"files": 143,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-9st0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Statistics",
+"code": "9ST0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 21,
+"files": 63,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-8st0",
+"board": "pearson",
+"qualification": "AS",
+"subject": "Statistics",
+"code": "8ST0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 6,
+"files": 18,
+"years": [
+2018,
+2020
+]
+},
+{
+"id": "pearson-9tu0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Turkish",
+"code": "9TU0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-9ur0",
+"board": "pearson",
+"qualification": "A-level",
+"subject": "Urdu",
+"code": "9UR0",
+"level": "alevel",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 18,
+"files": 54,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1aa0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Arabic",
+"code": "1AA0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 42,
+"files": 136,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1as0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Astronomy",
+"code": "1AS0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 43,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1bh0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Biblical Hebrew",
+"code": "1BH0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 10,
+"files": 30,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1bi0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Biology",
+"code": "1BI0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 24,
+"files": 72,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1bs0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Business",
+"code": "1BS0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 10,
+"files": 43,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1ch0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Chemistry",
+"code": "1CH0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 24,
+"files": 72,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1cn0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Chinese",
+"code": "1CN0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 39,
+"files": 127,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1cs0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Citizenship Studies",
+"code": "1CS0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 47,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1sc0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Combined Science",
+"code": "1SC0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 72,
+"files": 216,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1cp2",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Computer Science",
+"code": "1CP2",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 12,
+"files": 28,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "pearson-1dt0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "1DT0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 38,
+"files": 117,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1dr0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Drama",
+"code": "1DR0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 12,
+"files": 48,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1en0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "English Language",
+"code": "1EN0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 98,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-1en2",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "English Language 2.0",
+"code": "1EN2",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 15,
+"files": 46,
+"years": [
+2022,
+2025
+]
+},
+{
+"id": "pearson-1et0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "English Literature",
+"code": "1ET0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 23,
+"files": 67,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-1fr0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "French",
+"code": "1FR0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 156,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1ga0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Geography A",
+"code": "1GA0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 25,
+"files": 73,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1gb0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Geography B",
+"code": "1GB0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 24,
+"files": 72,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1gn0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "German",
+"code": "1GN0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 156,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1gk0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Greek",
+"code": "1GK0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 36,
+"files": 118,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1gu0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Gujarati",
+"code": "1GU0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 98,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1hi0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "History",
+"code": "1HI0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 100,
+"files": 301,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1in0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Italian",
+"code": "1IN0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 39,
+"files": 126,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1ja0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Japanese",
+"code": "1JA0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 36,
+"files": 118,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1ma1",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Mathematics",
+"code": "1MA1",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 66,
+"files": 207,
+"years": [
+2017,
+2025
+]
+},
+{
+"id": "pearson-1mu0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Music",
+"code": "1MU0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 9,
+"files": 36,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1pn0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Persian",
+"code": "1PN0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 97,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1pe0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Physical Education",
+"code": "1PE0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 60,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1ph0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Physics",
+"code": "1PH0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 25,
+"files": 73,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1pg0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Portuguese",
+"code": "1PG0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 33,
+"files": 103,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1ps0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Psychology",
+"code": "1PS0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 42,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1ra0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Religious Studies A",
+"code": "1RA0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 99,
+"files": 295,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1rb0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Religious Studies B",
+"code": "1RB0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 128,
+"files": 380,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1ru0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Russian",
+"code": "1RU0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 42,
+"files": 137,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1sp0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Spanish",
+"code": "1SP0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 154,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-1st0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Statistics",
+"code": "1ST0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 28,
+"files": 84,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-1tu0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Turkish",
+"code": "1TU0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 37,
+"files": 119,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "pearson-1ur0",
+"board": "pearson",
+"qualification": "GCSE",
+"subject": "Urdu",
+"code": "1UR0",
+"level": "gcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 42,
+"files": 133,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ac1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Accounting",
+"code": "4AC1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 36,
+"files": 104,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4aa1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Arabic as a first language",
+"code": "4AA1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 69,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ar0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Arabic as a first language",
+"code": "4AR0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 90,
+"years": [
+2011,
+2019
+]
+},
+{
+"id": "pearson-4ba0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Bangla",
+"code": "4BA0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 12,
+"files": 33,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4bn1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Bangladesh Studies",
+"code": "4BN1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 40,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4be0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Bengali",
+"code": "4BE0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 15,
+"files": 45,
+"years": [
+2011,
+2019
+]
+},
+{
+"id": "pearson-4bi1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Biology",
+"code": "4BI1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 142,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4bs1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Business",
+"code": "4BS1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 31,
+"files": 90,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ch1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Chemistry",
+"code": "4CH1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 140,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4cn1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Chinese",
+"code": "4CN1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 32,
+"files": 99,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ca0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Classical Arabic",
+"code": "4CA0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 24,
+"years": [
+2011,
+2019
+]
+},
+{
+"id": "pearson-4cm1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Commerce",
+"code": "4CM1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 34,
+"files": 100,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4cp0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Computer science",
+"code": "4CP0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 15,
+"files": 54,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ec1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Economics",
+"code": "4EC1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 40,
+"files": 116,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4es1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "English (as 2nd language)",
+"code": "4ES1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 48,
+"files": 152,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ea1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "English Language A",
+"code": "4EA1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 52,
+"files": 173,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-4eb1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "English Language B",
+"code": "4EB1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 26,
+"files": 85,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-4et1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "English Literature",
+"code": "4ET1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 52,
+"files": 171,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-4fr1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "French",
+"code": "4FR1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 30,
+"files": 90,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4pm1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Further Pure Mathematics",
+"code": "4PM1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 44,
+"files": 128,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ge1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Geography",
+"code": "4GE1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 32,
+"files": 92,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4gn1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "German",
+"code": "4GN1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 26,
+"files": 81,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4gl1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Global Citizenship",
+"code": "4GL1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 6,
+"files": 17,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4gk1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Greek as a first language",
+"code": "4GK1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 40,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4gu0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Gujarati",
+"code": "4GU0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 7,
+"files": 23,
+"years": [
+2011,
+2019
+]
+},
+{
+"id": "pearson-4hi1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "History",
+"code": "4HI1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 41,
+"files": 115,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4hb1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Human Biology",
+"code": "4HB1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 38,
+"files": 111,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4it1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Information and Communication Technology",
+"code": "4IT1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 27,
+"files": 75,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4is1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Islamic Studies",
+"code": "4IS1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 7,
+"files": 20,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ma1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Mathematics A",
+"code": "4MA1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 113,
+"files": 333,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-4mb1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Mathematics B",
+"code": "4MB1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 52,
+"files": 156,
+"years": [
+2018,
+2025
+]
+},
+{
+"id": "pearson-4pa1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Pakistan Studies",
+"code": "4PA1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 14,
+"files": 40,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ph1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Physics",
+"code": "4PH1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 49,
+"files": 143,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4rs1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Religious Studies",
+"code": "4RS1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 24,
+"files": 70,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4sd0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Science (Double Award)",
+"code": "4SD0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 66,
+"files": 186,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ss0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Science (Single Award)",
+"code": "4SS0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 25,
+"files": 70,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4si1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Sinhala",
+"code": "4SI1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 7,
+"files": 20,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4sp1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Spanish",
+"code": "4SP1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 26,
+"files": 80,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4sw1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Swahili",
+"code": "4SW1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 16,
+"files": 44,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4ta1",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Tamil",
+"code": "4TA1",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 7,
+"files": 21,
+"years": [
+2019,
+2025
+]
+},
+{
+"id": "pearson-4tu0",
+"board": "pearson",
+"qualification": "International GCSE",
+"subject": "Turkish",
+"code": "4TU0",
+"level": "igcse",
+"url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
+"papers": 8,
+"files": 24,
+"years": [
+2011,
+2019
 ]
 },
 {

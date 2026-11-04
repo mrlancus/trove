@@ -205,7 +205,7 @@ struct CoursePicker: View {
 
     private func unlistedNote(_ cat: Catalogue) -> String {
         let names = (cat.unlisted ?? []).map { u in u.id == "pearson" ? "Pearson Edexcel" : u.id == "ccea" ? "CCEA" : u.id.uppercased() }
-        let missing = names.isEmpty ? "" : "\(ListFormatter.localizedString(byJoining: names)) aren't listed yet. "
+        let missing = names.isEmpty ? "" : "\(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "isn't" : "aren't") listed yet. "
         return missing + "For anything else, upload the papers yourself: they're saved in your trove and sync to all your devices."
     }
 }

@@ -72,7 +72,7 @@ deadline and reassessing. Their tests are added here when they're built.
   3. Pick a GCSE one too (e.g. AQA GCSE Physics), and an IGCSE one (Cambridge).
   4. Device B: open Develop after syncing.
   5. On A, long-press a course → Remove course.
-- **Expected**: the picker lists subjects by level with board, spec code, number of papers and years; search finds by subject, board or code; Pearson Edexcel and CCEA are named as not listed yet, with uploads offered instead; the courses appear on B with no papers downloaded there ("0 of N papers on this device"); removing on A removes on B.
+- **Expected**: the picker lists subjects by level with board, spec code, number of papers and years; search finds by subject, board or code; Pearson Edexcel specs are listed (e.g. 9PH0, 4PH1, IAL Physics); CCEA is named as not listed yet, with uploads offered instead; the courses appear on B with no papers downloaded there ("0 of N papers on this device"); removing on A removes on B.
 - **Failure looks like**: a course only on one device, the picker empty (catalogue not bundled), a crash on a spec with no papers.
 - **Automated by**: `CourseTests/coursesSyncAndRemovingKeepsTheRecord`; app: manual.
 

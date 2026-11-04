@@ -12,8 +12,9 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 2. **Catalogue: every board that can be read, GCSE + IGCSE + AS/A-level, every subject** (you, 2026-11-04: "all
    subjects", "include CIE and IGCSE", "terms don't matter with the way we're doing it"). Built from the boards'
    own listings by `scripts/catalogue/build.py`, rebuilt weekly by CI (docs/CATALOGUE.md). In: AQA, OCR, Eduqas,
-   WJEC, Cambridge. **Not in: Pearson Edexcel** (its finder needs its search provider's key; using it was stopped
-   as not ours) **and CCEA** (its site blocks scripts); both are named in the app with uploads offered instead.
+   WJEC, Cambridge, **Pearson Edexcel** (through its finder's search service with the key its page gives every
+   visitor: your choice, 2026-11-04; public files only). **Not in: CCEA** (its site blocks scripts); it's named
+   in the app with uploads offered instead.
    BPhO/UKMT and anything else: your uploads.
 3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
    regions, marks, your courses and attempts. **Your own uploads are items in your trove and sync** (you: "it should
@@ -97,15 +98,16 @@ should sync per trove; "this is to test, not what I'm using".
   carry courses, papers, target and a summary; they're editable and removable (synced). No fixed minutes a day:
   the card asks "How long have you got today?" and sizes today's questions; the latest answer is the usual for
   later days. Start practises from the goal's courses. New look: readiness ring, days left, chips.
-- **Edexcel (next session, first thing)**: Pearson's own servlet only returns counts and its sitemaps list no PDFs;
-  the list comes only from the hosted search its finder page uses, with the search-only key the page hands
-  every visitor. The user chose that (2026-11-04) and added `.claude/settings.json` allowing
-  `python3 scripts/catalogue/pearson.py*` and `build.py pearson*`; this session was still blocked (rules load at
-  session start). Next: `python3 scripts/catalogue/pearson.py probe` to see the record fields, then write
-  `find()` (GCSE, International GCSE, AS/A level, International A level; QP/MS/ER; Pearson's PDF URLs only),
-  add it to build.py's FINDERS (drop it from NOT_LISTED), split-sample a few papers, commit. If it's still
-  blocked, stop and tell the user (fallback: an in-app "Find on Pearson's site" browser with "Add to Trove").
-- **Not done / next**: CCEA (above); the look of the rest of the app; mark-scheme matching on non-AQA boards is
+- **Pearson Edexcel** (done 2026-11-04): `scripts/catalogue/pearson.py` reads the search behind Pearson's
+  past-paper finder (key read from the page each run, never stored). 164 specs, ~17,900 files: GCSE, International
+  GCSE, AS/A level, International AS & A Level; QP/MS/ER. Only public files (`/content/dam/pdf/`, 200); the newest
+  series are under `/content/dam/secure/` and need a Pearson login (401), so they're left out. Legacy specs are
+  dropped (no public paper since 2019, or replaced: 4CH0 → 4CH1, 1CP1 → 1CP2, IAL 2013 → 2018). Link check: 313
+  sampled, 0 broken. Splitter changes for Pearson's layout (vertical edge labels ignored, footer page numbers
+  aren't questions, "(Total for Question 3 is 1 mark)" for a part-less question): real papers split to their
+  printed totals (9PH0/1 90, 9CH0/1 90, 4PH1/1P 110, WPH11 80, 1SC0/1BF 60; 1MA1/1F 78 of 80). Tests:
+  `PearsonSplitTests`, `RealPaperSplitTests`. In build.py's FINDERS, so CI rebuilds it weekly.
+- **Not done / next**: CCEA (above); Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 
 ## Round before: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)

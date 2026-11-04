@@ -16,7 +16,7 @@ GCSE, IGCSE and AS/A-level (and International AS & A Level), every subject each 
 | OCR | each qualification's Assessment page on ocr.org.uk | the series OCR publishes; the newest are only on Teach Cambridge for teachers |
 | Eduqas, WJEC | each qualification page's Past papers tab (`/umbraco/surface/TabSurface/GetpastpapersTab`) | papers and mark schemes on pastpapers.download.wjec.co.uk |
 | Cambridge International | each IGCSE and International AS & A Level syllabus's past-papers page | one recent series and the specimen papers; the rest are on School Support Hub for schools |
-| Pearson Edexcel (incl. International GCSE) | not yet | its finder searches through a third-party search service with its own key; reading that from a script was stopped in the build session as using a key that isn't ours. Asking Pearson, or another public listing, is open |
+| Pearson Edexcel | the search service behind qualifications.pearson.com's past-paper finder, with the search-only key its page gives every visitor (read from the page each run; the user's choice, 2026-11-04) | GCSE, International GCSE, AS/A level, International AS & A Level: the series Pearson makes public (files under `/content/dam/pdf/`); the newest are under `/content/dam/secure/` behind a Pearson login and are left out. Legacy specs (no public paper since 2019, or replaced: 4CH0 → 4CH1, IAL 2013 → 2018) are left out |
 | CCEA | not yet | its website blocks automated requests; not worked around |
 
 Modified (large-print, braille) papers, sound files, transcripts and confidential instructions are left out.
@@ -51,9 +51,9 @@ empties it.
 `PaperSplitter.splitBest` tries the board's own layout (AQA's sciences print "0 1 . 1") and the generic
 one ("1 (a) (i)", "1(b)(ii)", "2. (a)", marks "[2]" or "[2 marks]") and keeps whichever finds more marks.
 Parts on their own line belong to the question above; each part carries its stem; page numbers and
-numbers inside the text ("5.6 × 10⁻³") stay text. Checked on real papers from AQA, OCR, Eduqas, WJEC and Cambridge
+numbers inside the text ("5.6 × 10⁻³") stay text. Checked on real papers from AQA, OCR, Eduqas, WJEC, Cambridge and Pearson
 (TEST-CUR-004): totals match the paper's or come within a few marks. A paper with numbered questions but no marks printed (multiple choice: Cambridge's Paper 1, OCR's
-section A) gets 1 mark a question. Papers with no numbered questions (essays, listening) are reported, not split. Your uploads with no readable text
+section A) gets 1 mark a question. Papers with no numbered questions (essays, listening) are reported, not split. Pearson's papers need three things more, all in the splitter: the vertical "DO NOT WRITE IN THIS AREA" down each page edge is ignored, a page number at the foot is not a question, and a question with no part marks takes its "(Total for Question 3 is 1 mark)". Your uploads with no readable text
 (photos, scans) become one question per page.
 
 ## Terms

@@ -230,7 +230,7 @@ import Crypto
     @Test func theCatalogueIsLinksOnBoardSitesOnly() throws {
         let cat = try Catalogue.decode(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("index.json")))
         let hosts = ["aqa": ["aqa.org.uk", "cdn.sanity.io"], "ocr": ["ocr.org.uk"], "eduqas": ["wjec.co.uk", "eduqas.co.uk"],
-                     "wjec": ["wjec.co.uk"], "cie": ["cambridgeinternational.org"]]
+                     "wjec": ["wjec.co.uk"], "cie": ["cambridgeinternational.org"], "pearson": ["qualifications.pearson.com"]]
         #expect(Set(cat.specs.map(\.board)).isSubset(of: Set(hosts.keys)))
         #expect(cat.specs.allSatisfy { $0.docs.isEmpty }, "the index carries no documents")
         #expect(Set(cat.specs.map(\.id)).count == cat.specs.count)
@@ -564,6 +564,41 @@ extension DevelopAI.Task {
         ], layout: PaperSplitter.genericLayout)
         #expect(Set(scheme.keys) == ["1.1", "1.2.1", "2.1"])
         #expect(scheme["1.2.1"]?.contains("19.6") == true)
+    }
+}
+
+/// Pearson's layout (TEST-CUR-004): the question number apart from its text, a vertical "DO NOT WRITE IN THIS
+/// AREA" down each page edge, page numbers at the foot inside the margin, and a part-less question's marks
+/// only in its "(Total for Question 1 is 1 mark)" line. Written for this test (no board text).
+@Suite struct PearsonSplitTests {
+    @Test func numbersApartEdgeLabelsFootersAndTotals() {
+        func line(_ page: Int, _ x: Double, _ y: Double, _ t: String, w: Double = 300, h: Double = 12) -> PaperSplitter.Line {
+            .init(page: page, x: x, y: y, width: w, height: h, text: t)
+        }
+        var paper: [PaperSplitter.Line] = []
+        for page in 0..<4 {  // the edge label sits left of the margin on even pages, right of the page on odd ones
+            let x: [Double] = page % 2 == 0 ? [4, 38] : [599, 633]
+            paper += x.map { line(page, $0, 120, "DO NOT WRITE IN THIS AREA", w: 15, h: 649) }
+            paper.append(line(page, page % 2 == 0 ? 80 : 566, 827, "\(page + 2)", w: 6))
+            paper.append(line(page, 218, 834, "*P00000A0\(page + 2)20*"))
+        }
+        paper += [
+            line(0, 71, 86, "1", w: 6), line(0, 89, 86, "Write 0.5 as a fraction."),
+            line(0, 375, 200, "(Total for Question 1 is 1 mark)"),
+            line(0, 71, 300, "2", w: 6), line(0, 89, 300, "Work out 3 × 4"),
+            line(0, 375, 400, "(Total for Question 2 is 1 mark)"),
+            line(1, 71, 86, "3", w: 6), line(1, 89, 86, "A shop sells pens."),
+            line(1, 89, 200, "(a) Work out the total."), line(1, 524, 300, "(1)", w: 14),
+            line(1, 88, 400, "(b) Is she correct?"), line(1, 524, 700, "(3)", w: 14),
+            line(1, 371, 760, "(Total for Question 3 is 4 marks)"),
+            line(2, 71, 86, "4 A ball is dropped."), line(2, 524, 300, "(2)", w: 14),
+            line(2, 371, 400, "(Total for Question 4 = 2 marks)"),
+            line(3, 71, 86, "5", w: 6), line(3, 89, 86, "Simplify 2a + 3a"), line(3, 524, 200, "(1)", w: 14),
+        ]
+        let qs = PaperSplitter.splitBest(paper, layouts: [PaperSplitter.genericLayout]).questions
+        #expect(qs.map(\.key) == ["1", "2", "3.1", "3.2", "4", "5"])
+        #expect(qs.map(\.marks) == [1, 1, 1, 3, 2, 1], "a total counts only where no part marks are printed")
+        #expect(!qs.contains { $0.text.contains("DO NOT WRITE") })
     }
 }
 
