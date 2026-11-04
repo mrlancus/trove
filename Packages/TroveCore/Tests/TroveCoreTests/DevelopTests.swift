@@ -467,6 +467,58 @@ extension DevelopAI.Task {
     }
 }
 
+/// Goals made by talking them through, edited, with today's time (TEST-CUR-006, TEST-CUR-007).
+@Suite struct GoalTests {
+    let candidates = [GoalChat.Candidate(spec: "aqa-7408", name: "AQA A-level Physics (7408)", yours: true),
+                      GoalChat.Candidate(spec: "ocr-h556", name: "OCR A-level Physics A (H556)", yours: false)]
+
+    @Test func theAIAsksUntilItKnowsAndNeverGuessesTheDate() {
+        let ask = #"{"status":"ask","question":"Which board?","options":["AQA","OCR","Edexcel","Not sure"],"goal":{"name":"","date":"","courses":[],"papers":[],"target":"","summary":""}}"#
+        #expect(GoalChat.parse(ask, candidates: candidates) == .ask(question: "Which board?", options: ["AQA", "OCR", "Edexcel", "Not sure"]))
+        // "ready" without a real date turns back into a question.
+        let noDate = #"{"status":"ready","question":"","options":[],"goal":{"name":"Physics","date":"June","courses":["aqa-7408"],"papers":[],"target":"","summary":""}}"#
+        guard case .ask = GoalChat.parse(noDate, candidates: candidates) else { Issue.record("a goal without a date was accepted"); return }
+        let ready = #"{"status":"ready","question":"","options":[],"goal":{"name":"AQA A-level Physics","date":"2027-06-14","courses":["aqa-7408","made-up"],"papers":["Paper 1","Paper 2"],"target":"A*","summary":"AQA A-level Physics papers 1 and 2, June 2027 (mid-month assumed)."}}"#
+        guard case .ready(let g) = GoalChat.parse(ready, candidates: candidates) else { Issue.record("not ready"); return }
+        #expect(g.courses == ["aqa-7408"], "courses not in the list are dropped")
+        #expect(g.papers == ["Paper 1", "Paper 2"] && g.target == "A*")
+        #expect(GoalChat.deadline(g.date) == 1_812_974_400_000) // 2027-06-14 12:00 UTC
+        // The prompt carries the courses and, at the limit, tells it to stop asking.
+        let many = (0..<GoalChat.maxQuestions).flatMap { [GoalChat.Message(.you, "x\($0)"), GoalChat.Message(.ai, "q\($0)")] }
+        let prompt = GoalChat.prompt(many, candidates: candidates, today: "2026-11-04")
+        #expect(prompt.contains("aqa-7408: AQA A-level Physics (7408) (the student's course)"))
+        #expect(prompt.contains("reply with status \"ready\" now"))
+    }
+
+    @Test func todaysTimeSizesTodayAndBecomesTheUsual() async {
+        let day = 86_400_000.0, now = 1_700_000_000_000.0
+        var goal = CampaignPlanner.Goal(id: "campaign.g", name: "Physics", deadline: now + 5 * day, minutesPerDay: 30, courses: ["aqa-7408"])
+        goal.setToday(64, now: now)
+        let plan = CampaignPlanner.plan(goal, skills: ["a", "b", "c", "d", "e", "f", "g", "h", "i"], states: [:], now: now)
+        #expect(plan.days[0].questions == 8 && plan.days[1].questions == 8)
+        #expect(goal.minutesPerDay == 64 && goal.daysLeft(now: now) == 6)
+        #expect(goal.sourcePrefixes == ["cat:aqa-7408-"])
+        // Edited and removed like any record; removing syncs (inactive), so it's gone everywhere.
+        let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
+        await lib.saveCampaign(goal)
+        goal.name = "AQA Physics"
+        goal.papers = ["Paper 1"]
+        await lib.saveCampaign(goal)
+        #expect(await lib.campaigns() == [goal])
+        await lib.removeCampaign(goal)
+        #expect(await lib.campaigns().isEmpty)
+        // A goal's practice comes from its courses' papers.
+        var filter = Practice.Filter()
+        filter.sourcePrefixes = goal.sourcePrefixes
+        func problem(_ id: String, _ doc: String) -> Problem {
+            Problem(Record(id: id, kind: Develop.problemKind, fields: ["source": ["catalogue": .string(doc)], "key": .string("1.1"), "marks": .number(2),
+                                                                       "level": .string("alevel")], createdHLC: "1", updatedHLC: "1"))
+        }
+        let p1 = problem("p1", "aqa-7408-1-2023-06-qp"), p2 = problem("p2", "ocr-h556-1-2023-06-qp")
+        #expect(Practice.pick(5, from: [p1, p2], attempts: [], skills: [:], filter: filter, now: now, seed: 1).map(\.id) == ["p1"])
+    }
+}
+
 /// Chosen courses sync as records (TEST-CUR-005).
 @Suite struct CourseTests {
     @Test func coursesSyncAndRemovingKeepsTheRecord() async {

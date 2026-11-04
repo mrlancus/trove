@@ -11,7 +11,6 @@ struct DevelopView: View {
     @Environment(AppModel.self) private var model
     @State private var develop = DevelopModel.shared
     @State private var anki: URL?
-    @State private var addingGoal = false
 
     var body: some View { perfBody.perfWorkflow("Develop") }
 
@@ -40,7 +39,7 @@ struct DevelopView: View {
                     Text(message).font(.callout).foregroundStyle(.secondary)
                 }
                 CoursesCard(develop: develop)
-                goals
+                GoalsCard(develop: develop)
                 UploadsCard(develop: develop)
                 if develop.concepts.contains(where: { $0.type == .skill }) { skillsList }
                 if !develop.toReview.isEmpty { review }
@@ -73,43 +72,6 @@ struct DevelopView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(cornerRadius: Theme.Radius.large)
-    }
-
-    /// Preparation goals: readiness in a sentence, and the next days' plan.
-    private var goals: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Goals").font(.headline)
-                Spacer()
-                Button { addingGoal = true } label: { Label("Prepare for…", systemImage: "flag") }.buttonStyle(.bordered).controlSize(.small)
-            }
-            if develop.goals.isEmpty {
-                Text("Add an exam or a competition with its date: Trove plans what to practise each day from what you've shown so far.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            ForEach(develop.goals, id: \.id) { goal in
-                let plan = develop.plan(goal)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(goal.name).font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text(Date(timeIntervalSince1970: goal.deadline / 1000), style: .date).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Text(plan.why).font(.caption).foregroundStyle(.secondary)
-                    ForEach(Array(plan.days.prefix(3).enumerated()), id: \.offset) { i, day in
-                        Text("\(i == 0 ? "Today" : i == 1 ? "Tomorrow" : Date(timeIntervalSince1970: day.date / 1000).formatted(.dateTime.weekday(.wide))): "
-                             + (day.skills.isEmpty ? "nothing new needed" : day.skills.map(develop.name).joined(separator: ", "))
-                             + (day.diagnostic ? " (first check)" : ""))
-                            .font(.caption)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: Theme.Radius.large)
-        .sheet(isPresented: $addingGoal) { GoalSheet(develop: develop) }
     }
 
     private var skillsList: some View {
@@ -478,31 +440,3 @@ struct AnswerCanvas: UIViewRepresentable {
 #endif
 
 /// Adding a goal: a name, a date, how long a day.
-struct GoalSheet: View {
-    let develop: DevelopModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var date = Date().addingTimeInterval(14 * 86_400)
-    @State private var minutes = 30
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Goal (e.g. AQA Physics Paper 1)", text: $name)
-                DatePicker("Date", selection: $date, in: Date()..., displayedComponents: .date)
-                Stepper("\(minutes) minutes a day", value: $minutes, in: 10...180, step: 10)
-            }
-            .navigationTitle("Prepare for…")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { Task { await develop.addGoal(name: name, deadline: date, minutesPerDay: minutes); dismiss() } }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 260)
-        #endif
-    }
-}

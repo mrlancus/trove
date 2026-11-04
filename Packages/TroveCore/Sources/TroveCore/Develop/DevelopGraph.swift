@@ -146,6 +146,8 @@ public enum Practice {
     public struct Filter: Sendable, Equatable {
         public var skills: Set<String> = []
         public var sources: Set<String> = []
+        /// Source keys starting with any of these ("cat:aqa-7408-": a course's papers).
+        public var sourcePrefixes: Set<String> = []
         public var levels: Set<ProblemLevel> = []
         public var minMarks: Int?
         public var maxMarks: Int?
@@ -164,6 +166,7 @@ public enum Practice {
             !recent.contains(p.id)
                 && (filter.skills.isEmpty || !filter.skills.isDisjoint(with: p.skills))
                 && (filter.sources.isEmpty || filter.sources.contains(p.sourceKey))
+                && (filter.sourcePrefixes.isEmpty || filter.sourcePrefixes.contains { p.sourceKey.hasPrefix($0) })
                 && (filter.levels.isEmpty || filter.levels.contains(p.level))
                 && (filter.minMarks.map { (p.marks ?? 0) >= $0 } ?? true)
                 && (filter.maxMarks.map { (p.marks ?? 0) <= $0 } ?? true)

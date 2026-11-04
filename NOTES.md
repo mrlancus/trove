@@ -92,8 +92,14 @@ should sync per trove; "this is to test, not what I'm using".
 - **Apps**: Develop → Your courses (picker by level with search, subject badges, progress per course), a course
   screen (papers by series, tier filter, tap a paper to download it with its scheme, Download every paper,
   auto-split), Your own papers → Upload (Files, Photos, camera scan) saved as items in your trove.
-- **Not done / next**: Pearson Edexcel and CCEA (above); the rest of your feedback (goals that ask until they
-  understand, editable goals, flexible time per day, the look); mark-scheme matching on non-AQA boards is
+- **Goals** (your feedback): New goal with your AI is a short chat (`GoalChat`: one question at a time with
+  tappable answers, at most 6, never a guessed date) ending in a goal to confirm; without AI, a form. Goals
+  carry courses, papers, target and a summary; they're editable and removable (synced). No fixed minutes a day:
+  the card asks "How long have you got today?" and sizes today's questions; the latest answer is the usual for
+  later days. Start practises from the goal's courses. New look: readiness ring, days left, chips.
+- **Edexcel**: waiting on you: reply "do edexcel" to read Pearson's own past-paper service on
+  qualifications.pearson.com (the endpoint its finder calls; no key), like AQA's.
+- **Not done / next**: CCEA (above); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 
 ## Round before: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)

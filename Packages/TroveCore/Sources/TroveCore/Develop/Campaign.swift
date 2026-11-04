@@ -6,24 +6,75 @@ import Foundation
 public enum CampaignPlanner {
     public static let kind = "campaign"
 
-    public struct Goal: Sendable, Equatable {
+    public struct Goal: Sendable, Equatable, Identifiable {
         public var id: String
         public var name: String
         /// Unix ms.
         public var deadline: Double
         /// The skills it needs (empty: every skill).
         public var skills: [String]
+        /// Your usual time a day; today's can differ (`todayMinutes`).
         public var minutesPerDay: Int
-        public init(id: String, name: String, deadline: Double, skills: [String] = [], minutesPerDay: Int = 30) {
+        /// Catalogue spec ids it covers (practice comes from their papers).
+        public var courses: [String]
+        /// Which papers or components ("Paper 1", "Component 2"), when only some.
+        public var papers: [String]
+        /// "A*", "grade 7", "a gold certificate".
+        public var target: String?
+        /// What the goal is, in a sentence (written when your AI clarified it, or by you).
+        public var summary: String?
+        /// The time you have today, if you said: start of that day (Unix ms) and minutes.
+        public var todayDate: Double?
+        public var todayMinutes: Int?
+        /// Removing a goal keeps its record (inactive), so the removal syncs.
+        public var active: Bool
+
+        public init(id: String, name: String, deadline: Double, skills: [String] = [], minutesPerDay: Int = 30, courses: [String] = [],
+                    papers: [String] = [], target: String? = nil, summary: String? = nil, todayDate: Double? = nil, todayMinutes: Int? = nil,
+                    active: Bool = true) {
             self.id = id; self.name = name; self.deadline = deadline; self.skills = skills; self.minutesPerDay = minutesPerDay
+            self.courses = courses; self.papers = papers; self.target = target; self.summary = summary
+            self.todayDate = todayDate; self.todayMinutes = todayMinutes; self.active = active
         }
         public init?(_ r: Record) {
             guard let deadline = r.fields["deadline"]?.number else { return nil }
             self.init(id: r.id, name: r.fields["name"]?.string ?? "", deadline: deadline, skills: r.fields["skills"]?.stringArray ?? [],
-                      minutesPerDay: Int(r.fields["minutesPerDay"]?.number ?? 30))
+                      minutesPerDay: Int(r.fields["minutesPerDay"]?.number ?? 30), courses: r.fields["courses"]?.stringArray ?? [],
+                      papers: r.fields["papers"]?.stringArray ?? [], target: r.fields["target"]?.string, summary: r.fields["summary"]?.string,
+                      todayDate: r.fields["todayDate"]?.number, todayMinutes: r.fields["todayMinutes"]?.number.map { Int($0) },
+                      active: r.fields["active"]?.bool ?? true)
         }
         public var fields: [String: JSONValue] {
-            ["name": .string(name), "deadline": .number(deadline), "skills": JSONValue(skills), "minutesPerDay": .number(Double(minutesPerDay))]
+            var f: [String: JSONValue] = ["name": .string(name), "deadline": .number(deadline), "skills": JSONValue(skills),
+                                          "minutesPerDay": .number(Double(minutesPerDay)), "courses": JSONValue(courses),
+                                          "papers": JSONValue(papers), "active": .bool(active)]
+            f["target"] = target.map { .string($0) } ?? .null
+            f["summary"] = summary.map { .string($0) } ?? .null
+            f["todayDate"] = todayDate.map { .number($0) } ?? .null
+            f["todayMinutes"] = todayMinutes.map { .number(Double($0)) } ?? .null
+            return f
+        }
+
+        /// The minutes for the day starting at `dayStart`: today's if you said, else your usual.
+        public func minutes(on dayStart: Double) -> Int {
+            if let d = todayDate, let m = todayMinutes, abs(d - dayStart) < 1 { return m }
+            return minutesPerDay
+        }
+
+        /// Sets today's time; it becomes your usual too, since time changes and the latest is the best guess.
+        public mutating func setToday(_ minutes: Int, now: Double) {
+            todayDate = (now / CampaignPlanner.day).rounded(.down) * CampaignPlanner.day
+            todayMinutes = minutes
+            minutesPerDay = minutes
+        }
+
+        /// Problems from the goal's courses: their catalogue papers' source keys start with these.
+        public var sourcePrefixes: Set<String> { Set(courses.map { "cat:\($0)-" }) }
+
+        /// Days left, counting today.
+        public func daysLeft(now: Double) -> Int {
+            let today = (now / CampaignPlanner.day).rounded(.down) * CampaignPlanner.day
+            return max(0, Int(((deadline / CampaignPlanner.day).rounded(.down) * CampaignPlanner.day - today) / CampaignPlanner.day) + 1)
         }
     }
 
@@ -37,6 +88,8 @@ public enum CampaignPlanner {
         public var date: Double
         public var skills: [String]
         public var diagnostic: Bool
+        /// How many questions fit that day's time.
+        public var questions: Int = 0
     }
 
     public struct Plan: Sendable, Equatable {
@@ -49,13 +102,13 @@ public enum CampaignPlanner {
         public var why: String
     }
 
-    static let day = 86_400_000.0
+    public static let day = 86_400_000.0
 
     public static func plan(_ goal: Goal, skills allSkills: [String], states: [String: SkillState], now: Double) -> Plan {
         let wanted = (goal.skills.isEmpty ? allSkills : goal.skills).sorted()
         let today = (now / day).rounded(.down) * day
         let lastDay = max(today, (goal.deadline / day).rounded(.down) * day)
-        let perDay = max(1, goal.minutesPerDay / minutesPerProblem)
+        func perDay(_ date: Double) -> Int { max(1, goal.minutes(on: date) / minutesPerProblem) }
         // When each skill was last practised in the plan (starts from the evidence).
         var last: [String: Double] = [:]
         var stability: [String: Double] = [:]
@@ -80,6 +133,7 @@ public enum CampaignPlanner {
             var picks: [String] = []
             var diagnostic = false
             // A diagnostic first: one problem for every skill with no evidence.
+            let perDay = perDay(date)
             while picks.count < perDay, !queue.isEmpty { picks.append(queue.removeFirst()); diagnostic = true }
             if picks.count < perDay {
                 let need = wanted.filter { !picks.contains($0) && last[$0] != nil && chance($0) < safeChance }
@@ -92,7 +146,7 @@ public enum CampaignPlanner {
                 stability[s] = max(stability[s] ?? 1, (stability[s] ?? 1) * 1.5)
                 ability[s] = (ability[s] ?? 0) + 0.1
             }
-            days.append(Day(date: date, skills: picks, diagnostic: diagnostic))
+            days.append(Day(date: date, skills: picks, diagnostic: diagnostic, questions: perDay))
             date += day
         }
         let proficient = wanted.filter { states[$0]?.proficient == true }
@@ -111,6 +165,12 @@ extension Library {
     }
 
     public func campaigns() async -> [CampaignPlanner.Goal] {
-        await engine.records(kind: CampaignPlanner.kind).compactMap(CampaignPlanner.Goal.init).sorted { $0.deadline < $1.deadline }
+        await engine.records(kind: CampaignPlanner.kind).compactMap(CampaignPlanner.Goal.init).filter(\.active).sorted { $0.deadline < $1.deadline }
+    }
+
+    public func removeCampaign(_ goal: CampaignPlanner.Goal) async {
+        var off = goal
+        off.active = false
+        await saveCampaign(off)
     }
 }

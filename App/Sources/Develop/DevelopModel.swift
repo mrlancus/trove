@@ -479,11 +479,72 @@ final class DevelopModel {
 
     // MARK: Goals
 
-    func addGoal(name: String, deadline: Date, minutesPerDay: Int) async {
+    var hasAI: Bool { app?.ownAI != nil }
+
+    func saveGoal(_ goal: CampaignPlanner.Goal) async {
         guard let library = app?.library else { return }
-        await library.saveCampaign(.init(id: "campaign.\(UUID().uuidString)", name: name, deadline: deadline.timeIntervalSince1970 * 1000,
-                                         minutesPerDay: minutesPerDay))
+        await library.saveCampaign(goal)
+        // A goal's courses are your courses too.
+        for spec in goal.courses where !courses.contains(where: { $0.spec == spec }) {
+            if let s = catalogue?.spec(spec) { await addCourse(s) }
+        }
         await reload()
+    }
+
+    func removeGoal(_ goal: CampaignPlanner.Goal) async {
+        await app?.library?.removeCampaign(goal)
+        await reload()
+    }
+
+    /// "How long have you got today?": sizes today's plan; the latest answer is the usual for later days.
+    func setToday(_ goal: CampaignPlanner.Goal, minutes: Int) async {
+        var g = goal
+        g.setToday(minutes, now: Date().timeIntervalSince1970 * 1000)
+        await saveGoal(g)
+    }
+
+    /// Today's practice for a goal: as many questions as today's time allows, from its courses' papers.
+    func startGoal(_ goal: CampaignPlanner.Goal) {
+        let plan = plan(goal)
+        var filter = Practice.Filter()
+        filter.sourcePrefixes = goal.sourcePrefixes
+        if let today = plan.days.first, !today.skills.isEmpty, !goal.courses.isEmpty || !goal.skills.isEmpty { filter.skills = Set(today.skills) }
+        let count = max(1, plan.days.first?.questions ?? 3)
+        let seed = UInt64.random(in: 1...UInt64.max)
+        let now = Date().timeIntervalSince1970 * 1000
+        var picked = Practice.pick(count, from: practisable, attempts: attempts, skills: skills, filter: filter, now: now, seed: seed)
+        if picked.isEmpty, !filter.skills.isEmpty { // today's skills have no questions on this device: any from its courses
+            filter.skills = []
+            picked = Practice.pick(count, from: practisable, attempts: attempts, skills: skills, filter: filter, now: now, seed: seed)
+        }
+        session = picked.isEmpty ? nil : Session(problems: picked, seed: seed)
+        if picked.isEmpty { message = goal.courses.isEmpty ? "Add a course to this goal, or download some papers first." : "Download some of this course's papers first." }
+    }
+
+    /// Courses the AI may put in a goal: yours, then catalogue specs matching words of the conversation.
+    func goalCandidates(_ messages: [GoalChat.Message]) -> [GoalChat.Candidate] {
+        var out = courses.map { GoalChat.Candidate(spec: $0.spec, name: $0.name, yours: true) }
+        guard let catalogue else { return out }
+        let words = Set(messages.filter { $0.role == .you }.flatMap { $0.text.lowercased().split { !$0.isLetter && !$0.isNumber } }.map(String.init))
+            .filter { $0.count >= 4 || $0.allSatisfy(\.isNumber) && $0.count >= 3 }
+        let stop: Set<String> = ["want", "exam", "exams", "paper", "papers", "level", "test", "with", "need", "this", "next", "june", "year", "about", "revise", "pass"]
+        var scored: [String: (Catalogue.Spec, Int)] = [:]
+        for w in words where !stop.contains(w) {
+            for spec in catalogue.search(w) { scored[spec.id] = (spec, (scored[spec.id]?.1 ?? 0) + 1) }
+        }
+        let have = Set(out.map(\.spec))
+        for (spec, _) in scored.values.sorted(by: { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.id < $1.0.id }).prefix(30) where !have.contains(spec.id) {
+            out.append(GoalChat.Candidate(spec: spec.id, name: "\(boardName(spec.board)) \(spec.name)", yours: false))
+        }
+        return out
+    }
+
+    func clarifyGoal(_ messages: [GoalChat.Message]) async throws -> GoalChat.Reply {
+        guard let ai = app?.ownAI else { throw DevelopError("Set up your AI in Settings → AI, or fill the goal in yourself.") }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_GB")
+        return try await ai.clarifyGoal(messages, candidates: goalCandidates(messages), today: f.string(from: Date()))
     }
 
     func plan(_ goal: CampaignPlanner.Goal) -> CampaignPlanner.Plan {

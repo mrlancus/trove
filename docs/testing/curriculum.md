@@ -27,9 +27,9 @@ deadline and reassessing. Their tests are added here when they're built.
 - **Preconditions**: a few attempts on some skills.
 - **Steps**:
   1. Packages/TroveCore: `swift test --filter CampaignTests`.
-  2. (You) Develop → Prepare for… → a name, a date 9 days ahead, 16 minutes a day → Add.
-  3. Practise the first day's skills; reopen Develop.
-- **Expected**: day 1 starts with skills not assessed yet ("first check"); at most 2 problems a day at 16 minutes; a proficient, remembered skill never appears; the sentence says how many skills are shown; after practising, the plan changes.
+  2. (You) Develop → New goal → Fill in myself → a name, a date 9 days ahead, a Physics course → Add; on its card tap "15 min".
+  3. Practise the first day's skills (Start); reopen Develop.
+- **Expected**: day 1 starts with skills not assessed yet ("first check"); at most 1 question a day at 15 minutes (about 8 minutes each); a proficient, remembered skill never appears; the sentence says how many skills are shown; after practising, the plan changes.
 - **Failure looks like**: a skill you've shown repeatedly filling the plan, more problems than the time allows.
 - **Automated by**: `CampaignTests/diagnosticFirstThenWhatSlipsAndNeverWhatsSafe`; app: manual.
 
@@ -75,3 +75,34 @@ deadline and reassessing. Their tests are added here when they're built.
 - **Expected**: the picker lists subjects by level with board, spec code, number of papers and years; search finds by subject, board or code; Pearson Edexcel and CCEA are named as not listed yet, with uploads offered instead; the courses appear on B with no papers downloaded there ("0 of N papers on this device"); removing on A removes on B.
 - **Failure looks like**: a course only on one device, the picker empty (catalogue not bundled), a crash on a spec with no papers.
 - **Automated by**: `CourseTests/coursesSyncAndRemovingKeepsTheRecord`; app: manual.
+
+### TEST-CUR-006: A goal made by talking it through: the AI asks until it's sure
+- **Feature**: Develop → New goal (with your AI)
+- **Priority**: high
+- **Coverage**: auto-tested (prompt and parsing); app: implemented
+- **Platforms**: core; all apps
+- **Preconditions**: your AI set up (Settings → AI); a course or two added.
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter GoalTests`.
+  2. (You) Develop → New goal → type something vague: "physics next summer".
+  3. Answer its questions, by tapping an option or typing.
+  4. When it shows the goal, check it; tap Not quite once and correct something; then Add goal.
+- **Expected**: one short question at a time with 2–4 tappable answers (board, which papers, the date…); it never fills in a date you didn't give (a "ready" goal without a date turns back into "When is it?"); at most 6 questions; the proposal names the course from your courses (or one from the catalogue, which is then added to your courses), papers, target and a one-line summary saying what it assumed; Settings → AI → Activity shows one small "Setting up a goal" row per answer.
+- **Failure looks like**: it proposes straight away from a vague sentence, invents a date, picks a course not in the catalogue, asks more than 6 questions.
+- **Automated by**: `GoalTests/theAIAsksUntilItKnowsAndNeverGuessesTheDate`; app: manual.
+
+### TEST-CUR-007: Goals can be edited and removed; time changes day to day
+- **Feature**: goal card
+- **Priority**: high
+- **Coverage**: auto-tested (records, planning); app: implemented
+- **Platforms**: core; all apps
+- **Preconditions**: a goal with a course whose papers are downloaded (TEST-DEV-020).
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter GoalTests`.
+  2. (You) On the goal's card tap "1 h": Today's line changes (about 7 questions); tap Start.
+  3. Tomorrow, open Develop: the card asks "How long have you got today?" again (yesterday's choice is the default for the plan).
+  4. ⋯ → Edit goal: change the date and papers → Save. ⋯ → Remove goal.
+  5. Check a second device after syncing.
+- **Expected**: the card shows a readiness ring, the days left, papers and target chips; Start gives that many questions from the goal's courses only; edits and the removal appear on the other device.
+- **Failure looks like**: a fixed "30 minutes a day" you can't change, Start picking questions from another subject, a removed goal coming back.
+- **Automated by**: `GoalTests/todaysTimeSizesTodayAndBecomesTheUsual`; app: manual.
