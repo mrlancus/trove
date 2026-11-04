@@ -13,8 +13,9 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
    subjects", "include CIE and IGCSE", "terms don't matter with the way we're doing it"). Built from the boards'
    own listings by `scripts/catalogue/build.py`, rebuilt weekly by CI (docs/CATALOGUE.md). In: AQA, OCR, Eduqas,
    WJEC, Cambridge, **Pearson Edexcel** (through its finder's search service with the key its page gives every
-   visitor: your choice, 2026-11-04; public files only). **Not in: CCEA** (its site blocks scripts); it's named
-   in the app with uploads offered instead.
+   visitor: your choice, 2026-11-04; public files only). **Not in: CCEA**: tested 2026-11-04, it answers 403 "Your IP or
+   Country has been blocked" to cloud machines, whatever the request says, so it's not worked around; it's named
+   in the app with uploads offered instead. Ways in: email CCEA, or an in-app browser on your own device.
    BPhO/UKMT and anything else: your uploads.
 3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
    regions, marks, your courses and attempts. **Your own uploads are items in your trove and sync** (you: "it should

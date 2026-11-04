@@ -17,7 +17,7 @@ GCSE, IGCSE and AS/A-level (and International AS & A Level), every subject each 
 | Eduqas, WJEC | each qualification page's Past papers tab (`/umbraco/surface/TabSurface/GetpastpapersTab`) | papers and mark schemes on pastpapers.download.wjec.co.uk |
 | Cambridge International | each IGCSE and International AS & A Level syllabus's past-papers page | one recent series and the specimen papers; the rest are on School Support Hub for schools |
 | Pearson Edexcel | the search service behind qualifications.pearson.com's past-paper finder, with the search-only key its page gives every visitor (read from the page each run; the user's choice, 2026-11-04) | GCSE, International GCSE, AS/A level, International AS & A Level: the series Pearson makes public (files under `/content/dam/pdf/`); the newest are under `/content/dam/secure/` behind a Pearson login and are left out. Legacy specs (no public paper since 2019, or replaced: 4CH0 → 4CH1, IAL 2013 → 2018) are left out |
-| CCEA | not yet | its website blocks automated requests; not worked around |
+| CCEA | not yet | tested 2026-11-04 with an honest request (Trove's own User-Agent): Cloudflare answers 403 "Your IP or Country has been blocked by CCEA" for the page and even robots.txt. It's an IP/country block on cloud machines (GitHub Actions would be the same), not a script filter, so it isn't worked around (no proxies). Open: ask CCEA, or an in-app browser on your own device |
 
 Modified (large-print, braille) papers, sound files, transcripts and confidential instructions are left out.
 
