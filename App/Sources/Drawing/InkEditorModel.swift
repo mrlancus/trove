@@ -1561,8 +1561,7 @@ final class InkEditorModel {
     /// joined to it back onto what they join. One undo step.
     private func transformSelection(_ t: InkGeometry.Transform, _ selected: InkSelection) {
         guard t.isUsable, let library = app?.library else { return }
-        var sel = selected
-        sel.elements.subtract(lockedIds(in: selected))
+        let sel = InkSelection(pageKey: selected.pageKey, strokes: selected.strokes, elements: selected.elements.subtracting(lockedIds(in: selected)))
         guard sel.count > 0 else { return }
         // Show it where it landed straight away.
         content[sel.pageKey]?.strokes = (content[sel.pageKey]?.strokes ?? []).map { sel.strokes.contains($0.id) ? $0.transformed(t) : $0 }
@@ -1644,9 +1643,8 @@ final class InkEditorModel {
     }
 
     func deleteSelection() {
-        guard var sel = selection, let library = app?.library else { return }
-        let locked = lockedIds(in: sel)
-        sel.elements.subtract(locked)
+        guard let selected = selection, let library = app?.library else { return }
+        let sel = InkSelection(pageKey: selected.pageKey, strokes: selected.strokes, elements: selected.elements.subtracting(lockedIds(in: selected)))
         guard sel.count > 0 else { app?.toast = "Unlock it to delete it"; return }
         content[sel.pageKey]?.strokes.removeAll { sel.strokes.contains($0.id) }
         content[sel.pageKey]?.elements.removeAll { sel.elements.contains($0.id) }

@@ -182,7 +182,13 @@ struct PracticeView: View {
     @State private var opening = false
     @State private var error: String?
     @State private var picture: CGImage?
-    @State private var done: (score: Double?, text: String)?
+    @State private var done: Outcome?
+
+    /// How a question ended: its score (nil when skipped) and a line saying how it was marked.
+    struct Outcome: Equatable {
+        var score: Double?
+        var text: String
+    }
     @State private var hints: [String] = []
     @State private var kind = DevelopModel.workKind
 
@@ -210,7 +216,7 @@ struct PracticeView: View {
             }
             .task(id: p.id) { picture = await render(p) }
             .animation(.snappy(duration: 0.25), value: marking)
-            .animation(.snappy(duration: 0.25), value: done?.text)
+            .animation(.snappy(duration: 0.25), value: done)
         }
     }
 
@@ -352,7 +358,7 @@ struct PracticeView: View {
                 Button("Skip") {
                     Task {
                         await develop.record(p, score: nil, marking: .none, hint: hints.count)
-                        done = (nil, "Skipped: kept, but it counts as no evidence.")
+                        done = Outcome(score: nil, text: "Skipped: kept, but it counts as no evidence.")
                     }
                 }
                 .foregroundStyle(.secondary)
@@ -362,7 +368,7 @@ struct PracticeView: View {
         }
     }
 
-    private func resultCard(_ done: (score: Double?, text: String)) -> some View {
+    private func resultCard(_ done: Outcome) -> some View {
         HStack(spacing: Theme.Space.l) {
             ZStack {
                 Circle().stroke(Color.secondary.opacity(0.15), lineWidth: 6)
@@ -416,7 +422,7 @@ struct PracticeView: View {
                 let score = DevelopMarking.selfMarkScore(ticked: ticked.count, marks: p.marks, points: points.count)
                 Task {
                     await develop.record(p, score: score, marking: .selfMarked, hint: hints.count)
-                    done = (score, "\(min(ticked.count, p.marks ?? ticked.count)) of \(p.marks ?? max(1, points.count)) marks, self-marked against the mark scheme.")
+                    done = Outcome(score: score, text: "\(min(ticked.count, p.marks ?? ticked.count)) of \(p.marks ?? max(1, points.count)) marks, self-marked against the mark scheme.")
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -476,7 +482,7 @@ struct PracticeView: View {
             let r = try await develop.markWithAI(p, answer: await workSoFar(p), image: image)
             aiResult = r
             await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain)
-            done = (r.score, r.marking == .aiScheme ? "Marked by your AI against the mark scheme." : "Marked by your AI without a mark scheme (less sure).")
+            done = Outcome(score: r.score, text: r.marking == .aiScheme ? "Marked by your AI against the mark scheme." : "Marked by your AI without a mark scheme (less sure).")
         } catch {
             self.error = error.localizedDescription
         }
