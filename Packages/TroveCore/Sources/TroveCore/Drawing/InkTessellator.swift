@@ -41,10 +41,10 @@ public enum InkTessellator {
         if let o = InkOutline.outlineParts(tool: tool, width: width, points: pts, shape: shape, style: style) {
             if let dot = o.dot {
                 m.fan(centre: centroid(dot), dot, closed: true)
-            } else {
+            } else if let lastLeft = o.left.last, let lastRight = o.right.last, let firstLeft = o.left.first, let firstRight = o.right.first {
                 m.strip(o.left, o.right)
-                m.fan(centre: o.endCentre, [o.left[o.left.count - 1]] + o.endCap + [o.right[o.right.count - 1]], closed: false)
-                m.fan(centre: o.startCentre, [o.right[0]] + o.startCap + [o.left[0]], closed: false)
+                m.fan(centre: o.endCentre, [lastLeft] + o.endCap + [lastRight], closed: false)
+                m.fan(centre: o.startCentre, [firstRight] + o.startCap + [firstLeft], closed: false)
             }
             out.append(Part(color: color, grain: tool == .pencil, positions: m.positions, indices: m.indices))
             return out

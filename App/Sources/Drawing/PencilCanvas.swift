@@ -797,7 +797,7 @@ struct PencilCanvas: UIViewRepresentable {
         /// sharp one at the screen's resolution after a pinch or scroll settles; far ones are let go.
         private func prepareBitmaps(visible: CGRect, density: CGFloat) {
             let near = visible.insetBy(dx: -visible.width, dy: -visible.height)
-            var seen: [(spec: InkPageSpec, rect: CGRect)] = []
+            // The quick whole-page picture; the sharp part is the page's tiles (InkTiledPageLayer).
             for slot in slots {
                 switch slot.spec.background {
                 case .paper:
@@ -805,13 +805,8 @@ struct PencilCanvas: UIViewRepresentable {
                 case .pdf, .image, .goodnotes:
                     guard slot.frame.intersects(near) else { backdrop.drop(slot.spec.key); continue }
                     backdrop.prepare(slot.spec)
-                    if slot.frame.intersects(visible) {
-                        seen.append((slot.spec, visible.offsetBy(dx: -slot.offset.x, dy: -slot.offset.y)))
-                    }
                 }
             }
-            // Twice the screen's density: a pinch up to 2× stays sharp before the next part arrives.
-            backdrop.refine(seen, density: density * 2)
         }
 
         // MARK: Ink

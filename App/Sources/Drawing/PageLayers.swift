@@ -45,6 +45,9 @@ final class InkPageLayer: CALayer {
     private var shapes: [CAShapeLayer] = []
     private let whole = CALayer()
     private let detail = CALayer()
+    /// The PDF, picture or GoodNotes page drawn sharp in tiles at whatever zoom it's shown at.
+    private let tiles = InkTiledPageLayer()
+    private var tilesSig = ""
     private let picturesLayer = CALayer()
     private var pictureLayers: [String: CALayer] = [:]
     /// What the paper was last built from (spec, colour, dark, and the area for an endless canvas).
@@ -56,7 +59,7 @@ final class InkPageLayer: CALayer {
 
     override init() {
         super.init()
-        for l in [paper, whole, detail, picturesLayer] {
+        for l in [paper, whole, detail, tiles, picturesLayer] {
             l.actions = Self.noActions
             addSublayer(l)
         }
@@ -91,6 +94,7 @@ final class InkPageLayer: CALayer {
         case .paper(let kind, let color):
             whole.isHidden = true
             detail.isHidden = true
+            tiles.isHidden = true
             paper.isHidden = false
             backgroundColor = InkRenderer.cgColor(color ?? "#ffffff")
             setEdge(spec.infinite ? nil : (InkPage.isDark(color) ? UIColor.white.withAlphaComponent(0.12) : UIColor.black.withAlphaComponent(0.08)), bounds: bounds)
@@ -113,6 +117,17 @@ final class InkPageLayer: CALayer {
             whole.isHidden = false
             whole.frame = bounds
             paperSig = ""
+            // Sharp tiles over the whole page's quick picture: only the tiles on screen are drawn, in the
+            // background and several at once, and kept, so zooming back is instant (no redraw of the page).
+            tiles.isHidden = false
+            if tiles.frame != bounds { tiles.frame = bounds }
+            tiles.contentsScale = screen
+            let sig = "\(spec.key)|\(dark)|\(spec.width)x\(spec.height)"
+            if sig != tilesSig {
+                tilesSig = sig
+                tiles.page = InkTiledPageLayer.Page(drawn)
+                tiles.setNeedsDisplay()
+            }
         }
         // Pictures are in page points; an endless canvas's page points start at −origin.
         let shift = spec.infinite ? CGFloat(spec.origin) : 0
@@ -329,3 +344,68 @@ final class InkElementsLayer: CALayer {
     }
 }
 #endif
+
+
+/// A PDF, picture or GoodNotes page drawn in 512-pixel tiles by Core Animation (as PDF readers do):
+/// at each zoom only the tiles on screen are drawn, on background threads and several at once, at the
+/// zoom's own resolution, and kept for zooming back. No fade: a tile appears the moment it's ready, over
+/// the page's quick whole picture.
+final class InkTiledPageLayer: CATiledLayer {
+    /// What a tile draws: the page, with its PDF page opened once (drawing a `CGPDFPage` from several
+    /// threads is safe; parsing the document per tile would not be quick).
+    final class Page: @unchecked Sendable {
+        let spec: InkPageSpec
+        let pdf: CGPDFPage?
+        init(_ spec: InkPageSpec) {
+            self.spec = spec
+            if case .pdf(let data, let index) = spec.background, let provider = CGDataProvider(data: data as CFData),
+               let doc = CGPDFDocument(provider) {
+                pdf = doc.page(at: index + 1)
+            } else {
+                pdf = nil
+            }
+        }
+    }
+
+    private let lock = NSLock()
+    private var _page: Page?
+    var page: Page? {
+        get { lock.lock(); defer { lock.unlock() }; return _page }
+        set { lock.lock(); _page = newValue; lock.unlock() }
+    }
+
+    override class func fadeDuration() -> CFTimeInterval { 0 }
+
+    override init() {
+        super.init()
+        actions = InkPageLayer.noActions
+        tileSize = CGSize(width: 512, height: 512)
+        // From 1/8 to 16 times: Trove zooms 10 %–1000 %.
+        levelsOfDetail = 8
+        levelsOfDetailBias = 4
+        isOpaque = false
+    }
+
+    override init(layer: Any) { super.init(layer: layer) }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func draw(in ctx: CGContext) {
+        guard let page else { return }
+        let spec = page.spec
+        // The context is in page points with a top-left origin, clipped to this tile.
+        let tile = ctx.boundingBoxOfClipPath
+        if let pdf = page.pdf {
+            let size = CGSize(width: spec.width, height: spec.height)
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.fill(tile)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: size.height)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.concatenate(pdf.getDrawingTransform(.cropBox, rect: CGRect(origin: .zero, size: size), rotate: 0, preserveAspectRatio: true))
+            ctx.drawPDFPage(pdf)
+            ctx.restoreGState()
+        } else {
+            InkRenderer.drawBackground(spec, area: InkGeometry.Rect(x: tile.minX, y: tile.minY, width: tile.width, height: tile.height), in: ctx)
+        }
+    }
+}
