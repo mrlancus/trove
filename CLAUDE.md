@@ -51,3 +51,49 @@ cd web && npm run test:e2e                             # needs `npx wrangler dev
   make the website the main product.
 - Commit after each working step and push to `main`. Keep NOTES.md current (what's done, next steps, manual steps for the user) so a fresh session can say "read NOTES.md and continue".
 - Ask the user before decisions that are theirs (name, design direction, anything that costs money).
+
+## App quality checklist (read before touching `App/`; every item is a mistake already made once)
+The apps can't be run here, so a mistake usually reaches the user's iPad before anyone sees it. Check
+each change against this list before pushing, and say in the commit what you checked.
+
+**SwiftUI that can't crash or lag**
+- Keep view types shallow. A `body` or `@ViewBuilder` property that grows past roughly 15 child views,
+  or any `ViewThatFits`/`if`/`switch` holding several large alternatives, gets split into its own
+  `struct … : View` (best: also redraws less) or wrapped in `AnyView` at that boundary. A too-deep type
+  overflowed the main thread's stack and crashed the editor on opening (InkEditorView.toolbar, 0.1.169).
+- One view, one job: new screens and toolbars are made of small named structs, each watching only the
+  `@Observable` state it shows, so a change redraws one part, not the screen (MASTER_PLAN P3).
+- Nothing slow in `body` or a getter it calls: no file or database reads, PDF/image decoding, sorting or
+  filtering of big arrays, regex, or `Date()` formatting in loops. Work it out once (cached, or in the
+  model when its input changes) and off the main thread (`Task.detached`), then show it.
+- Lists and grids of user content are `Lazy…`; images are decoded at the size shown (P7).
+- Main-thread budgets (docs/prompts/develop-perf-testing.md): a tap shows feedback within 50 ms, a frame
+  takes under 16.7 ms (8.3 ms on ProMotion), no hang over 100 ms, Pencil-to-ink adds nothing to PencilKit.
+  Anything that might break one is measured (Diagnostics, `perfWorkflow`, an XCTest metric), not assumed.
+- Drawing and zooming: never re-render a whole page or the visible area as one image per zoom step;
+  use vector layers, the GPU ink, or tiles (`InkTiledPageLayer`) so detail arrives tile by tile.
+
+**Swift 6 and the build**
+- Don't capture a `var` in a `Task`; copy it to a `let` first. Mark static helpers called from
+  `Task.detached` `nonisolated`; never call `@MainActor` code from a background closure.
+- A tuple with optional elements doesn't take a non-optional value reliably: use a small struct.
+- When rewriting a block with a script or a range replace, list the declarations in it first
+  (`grep -n '^struct \|^final class \|^enum \|func '`) and make sure every one you didn't mean to
+  remove is still there afterwards (ItemConceptsSection was cut out with the old answer pad).
+- Two branches can each add the same name (two `DiagnosticsSection`s after merging Sketch 2): grep a
+  new type or view name across `App/` before adding it.
+
+**Checking a push**
+- A push isn't done until CI says so. Read the TroveCore result from the Swift Testing lines (`✘`,
+  "Test run with N tests … failed"), not the XCTest "All tests passed" line, which prints even when
+  Swift Testing fails. `RESULT skipped` on the ci-logs branch means the build never ran: find out why.
+- Changing behaviour means updating the tests that pinned the old behaviour in the same commit, with a
+  comment saying what changed and why; never delete an assertion to get green.
+- A crash report (`.ips`) from the user is read before guessing: the faulting thread's first frames in
+  `Trove` name the function.
+
+**Looks**
+- Every new screen uses `Theme` tokens (colours, `Theme.Space`, `Theme.Radius`, `card`, `glass`), one
+  clear primary action, 44 pt targets, Dynamic Type, and works at iPhone SE width and iPad Split View.
+- The user judges at first glance ("if it doesn't immediately look good that's a massive problem"):
+  no default grey forms for main screens, no walls of text or numbers, empty states that say what to do.
