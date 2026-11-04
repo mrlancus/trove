@@ -495,6 +495,11 @@ sequenceDiagram
 | **4. Campaigns** | Goal, deadline, diagnostic, plan, reassess, readiness with evidence | M | BPhO-style preparation | Pure planner tests | A 9-day plan re-plans after a diagnostic |
 | **5. Anki round trip and more methods** | Review-log import, Anki deck import with links back, `codeTests` method | M | No lock-in both ways | Fixtures from real Anki exports | — |
 
+**Status (2026-11-04):** phase 1 done (TroveCore, tested). Phase 2 built in the apps (CI builds; not yet on a
+device): Develop/Practise, download and split, practise, self-mark, AI mark, Pencil answers, hints, .apkg.
+Phase 3 partly: your own PDFs, calibration; other boards and scans not yet. Phase 4 built: campaigns.
+Phase 5 not started (review-log import, code tests).
+
 Nothing is physics-specific: physics is one spec entry and one mapping file. On Linux and CI: all
 of phase 1, the planners, splitters and exporters. On my devices: Pencil answers, downloads,
 background behaviour, and Anki on AnkiMobile.

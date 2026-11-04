@@ -92,15 +92,30 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   `Practice`, `Difficulty`, `DevelopAI.route`, `Catalogue`, `PaperSplitter`, `AnkiExport`;
   `catalogue/papers.json` (AQA 7408 2022–23, links checked live); JS `core/develop.js`; PROTOCOL §13;
   `Fixtures/mastery-cases.json`. 233 TroveCore tests, 73 web unit tests pass on Linux.
-- **Known bugs:** website e2e `pdf.e2e.mjs` is flaky on CI (the Quote button not found within 30 s; it failed
-  on a NOTES-only commit too). Search misses its budget (B3).
-- **Next (in order):** (1) read `ci-logs-tests` (`git fetch origin ci-logs-tests`; `summary.txt`, `perf.json`,
-  `shots/`) and fix what fails; write `docs/UI_AUDIT.md` from the screenshots; (2) B3: search on integer doc
-  ids with top-k (PERF_AUDIT L1, Swift + `core/search.js` + `search-cases.json`); (3) Develop phase 2 in the
-  apps: Develop sidebar entry / iPhone Practise tab, paper download, split review, practise and self-mark,
-  concepts on items (DEVELOP_PLAN §E); (4) AI caching in `AIProvider.complete`, relay cache-read weighting
-  (L2); (5) the editor's visible-pages-first loading; (6) [done: weekly link check];
-  (7) the restyle to A Glass with shared tokens (decision 16) after the UI audit.
+- **Then (user: "build the rest of everything that isn't done and test it all", 2026-11-04):**
+  - **Develop in the apps** (built on CI, not yet on a device): Develop in the iPad/Mac sidebar, a Practise tab on
+    iPhone; AQA papers downloaded on Wi-Fi into a local cache and split into questions (PDFKit text); practice one
+    question at a time with the original page; **Show mark scheme** + ticks (no AI), **Mark with AI** on a tap
+    (scheme quoted point by point, unsure marks to review, one medium re-check); the **Pencil answer pad** (default
+    on iPad; marked from a picture only on a tap); the **hint ladder** (5 levels, cost credit); skills with mastery,
+    a "why" sentence and calibration; **goals/campaigns** (diagnostic first, what slips, readiness sentence);
+    **practise from your own PDFs**; **Anki .apkg** export; concepts on items with ✓/✕ (✕ sticks).
+  - **Search** (B3): numbered docs + postings with frequencies + top-k (identical results, checked by
+    `SearchEngineEquivalenceTests`): p90 65 → 28.1 ms on the budget vault; and in the apps search runs off the
+    main thread, so typing is never blocked. 5 ms is still missed as a computation (PERF_AUDIT B3 options).
+  - **Notebook** opens on its visible page first. **Relay** counts cached tokens at their price (not deployed).
+  - **Website PDF bug fixed**: selecting text right after highlighting lost the selection (the cached viewer was
+    moved during a redraw). `pdf.e2e.mjs` wasn't flaky; all 25 website e2e tests pass locally. Not deployed.
+  - **UI audit** (`docs/UI_AUDIT.md`) from the first simulator screenshots: U1 Recent's empty message, U2 iPhone
+    opens on Recent, U6 "Pick a result": fixed. `Theme.swift` tokens for direction A Glass.
+  - **Tests**: TroveCore 241, web unit 73, web e2e 25/25, relay 59, extension 2 (Linux); Mac app tests 7/7 on CI;
+    UI tests on 4 simulators (first run's navigation fixed). All logged in `docs/testing/RESULTS.md`.
+- **Known bugs:** search over budget as a computation (B3).
+- **Not done (next sessions):** other boards in the catalogue (each needs a verified list of links on the
+  board's own site; Pearson's didn't answer by pattern), Develop's timed whole-paper mock, scanned papers
+  (Vision text for splitting), Anki review-log import, moving the rest of the views onto `Theme` tokens,
+  the iPhone top bar (U4), checking iPhone landscape (U7), search's remaining 5 ms (MaxScore bound).
+- **"publish" when you want them live:** the relay metering change and the website PDF fix (`cd server && npx wrangler deploy`).
 
 ## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
 Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
