@@ -53,7 +53,7 @@ public enum Marking: String, Sendable, Codable, CaseIterable {
     case none
 }
 
-public enum ProblemLevel: String, Sendable, Codable { case gcse, alevel, competition, university, other }
+public enum ProblemLevel: String, Sendable, Codable { case gcse, igcse, alevel, competition, university, other }
 
 public struct Concept: Sendable, Equatable, Identifiable {
     public var id: String

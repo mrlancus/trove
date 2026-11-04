@@ -107,8 +107,24 @@ final class TroveUITests: XCTestCase {
         XCTAssertTrue(waitForLibrary(app))
         let tab = app.tabBars.buttons["Practise"]
         if tab.exists { tab.tap() } else { open(app, "Develop") }
-        XCTAssertTrue(app.staticTexts["Papers"].firstMatch.waitForExistence(timeout: 20), "Develop didn't open")
+        XCTAssertTrue(app.staticTexts["Your courses"].firstMatch.waitForExistence(timeout: 20), "Develop didn't open")
         shot(app, "develop")
+        // Add a course from the catalogue (every board's specs, bundled), then open it.
+        app.buttons["Add a course"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Add a course"].waitForExistence(timeout: 10), "the course picker didn't open")
+        shot(app, "develop-courses")
+        let search = app.searchFields.firstMatch
+        if search.waitForExistence(timeout: 5) { search.tap(); search.typeText("physics") }
+        sleep(1)
+        shot(app, "develop-courses-physics")
+        let first = app.buttons.matching(NSPredicate(format: "label CONTAINS 'AQA A-level' OR label CONTAINS 'OCR A-level'")).firstMatch
+        if first.waitForExistence(timeout: 5) {
+            first.tap()
+            XCTAssertTrue(app.staticTexts["A-level Physics"].firstMatch.waitForExistence(timeout: 10), "the course wasn't added")
+            app.staticTexts["A-level Physics"].firstMatch.tap()
+            sleep(2)
+            shot(app, "develop-course")
+        }
     }
 
     func testRotateAndShow() {

@@ -991,12 +991,15 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
 
 - **`campaign`** `campaign.<uuid>`: `name`, `deadline` (ms), `skills` ([concept ids]; empty = every skill),
   `minutesPerDay`. The plan isn't stored: `CampaignPlanner.plan` works it out from the attempts each time.
+- **`course`** `course.<catalogue spec id>` (slugged): `spec` (catalogue spec id, e.g. `aqa-7408`), `name`
+  ("AQA A-level Physics (7408)", for readers without the catalogue), `active` (bool; removing a course sets
+  it false, so the removal syncs). Problems from a course's papers have `sourceKey` `cat:<doc id>`.
 - **Edge rules.** An edge's id comes from its ends and type, so the same link made on two devices
   is one record. Changing its `state` is a plain LWW `set`. A client never deletes a `rejected` edge,
   and nothing but the user's own action changes a rejected edge's state (suggesters check for it).
 - **Concept merges.** `mergedInto` points a duplicate at the concept that stands for it; edges aren't
   rewritten, readers follow `mergedInto` (stopping on a loop). Concepts whose names have the same set
   of stemmed content words merge automatically, the smallest id winning on every device.
-- **Catalogue papers** (`catalogue/papers.json`, facts and links only) are downloaded from the board's
+- **Catalogue papers** (`catalogue/index.json` + `catalogue/specs/<id>.json`, facts and links only; docs/CATALOGUE.md) are downloaded from the board's
   own site into a local cache on each device and are never synced as attachments; a `problem` from one
   has `source.catalogue` and no question text.

@@ -2,6 +2,11 @@ import Foundation
 import Observation
 import PDFKit
 import TroveCore
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Develop in the apps (docs/DEVELOP_PLAN.md §D phase 2, §E): the paper catalogue, downloading papers
 /// from the board onto this device, splitting them into questions, practising, marking, and mastery.
@@ -15,6 +20,8 @@ final class DevelopModel {
     @ObservationIgnored weak var app: AppModel?
 
     private(set) var catalogue: Catalogue?
+    private(set) var courses: [Course] = []
+    private var specFiles: [String: Catalogue.Spec] = [:]
     private(set) var cached: Set<String> = []
     private(set) var problems: [Problem] = []
     private(set) var attempts: [Attempt] = []
@@ -60,14 +67,14 @@ final class DevelopModel {
 
     func start(_ app: AppModel) async {
         self.app = app
-        if catalogue == nil, let url = Bundle.main.url(forResource: "papers", withExtension: "json"),
-           let data = try? Data(contentsOf: url) {
-            catalogue = try? Catalogue.decode(data)
-        }
         try? FileManager.default.createDirectory(at: Self.papersFolder, withIntermediateDirectories: true)
         refreshCache()
+        if let library = app.library { courses = await library.courses() }
+        await loadCatalogue()
+        for c in courses { await loadSpec(c.spec) }
         await seedConcepts()
         await reload()
+        await readUploadTexts()
     }
 
     func refreshCache() {
@@ -86,8 +93,9 @@ final class DevelopModel {
         skills = await Task.detached(priority: .userInitiated) { Mastery.evaluate(all) }.value
     }
 
+    /// The momentum skills (the first slice) for anyone doing a Physics course.
     private func seedConcepts() async {
-        guard let library = app?.library else { return }
+        guard let library = app?.library, courses.contains(where: { $0.name.localizedCaseInsensitiveContains("physics") }) else { return }
         let have = Set(await library.concepts().map(\.id))
         for c in Self.seed where !have.contains(Develop.conceptId(c.name)) {
             let id = await library.addConcept(c.name, type: c.type, origin: .spec)
@@ -97,16 +105,92 @@ final class DevelopModel {
         }
     }
 
+    // MARK: Courses and the catalogue
+
+    /// Where the catalogue is kept up to date (the repo's `catalogue/`, rebuilt weekly by CI from the boards'
+    /// own listings); the copy bundled with the app is the fallback.
+    static let catalogueBase = URL(string: "https://raw.githubusercontent.com/mrlancus/trove/main/catalogue/")!
+    static var catalogueFolder: URL { papersFolder.appendingPathComponent("catalogue", isDirectory: true) }
+
+    /// The index: bundled first (instant), then a newer one from the web, at most once a day.
+    private func loadCatalogue() async {
+        let local = Self.catalogueFolder.appendingPathComponent("index.json")
+        if catalogue == nil {
+            let data = (try? Data(contentsOf: local)) ?? Bundle.main.url(forResource: "index", withExtension: "json", subdirectory: "catalogue").flatMap { try? Data(contentsOf: $0) }
+            catalogue = await Task.detached(priority: .userInitiated) { data.flatMap { try? Catalogue.decode($0) } }.value
+        }
+        let age = (try? local.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { -$0.timeIntervalSinceNow } ?? .infinity
+        guard age > 86_400, let got = try? await URLSession.shared.data(from: Self.catalogueBase.appendingPathComponent("index.json")),
+              (got.1 as? HTTPURLResponse)?.statusCode == 200 else { return }
+        let data = got.0
+        guard let fresh = await Task.detached(priority: .utility, operation: { try? Catalogue.decode(data) }).value else { return }
+        try? FileManager.default.createDirectory(at: Self.catalogueFolder.appendingPathComponent("specs"), withIntermediateDirectories: true)
+        try? data.write(to: local, options: .atomic)
+        catalogue = fresh
+        specFiles.removeAll() // re-read spec files that may have changed
+        for c in courses { await loadSpec(c.spec) }
+    }
+
+    /// One spec's documents: downloaded copy, else bundled, else from the web (then kept).
+    @discardableResult
+    func loadSpec(_ id: String) async -> Catalogue.Spec? {
+        if let s = specFiles[id] { return s }
+        let local = Self.catalogueFolder.appendingPathComponent("specs/\(id).json")
+        var data = try? Data(contentsOf: local)
+        if data == nil, let url = Bundle.main.url(forResource: id, withExtension: "json", subdirectory: "catalogue/specs") { data = try? Data(contentsOf: url) }
+        if data == nil, let got = try? await URLSession.shared.data(from: Self.catalogueBase.appendingPathComponent("specs/\(id).json")),
+           (got.1 as? HTTPURLResponse)?.statusCode == 200 {
+            let fetched = got.0
+            data = fetched
+            try? FileManager.default.createDirectory(at: local.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? fetched.write(to: local, options: .atomic)
+        }
+        guard let data, let spec = await Task.detached(priority: .userInitiated, operation: { try? Catalogue.decodeSpec(data) }).value else { return nil }
+        specFiles[id] = spec
+        return spec
+    }
+
+    /// Your chosen courses with their documents (those loaded so far).
+    var courseSpecs: [Catalogue.Spec] { courses.compactMap { specFiles[$0.spec] } }
+
+    func addCourse(_ spec: Catalogue.Spec) async {
+        guard let library = app?.library else { return }
+        let board = catalogue?.board(spec.board)?.name ?? spec.board.uppercased()
+        await library.setCourse(Course(spec: spec.id, name: "\(board) \(spec.name)"))
+        courses = await library.courses()
+        await loadSpec(spec.id)
+        await seedConcepts()
+    }
+
+    func removeCourse(_ course: Course) async {
+        guard let library = app?.library else { return }
+        var off = course
+        off.active = false
+        await library.setCourse(off)
+        courses = await library.courses()
+    }
+
+    func boardName(_ id: String) -> String { catalogue?.board(id)?.name ?? id.uppercased() }
+
+    /// The spec a catalogue document belongs to (among your courses).
+    func spec(ofDoc id: String) -> Catalogue.Spec? {
+        courseSpecs.first { s in id.hasPrefix(s.id + "-") && s.docs.contains { $0.id == id } }
+    }
+
+    /// Question papers of a course on this device.
+    func downloaded(_ spec: Catalogue.Spec) -> Int { spec.questionPapers.filter { cached.contains($0.id) }.count }
+
     // MARK: Papers
 
-    var spec: Catalogue.Spec? { catalogue?.spec("aqa-7408") }
-
-    /// Downloads every paper of the spec this device doesn't have, from the board's own site, on
-    /// Wi-Fi only, one at a time, cancellable.
-    func download() {
-        guard downloadTask == nil, let catalogue, let spec else { return }
-        let missing = catalogue.downloadPlan(spec: spec.id, cached: cached)
-        guard !missing.isEmpty else { message = "Every paper is on this device."; return }
+    /// Downloads the chosen papers (each with its mark scheme and report; all of a course's when `papers`
+    /// is nil) from the board's own site, on Wi-Fi only, one at a time, cancellable; then splits them.
+    func download(_ spec: Catalogue.Spec, papers: Set<String>? = nil) {
+        guard downloadTask == nil, let catalogue else { return }
+        let missing = catalogue.downloadPlan(spec: spec, cached: cached, papers: papers)
+        guard !missing.isEmpty else {
+            Task { await split(spec) }
+            return
+        }
         downloading = (0, missing.count)
         downloadTask = Task {
             let config = URLSessionConfiguration.default
@@ -130,8 +214,10 @@ final class DevelopModel {
             refreshCache()
             downloading = nil
             downloadTask = nil
-            message = failed == 0 ? "Papers downloaded. Split them into questions next." :
-                "\(failed) paper\(failed == 1 ? "" : "s") couldn't be downloaded (they show as unavailable). Downloads use Wi-Fi only."
+            if failed > 0 {
+                message = "\(failed) file\(failed == 1 ? "" : "s") couldn't be downloaded (they show as unavailable). Downloads use Wi-Fi only."
+            }
+            await split(spec)
         }
     }
 
@@ -139,26 +225,31 @@ final class DevelopModel {
         downloadTask?.cancel()
     }
 
-    /// Splits every downloaded question paper into problems and reads its mark scheme.
-    func splitAll() async {
-        guard let library = app?.library, let catalogue, let spec, let layout = catalogue.board(spec.board)?.layout else { return }
+    /// Splits every downloaded question paper of a course into problems and reads its mark schemes.
+    func split(_ spec: Catalogue.Spec) async {
+        guard let library = app?.library, let catalogue else { return }
+        let layouts = [catalogue.layout(for: spec.board), PaperSplitter.genericLayout]
         splitting = true
         defer { splitting = false }
-        let concepts = await library.concepts()
-        let skillConcepts = concepts.filter { $0.type == .skill }
-        var made = 0
-        for doc in spec.docs where doc.type == .qp && cached.contains(doc.id) {
+        let skillConcepts = await library.concepts().filter { $0.type == .skill }
+        let done = Set(problems.map(\.sourceKey))
+        var made = 0, unsplit = 0
+        // A paper split on another device has its problems already (they sync); this device still reads its
+        // text and mark scheme for itself, since those stay on the device.
+        for doc in spec.questionPapers where cached.contains(doc.id) && !(done.contains("cat:\(doc.id)") && loadPaperCache("\(doc.id)-questions") != nil) {
+            let known = done.contains("cat:\(doc.id)")
             let file = Self.file(doc.id)
             let parsed = await Task.detached(priority: .userInitiated) { () -> (lines: [PaperSplitter.Line], size: CGSize)? in
                 guard let pdf = PDFDocument(url: file) else { return nil }
                 return PaperPDF.lines(pdf)
             }.value
             guard let parsed else { continue }
-            let questions = PaperSplitter.split(parsed.lines, layout: layout, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
+            let (questions, layout) = PaperSplitter.splitBest(parsed.lines, layouts: layouts, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
+            if questions.isEmpty { unsplit += 1; continue }
             var texts: [String: String] = [:]
-            let existing = Set(problems.filter { $0.sourceKey == "cat:\(doc.id)" && $0.splitBy == "user" }.map(\.key))
-            for q in questions where q.marks != nil && !existing.contains(q.key) {
+            for q in questions {
                 texts[q.key] = q.text
+                if known { continue }
                 let tagged = ConceptMatch.mentioned(in: q.text, concepts: skillConcepts)
                 await library.addProblem(sourceKey: "cat:\(doc.id)", key: q.key, parent: q.parent, pages: q.regions, marks: q.marks,
                                          level: spec.level, label: catalogue.label(doc, in: spec, question: q.key), skills: tagged)
@@ -169,13 +260,60 @@ final class DevelopModel {
             if let ms = catalogue.companions(of: doc, in: spec).ms, cached.contains(ms.id) {
                 let msFile = Self.file(ms.id)
                 let lines = await Task.detached(priority: .userInitiated) { PDFDocument(url: msFile).map { PaperPDF.lines($0).lines } ?? [] }.value
-                let entries = PaperSplitter.scheme(lines, layout: layout)
+                let entries = PaperSplitter.schemePaper(lines, layout: layout)
                 schemes[ms.id] = entries
                 savePaperCache(entries, name: "\(ms.id)-scheme")
             }
         }
-        message = made == 0 ? "No questions found. Download the papers first." : "\(made) questions ready to practise."
+        message = made == 0 && unsplit == 0 ? nil
+            : "\(made) questions ready to practise" + (unsplit > 0 ? "; \(unsplit) paper\(unsplit == 1 ? "" : "s") had no questions Trove could find (essay or listening papers, or scans)." : ".")
         await reload()
+    }
+
+    // MARK: Your own papers
+
+    /// Saves a file you picked (a PDF, a photo, a scan) as an item in your trove, so it syncs to all your
+    /// devices, then splits it into questions. Pictures become a one-page PDF first.
+    func upload(_ data: Data, name: String, mime: String) async {
+        guard let library = app?.library else { return }
+        var pdf = data, fileName = name
+        if !mime.contains("pdf") {
+            guard let made = Self.pdf(fromImage: data) else { message = "Couldn't read \(name)."; return }
+            pdf = made
+            fileName = (name as NSString).deletingPathExtension + ".pdf"
+        }
+        guard let id = try? await library.addFile(pdf, name: fileName, mime: "application/pdf", kind: .pdf, source: .app,
+                                                  title: (name as NSString).deletingPathExtension, folder: ["Practice papers"]) else {
+            message = "Couldn't save \(name)."; return
+        }
+        await app?.reload()
+        if let item = await library.item(id) { await split(item: item) }
+    }
+
+    nonisolated static func pdf(fromImage data: Data) -> Data? {
+        #if os(iOS)
+        guard let image = UIImage(data: data), let page = PDFPage(image: image) else { return nil }
+        #else
+        guard let image = NSImage(data: data), let page = PDFPage(image: image) else { return nil }
+        #endif
+        let doc = PDFDocument()
+        doc.insert(page, at: 0)
+        return doc.dataRepresentation()
+    }
+
+    /// The questions in one of your PDFs: numbered questions and parts, or one per page when there's no
+    /// text Trove can read (a photo or a scan).
+    nonisolated static func questions(inPDF data: Data) -> [PaperSplitter.Question]? {
+        guard let doc = PDFDocument(data: data) else { return nil }
+        let parsed = PaperPDF.lines(doc)
+        // Parts lettered (a), (b)… become 1.1, 1.2; a number only starts a question when it follows on from
+        // the last one (1, 2, 3…), so "3 kg of water" at the margin stays text.
+        let qs = PaperSplitter.splitPaper(parsed.lines, layout: PaperSplitter.genericLayout, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
+        if !qs.isEmpty { return qs }
+        return (0..<doc.pageCount).map { page in
+            PaperSplitter.Question(key: "\(page + 1)", parent: nil, regions: [PageRegion(page: page, rect: [0, 0, parsed.size.width, parsed.size.height])],
+                                   marks: nil, text: parsed.lines.filter { $0.page == page }.map(\.text).joined(separator: "\n"))
+        }
     }
 
     /// Splits one of your PDF items into problems (they stay items in your vault and sync like any other).
@@ -184,15 +322,9 @@ final class DevelopModel {
               let data = try? await library.attachmentData(att) else { message = "Couldn't open that PDF."; return }
         splitting = true
         defer { splitting = false }
-        let parsed = await Task.detached(priority: .userInitiated) { () -> (lines: [PaperSplitter.Line], size: CGSize)? in
-            PDFDocument(data: data).map { PaperPDF.lines($0) }
-        }.value
-        guard let parsed else { message = "Couldn't read that PDF's text (a scan needs its text read first)."; return }
-        // Parts lettered (a), (b)… become 1.1, 1.2; a number only starts a question when it follows on from
-        // the last one (1, 2, 3…), so "3 kg of water" at the margin stays text.
-        let lines = PaperSplitter.numberParts(parsed.lines)
-        let layout = PaperSplitter.uploadLayout
-        let questions = PaperSplitter.split(lines, layout: layout, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
+        guard let questions = await Task.detached(priority: .userInitiated, operation: { Self.questions(inPDF: data) }).value else {
+            message = "Couldn't read that file."; return
+        }
         let skillConcepts = await library.concepts().filter { $0.type == .skill }
         var texts: [String: String] = [:]
         for q in questions {
@@ -202,8 +334,21 @@ final class DevelopModel {
         }
         questionText["item-\(item.id)"] = texts
         savePaperCache(texts, name: "item-\(item.id)-questions")
-        message = questions.isEmpty ? "No numbered questions found in \(item.displayTitle)." : "\(questions.count) questions from \(item.displayTitle) ready to practise."
+        message = questions.isEmpty ? "Nothing to practise in \(item.displayTitle)." : "\(questions.count) questions from \(item.displayTitle) ready to practise."
         await reload()
+    }
+
+    /// Uploads split on another device: their problems synced; read their text here too (it stays on the device).
+    private func readUploadTexts() async {
+        guard let library = app?.library else { return }
+        for id in practisedItems where loadPaperCache("item-\(id)-questions") == nil {
+            guard let item = await library.item(id), let att = item.attachments.first(where: { $0.mime == "application/pdf" }),
+                  let data = try? await library.attachmentData(att),
+                  let qs = await Task.detached(priority: .utility, operation: { Self.questions(inPDF: data) }).value else { continue }
+            let texts = Dictionary(qs.map { ($0.key, $0.text) }, uniquingKeysWith: { a, _ in a })
+            questionText["item-\(id)"] = texts
+            savePaperCache(texts, name: "item-\(id)-questions")
+        }
     }
 
     private func savePaperCache(_ value: [String: String], name: String) {
@@ -239,7 +384,7 @@ final class DevelopModel {
 
     /// The matched mark-scheme entry, if any.
     func scheme(of p: Problem) -> String? {
-        guard let docId = docId(p), let catalogue, let spec, let qp = spec.docs.first(where: { $0.id == docId }),
+        guard let docId = docId(p), let catalogue, let spec = spec(ofDoc: docId), let qp = spec.docs.first(where: { $0.id == docId }),
               let ms = catalogue.companions(of: qp, in: spec).ms else { return nil }
         if schemes[ms.id] == nil { schemes[ms.id] = loadPaperCache("\(ms.id)-scheme") ?? [:] }
         return schemes[ms.id]?[p.key]
@@ -250,6 +395,9 @@ final class DevelopModel {
 
     /// Your PDF items that can be split into questions.
     var myPDFs: [Item] { (app?.items ?? []).filter { $0.attachments.contains { $0.mime == "application/pdf" } } }
+
+    /// Your uploaded papers that are split already (by item id).
+    var practisedItems: Set<String> { Set(problems.compactMap(itemId)) }
 
     // MARK: Practice
 
@@ -277,7 +425,7 @@ final class DevelopModel {
         let picked = Practice.pick(count, from: practisable, attempts: attempts, skills: skills, filter: filter,
                                    now: Date().timeIntervalSince1970 * 1000, seed: seed)
         session = picked.isEmpty ? nil : Session(problems: picked, seed: seed)
-        if picked.isEmpty { message = practisable.isEmpty ? "Download and split the papers first." : "Nothing new to practise for that right now." }
+        if picked.isEmpty { message = practisable.isEmpty ? "Add a course and download some papers first, or upload your own." : "Nothing new to practise for that right now." }
     }
 
     func advance() {

@@ -8,12 +8,16 @@ _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:
 `docs/DEVELOP_PLAN.md` §F (and `docs/PERF_AUDIT.md` for Part 2). Short form, with how to undo:
-1. **Slice spec: AQA A-level Physics 7408, topic momentum.** Undo: another catalogue entry + mapping.
-2. **Catalogue boards: AQA first; then CCEA, WJEC/Eduqas, Pearson (public papers); OCR once its terms page
-   loads (503 on 2026-11-03); BPhO and UKMT never in the catalogue (your uploads only).** Undo: edit `catalogue/papers.json`.
+1. **Slice spec: AQA A-level Physics 7408, topic momentum** (the seeded momentum skills appear only for a Physics course). Superseded for papers by 2.
+2. **Catalogue: every board that can be read, GCSE + IGCSE + AS/A-level, every subject** (you, 2026-11-04: "all
+   subjects", "include CIE and IGCSE", "terms don't matter with the way we're doing it"). Built from the boards'
+   own listings by `scripts/catalogue/build.py`, rebuilt weekly by CI (docs/CATALOGUE.md). In: AQA, OCR, Eduqas,
+   WJEC, Cambridge. **Not in: Pearson Edexcel** (its finder needs its search provider's key; using it was stopped
+   as not ours) **and CCEA** (its site blocks scripts); both are named in the app with uploads offered instead.
+   BPhO/UKMT and anything else: your uploads.
 3. **Board papers stay in a local cache on each device, never synced**; the vault keeps references,
-   regions, marks and your attempts. Why: "no PDFs in the relay or R2" and AQA's "must not be reproduced on
-   third party websites – in any format". Undo: `Catalogue.syncPapers = true`.
+   regions, marks, your courses and attempts. **Your own uploads are items in your trove and sync** (you: "it should
+   be per trove, not per device"). Undo for board papers: sync them as attachments.
 4. **Develop data syncs to the website, no website UI yet** (JS port of the formats and mastery only).
 5. **Marking on the device by default** (tick the mark scheme, numeric check); **AI marking only when you tap it**,
    sending a crop of a handwritten answer. Handwriting reading stays on the device (MASTER_PLAN decision 9 kept).
@@ -32,6 +36,13 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 15. **Diagnostics: local only, with Export and an optional "Save a copy to the vault"** (overrides MASTER_PLAN
     decision 4's "always in the vault").
 16. **Design: A Glass** (MASTER_PLAN decision 1; NOTES said it was still open). Tokens in one place.
+
+17. **Courses are synced records** (`course.<spec>`, PROTOCOL §13): choose once, every device shows them; each
+    device downloads the papers it practises.
+18. **Splitting: best of the board's layout and a generic one** (whichever finds more marks); parts carry their
+    stems; uploads without readable text become one question per page.
+19. **The apps fetch the catalogue from this repo** (`raw.githubusercontent.com/mrlancus/trove/main/catalogue/`) at
+    most once a day, with the bundled copy as the fallback, so new series arrive without an app update.
 
 ## Status
 | Part | State | Tested |
@@ -67,7 +78,25 @@ decision 1, confirmed in "Decisions taken for you" 16); restyle after `docs/UI_A
   - **Installing:** the run's artifacts are `Trove-macOS` (universal, signed with Trove's self-signed certificate) and `Trove-iOS` (`Trove.ipa`, unsigned). The user installs the IPA with **Sideloadly** using their free Apple ID; that needs redoing every 7 days.
 - **The relay is deployed** with `ALLOW_NEW_VAULTS=true`. The user needs that to create the vault on the website. **After they've made their vault, set it to `"false"` and redeploy.** The token for `wrangler deploy` is in the cloud environment (`CLOUDFLARE_API_TOKEN`).
 
-## Latest round: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)
+## Latest round: every exam board, courses, uploads from anywhere (2026-11-04)
+User: "how can we add all the other exam boards" → A-level, GCSE and IGCSE, all subjects, Cambridge too; uploads
+should sync per trove; "this is to test, not what I'm using".
+- **Catalogue** (docs/CATALOGUE.md): `scripts/catalogue/` finders for AQA (its finder's search service), OCR
+  (Assessment pages), Eduqas and WJEC (the Past papers tab feed), Cambridge (IGCSE and International AS & A Level
+  past-paper pages: one recent series + specimens only). Output `catalogue/index.json` + `catalogue/specs/*.json`
+  (replaces `papers.json`). Weekly rebuild + link sample in `.github/workflows/catalogue.yml`.
+- **TroveCore**: `Catalogue` v2 (index + spec files, tiers, titles, option papers, `search`, `specs(level:)`,
+  `downloadPlan(papers:)`), `ProblemLevel.igcse`, `Course` records, generic splitter (`numberParts` rewrite,
+  3-level keys 1.2.1, stems, robust margin, `splitBest`). Tests: `CourseTests`, `GenericSplitTests`,
+  `RealPaperSplitTests` (real papers via `split-sample.py`, never committed).
+- **Apps**: Develop → Your courses (picker by level with search, subject badges, progress per course), a course
+  screen (papers by series, tier filter, tap a paper to download it with its scheme, Download every paper,
+  auto-split), Your own papers → Upload (Files, Photos, camera scan) saved as items in your trove.
+- **Not done / next**: Pearson Edexcel and CCEA (above); the rest of your feedback (goals that ask until they
+  understand, editable goals, flexible time per day, the look); mark-scheme matching on non-AQA boards is
+  best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
+
+## Round before: Develop, no lag, cheap AI and a full test plan (`docs/prompts/develop-perf-testing.md`, 2026-11-03)
 The user: "follow it from the top … don't ask me for permission; log the decisions you take for me". On `main`
 from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" below.**
 - **Part 1 (done, stop point reached):** `docs/DEVELOP_PLAN.md`: what exists (every AI call site), the 12

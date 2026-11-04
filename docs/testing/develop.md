@@ -100,18 +100,19 @@ TEST-DEV-004, 005, 006, 009 and 011 are filed in their areas as TEST-GRAPH-010, 
 ## Built: Develop in the apps (phase 2, first version)
 Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 
-### TEST-DEV-020: Download the AQA papers and split them into questions
-- **Feature**: Develop → Papers
+### TEST-DEV-020: Download a course's papers and split them into questions
+- **Feature**: Develop → Your courses → a course
 - **Priority**: critical
 - **Coverage**: implemented
 - **Platforms**: iPad, iPhone, Mac
-- **Preconditions**: On Wi-Fi. Develop (sidebar on iPad/Mac, Practise tab on iPhone).
+- **Preconditions**: On Wi-Fi. A course added (TEST-CUR-005).
 - **Steps**:
-  1. Tap Download papers (Wi-Fi); watch the progress; tap Cancel halfway, then Download again.
-  2. When done, tap Split into questions.
-- **Expected**: "19 of 19 on this device" (the spec too: 20 links in all); a message with how many questions are ready (dozens per paper); Cancel stops after the current paper; on mobile data nothing downloads and it says Wi-Fi only.
-- **Failure looks like**: a spinner for ever, 0 questions, the app freezing while splitting (Settings → Battery → Lag would show a hang in Develop).
-- **Automated by**: manual; TroveCore `DevelopTests/aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme`.
+  1. Open the course. Tap one paper: it downloads with its mark scheme and report, then splits.
+  2. Tap Download every paper; watch the progress; tap Cancel halfway, then tap it again.
+  3. For a GCSE course, switch the tier picker between Higher and Foundation.
+- **Expected**: the paper's row turns to "Ready to practise" with a green tick; a message says how many questions are ready (dozens per paper); essay, listening or scanned papers are reported as "no questions Trove could find" rather than failing; Cancel stops after the current file; on mobile data nothing downloads and it says Wi-Fi only; the course's bar on Develop's home fills up.
+- **Failure looks like**: a spinner for ever, 0 questions from a science or maths paper, the app freezing while splitting (Settings → Battery → Lag would show a hang in Develop).
+- **Automated by**: manual; TroveCore `RealPaperSplitTests` (TEST-CUR-004), `DevelopTests/aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme`.
 
 ### TEST-DEV-021: Practise with no AI: answer, show the mark scheme, tick, see the evidence
 - **Feature**: practice loop
@@ -207,16 +208,17 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Failure looks like**: a hint giving the answer early; full credit after hints.
 - **Automated by**: `DevelopHintTests/eachLevelAsksForOnlyThatMuch`, mastery rule TEST-DEV-002; app: manual.
 
-### TEST-DEV-028: Practise from your own PDF
-- **Feature**: your uploads
+### TEST-DEV-028: Upload your own paper from anywhere; it's on every device
+- **Feature**: Develop → Your own papers → Upload
 - **Priority**: high
 - **Coverage**: auto-tested (numbering and splitting); app: implemented
 - **Platforms**: core; all apps
-- **Preconditions**: a worksheet or competition paper PDF of yours in Trove (with text, not a bare scan).
+- **Preconditions**: a worksheet or competition paper as a PDF (in Files, iCloud Drive, Downloads…) and a photo of a printed page.
 - **Steps**:
   1. Packages/TroveCore: `swift test --filter UploadSplitTests`.
-  2. (You) Develop → Practise from one of my PDFs… → pick it.
-  3. Practise anything.
-- **Expected**: numbered questions and parts (1, 1(b) → 1.2, Q2, 2 c → 2.3) become questions with their marks; a stray number in the text ("3 kg of water") doesn't start a question; your PDF's questions appear among the practice, the source line naming your file.
-- **Failure looks like**: every line a question, no questions found in a PDF with numbered questions.
+  2. (You) Develop → Your own papers → Upload → From Files… → pick the PDF.
+  3. Upload → From Photos… → pick the photo. On iPhone/iPad also Upload → Scan with the camera.
+  4. Open Develop on another device of the same trove after syncing; Practise anything there.
+- **Expected**: the PDF becomes questions (1, 1(b) → 1.2, Q2, 2 c → 2.3) with their marks; a photo or scan with no readable text becomes one question per page; each upload is an item in your trove (folder "Practice papers"), so on the other device the questions are there and practisable without uploading again; a stray number in the text ("3 kg of water") doesn't start a question.
+- **Failure looks like**: only a dropdown of existing items, an upload only on one device, every line a question.
 - **Automated by**: `UploadSplitTests/numberedWorksheetsSplitAndStrayNumbersStayText`; app: manual.

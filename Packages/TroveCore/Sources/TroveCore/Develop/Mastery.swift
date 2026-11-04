@@ -177,7 +177,7 @@ public enum Mastery {
 /// Problem difficulty and the AI routing rule (docs/DEVELOP_PLAN.md Appendix C).
 public enum Difficulty {
     /// Prior difficulty by level when nothing better is known.
-    public static let levelBase: [ProblemLevel: Double] = [.gcse: -1, .alevel: 0, .competition: 1.5, .university: 1.5, .other: 0]
+    public static let levelBase: [ProblemLevel: Double] = [.gcse: -1, .igcse: -0.75, .alevel: 0, .competition: 1.5, .university: 1.5, .other: 0]
     /// An A-level question whose national average is below this is hard (most candidates lost most marks).
     public static let hardNationalAverage = 0.35
     /// Trove's own estimate counts from this many attempts.
@@ -197,7 +197,7 @@ public enum Difficulty {
     /// evidence. Marks, length, parts and handwriting don't count.
     public static func isHard(_ problem: Problem, ownEstimate: Double? = nil, attempts: Int = 0) -> Bool {
         switch problem.level {
-        case .gcse: return false
+        case .gcse, .igcse: return false
         case .competition, .university: return true
         case .alevel, .other:
             if let avg = problem.nationalAverage, avg < hardNationalAverage { return true }

@@ -61,8 +61,10 @@ targets:
     sources:
       - path: Sources
       - path: Resources
-      # The paper catalogue (facts and links only), bundled as the fallback (docs/DEVELOP_PLAN.md Appendix D).
-      - path: ../catalogue/papers.json
+      # The paper catalogue (facts and links only; docs/CATALOGUE.md), bundled as the fallback for the
+      # weekly-updated copy on GitHub: a folder reference, so it lands as catalogue/index.json + catalogue/specs/.
+      - path: ../catalogue
+        type: folder
         buildPhase: resources
     dependencies:
       - package: TroveCore

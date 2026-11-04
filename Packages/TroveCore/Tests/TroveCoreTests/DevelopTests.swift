@@ -223,33 +223,46 @@ import Crypto
         #expect(DevelopAI.Task.allCasesForTest.allSatisfy { DevelopAI.route($0, hard: true).model == "claude-haiku-5-5" })
     }
 
-    // TEST-DEV-009 (TEST-CUR-001)
+    static let catalogueFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("catalogue")
+
+    // TEST-DEV-009 (TEST-CUR-001, TEST-CUR-003)
     @Test func theCatalogueIsLinksOnBoardSitesOnly() throws {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("catalogue/papers.json")
-        let cat = try Catalogue.decode(Data(contentsOf: url))
-        let spec = try #require(cat.spec("aqa-7408"))
-        #expect(spec.level == .alevel)
-        #expect(spec.docs.count >= 19)
-        for doc in spec.docs {
-            let host = URL(string: doc.url)?.host ?? ""
-            #expect(host.hasSuffix("aqa.org.uk"), "\(doc.id) points at \(host)")
-            #expect(!doc.url.lowercased().contains("physicsandmathstutor"))
+        let cat = try Catalogue.decode(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("index.json")))
+        let hosts = ["aqa": ["aqa.org.uk", "cdn.sanity.io"], "ocr": ["ocr.org.uk"], "eduqas": ["wjec.co.uk", "eduqas.co.uk"],
+                     "wjec": ["wjec.co.uk"], "cie": ["cambridgeinternational.org"]]
+        #expect(Set(cat.specs.map(\.board)).isSubset(of: Set(hosts.keys)))
+        #expect(cat.specs.allSatisfy { $0.docs.isEmpty }, "the index carries no documents")
+        #expect(Set(cat.specs.map(\.id)).count == cat.specs.count)
+        #expect(cat.specs(level: .gcse).count > 20 && cat.specs(level: .alevel).count > 20)
+        // Every spec file: links on its board's own site, unique ids, never a mirror.
+        for summary in cat.specs {
+            let spec = try Catalogue.decodeSpec(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("specs/\(summary.id).json")))
+            #expect(spec.id == summary.id && !spec.questionPapers.isEmpty)
+            #expect(Set(spec.docs.map(\.id)).count == spec.docs.count, "\(spec.id) has duplicate ids")
+            for doc in spec.docs {
+                let host = URL(string: doc.url)?.host ?? ""
+                #expect(hosts[spec.board, default: []].contains { host == $0 || host.hasSuffix("." + $0) }, "\(doc.id) points at \(host)")
+                #expect(!doc.url.lowercased().contains("physicsandmathstutor") && !doc.url.lowercased().contains("savemyexams"))
+            }
         }
+        let spec = try Catalogue.decodeSpec(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("specs/aqa-7408.json")))
+        #expect(spec.level == .alevel && spec.subject == "Physics")
         let qp = try #require(spec.docs.first { $0.id == "aqa-7408-2-2023-06-qp" })
         let (ms, er) = cat.companions(of: qp, in: spec)
         #expect(ms?.id == "aqa-7408-2-2023-06-ms")
         #expect(er?.id == "aqa-7408-2-2023-06-er")
         #expect(cat.label(qp, in: spec, question: "4.2") == "AQA 7408/2 June 2023 Q4.2")
-        #expect(cat.downloadPlan(spec: "aqa-7408", cached: [qp.id]).count == spec.docs.count - 1)
-        #expect(Set(spec.docs.map(\.id)).count == spec.docs.count)
+        // Choosing one paper downloads it with its mark scheme and report, nothing else.
+        #expect(Set(cat.downloadPlan(spec: spec, cached: [], papers: [qp.id]).map(\.id)) == [qp.id, "aqa-7408-2-2023-06-ms", "aqa-7408-2-2023-06-er"])
+        #expect(cat.downloadPlan(spec: spec, cached: [qp.id]).count == spec.docs.filter { $0.type != .spec }.count - 1)
+        #expect(cat.search("aqa phys", level: .alevel).contains { $0.id == "aqa-7408" })
+        #expect(cat.layout(for: "aqa").parts != true && cat.layout(for: "ocr") == PaperSplitter.genericLayout)
     }
 
     // TEST-DEV-010
     @Test func aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme() throws {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("catalogue/papers.json")
-        let layout = try #require(try Catalogue.decode(Data(contentsOf: url)).board("aqa")).layout
+        let layout = try Catalogue.decode(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("index.json"))).layout(for: "aqa")
         // Written for this test in AQA's layout (no board text).
         func line(_ page: Int, _ x: Double, _ y: Double, _ t: String) -> PaperSplitter.Line { .init(page: page, x: x, y: y, width: 400, height: 12, text: t) }
         let paper = [
@@ -268,8 +281,11 @@ import Crypto
         #expect(qs.map(\.key) == ["1", "1.1", "1.2", "2.1"])
         #expect(qs.map(\.marks) == [nil, 1, 3, 2])
         #expect(qs.map(\.parent) == [nil, "1", "1", "2"])
-        // 1.2's region runs from its first line to the end of its page, so Figure 1 comes with it.
-        #expect(qs[2].regions == [PageRegion(page: 0, rect: [0, 300, 595, 542])])
+        // 1.2's region runs from its first line to the end of its page, so Figure 1 comes with it, after
+        // question 1's stem; 1.1 follows its stem directly, so the two join.
+        #expect(qs[2].regions == [PageRegion(page: 0, rect: [0, 80, 595, 40]), PageRegion(page: 0, rect: [0, 300, 595, 542])])
+        #expect(qs[1].regions == [PageRegion(page: 0, rect: [0, 80, 595, 220])])
+        #expect(qs[2].text.hasPrefix("0 1       A trolley"))
         #expect(qs[0].regions == [PageRegion(page: 0, rect: [0, 80, 595, 40])])
         let scheme = PaperSplitter.scheme([
             line(0, 40, 100, "01.1   mass × velocity (product of)"),
@@ -451,6 +467,54 @@ extension DevelopAI.Task {
     }
 }
 
+/// Chosen courses sync as records (TEST-CUR-005).
+@Suite struct CourseTests {
+    @Test func coursesSyncAndRemovingKeepsTheRecord() async {
+        let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
+        await lib.setCourse(Course(spec: "aqa-7408", name: "AQA A-level Physics (7408)"))
+        await lib.setCourse(Course(spec: "ocr-j249", name: "OCR GCSE Physics A (J249)"))
+        #expect(await lib.courses().map(\.spec) == ["aqa-7408", "ocr-j249"])
+        await lib.setCourse(Course(spec: "ocr-j249", name: "OCR GCSE Physics A (J249)", active: false))
+        #expect(await lib.courses().map(\.spec) == ["aqa-7408"])
+        #expect(Course.id("aqa-7408") == "course.aqa-7408")
+    }
+}
+
+/// Papers from boards without their own layout (OCR, WJEC, Eduqas, Cambridge) split by the generic one (TEST-CUR-004).
+@Suite struct GenericSplitTests {
+    @Test func lettteredPartsSplitWhereverTheyStart() {
+        // Written for this test in the common "1 (a) (i)" style (no board text).
+        func line(_ page: Int, _ x: Double, _ y: Double, _ t: String) -> PaperSplitter.Line { .init(page: page, x: x, y: y, width: 400, height: 12, text: t) }
+        let paper = [
+            line(0, 40, 80, "1 A student drops a ball from a window."),
+            line(0, 40, 110, "(a) Define acceleration. [1]"),
+            line(0, 70, 160, "(b) (i) Calculate the speed after 2.0 s."),
+            line(0, 90, 260, "speed = ....................... m s−1 [2]"),
+            line(0, 70, 300, "(ii) Explain why air resistance can be ignored. [2]"),
+            line(1, 40, 60, "2 (a) State Newton's first law. [1]"),
+            line(1, 70, 120, "(b) A 3 kg mass rests on a table."),
+            line(1, 90, 140, "Describe the forces on it. [3]"),
+        ]
+        let qs = PaperSplitter.splitPaper(paper, layout: PaperSplitter.genericLayout)
+        #expect(qs.map(\.key) == ["1", "1.1", "1.2.1", "1.2.2", "2.1", "2.2"])
+        #expect(qs.map(\.marks) == [nil, 1, 2, 2, 1, 3])
+        #expect(qs.map(\.parent) == [nil, "1", "1.2", "1.2", "2", "2"])
+        // 1(b)(ii) carries the question's stem.
+        #expect(qs[3].text.hasPrefix("1 A student drops a ball") && qs[3].text.contains("Explain why air resistance"))
+        #expect(qs[5].text.contains("3 kg mass"), "a number inside the text stays text")
+        // The best of the board's layout and the generic one.
+        let aqa = Catalogue.Layout(question: #"^(\d \d)(?: \. (\d+))?(?:\s|$)"#, marks: #"\[(\d+) marks?\]"#, scheme: #"^(\d\d)\.(\d+)(?:\s|$)"#)
+        #expect(PaperSplitter.splitBest(paper, layouts: [aqa, PaperSplitter.genericLayout]).layout == PaperSplitter.genericLayout)
+        let scheme = PaperSplitter.schemePaper([
+            line(0, 40, 100, "1 (a) rate of change of velocity B1"),
+            line(0, 40, 140, "1(b)(i) v = u + at = 19.6 C1 A1"),
+            line(0, 40, 200, "2a an object stays at rest or moves at constant velocity unless a resultant force acts"),
+        ], layout: PaperSplitter.genericLayout)
+        #expect(Set(scheme.keys) == ["1.1", "1.2.1", "2.1"])
+        #expect(scheme["1.2.1"]?.contains("19.6") == true)
+    }
+}
+
 /// Your own PDFs split into questions (TEST-DEV-028).
 @Suite struct UploadSplitTests {
     @Test func numberedWorksheetsSplitAndStrayNumbersStayText() {
@@ -465,9 +529,37 @@ extension DevelopAI.Task {
             line(280, "7 apples were in the box."),
         ])
         let qs = PaperSplitter.split(lines, layout: PaperSplitter.uploadLayout)
-        #expect(qs.map(\.key) == ["1", "1.2", "2", "2.3"])
-        #expect(qs.map(\.marks) == [2, 3, nil, 4])
-        #expect(qs[0].text.contains("3 kg of water"))
+        // "(a)" on its own line is part 1.1 of the question above it.
+        #expect(qs.map(\.key) == ["1", "1.1", "1.2", "2", "2.3"])
+        #expect(qs.map(\.marks) == [nil, 2, 3, nil, 4])
+        #expect(qs[1].text.contains("3 kg of water"))
         #expect(qs.last?.text.contains("7 apples") == true)
+    }
+}
+
+/// Real papers from each board, split as the apps would (TEST-CUR-004). Runs only with
+/// TROVE_SPLIT_LINES set to a folder made by scripts/catalogue/split-sample.py (the papers aren't in the repo).
+@Suite struct RealPaperSplitTests {
+    struct Sample: Decodable {
+        struct L: Decodable { var page: Int; var x, y, width, height: Double; var text: String }
+        var doc: String
+        var board: String
+        var layout: Catalogue.Layout?
+        var width, height: Double
+        var lines: [L]
+    }
+
+    @Test func eachBoardsPaperSplitsIntoMarkedQuestions() throws {
+        guard let folder = ProcessInfo.processInfo.environment["TROVE_SPLIT_LINES"] else { return }
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder).filter { $0.hasSuffix(".json") }.sorted()
+        #expect(!files.isEmpty)
+        for f in files {
+            let s = try JSONDecoder().decode(Sample.self, from: Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent(f)))
+            let lines = s.lines.map { PaperSplitter.Line(page: $0.page, x: $0.x, y: $0.y, width: $0.width, height: $0.height, text: $0.text) }
+            let qs = PaperSplitter.splitBest(lines, layouts: [s.layout, PaperSplitter.genericLayout].compactMap { $0 }, pageHeight: s.height, pageWidth: s.width).questions
+            let total = qs.compactMap(\.marks).reduce(0, +)
+            print("SPLIT \(s.doc): \(qs.count) questions, \(total) marks: \(qs.prefix(14).map { "\($0.key)[\($0.marks!)]" }.joined(separator: " "))")
+            #expect(qs.count >= 5, "\(s.doc) split into only \(qs.count) marked questions")
+        }
     }
 }

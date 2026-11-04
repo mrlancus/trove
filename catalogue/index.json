@@ -1,0 +1,1679 @@
+{
+"v": 2,
+"updated": "2026-11-04",
+"note": "Facts and links only, from each board's own site. Built by scripts/catalogue/build.py.",
+"boards": [
+{
+"id": "aqa",
+"name": "AQA",
+"site": "https://www.aqa.org.uk",
+"layout": {
+"question": "^(\\d \\d)(?: \\. (\\d+))?(?:\\s|$)",
+"marks": "\\[(\\d+) marks?\\]",
+"scheme": "^(\\d\\d)\\.(\\d+)(?:\\s|$)"
+}
+}
+],
+"unlisted": [
+{
+"id": "pearson",
+"why": "Pearson Edexcel's past-paper search needs its own search service key; not read automatically yet."
+},
+{
+"id": "ccea",
+"why": "CCEA's website blocks automated requests."
+}
+],
+"specs": [
+{
+"id": "aqa-7127",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Accounting",
+"code": "7127",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-7201",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Art, craft and design)",
+"code": "7201",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2025
+],
+"files": 2
+},
+{
+"id": "aqa-7202",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Fine art)",
+"code": "7202",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2023
+],
+"files": 1
+},
+{
+"id": "aqa-7203",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Graphic communication)",
+"code": "7203",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2023
+],
+"files": 1
+},
+{
+"id": "aqa-7206",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Photography)",
+"code": "7206",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2023
+],
+"files": 1
+},
+{
+"id": "aqa-7204",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Textile design)",
+"code": "7204",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2023
+],
+"files": 1
+},
+{
+"id": "aqa-7205",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Art and Design (Three-dimensional design)",
+"code": "7205",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 1,
+"years": [
+2023,
+2023
+],
+"files": 1
+},
+{
+"id": "aqa-7637",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Bengali",
+"code": "7637",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 18,
+"years": [
+2020,
+2025
+],
+"files": 42
+},
+{
+"id": "aqa-7402",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Biology",
+"code": "7402",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 26,
+"years": [
+2017,
+2025
+],
+"files": 75
+},
+{
+"id": "aqa-7401",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Biology",
+"code": "7401",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 15,
+"years": [
+2016,
+2025
+],
+"files": 43
+},
+{
+"id": "aqa-7132",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Business",
+"code": "7132",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 21,
+"years": [
+2020,
+2025
+],
+"files": 64
+},
+{
+"id": "aqa-7131",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Business",
+"code": "7131",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 12,
+"years": [
+2020,
+2025
+],
+"files": 40
+},
+{
+"id": "aqa-7138",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Business (New)",
+"code": "7138",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 3,
+"years": [],
+"files": 9
+},
+{
+"id": "aqa-7137",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Business (New)",
+"code": "7137",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [],
+"files": 6
+},
+{
+"id": "aqa-7405",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Chemistry",
+"code": "7405",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 30,
+"years": [
+2017,
+2025
+],
+"files": 115
+},
+{
+"id": "aqa-7404",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Chemistry",
+"code": "7404",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 20,
+"years": [
+2016,
+2025
+],
+"files": 75
+},
+{
+"id": "aqa-7517",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Computer Science",
+"code": "7517",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 42
+},
+{
+"id": "aqa-7516",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Computer Science",
+"code": "7516",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 10,
+"years": [
+2020,
+2025
+],
+"files": 27
+},
+{
+"id": "aqa-7237",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Dance",
+"code": "7237",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 8,
+"years": [
+2020,
+2025
+],
+"files": 25
+},
+{
+"id": "aqa-7552",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "7552",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 40
+},
+{
+"id": "aqa-7562",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Design and Technology",
+"code": "7562",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 40
+},
+{
+"id": "aqa-7262",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Drama",
+"code": "7262",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 7,
+"years": [
+2020,
+2025
+],
+"files": 33
+},
+{
+"id": "aqa-7136",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Economics",
+"code": "7136",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 21,
+"years": [
+2020,
+2025
+],
+"files": 63
+},
+{
+"id": "aqa-7135",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Economics",
+"code": "7135",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 10,
+"years": [
+2020,
+2025
+],
+"files": 38
+},
+{
+"id": "aqa-7702",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "English Language",
+"code": "7702",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 52
+},
+{
+"id": "aqa-7701",
+"board": "aqa",
+"qualification": "AS",
+"subject": "English Language",
+"code": "7701",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 10,
+"years": [
+2020,
+2025
+],
+"files": 33
+},
+{
+"id": "aqa-7707",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "English Language and Literature",
+"code": "7707",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 42
+},
+{
+"id": "aqa-7712",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "English Literature A",
+"code": "7712",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 21,
+"years": [
+2020,
+2025
+],
+"files": 70
+},
+{
+"id": "aqa-7711",
+"board": "aqa",
+"qualification": "AS",
+"subject": "English Literature A",
+"code": "7711",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 10,
+"years": [
+2020,
+2025
+],
+"files": 27
+},
+{
+"id": "aqa-7717",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "English Literature B",
+"code": "7717",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 28,
+"years": [
+2020,
+2025
+],
+"files": 76
+},
+{
+"id": "aqa-7716",
+"board": "aqa",
+"qualification": "AS",
+"subject": "English Literature B",
+"code": "7716",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 18,
+"years": [
+2020,
+2025
+],
+"files": 52
+},
+{
+"id": "aqa-7447",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Environmental Science",
+"code": "7447",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-7652",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "French",
+"code": "7652",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 15,
+"years": [
+2020,
+2025
+],
+"files": 52
+},
+{
+"id": "aqa-7651",
+"board": "aqa",
+"qualification": "AS",
+"subject": "French",
+"code": "7651",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 13,
+"years": [
+2020,
+2025
+],
+"files": 47
+},
+{
+"id": "aqa-7367",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Further Mathematics",
+"code": "7367",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 40,
+"years": [
+2019,
+2025
+],
+"files": 105
+},
+{
+"id": "aqa-7366",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Further Mathematics",
+"code": "7366",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 36,
+"years": [
+2018,
+2025
+],
+"files": 96
+},
+{
+"id": "aqa-7037",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Geography",
+"code": "7037",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 54
+},
+{
+"id": "aqa-7036",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Geography",
+"code": "7036",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 12,
+"years": [
+2020,
+2025
+],
+"files": 32
+},
+{
+"id": "aqa-7662",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "German",
+"code": "7662",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 15,
+"years": [
+2020,
+2025
+],
+"files": 51
+},
+{
+"id": "aqa-7661",
+"board": "aqa",
+"qualification": "AS",
+"subject": "German",
+"code": "7661",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 13,
+"years": [
+2020,
+2025
+],
+"files": 46
+},
+{
+"id": "aqa-7677",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Hebrew (Biblical)",
+"code": "7677",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 15,
+"years": [
+2022,
+2025
+],
+"files": 37
+},
+{
+"id": "aqa-7672",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Hebrew (Modern)",
+"code": "7672",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 18,
+"years": [
+2021,
+2025
+],
+"files": 47
+},
+{
+"id": "aqa-7042",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "History",
+"code": "7042",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 231,
+"years": [
+2020,
+2025
+],
+"files": 564
+},
+{
+"id": "aqa-7041",
+"board": "aqa",
+"qualification": "AS",
+"subject": "History",
+"code": "7041",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 106,
+"years": [
+2020,
+2025
+],
+"files": 235
+},
+{
+"id": "aqa-7162",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Law",
+"code": "7162",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 28,
+"years": [
+2020,
+2025
+],
+"files": 72
+},
+{
+"id": "aqa-7357",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Mathematics",
+"code": "7357",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 27,
+"years": [
+2018,
+2025
+],
+"files": 78
+},
+{
+"id": "aqa-7356",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Mathematics",
+"code": "7356",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 18,
+"years": [
+2018,
+2025
+],
+"files": 48
+},
+{
+"id": "aqa-7572",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Media Studies",
+"code": "7572",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 16,
+"years": [
+2020,
+2025
+],
+"files": 44
+},
+{
+"id": "aqa-7272",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Music",
+"code": "7272",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 7,
+"years": [
+2020,
+2025
+],
+"files": 28
+},
+{
+"id": "aqa-7682",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Panjabi",
+"code": "7682",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 20,
+"years": [
+2020,
+2025
+],
+"files": 60
+},
+{
+"id": "aqa-7172",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Philosophy",
+"code": "7172",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 35
+},
+{
+"id": "aqa-7582",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Physical Education",
+"code": "7582",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 40
+},
+{
+"id": "aqa-7408",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Physics",
+"code": "7408",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 80,
+"years": [
+2017,
+2025
+],
+"files": 259
+},
+{
+"id": "aqa-7407",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Physics",
+"code": "7407",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 20,
+"years": [
+2016,
+2025
+],
+"files": 75
+},
+{
+"id": "aqa-7687",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Polish",
+"code": "7687",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 21,
+"years": [
+2020,
+2025
+],
+"files": 61
+},
+{
+"id": "aqa-7152",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Politics",
+"code": "7152",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 20,
+"years": [
+2020,
+2025
+],
+"files": 53
+},
+{
+"id": "aqa-7182",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Psychology",
+"code": "7182",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 23,
+"years": [
+2020,
+2025
+],
+"files": 66
+},
+{
+"id": "aqa-7181",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Psychology",
+"code": "7181",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 11,
+"years": [
+2020,
+2025
+],
+"files": 30
+},
+{
+"id": "aqa-7062",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Religious Studies",
+"code": "7062",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 98
+},
+{
+"id": "aqa-7061",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Religious Studies",
+"code": "7061",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 25,
+"years": [
+2020,
+2025
+],
+"files": 58
+},
+{
+"id": "aqa-7192",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Sociology",
+"code": "7192",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 21,
+"years": [
+2020,
+2025
+],
+"files": 59
+},
+{
+"id": "aqa-7191",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Sociology",
+"code": "7191",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 10,
+"years": [
+2020,
+2025
+],
+"files": 28
+},
+{
+"id": "aqa-7692",
+"board": "aqa",
+"qualification": "A-level",
+"subject": "Spanish",
+"code": "7692",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 15,
+"years": [
+2020,
+2025
+],
+"files": 51
+},
+{
+"id": "aqa-7691",
+"board": "aqa",
+"qualification": "AS",
+"subject": "Spanish",
+"code": "7691",
+"level": "alevel",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 13,
+"years": [
+2020,
+2025
+],
+"files": 49
+},
+{
+"id": "aqa-8201",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Art, craft and design)",
+"code": "8201",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2025
+],
+"files": 3
+},
+{
+"id": "aqa-8202",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Fine art)",
+"code": "8202",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 2
+},
+{
+"id": "aqa-8203",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Graphic communication)",
+"code": "8203",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 2
+},
+{
+"id": "aqa-8206",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Photography)",
+"code": "8206",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 2
+},
+{
+"id": "aqa-8204",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Textile design)",
+"code": "8204",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 2
+},
+{
+"id": "aqa-8205",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Art and Design (Three-dimensional design)",
+"code": "8205",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 2,
+"years": [
+2023,
+2024
+],
+"files": 2
+},
+{
+"id": "aqa-8638",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Bengali",
+"code": "8638",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 126
+},
+{
+"id": "aqa-8461",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Biology",
+"code": "8461",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 29,
+"years": [
+2018,
+2025
+],
+"files": 81
+},
+{
+"id": "aqa-8132",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Business",
+"code": "8132",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-8462",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Chemistry",
+"code": "8462",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 34,
+"years": [
+2018,
+2025
+],
+"files": 111
+},
+{
+"id": "aqa-8673",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Chinese (Mandarin)",
+"code": "8673",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 41,
+"years": [
+2020,
+2025
+],
+"files": 121
+},
+{
+"id": "aqa-8100",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Citizenship Studies",
+"code": "8100",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-8465",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Combined Science: Synergy",
+"code": "8465",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 58,
+"years": [
+2018,
+2025
+],
+"files": 176
+},
+{
+"id": "aqa-8464",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Combined Science: Trilogy",
+"code": "8464",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 98,
+"years": [
+2018,
+2025
+],
+"files": 300
+},
+{
+"id": "aqa-8525",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Computer Science",
+"code": "8525",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 23,
+"years": [
+2020,
+2025
+],
+"files": 46
+},
+{
+"id": "aqa-8236",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Dance",
+"code": "8236",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 8,
+"years": [
+2020,
+2025
+],
+"files": 23
+},
+{
+"id": "aqa-8552",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Design and Technology",
+"code": "8552",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 7,
+"years": [
+2020,
+2025
+],
+"files": 23
+},
+{
+"id": "aqa-8261",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Drama",
+"code": "8261",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 6,
+"years": [
+2020,
+2025
+],
+"files": 24
+},
+{
+"id": "aqa-8136",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Economics",
+"code": "8136",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-8852",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Engineering",
+"code": "8852",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 7,
+"years": [
+2020,
+2025
+],
+"files": 21
+},
+{
+"id": "aqa-8700",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "English Language",
+"code": "8700",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 19,
+"years": [
+2020,
+2025
+],
+"files": 84
+},
+{
+"id": "aqa-8702",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "English Literature",
+"code": "8702",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 18,
+"years": [
+2020,
+2025
+],
+"files": 52
+},
+{
+"id": "aqa-8585",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Food preparation and nutrition",
+"code": "8585",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 8,
+"years": [
+2019,
+2025
+],
+"files": 24
+},
+{
+"id": "aqa-8652",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "French",
+"code": "8652",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 6,
+"years": [],
+"files": 13
+},
+{
+"id": "aqa-8658",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "French",
+"code": "8658",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 129
+},
+{
+"id": "aqa-8035",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Geography",
+"code": "8035",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 19,
+"years": [
+2020,
+2025
+],
+"files": 71
+},
+{
+"id": "aqa-8662",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "German",
+"code": "8662",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 6,
+"years": [],
+"files": 13
+},
+{
+"id": "aqa-8668",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "German",
+"code": "8668",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 45,
+"years": [
+2020,
+2025
+],
+"files": 130
+},
+{
+"id": "aqa-8678",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Hebrew (Modern)",
+"code": "8678",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 41,
+"years": [
+2020,
+2025
+],
+"files": 107
+},
+{
+"id": "aqa-8145",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "History",
+"code": "8145",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 127,
+"years": [
+2020,
+2025
+],
+"files": 366
+},
+{
+"id": "aqa-8633",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Italian",
+"code": "8633",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 132
+},
+{
+"id": "aqa-8300",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Mathematics",
+"code": "8300",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 101,
+"years": [
+2017,
+2025
+],
+"files": 337
+},
+{
+"id": "aqa-8572",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Media Studies",
+"code": "8572",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 13,
+"years": [
+2020,
+2025
+],
+"files": 39
+},
+{
+"id": "aqa-8271",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Music",
+"code": "8271",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 8,
+"years": [
+2020,
+2025
+],
+"files": 26
+},
+{
+"id": "aqa-8683",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Panjabi",
+"code": "8683",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 43,
+"years": [
+2020,
+2025
+],
+"files": 123
+},
+{
+"id": "aqa-8582",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Physical Education",
+"code": "8582",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 40
+},
+{
+"id": "aqa-8463",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Physics",
+"code": "8463",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 33,
+"years": [
+2018,
+2025
+],
+"files": 109
+},
+{
+"id": "aqa-8688",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Polish",
+"code": "8688",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 130
+},
+{
+"id": "aqa-8182",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Psychology",
+"code": "8182",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 36
+},
+{
+"id": "aqa-8062",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "8062",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 53,
+"years": [
+2020,
+2025
+],
+"files": 148
+},
+{
+"id": "aqa-8061",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "8061",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 29,
+"years": [
+2020,
+2025
+],
+"files": 80
+},
+{
+"id": "aqa-8063",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "8063",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 33,
+"years": [
+2020,
+2025
+],
+"files": 86
+},
+{
+"id": "aqa-8192",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Sociology",
+"code": "8192",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 14,
+"years": [
+2020,
+2025
+],
+"files": 35
+},
+{
+"id": "aqa-8692",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Spanish",
+"code": "8692",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 6,
+"years": [],
+"files": 13
+},
+{
+"id": "aqa-8698",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Spanish",
+"code": "8698",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 42,
+"years": [
+2020,
+2025
+],
+"files": 133
+},
+{
+"id": "aqa-8382",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Statistics",
+"code": "8382",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 41,
+"years": [
+2019,
+2025
+],
+"files": 104
+},
+{
+"id": "aqa-8648",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Urdu",
+"code": "8648",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 39,
+"years": [
+2020,
+2025
+],
+"files": 118
+}
+]
+}

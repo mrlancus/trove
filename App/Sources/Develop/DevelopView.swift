@@ -39,9 +39,10 @@ struct DevelopView: View {
                 if let message = develop.message {
                     Text(message).font(.callout).foregroundStyle(.secondary)
                 }
+                CoursesCard(develop: develop)
                 goals
-                papers
-                skillsList
+                UploadsCard(develop: develop)
+                if develop.concepts.contains(where: { $0.type == .skill }) { skillsList }
                 if !develop.toReview.isEmpty { review }
                 more
             }
@@ -65,7 +66,7 @@ struct DevelopView: View {
                 }
             } else {
                 Text("Practise with real papers").font(.title3.weight(.semibold))
-                Text("Download AQA A-level Physics papers from AQA's own website onto this device, split them into questions, then practise. Mark yourself against the mark scheme, or with your AI if you want.")
+                Text("Add your courses, download their past papers from the exam board's own website, and Trove splits them into questions. Mark yourself against the mark scheme, or with your AI if you want. You can also upload your own papers.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -109,44 +110,6 @@ struct DevelopView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(cornerRadius: Theme.Radius.large)
         .sheet(isPresented: $addingGoal) { GoalSheet(develop: develop) }
-    }
-
-    private var papers: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Papers").font(.headline)
-            if let spec = develop.spec {
-                let have = spec.docs.filter { develop.cached.contains($0.id) }.count
-                LabeledContent("\(spec.qualification) \(spec.subject) (AQA \(spec.code))", value: "\(have) of \(spec.docs.count) on this device")
-                HStack {
-                    if let d = develop.downloading {
-                        ProgressView(value: Double(d.done), total: Double(max(1, d.total)))
-                            .frame(maxWidth: 200)
-                        Text("\(d.done) of \(d.total)").font(.caption).monospacedDigit()
-                        Button("Cancel") { develop.cancelDownload() }
-                    } else {
-                        Button(have == spec.docs.count ? "Check papers" : "Download papers") { develop.download() }
-                        Button(develop.splitting ? "Splitting…" : "Split into questions") { Task { await develop.splitAll() } }
-                            .disabled(develop.splitting || have == 0)
-                    }
-                }
-                .buttonStyle(.bordered)
-                Text("\(develop.practisable.count) questions ready. Downloads use Wi-Fi only. Papers stay on this device and never sync; only your attempts do.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if !develop.myPDFs.isEmpty {
-                    Menu {
-                        ForEach(develop.myPDFs.prefix(40)) { item in
-                            Button(item.displayTitle) { Task { await develop.split(item: item) } }
-                        }
-                    } label: { Label("Practise from one of my PDFs…", systemImage: "doc.text.magnifyingglass") }
-                    .disabled(develop.splitting)
-                }
-            } else {
-                Text("The paper catalogue isn't in this build.").font(.callout).foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card(cornerRadius: Theme.Radius.large)
     }
 
     private var skillsList: some View {
