@@ -132,6 +132,14 @@ struct DevelopView: View {
                 .buttonStyle(.bordered)
                 Text("\(develop.practisable.count) questions ready. Papers stay on this device and never sync; only your attempts do.")
                     .font(.caption).foregroundStyle(.secondary)
+                if !develop.myPDFs.isEmpty {
+                    Menu {
+                        ForEach(develop.myPDFs.prefix(40)) { item in
+                            Button(item.displayTitle) { Task { await develop.split(item: item) } }
+                        }
+                    } label: { Label("Practise from one of my PDFs…", systemImage: "doc.text.magnifyingglass") }
+                    .disabled(develop.splitting)
+                }
             } else {
                 Text("The paper catalogue isn't in this build.").font(.callout).foregroundStyle(.secondary)
             }
@@ -154,6 +162,11 @@ struct DevelopView: View {
                         if s?.proficient == true { Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).accessibilityLabel("Proficient") }
                     }
                     Text(s?.why ?? "Not assessed yet.").font(.caption).foregroundStyle(.secondary)
+                    if let brier = s?.brier() {
+                        // Calibration (DEVELOP_PLAN §B3 point 3): 0.25 is guessing; lower means the model predicts you well.
+                        Text("Predictions: Brier \(String(format: "%.2f", brier))\(brier > 0.25 ? " (worse than guessing: tell me)" : "")")
+                            .font(.caption2).foregroundStyle(brier > 0.25 ? .orange : .secondary)
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -293,10 +306,9 @@ struct PracticeView: View {
     }
 
     private func render(_ p: Problem) async -> CGImage? {
-        guard let doc = develop.docId(p), let region = p.pages.first else { return nil }
-        let file = DevelopModel.file(doc)
+        guard let region = p.pages.first, let data = await develop.pdfData(p) else { return nil }
         return await Task.detached(priority: .userInitiated) {
-            guard let pdf = PDFDocument(url: file) else { return nil }
+            guard let pdf = PDFDocument(data: data) else { return nil }
             return PaperPDF.image(pdf, region)
         }.value
     }

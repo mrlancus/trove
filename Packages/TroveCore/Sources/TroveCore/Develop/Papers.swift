@@ -158,6 +158,40 @@ public enum PaperSplitter {
     }
 }
 
+extension PaperSplitter {
+    /// For your own PDFs (worksheets, textbook pages, competition papers), after `numberParts`:
+    /// "1", "1.", "1)", "1.2"; marks as "[3]", "(3)", "[3 marks]", "(3 marks)" at a line's end.
+    public static let uploadLayout = Catalogue.Layout(question: #"^(\d{1,2})(?:\.(\d))?[.)]?\s"#,
+                                                      marks: #"[\[(](\d{1,2})(?: marks?)?[\])]\s*$"#, scheme: #"^(\d{1,2})(?:\.(\d))?[.)]?\s"#)
+
+    /// Question numbers in your own PDFs: "2(b)" and "2 b " become "2.2"; a number that doesn't follow on
+    /// from the previous question's (same or next) is escaped so it isn't taken for a question.
+    public static func numberParts(_ lines: [PaperSplitter.Line]) -> [PaperSplitter.Line] {
+        let letters = Array("abcdefgh")
+        var last = 0
+        return lines.sorted { ($0.page, $0.y, $0.x) < ($1.page, $1.y, $1.x) }.map { line in
+            var l = line
+            var t = l.text
+            if let m = t.range(of: #"^(?:Q\.?\s?)?(\d{1,2})\s?\(([a-h])\)"#, options: .regularExpression)
+                ?? t.range(of: #"^(?:Q\.?\s?)?(\d{1,2}) ([a-h])(?=\s)"#, options: .regularExpression) {
+                let head = String(t[m])
+                let digits = head.filter(\.isNumber)
+                if let letter = head.last(where: { letters.contains($0) }), let k = letters.firstIndex(of: letter) {
+                    t = "\(digits).\(k + 1)" + t[m.upperBound...]
+                }
+            } else if let m = t.range(of: #"^Q\.?\s?(?=\d)"#, options: .regularExpression) {
+                t.removeSubrange(m)
+            }
+            if let m = t.range(of: #"^\d{1,2}(?=[.)\s])"#, options: .regularExpression), let n = Int(t[m]) {
+                if n == last || n == last + 1 { last = n } else { t = "\u{200B}" + t }
+            }
+            l.text = t
+            return l
+        }
+    }
+
+}
+
 /// Anki export (docs/DEVELOP_PLAN.md §B3 point 8): a tab-separated file with a GUID column, so
 /// importing it again updates the same notes instead of duplicating them (Anki manual, "Text files").
 public enum AnkiExport {

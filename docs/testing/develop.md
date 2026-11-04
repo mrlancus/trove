@@ -206,3 +206,17 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Expected**: hint 1 is a nudge and none before 5 gives the answer; 5 is a full solution; the skill's sentence shows the success, but after a full solution it counts for nothing (independence 0) and the skill is due again tomorrow.
 - **Failure looks like**: a hint giving the answer early; full credit after hints.
 - **Automated by**: `DevelopHintTests/eachLevelAsksForOnlyThatMuch`, mastery rule TEST-DEV-002; app: manual.
+
+### TEST-DEV-028: Practise from your own PDF
+- **Feature**: your uploads
+- **Priority**: high
+- **Coverage**: auto-tested (numbering and splitting); app: implemented
+- **Platforms**: core; all apps
+- **Preconditions**: a worksheet or competition paper PDF of yours in Trove (with text, not a bare scan).
+- **Steps**:
+  1. Packages/TroveCore: `swift test --filter UploadSplitTests`.
+  2. (You) Develop → Practise from one of my PDFs… → pick it.
+  3. Practise anything.
+- **Expected**: numbered questions and parts (1, 1(b) → 1.2, Q2, 2 c → 2.3) become questions with their marks; a stray number in the text ("3 kg of water") doesn't start a question; your PDF's questions appear among the practice, the source line naming your file.
+- **Failure looks like**: every line a question, no questions found in a PDF with numbered questions.
+- **Automated by**: `UploadSplitTests/numberedWorksheetsSplitAndStrayNumbersStayText`; app: manual.

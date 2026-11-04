@@ -450,3 +450,24 @@ extension DevelopAI.Task {
         #expect(await lib.campaigns() == [goal])
     }
 }
+
+/// Your own PDFs split into questions (TEST-DEV-028).
+@Suite struct UploadSplitTests {
+    @Test func numberedWorksheetsSplitAndStrayNumbersStayText() {
+        func line(_ y: Double, _ t: String, page: Int = 0) -> PaperSplitter.Line { .init(page: page, x: 50, y: y, width: 400, height: 12, text: t) }
+        let lines = PaperSplitter.numberParts([
+            line(60, "1. A ball of mass 0.2 kg moves at 3 m/s."),
+            line(80, "(a) Calculate its momentum. [2]"),
+            line(120, "3 kg of water is then added to the cart."),
+            line(160, "1(b) Explain why momentum is conserved. (3 marks)"),
+            line(200, "Q2 A cart collides with a wall."),
+            line(240, "2 c The force on the wall. [4]"),
+            line(280, "7 apples were in the box."),
+        ])
+        let qs = PaperSplitter.split(lines, layout: PaperSplitter.uploadLayout)
+        #expect(qs.map(\.key) == ["1", "1.2", "2", "2.3"])
+        #expect(qs.map(\.marks) == [2, 3, nil, 4])
+        #expect(qs[0].text.contains("3 kg of water"))
+        #expect(qs.last?.text.contains("7 apples") == true)
+    }
+}

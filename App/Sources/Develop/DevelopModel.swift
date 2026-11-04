@@ -178,6 +178,34 @@ final class DevelopModel {
         await reload()
     }
 
+    /// Splits one of your PDF items into problems (they stay items in your vault and sync like any other).
+    func split(item: Item) async {
+        guard let library = app?.library, let att = item.attachments.first(where: { $0.mime == "application/pdf" }),
+              let data = try? await library.attachmentData(att) else { message = "Couldn't open that PDF."; return }
+        splitting = true
+        defer { splitting = false }
+        let parsed = await Task.detached(priority: .userInitiated) { () -> (lines: [PaperSplitter.Line], size: CGSize)? in
+            PDFDocument(data: data).map { PaperPDF.lines($0) }
+        }.value
+        guard let parsed else { message = "Couldn't read that PDF's text (a scan needs its text read first)."; return }
+        // Parts lettered (a), (b)… become 1.1, 1.2; a number only starts a question when it follows on from
+        // the last one (1, 2, 3…), so "3 kg of water" at the margin stays text.
+        let lines = PaperSplitter.numberParts(parsed.lines)
+        let layout = PaperSplitter.uploadLayout
+        let questions = PaperSplitter.split(lines, layout: layout, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
+        let skillConcepts = await library.concepts().filter { $0.type == .skill }
+        var texts: [String: String] = [:]
+        for q in questions {
+            texts[q.key] = q.text
+            await library.addProblem(sourceKey: "item:\(item.id)", key: q.key, parent: q.parent, pages: q.regions, marks: q.marks, level: .other,
+                                     label: "\(item.displayTitle) Q\(q.key)", skills: ConceptMatch.mentioned(in: q.text, concepts: skillConcepts))
+        }
+        questionText["item-\(item.id)"] = texts
+        savePaperCache(texts, name: "item-\(item.id)-questions")
+        message = questions.isEmpty ? "No numbered questions found in \(item.displayTitle)." : "\(questions.count) questions from \(item.displayTitle) ready to practise."
+        await reload()
+    }
+
     private func savePaperCache(_ value: [String: String], name: String) {
         if let data = try? JSONEncoder().encode(value) { try? data.write(to: Self.papersFolder.appendingPathComponent("\(name).json")) }
     }
@@ -188,9 +216,22 @@ final class DevelopModel {
     }
 
     func docId(_ p: Problem) -> String? { p.sourceKey.hasPrefix("cat:") ? String(p.sourceKey.dropFirst(4)) : nil }
+    func itemId(_ p: Problem) -> String? { p.sourceKey.hasPrefix("item:") ? String(p.sourceKey.dropFirst(5)) : nil }
+
+    /// The PDF a problem is on: a catalogue paper in the local cache, or one of your items.
+    func pdfData(_ p: Problem) async -> Data? {
+        if let doc = docId(p) { return try? Data(contentsOf: Self.file(doc)) }
+        guard let id = itemId(p), let library = app?.library, let item = await library.item(id),
+              let att = item.attachments.first(where: { $0.mime == "application/pdf" }) else { return nil }
+        return try? await library.attachmentData(att)
+    }
 
     /// The question's text, read from the paper on this device (never stored in the vault).
     func text(of p: Problem) -> String {
+        if let id = itemId(p) {
+            if questionText["item-\(id)"] == nil { questionText["item-\(id)"] = loadPaperCache("item-\(id)-questions") ?? [:] }
+            return questionText["item-\(id)"]?[p.key] ?? ""
+        }
         guard let doc = docId(p) else { return "" }
         if questionText[doc] == nil { questionText[doc] = loadPaperCache("\(doc)-questions") ?? [:] }
         return questionText[doc]?[p.key] ?? ""
@@ -205,7 +246,10 @@ final class DevelopModel {
     }
 
     /// Problems whose paper is on this device.
-    var practisable: [Problem] { problems.filter { docId($0).map(cached.contains) ?? false } }
+    var practisable: [Problem] { problems.filter { docId($0).map(cached.contains) ?? (itemId($0) != nil) } }
+
+    /// Your PDF items that can be split into questions.
+    var myPDFs: [Item] { (app?.items ?? []).filter { $0.attachments.contains { $0.mime == "application/pdf" } } }
 
     // MARK: Practice
 
