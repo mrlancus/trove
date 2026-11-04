@@ -151,14 +151,16 @@ extension AIClient {
                             uploads: [GoalChat.Upload] = [], current: GoalChat.Proposal? = nil) async throws -> GoalChat.Reply {
         let route = DevelopAI.route(.plan, hard: false)
         let parts: [AIClient.Part] = [.text(GoalChat.prompt(messages, candidates: candidates, today: today, uploads: uploads, current: current))]
-        // Thinking counts against the limit: 800 tokens cut most replies off. The plan budget, and once more
-        // with double if even that runs out (you only pay for what's used).
+        // The reply is small (a question with options, or the goal: ~100–250 tokens). Thinking is on by default
+        // and counts against the limit, which cut replies off at 800; it isn't needed here, so it's off where the
+        // model allows (`canSkipThinking`). The limit is the plan budget either way (only what's used is paid),
+        // and once more with double if even that runs out.
         let reply: AIClient.Reply
         do {
-            reply = try await complete(parts, tier: .fast, schema: GoalChat.schema, maxTokens: route.maxTokens, effort: route.effort,
+            reply = try await complete(parts, tier: .fast, schema: GoalChat.schema, maxTokens: route.maxTokens, effort: "low", think: false,
                                        purpose: Purpose(.develop, about: "Setting up a goal"))
         } catch let failure as Failure where failure == .cutOff {
-            reply = try await complete(parts, tier: .fast, schema: GoalChat.schema, maxTokens: route.maxTokens * 2, effort: "low",
+            reply = try await complete(parts, tier: .fast, schema: GoalChat.schema, maxTokens: route.maxTokens * 2, effort: "low", think: false,
                                        purpose: Purpose(.develop, about: "Setting up a goal"))
         }
         guard let parsed = GoalChat.parse(reply.text, candidates: candidates, uploads: uploads) else {

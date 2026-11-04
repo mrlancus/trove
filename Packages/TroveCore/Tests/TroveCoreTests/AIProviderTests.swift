@@ -84,6 +84,30 @@ struct AIProviderTests {
         do { _ = try await client.complete([.text("hi")]) } catch let e as AIClient.Failure { #expect(e.message.contains("declined")) }
     }
 
+    /// The goal chat doesn't think (its reply is a short question or the goal): thinking off on Haiku 5.5,
+    /// left on (low effort) for models that reject turning it off; a cut-off reply is asked once more, larger.
+    @Test func theGoalChatSkipsThinkingWhereItCan() async throws {
+        let ready = #"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"{\"status\":\"ask\",\"question\":\"Which board?\",\"options\":[\"AQA\",\"OCR\"],\"goal\":{\"name\":\"\",\"date\":\"\",\"courses\":[],\"papers\":[],\"target\":\"\",\"summary\":\"\",\"uploads\":[]}}"}],"usage":{"input_tokens":900,"output_tokens":60}}"#
+        let net = FakeNet([(200, #"{"stop_reason":"max_tokens","content":[]}"#), (200, ready)])
+        var s = AISettings()
+        s.apiKey = "k"
+        let client = AIClient(settings: s, transport: net.transport)
+        let reply = try await client.clarifyGoal([.init(.you, "physics")], candidates: [], today: "2026-11-04")
+        #expect(reply == .ask(question: "Which board?", options: ["AQA", "OCR"]))
+        #expect((net.body(0)["thinking"] as? [String: Any])?["type"] as? String == "disabled")
+        #expect((net.body(0)["output_config"] as? [String: Any])?["effort"] as? String == "low")
+        #expect((net.body(1)["max_tokens"] as? Int ?? 0) > (net.body(0)["max_tokens"] as? Int ?? 0), "the retry has more room")
+        #expect(AIClient.canSkipThinking("claude-haiku-5-5", effort: "low"))
+        #expect(!AIClient.canSkipThinking("claude-opus-5-5", effort: "low") && !AIClient.canSkipThinking("claude-sonnet-5-5", effort: "low"))
+        #expect(!AIClient.canSkipThinking("claude-haiku-5-5", effort: "max"))
+        // A model that can't turn thinking off gets no thinking field (adaptive, at low effort).
+        var opus = s
+        opus.models[.fast] = "claude-opus-5-5"
+        let net2 = FakeNet([(200, ready)])
+        _ = try await AIClient(settings: opus, transport: net2.transport).clarifyGoal([.init(.you, "physics")], candidates: [], today: "2026-11-04")
+        #expect(net2.body(0)["thinking"] == nil)
+    }
+
     @Test func openAIStyleFallsBackWhenAParameterIsRefused() async throws {
         let net = FakeNet([
             (400, #"{"error":{"message":"Unrecognized request argument: reasoning_effort"}}"#),

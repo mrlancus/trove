@@ -238,12 +238,15 @@ public struct AIClient: Sendable {
     /// `effort` is medium unless the job is simple: reading a page and making keywords are "low" (the
     /// thinking is billed as output and is most of their cost, and they need little of it); Ask, which
     /// plans searches over several steps, is medium. The user's choice.
+    /// `think: false` turns thinking off for a small, simple reply (a goal question), on the models that allow
+    /// it (`canSkipThinking`); on the rest thinking stays on and `effort` keeps it short.
     public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
-                         effort: String = "medium", purpose: Purpose = Purpose(.action)) async throws -> Reply {
+                         effort: String = "medium", think: Bool = true, purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
         if settings.provider == .anthropic {
-            return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
+            return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort,
+                                       think: think || !Self.canSkipThinking(model, effort: effort), purpose: purpose)
         }
         return try await openAI(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
     }
@@ -286,7 +289,17 @@ public struct AIClient: Sendable {
         return r
     }
 
-    private func anthropic(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int, effort: String, purpose: Purpose) async throws -> Reply {
+    /// Models that accept `thinking: {type: "disabled"}` (at effort high or below for the 5 family). Claude
+    /// Opus 5.5, Sonnet 5.5 and Fable reject it with a 400, so they always think (low effort keeps it brief).
+    public static func canSkipThinking(_ model: String, effort: String) -> Bool {
+        let m = model.lowercased()
+        guard !["xhigh", "max"].contains(effort) else { return false }
+        if m.contains("opus-5-5") || m.contains("sonnet-5-5") || m.contains("fable") || m.contains("mythos") { return false }
+        return m.contains("haiku-5-5") || m.contains("opus-5") || m.contains("sonnet-5") || m.contains("opus-4-8") || m.contains("opus-4-7")
+    }
+
+    private func anthropic(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int, effort: String, think: Bool = true,
+                           purpose: Purpose) async throws -> Reply {
         var content: [[String: Any]] = []
         for part in parts {
             switch part {
@@ -297,10 +310,11 @@ public struct AIClient: Sendable {
         }
         var output: [String: Any] = ["effort": effort]
         if let schema { output["format"] = ["type": "json_schema", "schema": schema] }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model, "max_tokens": maxTokens, "system": Self.system,
             "messages": [["role": "user", "content": content]], "output_config": output,
         ]
+        if !think { body["thinking"] = ["type": "disabled"] }
         let json = try await send(request("/messages", body: body))
         let o = json.object ?? [:]
         let usage = await meterUsage(o, model: model, purpose: purpose)

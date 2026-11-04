@@ -145,8 +145,10 @@ should sync per trove; "this is to test, not what I'm using".
 - **Fixes from your first try (2026-11-04):** Edit goal froze: it read every PDF's name for each row on each
   redraw (n² name reads); now names are read once per upload (`GoalUploads.Entry`, cached in DevelopModel) and
   matches are worked out when the courses/name/notes change (`manyUploadsMatchQuickly`). Goal chat "The answer
-  was cut off": it asked for 800 tokens and thinking counts against that; now the plan budget (3,000) and one
-  retry at double. **Your papers** screen (Develop → Your own papers → All your papers): search by any words of
+  was cut off": it asked for 800 tokens and thinking (on by default) counts against that. The reply itself is
+  ~100–250 tokens, so thinking is now off for it where the model allows (`AIClient.canSkipThinking`: Haiku 5.5,
+  Opus 5, Sonnet 5…; Opus 5.5 / Sonnet 5.5 reject it, so they think at low effort), with the plan budget (3,000)
+  as the ceiling and one retry at double. **Your papers** screen (Develop → Your own papers → All your papers): search by any words of
   a name or goal, sort (newest, name, most questions), rename, split, open, delete (with a confirm), upload, and
   "Include every PDF in my trove". Uploads from Develop are marked `developUpload`. Test: TEST-DEV-033.
 - **Not done / next**: CCEA papers come through the browser only; Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
