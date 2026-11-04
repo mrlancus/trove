@@ -124,13 +124,13 @@ struct DevelopView: View {
                         Text("\(d.done) of \(d.total)").font(.caption).monospacedDigit()
                         Button("Cancel") { develop.cancelDownload() }
                     } else {
-                        Button(have == spec.docs.count ? "Check for missing papers" : "Download papers (Wi-Fi)") { develop.download() }
+                        Button(have == spec.docs.count ? "Check papers" : "Download papers") { develop.download() }
                         Button(develop.splitting ? "Splitting…" : "Split into questions") { Task { await develop.splitAll() } }
                             .disabled(develop.splitting || have == 0)
                     }
                 }
                 .buttonStyle(.bordered)
-                Text("\(develop.practisable.count) questions ready. Papers stay on this device and never sync; only your attempts do.")
+                Text("\(develop.practisable.count) questions ready. Downloads use Wi-Fi only. Papers stay on this device and never sync; only your attempts do.")
                     .font(.caption).foregroundStyle(.secondary)
                 if !develop.myPDFs.isEmpty {
                     Menu {

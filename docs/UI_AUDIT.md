@@ -22,6 +22,14 @@ Type, Split View and the Mac's three window sizes still to add).
 | U6 | iPad: search | With results on the left, the right side still says "Pick something / Or press ⌘N…": a hint aimed at an empty library. | `ipad-13-search.jpg` | Says "Pick a result" while searching. | fixed (MainView `columnsSplit`) |
 | U7 | iPhone landscape | The landscape screenshot comes out sideways and doesn't show a usable layout: the tab bar sits along the left, the content is cut off. Unclear whether it's the simulator capture or the layout; needs a check on your iPhone. | `iphone-se-landscape.jpg` | Check on a device (TEST-RESP-001). | to check |
 
+### Second run (d1961da, 2026-11-04): the tests reach Notes, Sketches, search and Develop
+
+| # | Where | What | Seen in | Fix | Status |
+|---|---|---|---|---|---|
+| U8 | iPhone: Develop | "Download papers (Wi-Fi)" wraps onto two lines inside its button, next to a greyed "Split into questions". | `iphone-pro-max-develop.jpg` | "Download papers"; "Wi-Fi only" moves into the caption. | fixed |
+| U9 | iPad 13-inch: Develop | Reads well: the cards sit in a readable column with the sidebar; Develop is selected in the sidebar between Clipboard and Connections. | `ipad-13-develop.jpg` | — | no change |
+| U10 | iPhone: a notebook item | 40 page previews in two columns, generated ink visible; the Draw button and the item's controls are reachable. | `iphone-pro-max-notebook.jpg` | — | no change |
+
 ## Design direction
 
 Decision 16 (A Glass, glass on floating controls only). The iOS 26 build already uses system Liquid

@@ -95,7 +95,9 @@ final class TroveUITests: XCTestCase {
         }
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
         field.tap()
-        field.typeText("momentum")
+        sleep(1)
+        // On iPad the field sits in the toolbar and the keyboard goes to the app, not the element.
+        if (field.value(forKey: "hasKeyboardFocus") as? Bool) == true { field.typeText("momentum") } else { app.typeText("momentum") }
         sleep(1)
         shot(app, "search")
     }
@@ -122,9 +124,12 @@ final class TroveUITests: XCTestCase {
     func testLaunchTime() {
         // A first launch writes the vault; later launches are what's measured.
         _ = launch()
-        measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)]) {
-            let app = XCUIApplication()
-            app.launchArguments += ["-TroveTestVault", "small"]
+        let app = XCUIApplication()
+        app.launchArguments += ["-TroveTestVault", "small"]
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+        measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)], options: options) {
+            app.terminate()
             app.launch()
         }
     }
