@@ -95,9 +95,14 @@ against all 64 prefix words, then again while scoring, with String-keyed diction
 p90 102 → 65 ms (L, bb65fc5). Then L1: documents numbered, postings carry term frequencies, the lead
 word scored by walking its postings, a top-k heap: p90 65 → 28.1 ms, identical results and scores
 (`SearchEngineEquivalenceTests` checks 300 random queries against scoring every doc the old way).
-**Still over.** What's left is the two-letter prefix ("pl" stands for 64 words over ~40k notes). Next:
-cap a two-letter prefix at the 16 commonest words, or wait for the third letter before searching on
-prefixes (both change results, so `core/search.js` and `search-cases.json` change with them).
+**Still over.** Tried and reverted: prefixes only from the third letter gave p90 26.3 ms (from 28.1),
+too little for making two letters find nothing. What's left is words in most notes: in trove-gen's
+Zipf text the commonest content words sit in 40–80 % of 50k notes, so a keystroke scores ~40k
+candidates. Real notes are likely kinder (the commonest words are stopwords, already dropped), so
+this vault is a worst case; your diagnostics export will tell. Next options, each a large change:
+(1) score at most the 2,000 candidates with the highest lead-term frequency first and stop when no
+later one can enter the top 100 (MaxScore-style bound; same results); (2) search on a background
+actor and drop stale keystrokes, so typing never waits (P4: the budget is about blocking typing).
 
 **B4. Opening a notebook decoded every stroke on the main thread.** `InkEditorModel` is
 `@MainActor`; its ink reload (`Drawing/InkEditorModel.swift`, "Reload ink") turned every stroke into
