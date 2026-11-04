@@ -286,3 +286,21 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Expected**: matches by board, level and subject (not CCEA GCSE for an AQA A-level goal); your choices are kept and sync; a goal with no course and nothing chosen practises from everything; uploading from the goal adds the paper to it; the chat changes only what you asked and nothing is saved until you Save.
 - **Failure looks like**: uploads never offered, a match you turned off coming back, the chat overwriting the rest of the goal.
 - **Automated by**: `GoalUploadsTests`; app: manual.
+
+
+### TEST-DEV-033: Your papers: every upload in one list, searchable, renamable
+- **Feature**: Develop → Your own papers → All your papers
+- **Priority**: medium
+- **Coverage**: app: implemented, never run
+- **Platforms**: all apps
+- **Preconditions**: a few uploads (one in a goal), and other PDFs in your trove.
+- **Steps**:
+  1. (You) Open All your papers. Search two words of one name in the other order ("physics ccea").
+  2. Sort by Name, then Most questions. Swipe a paper → Rename; check the new name everywhere.
+  3. Long-press a paper that isn't split → Split into questions. Tap a paper: it opens.
+  4. Turn on Include every PDF in my trove. Delete a test paper; confirm.
+  5. Edit an old goal (it froze before) and a new one with many PDFs in your trove; scroll the papers in it.
+- **Expected**: every Develop upload and every paper a goal uses is listed with its questions, goals and date;
+  search ignores word order; renames and deletes reach every device; Edit goal opens at once and scrolls smoothly.
+- **Failure looks like**: a freeze, uploads missing, search needing the exact name.
+- **Automated by**: `GoalUploadsTests/manyUploadsMatchQuickly` (the matching behind it); app: manual.

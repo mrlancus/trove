@@ -344,8 +344,17 @@ final class DevelopModel {
         var thinking = true
     }
 
-    /// Subjects to look for in a paper: the catalogue's, and the common ones.
-    var subjectNames: [String] { Array(Set((catalogue?.specs.map(\.subject) ?? []) + PaperTitle.commonSubjects)) }
+    /// Subjects to look for in a paper: the catalogue's, and the common ones (worked out once per catalogue).
+    var subjectNames: [String] {
+        let count = catalogue?.specs.count ?? 0
+        if let c = subjectCache, c.count == count { return c.names }
+        let names = Array(Set((catalogue?.specs.map(\.subject) ?? []) + PaperTitle.commonSubjects)).sorted()
+        subjectCache = (count, names)
+        return names
+    }
+    @ObservationIgnored private var subjectCache: (count: Int, names: [String])?
+    /// Each upload's name, read once (by id and title, so a rename reads it again).
+    @ObservationIgnored private var entryCache: [String: GoalUploads.Entry] = [:]
 
     /// A quick suggestion from the file name, before the paper's been read.
     func pending(_ data: Data, fileName: String, mime: String, source: URL? = nil) -> PendingUpload {
@@ -430,6 +439,7 @@ final class DevelopModel {
                                                   title: title ?? (name as NSString).deletingPathExtension, folder: ["Practice papers"]) else {
             message = "Couldn't save \(name)."; return nil
         }
+        await library.update(id, ["developUpload": .bool(true)])  // listed in Your papers
         await app?.reload()
         if let item = await library.item(id) { await split(item: item) }
         return id
@@ -541,8 +551,35 @@ final class DevelopModel {
     /// Your PDF items that can be split into questions.
     var myPDFs: [Item] { (app?.items ?? []).filter { $0.attachments.contains { $0.mime == "application/pdf" } && !$0.id.hasPrefix("paper.") } }
 
+    /// Your papers: what you uploaded in Develop, what you've practised, and what a goal uses.
+    var yourPapers: [Item] {
+        let practised = practisedItems
+        let inGoals = Set(goals.flatMap(\.uploads))
+        return myPDFs.filter { $0.record["developUpload"]?.bool == true || practised.contains($0.id) || inGoals.contains($0.id) }
+    }
+
+    /// Goals that practise from an upload.
+    func goals(using itemId: String) -> [CampaignPlanner.Goal] { goals.filter { goalUploads($0).contains(itemId) } }
+
     /// Your own papers (PDFs in your trove, not the board papers kept for syncing), as goals see them.
     var uploadList: [(id: String, title: String)] { myPDFs.map { ($0.id, $0.displayTitle) } }
+
+    /// Your uploads with their names read, for matching goals (cached: Edit goal froze reading them on every redraw).
+    var uploadEntries: [GoalUploads.Entry] {
+        let subjects = subjectNames
+        return uploadList.map { u in
+            let key = u.id + "\u{1}" + u.title
+            if let e = entryCache[key] { return e }
+            let e = GoalUploads.Entry(id: u.id, title: u.title, subjects: subjects)
+            entryCache[key] = e
+            return e
+        }
+    }
+
+    /// Uploads that match a goal by name, before your picks.
+    func automaticUploads(courses: [String], name: String, summary: String?) -> Set<String> {
+        GoalUploads.automatic(entries: uploadEntries, targets: goalTargets(courses: courses, name: name, summary: summary))
+    }
 
     /// What a goal is about, for matching uploads: its courses, else its name and notes.
     func goalTargets(courses: [String], name: String, summary: String?) -> [GoalUploads.Target] {
@@ -552,8 +589,8 @@ final class DevelopModel {
 
     /// The uploads a goal practises from: the ones you picked and the ones whose name matches it.
     func goalUploads(_ goal: CampaignPlanner.Goal) -> [String] {
-        GoalUploads.effective(picked: goal.uploads, excluded: goal.excludedUploads, uploads: uploadList,
-                              targets: goalTargets(courses: goal.courses, name: goal.name, summary: goal.summary), subjects: subjectNames)
+        GoalUploads.effective(picked: goal.uploads, excluded: goal.excludedUploads, entries: uploadEntries,
+                              targets: goalTargets(courses: goal.courses, name: goal.name, summary: goal.summary))
     }
 
     /// Your uploaded papers that are split already (by item id).

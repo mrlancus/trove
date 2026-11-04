@@ -142,6 +142,13 @@ should sync per trove; "this is to test, not what I'm using".
   by chatting with your AI" opens the goal chat on the current goal (it may change anything, uploads too; you
   still Save). A goal with no course and no uploads still practises from everything. Tests: `GoalUploadsTests`,
   TEST-DEV-032.
+- **Fixes from your first try (2026-11-04):** Edit goal froze: it read every PDF's name for each row on each
+  redraw (n² name reads); now names are read once per upload (`GoalUploads.Entry`, cached in DevelopModel) and
+  matches are worked out when the courses/name/notes change (`manyUploadsMatchQuickly`). Goal chat "The answer
+  was cut off": it asked for 800 tokens and thinking counts against that; now the plan budget (3,000) and one
+  retry at double. **Your papers** screen (Develop → Your own papers → All your papers): search by any words of
+  a name or goal, sort (newest, name, most questions), rename, split, open, delete (with a confirm), upload, and
+  "Include every PDF in my trove". Uploads from Develop are marked `developUpload`. Test: TEST-DEV-033.
 - **Not done / next**: CCEA papers come through the browser only; Pearson's newest series (login only); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 

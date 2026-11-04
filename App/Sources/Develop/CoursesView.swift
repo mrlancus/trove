@@ -386,6 +386,12 @@ struct UploadsCard: View {
                     Button("Rename…", systemImage: "pencil") { newName = item.displayTitle; renaming = item }
                 }
             }
+            let all = develop.yourPapers.count
+            if all > 0 {
+                NavigationLink { PapersView(develop: develop) } label: {
+                    Label("All your papers (\(all)): search, rename, delete", systemImage: "list.bullet").font(.subheadline)
+                }
+            }
             let others = develop.myPDFs.filter { !develop.practisedItems.contains($0.id) }
             if !others.isEmpty {
                 Menu {

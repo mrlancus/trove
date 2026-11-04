@@ -321,6 +321,9 @@ struct GoalForm: View {
     @State private var summary = ""
     @State private var picked: Set<String> = []
     @State private var excluded: Set<String> = []
+    /// Uploads matching the goal by name: worked out when the courses, name or notes change, not per row
+    /// (it froze Edit goal before, reading every PDF's name for each row on each redraw).
+    @State private var automatic: Set<String> = []
     @State private var chatting = false
 
     var body: some View {
@@ -373,7 +376,10 @@ struct GoalForm: View {
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .onAppear(perform: load)
+            .onAppear { load(); refreshMatches() }
+            .onChange(of: courses) { _, _ in refreshMatches() }
+            .onChange(of: name) { _, _ in refreshMatches() }
+            .onChange(of: summary) { _, _ in refreshMatches() }
             .sheet(isPresented: $chatting) { GoalChatSheet(develop: develop, editing: current, apply: use) }
         }
         #if os(macOS)
@@ -395,9 +401,8 @@ struct GoalForm: View {
 
     // MARK: Your own papers
 
-    private var automatic: Set<String> {
-        GoalUploads.automatic(uploads: develop.uploadList, targets: develop.goalTargets(courses: Array(courses), name: name, summary: summary),
-                              subjects: develop.subjectNames)
+    private func refreshMatches() {
+        automatic = develop.automaticUploads(courses: Array(courses), name: name, summary: summary)
     }
 
     private func isOn(_ id: String) -> Bool { picked.contains(id) || automatic.contains(id) && !excluded.contains(id) }
@@ -416,10 +421,12 @@ struct GoalForm: View {
     /// any other PDF in your trove from the menu; and Upload right here.
     private var uploadsSection: some View {
         let auto = automatic
-        let all = develop.myPDFs
-        let shown = all.filter { isOn($0.id) || auto.contains($0.id) || develop.practisedItems.contains($0.id) }
-            .sorted { (isOn($0.id) ? 0 : 1, $0.displayTitle) < (isOn($1.id) ? 0 : 1, $1.displayTitle) }
-        let others = all.filter { item in !shown.contains { $0.id == item.id } }
+        let on = Set(develop.myPDFs.map(\.id).filter(isOn))
+        let practised = develop.practisedItems
+        let shown = develop.myPDFs.filter { on.contains($0.id) || auto.contains($0.id) || practised.contains($0.id) }
+            .sorted { (on.contains($0.id) ? 0 : 1, $0.displayTitle) < (on.contains($1.id) ? 0 : 1, $1.displayTitle) }
+        let shownIds = Set(shown.map(\.id))
+        let others = develop.myPDFs.filter { !shownIds.contains($0.id) }
         return Section {
             if shown.isEmpty {
                 Text("None yet. Upload a paper here, or from a board's website, and it's added to this goal.").font(.caption).foregroundStyle(.secondary)
@@ -428,7 +435,7 @@ struct GoalForm: View {
                 Toggle(isOn: Binding(get: { isOn(item.id) }, set: { turn(item.id, $0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.displayTitle).lineLimit(2)
-                        if auto.contains(item.id) && !excluded.contains(item.id) {
+                        if auto.contains(item.id) && !excluded.contains(item.id) && !picked.contains(item.id) {
                             Text("Matches this goal").font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -466,6 +473,7 @@ struct GoalForm: View {
         target = p.target ?? ""
         summary = p.summary
         // Exactly the uploads it chose: picked, and any other automatic match turned off.
+        refreshMatches()
         picked = Set(p.uploads)
         excluded = automatic.subtracting(p.uploads)
     }

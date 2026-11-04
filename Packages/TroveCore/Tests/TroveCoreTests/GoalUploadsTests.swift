@@ -62,4 +62,19 @@ import Testing
         guard case .ready(let q) = try #require(GoalChat.parse(old, candidates: [])) else { Issue.record("not ready"); return }
         #expect(q.uploads.isEmpty)
     }
+
+    /// Edit goal froze with many PDFs (2026-11-04): reading names once, then matching, must stay quick.
+    @Test func manyUploadsMatchQuickly() {
+        let subjects = PaperTitle.commonSubjects + (0..<200).map { "Subject \($0)" }
+        let many = (0..<500).map { i in (id: "u\(i)", title: i % 5 == 0 ? "AQA A-level Physics Paper \(i % 3 + 1), June 20\(10 + i % 15)" : "Scan \(i) of my notes") }
+        var start = Date()
+        let entries = GoalUploads.entries(many, subjects: subjects)  // once per name (the app keeps them)
+        #expect(Date().timeIntervalSince(start) < 5, "reading 500 names took \(Date().timeIntervalSince(start)) s")
+        let aqa = GoalUploads.targets(courses: [("AQA", "Physics", "A-level")], goalText: "")
+        start = Date()
+        var found = 0
+        for _ in 0..<200 { found = GoalUploads.automatic(entries: entries, targets: aqa).count }  // many redraws
+        #expect(found == 100)
+        #expect(Date().timeIntervalSince(start) < 1, "200 matchings of 500 uploads took \(Date().timeIntervalSince(start)) s")
+    }
 }

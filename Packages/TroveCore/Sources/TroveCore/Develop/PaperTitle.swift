@@ -165,7 +165,11 @@ public enum PaperTitle {
 
     static func subject(in text: String, subjects: [String]) -> String? {
         var best: (String.Index, Int, String)?
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
         for s in Set(subjects) where s.count >= 3 {
+            // A plain search first (cheap); the word-boundary check only for subjects actually there.
+            let first = s.split(separator: " ").first.map(String.init) ?? s
+            guard folded.range(of: first, options: [.caseInsensitive, .diacriticInsensitive]) != nil else { continue }
             let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: s).replacingOccurrences(of: " ", with: #"\s+"#) + #"\b"#
             guard let r = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { continue }
             // Earliest wins; at the same place the longer name ("Further Mathematics" over "Mathematics").
