@@ -97,8 +97,14 @@ should sync per trove; "this is to test, not what I'm using".
   carry courses, papers, target and a summary; they're editable and removable (synced). No fixed minutes a day:
   the card asks "How long have you got today?" and sizes today's questions; the latest answer is the usual for
   later days. Start practises from the goal's courses. New look: readiness ring, days left, chips.
-- **Edexcel**: waiting on you: reply "do edexcel" to read Pearson's own past-paper service on
-  qualifications.pearson.com (the endpoint its finder calls; no key), like AQA's.
+- **Edexcel (next session, first thing)**: Pearson's own servlet only returns counts and its sitemaps list no PDFs;
+  the list comes only from the hosted search its finder page uses, with the search-only key the page hands
+  every visitor. The user chose that (2026-11-04) and added `.claude/settings.json` allowing
+  `python3 scripts/catalogue/pearson.py*` and `build.py pearson*`; this session was still blocked (rules load at
+  session start). Next: `python3 scripts/catalogue/pearson.py probe` to see the record fields, then write
+  `find()` (GCSE, International GCSE, AS/A level, International A level; QP/MS/ER; Pearson's PDF URLs only),
+  add it to build.py's FINDERS (drop it from NOT_LISTED), split-sample a few papers, commit. If it's still
+  blocked, stop and tell the user (fallback: an in-app "Find on Pearson's site" browser with "Add to Trove").
 - **Not done / next**: CCEA (above); the look of the rest of the app; mark-scheme matching on non-AQA boards is
   best-effort (the scheme's page is always one tap away); Cambridge's older series aren't public.
 
