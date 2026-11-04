@@ -424,3 +424,29 @@ extension DevelopAI.Task {
         #expect(AnkiPackage.checksum("p = ?") == Int64(String(Data(Insecure.SHA1.hash(data: Data("p = ?".utf8))).hex.prefix(8)), radix: 16))
     }
 }
+
+/// Campaigns (TEST-CUR-002).
+@Suite struct CampaignTests {
+    @Test func diagnosticFirstThenWhatSlipsAndNeverWhatsSafe() async {
+        let day = 86_400_000.0, now = 1_700_000_000_000.0
+        // "strong": three hard solves recently (proficient, safe); "weak": one miss; "new": nothing yet.
+        let strong = (0..<3).map { Attempt(id: "s\($0)", problem: "p\($0)", skills: ["strong"], at: now - Double(3 - $0) * day, hint: 0,
+                                           marking: .selfMarked, score: 1, b: 1.5, sourceKey: "src\($0)") }
+        let weak = [Attempt(id: "w", problem: "q", skills: ["weak"], at: now - 2 * day, hint: 0, marking: .selfMarked, score: 0.2, b: 0, sourceKey: "x")]
+        let states = Mastery.evaluate(strong + weak)
+        let goal = CampaignPlanner.Goal(id: "campaign.bpho", name: "BPhO Round 1", deadline: now + 8 * day, minutesPerDay: 16)
+        let plan = CampaignPlanner.plan(goal, skills: ["new", "strong", "weak"], states: states, now: now)
+        #expect(plan.days.count == 9)
+        #expect(plan.days.allSatisfy { $0.skills.count <= 2 })
+        #expect(plan.days[0].diagnostic && plan.days[0].skills.first == "new")
+        #expect(plan.days[0].skills.contains("weak"))
+        #expect(!plan.days.flatMap(\.skills).contains("strong"))
+        #expect(plan.proficient == ["strong"] && plan.total == 3)
+        #expect(plan.why.hasPrefix("1 of 3 skills shown"))
+        #expect(plan == CampaignPlanner.plan(goal, skills: ["weak", "strong", "new"], states: states, now: now))
+        // Saved and read back like any record.
+        let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
+        await lib.saveCampaign(goal)
+        #expect(await lib.campaigns() == [goal])
+    }
+}

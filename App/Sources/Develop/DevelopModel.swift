@@ -21,6 +21,7 @@ final class DevelopModel {
     private(set) var skills: [String: SkillState] = [:]
     private(set) var concepts: [Concept] = []
     private(set) var index = EdgeIndex()
+    private(set) var goals: [CampaignPlanner.Goal] = []
     var downloading: (done: Int, total: Int)?
     var splitting = false
     var message: String?
@@ -79,6 +80,7 @@ final class DevelopModel {
         problems = await library.problems()
         attempts = await library.attempts()
         concepts = await library.concepts()
+        goals = await library.campaigns()
         index = EdgeIndex(edges: await library.edges(), concepts: concepts)
         let all = attempts
         skills = await Task.detached(priority: .userInitiated) { Mastery.evaluate(all) }.value
@@ -282,6 +284,22 @@ final class DevelopModel {
         await library.recordAttempt(fixed)
         await reload()
     }
+
+    // MARK: Goals
+
+    func addGoal(name: String, deadline: Date, minutesPerDay: Int) async {
+        guard let library = app?.library else { return }
+        await library.saveCampaign(.init(id: "campaign.\(UUID().uuidString)", name: name, deadline: deadline.timeIntervalSince1970 * 1000,
+                                         minutesPerDay: minutesPerDay))
+        await reload()
+    }
+
+    func plan(_ goal: CampaignPlanner.Goal) -> CampaignPlanner.Plan {
+        let skillIds = concepts.filter { $0.type == .skill && $0.mergedInto == nil }.map(\.id)
+        return CampaignPlanner.plan(goal, skills: skillIds, states: skills, now: Date().timeIntervalSince1970 * 1000)
+    }
+
+    func name(_ id: String) -> String { concepts.first { $0.id == id }?.name ?? id }
 
     // MARK: Anki
 

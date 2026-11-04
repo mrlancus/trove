@@ -989,6 +989,8 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   `catalogue` (spec id in the catalogue), `topics` ([{`ref`, `title`, `concept`}], made on the
   device).
 
+- **`campaign`** `campaign.<uuid>`: `name`, `deadline` (ms), `skills` ([concept ids]; empty = every skill),
+  `minutesPerDay`. The plan isn't stored: `CampaignPlanner.plan` works it out from the attempts each time.
 - **Edge rules.** An edge's id comes from its ends and type, so the same link made on two devices
   is one record. Changing its `state` is a plain LWW `set`. A client never deletes a `rejected` edge,
   and nothing but the user's own action changes a rejected edge's state (suggesters check for it).
