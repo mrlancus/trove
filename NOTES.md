@@ -115,7 +115,9 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   board's own site; Pearson's didn't answer by pattern), Develop's timed whole-paper mock, scanned papers
   (Vision text for splitting), Anki review-log import, moving the rest of the views onto `Theme` tokens,
   the iPhone top bar (U4), checking iPhone landscape (U7), search's remaining 5 ms (MaxScore bound).
-- **"publish" when you want them live:** the relay metering change and the website PDF fix (`cd server && npx wrangler deploy`).
+- **Deploy pending:** the relay metering change and the website PDF fix. A cloud session tried `cd server && npx
+  wrangler deploy` on 2026-11-04 and the session's permission settings refused a production deploy; the user
+  approves it (allow it when asked, or add a permission rule), then any session can run it.
 
 ## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
 Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
@@ -1107,8 +1109,8 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
 - **The way back to before the Develop work** (2026-11-03): `main` as it was is saved on the branch
   `archive/main-before-develop` (b5c07b9). To go back: `git checkout -b old archive/main-before-develop`.
   Never delete or force-push it.
-  - **The `pre-develop` tag isn't on GitHub yet**: this session's git proxy refused tag pushes (HTTP 403),
-    so only the branch was saved. Make the tag yourself on any computer:
+  - **Optional:** the `pre-develop` tag isn't on GitHub (this session's git proxy refused tag pushes, HTTP 403).
+    The branch alone is enough to go back; the tag is only a second bookmark. If you want it anyway:
     `git fetch origin && git tag -a pre-develop -m "main before the Develop, performance and testing work" origin/archive/main-before-develop && git push origin pre-develop`
     (or GitHub → Releases → Draft a new release → tag `pre-develop`, target `archive/main-before-develop`).
 - **Your own AI (Claude):** create an API key at https://console.anthropic.com/settings/keys, add
