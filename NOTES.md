@@ -3,9 +3,7 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-- 2026-11-03, `main`, session_01C6a43TMdUt74aePrEdY1qc: `docs/prompts/develop-perf-testing.md` Parts 1–3.
-  Files: `docs/DEVELOP_PLAN.md`, `docs/PERF_AUDIT.md`, `docs/testing/`, `Packages/TroveCore/Sources/TroveCore/Develop/`,
-  `Packages/TroveCore/Sources/TroveCore/Gen/`, `App/project.yml`, `App/Sources/Services/Perf.swift`, `MetricsReporter.swift`.
+(nobody right now)
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:
@@ -109,7 +107,9 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   - **UI audit** (`docs/UI_AUDIT.md`) from the first simulator screenshots: U1 Recent's empty message, U2 iPhone
     opens on Recent, U6 "Pick a result": fixed. `Theme.swift` tokens for direction A Glass.
   - **Tests**: TroveCore 241, web unit 73, web e2e 25/25, relay 59, extension 2 (Linux); Mac app tests 7/7 on CI;
-    UI tests on 4 simulators (first run's navigation fixed). All logged in `docs/testing/RESULTS.md`.
+    UI tests on 4 simulators: 16 pass at d1961da (Develop on three devices); iPad search typing and the launch
+    metric fixed in the tests at 234a0e7 (check that run's `ci-logs-tests`); the iPad mini simulator itself
+    failed to launch/stop the app. All logged in `docs/testing/RESULTS.md`.
 - **Known bugs:** search over budget as a computation (B3).
 - **Not done (next sessions):** other boards in the catalogue (each needs a verified list of links on the
   board's own site; Pearson's didn't answer by pattern), Develop's timed whole-paper mock, scanned papers
