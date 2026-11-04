@@ -30,3 +30,4 @@ One row per run. Never edit an old row; a re-run is a new row. Who: `Claude` (cl
 | 2026-11-04 | Apple apps build with Pencil answers, hints, .apkg, goals, your own PDFs, off-main search | d1961da, run 146 | macOS 15 runner, Xcode 26.3 | CI | pass | macOS + iOS; published as latest |
 | 2026-11-04 | UI tests (TroveUITests) on 4 simulators | d1961da, run 146 | iOS simulators, Xcode 26.3 | CI | fail | 16 passed: Develop (3 devices), notes scrolling, notebook, rotation, search on iPhones; failed: search on iPads (toolbar field focus, test fixed), launch-time metric (test fixed), iPad mini simulator couldn't launch or stop the app (CI simulator, not Trove) |
 | 2026-11-04 | Mac app tests (TroveTests) | d1961da, run 146 | macOS 15 runner | CI | pass | 7/7 |
+| 2026-11-04 | relay + website deploy, served code checked | 737aeb5, version dfb1e28e | Cloudflare (production) | Claude | pass | root 200; new pdfviewer.js and app.js served |

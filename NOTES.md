@@ -49,7 +49,7 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 | **PDFs like a PDF app** (find, text highlights, quotes, links, forms, export as annotations; PROTOCOL.md §10) | 🟡 Core + website tested; apps (PDFKit reader) build on CI, not yet run on a device | `pdf-cases.json` (Swift + JS), pdf.js export test, Chromium e2e (`pdf.e2e.mjs`) |
 | **Drawing / Apple Pencil** (sketches and ink on PDFs/images, PROTOCOL.md §10): 6 pens, laser, 3 erasers, scribble to erase, lasso, shapes, text, pictures, 17 papers, page sizes, scroll/flip layouts, zoom 10–1000 %, Pencil squeeze palette, page panel, endless canvas, PDF export, handwriting search, editing (S3: lasso actions, shape tool, connectors, ruler/protractor, text on the page, elements library) | 🟡 Core + website tested; apps written (PencilKit pens + Trove tools on iPad/iPhone, all tools on Mac), build on CI, not yet run on a device | Swift + JS unit tests on `ink-cases.json`, `ink-geometry.json`, `ink-editing.json`; 3 Chromium e2e (incl. `editing.e2e.mjs`) |
 | **GoodNotes notebooks with handwriting** (`docs/GOODNOTES.md`) | 🟡 Website checked against real notebooks and GoodNotes' PDF exports; apps building on CI | shared fixture `ink.goodnotes` (Swift + JS) |
-| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version feab0b38, at 98a39e8, after master plan round 1: `segments/batch`, website batched sync) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
+| Relay + web app deployed to Cloudflare | ✅ **https://trove-relay.lancus.workers.dev** (version dfb1e28e, at 737aeb5, 2026-11-04: cache-weighted AI metering, website PDF selection fix) | web e2e, Chromium UI e2e and the Swift integration test all pass against production |
 
 **Design mockups:** three directions (A Glass, B Editorial, C Midnight; Mac + iPhone each) in a
 private artifact: https://claude.ai/artifact/A9P4DTybx1EaSzG3TcayJg. **Decided: A Glass** (MASTER_PLAN §13
@@ -115,9 +115,7 @@ from b5c07b9 (saved as `archive/main-before-develop`). **Continue with "Next" be
   board's own site; Pearson's didn't answer by pattern), Develop's timed whole-paper mock, scanned papers
   (Vision text for splitting), Anki review-log import, moving the rest of the views onto `Theme` tokens,
   the iPhone top bar (U4), checking iPhone landscape (U7), search's remaining 5 ms (MaxScore bound).
-- **Deploy pending:** the relay metering change and the website PDF fix. A cloud session tried `cd server && npx
-  wrangler deploy` on 2026-11-04 and the session's permission settings refused a production deploy; the user
-  approves it (allow it when asked, or add a permission rule), then any session can run it.
+- **Deployed** 2026-11-04 (version dfb1e28e): the relay metering change and the website PDF fix.
 
 ## Round before: the master plan, round 1 (user: "do everything!"; GoodNotes first; merged to main at 98a39e8, relay deployed as feab0b38)
 Plan: `docs/MASTER_PLAN.md` (decisions §13, order §14). Built on CI from the branch with
@@ -1109,10 +1107,7 @@ other services, GitHub). Its "Decisions for the user" list is still open; ask be
 - **The way back to before the Develop work** (2026-11-03): `main` as it was is saved on the branch
   `archive/main-before-develop` (b5c07b9). To go back: `git checkout -b old archive/main-before-develop`.
   Never delete or force-push it.
-  - **Optional:** the `pre-develop` tag isn't on GitHub (this session's git proxy refused tag pushes, HTTP 403).
-    The branch alone is enough to go back; the tag is only a second bookmark. If you want it anyway:
-    `git fetch origin && git tag -a pre-develop -m "main before the Develop, performance and testing work" origin/archive/main-before-develop && git push origin pre-develop`
-    (or GitHub → Releases → Draft a new release → tag `pre-develop`, target `archive/main-before-develop`).
+  - No `pre-develop` tag: the user doesn't want one (the branch is enough).
 - **Your own AI (Claude):** create an API key at https://console.anthropic.com/settings/keys, add
   credit (about $5) and set a monthly spend limit there, then paste the key into Trove → Settings →
   AI → Your AI (never into a chat). It syncs to your other devices end-to-end encrypted.
