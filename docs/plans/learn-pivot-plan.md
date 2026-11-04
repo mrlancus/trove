@@ -97,8 +97,11 @@ Most comparison pages are written by competitors, so this section uses only what
   - Needs an Apple Intelligence device: here that is **only the iPad**. The user's Mac is Intel and has none.
   - Sources: [guide](https://www.atelier-socle.com/en/articles/foundation-models-api-guide),
     [InfoQ](https://infoq.com/news/2026/03/apple-foundation-models-context).
-  - **For Trove:** on-device question and card generation works in chunks of about 2,500 tokens of source,
-    on the iPad only. Other devices use the relay's AI (counted against the allowance) or wait for the iPad.
+  - **For Trove:** too small to write exam questions in a paper's style (§C2.3).
+    - That needs several real questions and their mark schemes as examples, plus your material.
+    - It's also weak at accurate maths and science.
+    - So questions are written by **Haiku 5.5** (your choice, 2026-11-04). The on-device model does only
+      small free jobs on the iPad, such as suggesting which topic a question belongs to.
 - **SpeechAnalyzer / SpeechTranscriber** (iOS/macOS 26) are made for long, distant audio such as
   lectures, run on the device, and support about 10 languages at launch
   ([WWDC25 session](https://nonstrict.eu/wwdcindex/wwdc2025/277/)).
@@ -178,12 +181,26 @@ invite-only. One default breaks it (§7).
 | Flag | UI hidden | Background stopped | Kept |
 |---|---|---|---|
 | `graph` | Connections in the sidebar, the command palette and the iPhone list; the small graph on items; the Notes/Clipboard graph switch; the website's graph and clipboard Map | Nothing runs by itself: the graph is built only while it's on screen | `Links.graph` (backlinks, `[[links]]`, unlinked mentions), "maybe related", `DevelopGraph` (Develop's edges, decision 11) |
-| `obsidian` | Settings → "Sync with an Obsidian vault" | The Obsidian folder sync in `mirrorIfOwner` | `obsidianFolder` in the config (unused while hidden); the Notion & Obsidian import; the Markdown export to `<vault>/Notes` (see §10 Q3) |
+| `obsidian` | Settings → "Sync with an Obsidian vault" | The Obsidian folder sync in `mirrorIfOwner` | `obsidianFolder` in the config (unused while hidden); the Notion & Obsidian import |
 | `githubBridge` | The GitHub part of Bridges (apps + website) | The relay's 6-hourly run: on first launch with the flag off, the app sets any `github` bridge to `enabled: false` through the existing API, and keeps their ids in the synced setting `features.pausedBridges`. Turning the flag back on re-enables exactly those, unless you've changed them since (review R9) | The relay code and its tests (CLAUDE.md: the relay is done) |
 | trove-mcp | Nothing in the apps, the website or the README names it (review R7). `mcp/README.md` gets a "paused" line at the top | Nothing runs unless the user starts it. Its CI tests keep running, so the code doesn't rot | `mcp/`, the `agent` device kind |
 
 **Cost of keeping it**: CI minutes (free, the repo is public) and keeping `Links.graph` working, which
 backlinks need anyway. Nothing ships that runs.
+
+### A3. The Mac's Markdown copy: off by default, with a setting (your choice, 2026-11-04)
+- **What it is**: `ObsidianMirrorService.export`, called from `mirrorIfOwner`.
+  - The Mac that made the vault writes every note as a plain `.md` file into `Trove/Notes/` in iCloud Drive
+    after syncs.
+  - It's one-way: Trove never reads those files back.
+- **Why it changes**: it's written even when the vault is end-to-end encrypted (`AppModel.swift:1268` checks
+  only `mirrorOwner`), so it leaves your notes as plain text in iCloud Drive.
+- **The change**:
+  - A new device setting, "Keep a readable copy of my notes in iCloud Drive", **off by default**.
+  - The Settings line says plainly that the copy isn't encrypted.
+  - `mirrorIfOwner` exports only when the setting is on.
+  - Files already in `Trove/Notes/` aren't deleted by themselves. Settings offers "Delete the copy", which
+    asks first.
 
 ---
 
@@ -192,15 +209,15 @@ backlinks need anyway. Nothing ships that runs.
 ### B1. Navigation
 - **iPad and Mac sidebar**:
   - **Home**.
-  - **Learn** (§10 Q1; "Develop" today): Up next, Courses, Your work, Goals, Cards.
+  - **Learn** (renamed from "Develop", your choice, 2026-11-04): Up next, Courses, Your work, Goals, Cards.
   - **Notes & Sketches**: Library, Today's note, folders, smart collections.
   - **Clipboard**.
   - **Import**.
   - Connections is gone (A2).
-- **iPhone tabs**: Home, **Learn**, Notes, Search.
-  - The Clipboard leaves the tab bar. It's reached from Notes (a section at the top), from Home's "Jump back
-    in", and from the Trove keyboard.
-  - The tab-switch logic in `PhoneViews.swift:68` changes with it.
+- **iPhone tabs**: Home, **Learn**, Library, Clipboard, Search.
+  - The Clipboard keeps its own tab (your choice, 2026-11-04).
+  - Learn replaces "Practise" and moves to second place.
+  - The tab-switch logic in `PhoneViews.swift:68` follows the new order.
 - **Cards** become part of Learn:
   - Studying everything due already exists, as a sheet: command palette "Study flashcards", Mac ⇧⌘Y,
     `StudyView(noteId: nil)` (review R6).
@@ -262,15 +279,38 @@ depend on exam boards. What's missing is a way to make a course and questions wi
 ### C2. Where questions come from
 1. **Board papers**: as now.
 2. **Your uploads**: as now (split; one question per page when there's no text).
-3. **Your notes, PDFs and transcripts → questions and cards.**
-   - Written by AI from a chunk of your own material.
-   - Every question keeps a link to the passage it came from (`madeFrom` edge, `origin: ai`).
-   - Tap to see the source. "This is wrong" removes it and is remembered.
-   - On the iPad: Foundation Models with `@Generable` output, through the existing
-     `App/Sources/Enrichment/OnDeviceAI.swift`.
-     - Chunks are sized from `contextSize` on iOS 26.4+, or a cautious 2,500 tokens otherwise. The 4k figure
-       comes from third-party guides.
-   - Elsewhere: the relay's Haiku at low effort, only when you tap (decision 7's routing).
+3. **New questions in the style of your real papers** (your choice, 2026-11-04: "always use examples from
+   existing pdfs uploaded and make questions in that style not random generated ones … not the same but
+   similar style … realistic mark schemes").
+   - **Model**: Haiku 5.5 through the relay, only when you tap. Costs are in §C4.
+   - **Always from real examples.**
+     - Each request carries 3–5 real questions on the same topic, with their real mark schemes, from the
+       downloaded board papers and your uploads. Same course first, then the same board and level.
+     - Plus your own material for the topic (notes, transcript), if there is any.
+     - No examples, no generation: the course asks you to download or upload a paper first.
+   - **Similar, not copied**:
+     - New contexts and numbers.
+     - The same command words ("calculate", "explain", "evaluate").
+     - The same mark values and part structure (a, b, c).
+     - Diagrams described in words, or drawn as a simple sketch on the page.
+     - No sentence copied from an example.
+   - **Mark schemes in the board's own format**:
+     - M1/A1 method and accuracy marks for maths.
+     - Marking points with alternatives ("allow …", "ignore …") for science.
+     - Levels with indicative content for long answers.
+     - The scheme's total must equal the question's marks.
+   - **Checked before you see it**: a second Haiku call solves each question from scratch without the
+     scheme. Then:
+     - Numbers are recalculated on the device where possible.
+     - A question is dropped if its answer and its scheme disagree, the marks don't add up, or it's too
+       close to an example (a word-overlap check on the device).
+   - **Labelled honestly**:
+     - "Trove-made, in the style of AQA 7408 Paper 1".
+     - `origin: ai`, with `madeFrom` edges to the examples and the material it used.
+     - You can see those examples. "This is wrong" removes the question and is remembered.
+   - **Private**: kept in your vault only, never shared (study with friends shares only catalogue ids).
+   - **Difficulty**: the examples' level prior (`Difficulty.levelBase`), until your own attempts give an
+     estimate.
 4. **Typed by you**: a question, its answer or mark points, and a topic.
 5. **Cards**: as now, and they can be made from a question you got wrong ("Make a card", already in §E of
    DEVELOP_PLAN).
@@ -290,7 +330,33 @@ Each kind is a `problem` with a new `format` field: `written` (the default), `re
 - `Problem` has no such field today (`DevelopRecords.swift:115`), so older builds treat the problem as
   written.
 
-### C4. A plan that gets finished
+### C4. What Haiku 5.5 costs for this
+**Prices**: $0.10 per million input tokens and $0.50 per million output tokens (for prompts up to 100K
+tokens). Cached input is cheaper still.
+
+**One set of 5 questions** (estimates, to be measured once built):
+| Call | Input | Output | Cost |
+|---|---|---|---|
+| Write: system prompt ~1.5k, 3–5 examples with schemes ~6k, your material ~2k | ~10k | ~4.5k (questions, schemes, thinking at low effort) | ~$0.003 |
+| Check: the 5 questions ~3k, instructions ~1k | ~4k | ~5k (solving each) | ~$0.003 |
+| **Total** | ~14k | ~9.5k | **~$0.006, about ½p** |
+
+- **Per question**: about 0.1p.
+- **Heavy use**: 20 questions a day for a month is 600 questions, about **50p a month**. At three times the
+  estimate it's still under £2.
+- **Caching**: a topic's examples are the same every time. Repeat requests read them from the cache, which
+  the relay counts at a tenth. Output dominates the cost anyway.
+
+**The relay's allowance is the real limit, not the money**:
+- 1,000,000 metered tokens per vault per month (`DEFAULT_MONTHLY_TOKENS`, `server/src/ai.ts:19`).
+- Input and output count the same; cache reads count a tenth (`meteredTokens`, line 73).
+- A set uses ~24k, so the allowance covers **about 40 sets (~200 questions) a month**, shared with AI marking
+  and the tutor.
+- With Haiku 5.5 the whole allowance costs at most about $0.50 a month.
+- Raising it to 5M (`AI_MONTHLY_LIMIT`) would cost at most about $2.50 a month. That's your money, so it's
+  your call (§10 Q6).
+
+### C5. A plan that gets finished
 Campaigns already plan towards a goal. For self-learners add:
 - **Checkpoints**: a short mixed quiz every few sessions. Its result re-plans.
 - **Small sessions**: every plan step is at most 20 minutes.
@@ -349,7 +415,7 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 | Step | What | Size | Done when |
 |---|---|---|---|
 | 0 | **Wait for the other session**, then: a NOTES pointer and your §10 decisions; the README's first paragraph and list order, `CLAUDE.md`'s first line and `docs/RESEARCH.md`'s pitch lead with learning (review R7) | S | NOTES says nobody is in progress; docs agree |
-| 1 | **Hide** (§3): `Features` with test overrides, every entry point, the GitHub bridges paused, the website | S | UI tests show no Connections, no Obsidian setting and no GitHub bridge with the flags off; a Mac unit test shows `mirrorIfOwner` leaves the Obsidian folder alone (review R10); existing graph tests pass with `-TroveFeatures all` / `trove.features` |
+| 1 | **Hide** (§3): `Features` with test overrides, every entry point, the GitHub and Telegram bridges paused, the website; the Markdown copy off by default (§3 A3) | S | UI tests show no Connections, no Obsidian setting and no GitHub bridge with the flags off; a Mac unit test shows `mirrorIfOwner` leaves the Obsidian folder alone (review R10); existing graph tests pass with `-TroveFeatures all` / `trove.features` |
 | 2 | **Privacy default** (§7) | XS | A new vault has `recordPlaces: false` written; the Swift and JS defaults are off |
 | 3 | **Navigation, Home, first launch** (§4 B1–B3), and the name (§10 Q1) | M | iPhone and iPad UI tests; TEST-HOME updated |
 | 4 | **Half-built Develop items** (§4 B4) | M | NOTES "Not done" items closed |
@@ -357,12 +423,27 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 | 6 | **Questions from your material** (§5 C2.3–C2.4), tutor rule (§1.1) | L | Generation tests with a fake model; on the iPad, a note becomes 5 questions with sources |
 | 7 | **Cards in Learn** (§4 B1) | S | Due cards in Up next |
 | 8 | **Lecture transcripts and questions** (§6), on the existing ink audio | M | A 30-minute recording transcribes on the iPad; questions cite the transcript |
-| 9 | **Other kinds of practice and checkpoints** (§5 C3–C4) | M | Mastery tests for do-and-rate |
+| 9 | **Other kinds of practice and checkpoints** (§5 C3, C5) | M | Mastery tests for do-and-rate |
 | 10 | Then the existing plans: cohort comparison, study with friends | — | — |
 
 ---
 
 ## 10. Decisions that are yours
+
+**Decided (2026-11-04):**
+- Q1: the section is **Learn**, and the app stays **Trove** (it can be renamed later, display name only).
+- Q2: keep RSS feeds and add addresses, and hide the Telegram bot. That adds a `telegramBridge` flag to §3,
+  which pauses existing Telegram bridges the way `githubBridge` pauses GitHub ones.
+- Q3: the Markdown copy is off by default, with a setting (§3 A3).
+- Q4: Haiku 5.5 writes the questions, when you tap, in the style of real papers (§C2.3).
+- Q5: the Clipboard keeps its own iPhone tab.
+
+**Still open:**
+
+6. **The AI allowance**: keep 1M tokens a month (about 200 Trove-made questions, plus marking and the tutor),
+   or raise it (5M costs at most about $2.50 a month with Haiku 5.5)? See §C4.
+
+**The original options, for the record:**
 1. **The name of the section.** Options:
    - **Learn**: plain, fits "anyone learning anything". My pick.
    - **Study**: fits students, less so a guitarist.

@@ -150,3 +150,17 @@ Every issue below has been fixed in the plan. The **Fix** line says how.
   Code's rules on profiling and transparency. For personal use, it's your own key and your own vault.
 - **Copyright** (DEVELOP_PLAN Appendix E) applies to questions made from board papers. Questions made from
   your own notes are yours.
+
+## After the user's answers (2026-11-04)
+These are the user's decisions, not review fixes. They're now in the plan:
+- **The section is Learn**, and the app stays Trove.
+- **The iPhone Clipboard keeps its own tab.**
+- **RSS feeds and add addresses stay**; the Telegram bot is hidden like the GitHub bridge.
+- **The Markdown copy is off by default, with a setting** (plan §3 A3).
+  - Checked: `mirrorIfOwner` (`AppModel.swift:1268`) exports whenever this is the mirror-owner Mac,
+    encrypted vault or not.
+- **Haiku 5.5 writes questions in the style of real papers**, with mark schemes in the board's format and a
+  second pass that solves and checks each question (plan §C2.3).
+  - Checked: the relay's allowance is 1M metered tokens a month, and cache reads count a tenth
+    (`server/src/ai.ts:19,73`).
+  - Costs (plan §C4) are estimates from the published Haiku 5.5 prices. Measure them on the first real sets.
