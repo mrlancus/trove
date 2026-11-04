@@ -525,8 +525,14 @@ final class DevelopModel {
     func goalCandidates(_ messages: [GoalChat.Message]) -> [GoalChat.Candidate] {
         var out = courses.map { GoalChat.Candidate(spec: $0.spec, name: $0.name, yours: true) }
         guard let catalogue else { return out }
-        let words = Set(messages.filter { $0.role == .you }.flatMap { $0.text.lowercased().split { !$0.isLetter && !$0.isNumber } }.map(String.init))
-            .filter { $0.count >= 4 || $0.allSatisfy(\.isNumber) && $0.count >= 3 }
+        var words: Set<String> = []
+        for m in messages where m.role == .you {
+            for part in m.text.lowercased().split(whereSeparator: { c in !c.isLetter && !c.isNumber }) {
+                let w = String(part)
+                let isCode = w.count >= 3 && w.allSatisfy(\.isNumber)
+                if w.count >= 4 || isCode { words.insert(w) }
+            }
+        }
         let stop: Set<String> = ["want", "exam", "exams", "paper", "papers", "level", "test", "with", "need", "this", "next", "june", "year", "about", "revise", "pass"]
         var scored: [String: (Catalogue.Spec, Int)] = [:]
         for w in words where !stop.contains(w) {
