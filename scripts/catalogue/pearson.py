@@ -30,7 +30,10 @@ SERIES = re.compile(r"^(January|February|March|May|June|October|November)-(\d{4}
 CODE = re.compile(r"^(\d[a-z]{2}\d)[-_]", re.I)          # 1ma1-1f-que…, 9PH0_02_que…, 4ea1-01r-que…
 IAL_UNIT = re.compile(r"^(w[a-z]{2})(\d\d)[-_]([0-9a-z]+)[-_]", re.I)  # wma11-01-que…, WHI04_1B_que…
 FILE_PAPER = re.compile(r"^\d[a-z]{2}\d[-_](\d+[a-z]?)[-_]", re.I)
-RECENT = 2019
+RECENT = 2020
+# Codes filed under one shared spec ("Science", "Mathematics") that are their own subjects.
+SUBJECTS = {"1BI0": "Biology", "1CH0": "Chemistry", "1PH0": "Physics", "1SC0": "Combined Science",
+            "9FM0": "Further Mathematics", "8FM0": "Further Mathematics", "9MA0": "Mathematics", "8MA0": "Mathematics"}
 AGENT = "Trove catalogue builder (+https://github.com/mrlancus/trove)"
 
 
@@ -117,6 +120,8 @@ def parse(record):
     if not specs:
         return None
     _, accredited, spec_slug = specs[0]
+    if spec_slug.endswith("-mod"):  # modified (large-print) papers
+        return None
     file = url.rsplit("/", 1)[1]
     code = CODE.match(file)
     qual, level = FAMILIES[fam]
@@ -132,8 +137,8 @@ def parse(record):
     if not paper and (m := re.match(r"^(?:Paper|Unit|Component)-(\w+)$", unit or "", re.I)):
         paper = m.group(1).upper()
     tier = None
-    if paper and level in ("gcse", "igcse") and (pm := re.match(r"^(\d+)([FH])$", paper)):
-        paper, tier = pm.group(1), "Foundation" if pm.group(2) == "F" else "Higher"
+    if paper and level in ("gcse", "igcse") and (pm := re.match(r"^(\d+)([FH])(R?)$", paper)):
+        paper, tier = pm.group(1) + pm.group(3), "Foundation" if pm.group(2) == "F" else "Higher"
     unit_code = IAL_UNIT.match(file)
     title = f"Paper {paper}" if paper else None
     if fam == "International-Advanced-Level" and unit_code:
@@ -147,43 +152,58 @@ def parse(record):
     facts = {"family": fam, "qualification": qual, "level": level, "subject": subject, "accredited": accredited,
              "slug": spec_slug, "code": code.group(1).upper() if code else None,
              "unit": unit_code.group(1).upper() if unit_code else None}
-    return (fam, spec_slug, qual), facts, doc
+    return (fam, spec_slug), facts, doc
 
 
 def build(hits):
+    """One spec per spec code (1MA1, 9PH0, 4MA1): Pearson files some codes under one shared spec and
+    some under two; files without a code join their spec's commonest code. International A levels,
+    whose papers are units (WPH11…), are one spec per Pearson spec."""
+    parsed = [p for p in map(parse, hits) if p]
+    usual = collections.defaultdict(collections.Counter)
+    for (fam, spec_slug), f, _ in parsed:
+        if f["code"] and fam != "International-Advanced-Level":
+            usual[(fam, spec_slug)][f["code"]] += 1
     groups = {}
-    for r in hits:
-        p = parse(r)
-        if not p:
-            continue
-        key, facts, doc = p
-        g = groups.setdefault(key, {"facts": [], "docs": []})
-        g["facts"].append(facts)
+    for (fam, spec_slug), f, doc in parsed:
+        code = None if fam == "International-Advanced-Level" else (f["code"] or next(iter(usual[(fam, spec_slug)].most_common(1)), (None,))[0])
+        g = groups.setdefault((fam, code or spec_slug), {"facts": [], "docs": [], "code": code})
+        g["facts"].append(f)
         g["docs"].append(doc)
     specs, used = [], set()
-    for (fam, spec_slug, qual), g in sorted(groups.items()):
+    for (fam, name), g in sorted(groups.items()):
         qps = [d for d in g["docs"] if d["type"] == "qp"]
         if not qps or max(d["year"] for d in qps) < RECENT:
             continue
-        f = g["facts"][0]
-        codes = collections.Counter(x["code"] for x in g["facts"] if x["code"])
-        units = sorted({x["unit"] for x in g["facts"] if x["unit"]})
+        facts = g["facts"]
+        commonest = lambda k: collections.Counter(x[k] for x in facts).most_common(1)[0][0]  # noqa: E731
+        qual, level = FAMILIES[fam]
+        if fam == "A-Level":
+            qual = "AS" if (g["code"] or "")[:1] == "8" or (not g["code"] and commonest("qualification") == "AS") else "A level"
         if fam == "International-Advanced-Level":
-            code = "/".join(units[:4]) + ("…" if len(units) > 4 else "") if units else spec_slug
-            sid = f"pearson-{slug(spec_slug)}"
+            units = sorted({x["unit"] for x in facts if x["unit"]})
+            numbers = sorted({d["paper"] for d in g["docs"] if d.get("paper") and d["paper"][:3] in units})
+            if len(units) == 1 and numbers:
+                code = numbers[0] if len(numbers) == 1 else f"{numbers[0]}–{numbers[-1]}"
+            else:
+                code = "/".join(units) if units else name.upper()
+            sid = f"pearson-{slug(name)}"
         else:
-            code = codes.most_common(1)[0][0] if codes else spec_slug
-            sid = f"pearson-{code.lower()}" if codes else f"pearson-{slug(spec_slug)}"
+            code = g["code"] or name
+            sid = f"pearson-{slug(code)}"
         if sid in used:
-            sid = f"{sid}-{f['accredited']}"
+            sid = f"{sid}-{commonest('accredited')}"
         used.add(sid)
-        subject = f["subject"]
+        subject = SUBJECTS.get(g["code"] or "", commonest("subject"))
+        subject = subject[:1].upper() + subject[1:]
+        if fam == "GCSE" and (g["code"] or "").startswith("3"):
+            subject += " (Short Course)"
         docs = []
         for d in g["docs"]:
             d["id"] = doc_id(sid, d["type"], d["paper"], d["tier"], d["series"], d["year"])
             docs.append({k: v for k, v in d.items() if v is not None})
         specs.append({"id": sid, "board": "pearson", "qualification": qual, "subject": subject, "code": code,
-                      "level": f["level"], "url": PAGE, "docs": docs})
+                      "level": level, "url": PAGE, "docs": docs})
     return specs
 
 
