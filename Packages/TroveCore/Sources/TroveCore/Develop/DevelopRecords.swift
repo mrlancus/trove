@@ -125,6 +125,8 @@ public struct Problem: Sendable, Equatable, Identifiable {
     public var splitBy: String
     public var label: String
     public var skills: [String]
+    /// The `PaperSplitter.version` that made its regions (1 before versions were kept).
+    public var splitVersion: Int
 
     public init(_ r: Record) {
         id = r.id
@@ -137,6 +139,7 @@ public struct Problem: Sendable, Equatable, Identifiable {
         level = ProblemLevel(rawValue: r.fields["level"]?.string ?? "") ?? .other
         nationalAverage = r.fields["nationalAverage"]?.number
         splitBy = r.fields["splitBy"]?.string ?? "auto"
+        splitVersion = Int(r.fields["splitV"]?.number ?? 1)
         label = r.fields["label"]?.string ?? ""
         skills = r.fields["skills"]?.stringArray ?? []
     }
@@ -246,12 +249,21 @@ extension Library {
         fields["parent"] = parent.map(JSONValue.string) ?? .null
         fields["marks"] = marks.map { .number(Double($0)) } ?? .null
         fields["nationalAverage"] = nationalAverage.map(JSONValue.number) ?? .null
+        fields["splitV"] = .number(Double(PaperSplitter.version))
         await engine.set(fields, record: id, kind: Develop.problemKind)
         for skill in skills { await setEdge(from: id, to: skill, type: .tests, state: .accepted, origin: .rule) }
         return id
     }
 
     public func problems() async -> [Problem] { await engine.records(kind: Develop.problemKind).map(Problem.init) }
+
+    /// After splitting a paper again: its questions that the new split no longer has are removed (their
+    /// attempts keep their label, so Your work still shows them).
+    public func removeProblems(sourceKey: String, keeping keys: Set<String>) async {
+        for p in await problems() where p.sourceKey == sourceKey && !keys.contains(p.key) {
+            await engine.delete(p.id)
+        }
+    }
 
     /// Records an attempt (written once; marking can be confirmed or changed later).
     @discardableResult

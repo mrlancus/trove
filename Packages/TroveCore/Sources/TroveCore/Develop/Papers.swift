@@ -183,6 +183,28 @@ public enum PaperSplitter {
     /// How far in from the margin a part ("(b)") may start.
     public static let partIndent = 72.0
 
+    /// Bumped when splitting changes what a question's regions hold, so papers split before are split
+    /// again (2: tight crops, lead-ins with the part they introduce, "c)" and "Question 1" labels).
+    public static let version = 2
+
+    /// Room left round a question's text when it's cropped (points).
+    static let pad = 8.0
+
+    /// Two keys of the same numbered question ("1.3" and "1.4", "1" and "1.1").
+    static func sameQuestion(_ a: String, _ b: String) -> Bool {
+        a.split(separator: ".").first == b.split(separator: ".").first
+    }
+
+    /// A line of words, not an answer line ("……… m s−1"), a page furniture line ("Turn over") or a lone number.
+    static func isProse(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        let lower = t.lowercased()
+        if ["turn over", "do not write", "blank page", "end of question", "total for question", "question continues"].contains(where: { lower.contains($0) }) { return false }
+        let words = t.split(whereSeparator: { !$0.isLetter }).filter { $0.count >= 3 }
+        let dots = t.filter { $0 == "." || $0 == "…" || $0 == "_" }.count
+        return words.count >= 3 && dots * 3 < t.count
+    }
+
     /// The page's left text margin: near the left of almost every line, ignoring a few stray bits further
     /// left (a barcode's digits, a vertical label on the cover).
     static func leftMargin(_ lines: [Line]) -> Double {
@@ -225,21 +247,45 @@ public enum PaperSplitter {
             guard let g = groups(q, line.text), let k = key(g), starts.last?.key != k else { continue }
             if line.x <= margin || k.contains(".") { starts.append((i, k)) }
         }
+        // Each question's lines: from its start to the next question's start.
+        var bodies: [[Line]] = starts.enumerated().map { n, start in
+            let end = n + 1 < starts.count ? starts[n + 1].index : ordered.count
+            return Array(ordered[start.index..<end])
+        }
+        // A part ends at its marks. Prose after them introduces the next part of the same question ("The
+        // photons generated…" before d)), so it moves there; anything else after the marks (answer lines,
+        // "Turn over", the next question's boilerplate) is left out (docs/prompts/practice-space-home.md).
+        var marked: [Bool] = Array(repeating: false, count: bodies.count)
+        for n in bodies.indices {
+            guard let last = bodies[n].lastIndex(where: { groups(mk, $0.text) != nil }) else { continue }
+            marked[n] = true
+            let trailing = Array(bodies[n][(last + 1)...])
+            bodies[n] = Array(bodies[n][...last])
+            guard n + 1 < bodies.count, !trailing.isEmpty, Self.sameQuestion(starts[n].key, starts[n + 1].key) else { continue }
+            if let first = trailing.firstIndex(where: { Self.isProse($0.text) }) {
+                bodies[n + 1] = Array(trailing[first...]) + bodies[n + 1]
+            }
+        }
         var out: [Question] = []
         for (n, start) in starts.enumerated() {
-            let end = n + 1 < starts.count ? starts[n + 1].index : ordered.count
-            let body = Array(ordered[start.index..<end])
-            var byPage: [Int: (top: Double, bottom: Double)] = [:]
+            let body = bodies[n]
+            var byPage: [Int: (top: Double, bottom: Double, left: Double, right: Double)] = [:]
             for l in body {
-                let r = byPage[l.page] ?? (l.y, l.y + l.height)
-                byPage[l.page] = (min(r.top, l.y), max(r.bottom, l.y + l.height))
+                let r = byPage[l.page] ?? (l.y, l.y + l.height, l.x, l.x + l.width)
+                byPage[l.page] = (min(r.top, l.y), max(r.bottom, l.y + l.height), min(r.left, l.x), max(r.right, l.x + l.width))
             }
-            // A region runs from the question's first line to the next question's start (or the page's end),
-            // so diagrams between the lines come with it.
+            // A region runs from the question's first line to its marks, round its text (a little margin),
+            // so it's only the question. Without marks (a stem, or a paper that prints none) it runs to the
+            // next question's start, so a diagram under the last line still comes with it.
+            let lastPage = byPage.keys.max()
             let regions = byPage.keys.sorted().map { page -> PageRegion in
-                let top = byPage[page]!.top
+                let b = byPage[page]!
                 let nextOnPage = n + 1 < starts.count && ordered[starts[n + 1].index].page == page ? ordered[starts[n + 1].index].y : pageHeight
-                return PageRegion(page: page, rect: [0, top, pageWidth, max(0, nextOnPage - top)])
+                let top = max(0, b.top - Self.pad)
+                let bottom = marked[n] && page == lastPage ? min(pageHeight, b.bottom + Self.pad) : min(pageHeight, max(b.bottom + Self.pad, nextOnPage - 2))
+                let left = max(0, min(b.left, margin - marginSlack) - Self.pad)
+                let right = min(pageWidth, b.right + Self.pad)
+                return PageRegion(page: page, rect: [left, top, max(1, right - left), max(0, bottom - top)])
             }
             var marks = body.compactMap { groups(mk, $0.text).flatMap { $0.first }.flatMap { Int($0) } }.reduce(0, +)
             if marks == 0, !start.key.contains(".") {
@@ -268,8 +314,9 @@ public enum PaperSplitter {
             var regions: [PageRegion] = []
             for r in stems.flatMap(\.regions) + q.regions {
                 if let last = regions.last, last.page == r.page, last.rect.count == 4, r.rect.count == 4,
-                   abs(last.rect[1] + last.rect[3] - r.rect[1]) < 2 {
-                    regions[regions.count - 1].rect[3] = r.rect[1] + r.rect[3] - last.rect[1]
+                   abs(last.rect[1] + last.rect[3] - r.rect[1]) < 2 + 2 * Self.pad {
+                    let left = min(last.rect[0], r.rect[0]), right = max(last.rect[0] + last.rect[2], r.rect[0] + r.rect[2])
+                    regions[regions.count - 1].rect = [left, last.rect[1], right - left, r.rect[1] + r.rect[3] - last.rect[1]]
                 } else if !regions.contains(r) {
                     regions.append(r)
                 }
@@ -349,9 +396,10 @@ extension PaperSplitter {
         let full = try! NSRegularExpression(pattern: #"^(?:Q\.?\s?)?(\d{1,2})\.?\s?\(([a-h])\)\s?(?:\("# + roman + #"\))?"#)
         let spaced = try! NSRegularExpression(pattern: #"^(?:Q\.?\s?)?(\d{1,2}) ([a-h])(?: \(?"# + roman + #"\)?)?(?=\s|$)"#)
         let compact = try! NSRegularExpression(pattern: #"^(\d{1,2})([a-h])"# + roman + #"?(?=\s|\(|$)"#)
-        let partAlone = try! NSRegularExpression(pattern: #"^\(([a-h])\)\s?(?:\("# + roman + #"\))?(?=\s|$)"#)
-        let romanAlone = try! NSRegularExpression(pattern: #"^\("# + roman + #"\)(?=\s|$)"#)
-        let bare = try! NSRegularExpression(pattern: #"^(?:Q\.?\s?)?(\d{1,2})[.)*]?(?=\s|$)"#)
+        // "(c)", and "c)" as some papers print it (BPhO, many school papers), each maybe with "(i)" / "i)" after.
+        let partAlone = try! NSRegularExpression(pattern: #"^\(?([a-h])\)\s?(?:\(?"# + roman + #"\))?(?=\s|$)"#)
+        let romanAlone = try! NSRegularExpression(pattern: #"^\(?"# + roman + #"\)(?=\s|$)"#)
+        let bare = try! NSRegularExpression(pattern: #"^(?:Q(?:uestion)?\.?\s?)?(\d{1,2})[.):*]?(?=\s|$)"#)
         let romans = ["i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10]
         // A page number in the footer ("2" at the foot of an even page, inside the margin) isn't question 2.
         var foot: [Int: Double] = [:]
@@ -379,7 +427,8 @@ extension PaperSplitter {
                 l.text = key(q, part, m.groups[0]) + " " + t[m.end...]
             } else if let m = match(bare, t), let n = Int(m.groups[0]) {
                 let rest = t[m.end...].drop { $0 == " " }
-                let pageNumber = rest.isEmpty && line.y >= (foot[line.page] ?? 0) - 30
+                // A lone number low on the page; "Question 2" is never a page number.
+                let pageNumber = rest.isEmpty && t.first?.isNumber == true && line.y >= (foot[line.page] ?? 0) - 30
                 if line.x <= margin, n > q, n <= q + 2, !pageNumber, !(rest.first?.isLowercase ?? false) {
                     q = n; part = 0
                     l.text = "\(n) " + rest

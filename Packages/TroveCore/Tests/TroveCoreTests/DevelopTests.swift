@@ -304,12 +304,16 @@ import Crypto
         #expect(qs.map(\.key) == ["1", "1.1", "1.2", "2.1"])
         #expect(qs.map(\.marks) == [nil, 1, 3, 2])
         #expect(qs.map(\.parent) == [nil, "1", "1", "2"])
-        // 1.2's region runs from its first line to the end of its page, so Figure 1 comes with it, after
-        // question 1's stem; 1.1 follows its stem directly, so the two join.
-        #expect(qs[2].regions == [PageRegion(page: 0, rect: [0, 80, 595, 40]), PageRegion(page: 0, rect: [0, 300, 595, 542])])
-        #expect(qs[1].regions == [PageRegion(page: 0, rect: [0, 80, 595, 220])])
+        // 1.2's region runs from its first line to its marks (8 points round the text, from the page's
+        // left margin), so Figure 1 above the marks comes with it, after question 1's stem; 1.1 follows its
+        // stem directly, so the two join. (These test lines are 400 points wide, so the right edge is the page's.)
+        #expect(qs[2].regions == [PageRegion(page: 0, rect: [32, 72, 416, 46]), PageRegion(page: 0, rect: [32, 292, 563, 328])])
+        #expect(qs[1].regions == [PageRegion(page: 0, rect: [32, 72, 563, 88])])
         #expect(qs[2].text.hasPrefix("0 1       A trolley"))
-        #expect(qs[0].regions == [PageRegion(page: 0, rect: [0, 80, 595, 40])])
+        #expect(qs[0].regions == [PageRegion(page: 0, rect: [32, 72, 416, 46])])
+        // "Turn over" after 2.1's marks is left out.
+        #expect(qs[3].regions == [PageRegion(page: 1, rect: [32, 52, 563, 168])])
+        #expect(!qs[3].text.contains("Turn over"))
         let scheme = PaperSplitter.scheme([
             line(0, 40, 100, "01.1   mass × velocity (product of)"),
             line(0, 40, 140, "01.2   v from the graph: 2.4 m s−1"),

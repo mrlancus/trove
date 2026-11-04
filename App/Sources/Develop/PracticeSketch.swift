@@ -61,9 +61,9 @@ extension DevelopModel {
         if let folder = await library.ensureFolder(path, auto: false) { await library.move(id, to: folder) }
         // The question as a picture, like a section of a PDF in GoodNotes.
         if let item = await library.item(id), let page = item.sketchPageList.first,
-           let data = await pdfData(p), let region = p.pages.first {
+           let data = await pdfData(p), !p.pages.isEmpty {
             let image = await Task.detached(priority: .userInitiated) { () -> (Data, Int, Int)? in
-                guard let pdf = PDFDocument(data: data), let cg = PaperPDF.image(pdf, region), let png = InkRenderer.png(cg) else { return nil }
+                guard let pdf = PDFDocument(data: data), let cg = PaperPDF.question(pdf, p.pages), let png = InkRenderer.png(cg) else { return nil }
                 return (png, cg.width, cg.height)
             }.value
             if let (png, w, h) = image {

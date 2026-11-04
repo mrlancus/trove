@@ -109,3 +109,79 @@ struct PracticeStatsTests {
         #expect(PracticeStats([], now: now, calendar: utc).recentAverage == nil)
     }
 }
+
+/// Splitting v2 (docs/prompts/practice-space-home.md): only the question, with its context.
+struct TightSplitTests {
+    // Written for this test in a competition-paper style: "Question 1", parts "c)", "(i)", marks "(10)".
+    func line(_ page: Int, _ x: Double, _ y: Double, _ t: String, width: Double = 400) -> PaperSplitter.Line {
+        .init(page: page, x: x, y: y, width: width, height: 12, text: t)
+    }
+
+    var paper: [PaperSplitter.Line] {
+        [
+            line(0, 60, 60, "Question 1"),
+            line(0, 60, 80, "This question is about the energy of a star."),
+            line(0, 80, 120, "a) State what fuels the star. (2)"),
+            line(0, 80, 160, "b) Show that the core pressure is about 10^16 Pa."),
+            line(0, 100, 180, "where X is the mass fraction of hydrogen. (3)"),
+            line(0, 60, 230, "Photons made in the core take a random walk to the surface of the star."),
+            line(0, 80, 260, "c) Estimate the time for a photon to escape."),
+            line(0, 100, 280, "(i) Find the mean free path."),
+            line(0, 100, 300, "(ii) Hence find the number of steps. (4)"),
+            line(0, 60, 400, "........................................................."),
+            line(1, 60, 60, "Question 2"),
+            line(1, 80, 90, "a) Define luminosity. (1)"),
+        ]
+    }
+
+    @Test func competitionStyleLabelsSplit() {
+        let qs = PaperSplitter.splitPaper(paper, layout: PaperSplitter.genericLayout, pageHeight: 842, pageWidth: 595)
+        #expect(qs.map(\.key) == ["1", "1.1", "1.2", "1.3", "1.3.1", "1.3.2", "2", "2.1"])
+        #expect(qs.first { $0.key == "1.2" }?.marks == 3)
+    }
+
+    @Test func aLeadInGoesWithThePartItIntroduces() {
+        let qs = PaperSplitter.splitPaper(paper, layout: PaperSplitter.genericLayout, pageHeight: 842, pageWidth: 595)
+        let b = qs.first { $0.key == "1.2" }!, c = qs.first { $0.key == "1.3" }!
+        #expect(!b.text.contains("random walk"))
+        #expect(c.text.contains("random walk"))
+        // c)(ii) carries the question's stem and c)'s lead-in, not a) or b).
+        let cii = qs.first { $0.key == "1.3.2" }!
+        #expect(cii.text.contains("energy of a star") && cii.text.contains("random walk") && cii.text.contains("Hence find"))
+        #expect(!cii.text.contains("fuels") && !cii.text.contains("core pressure"))
+    }
+
+    @Test func regionsHoldOnlyTheQuestion() {
+        let qs = PaperSplitter.splitPaper(paper, layout: PaperSplitter.genericLayout, pageHeight: 842, pageWidth: 595)
+        let b = qs.first { $0.key == "1.2" }!
+        // The question's stem comes first (its context), then b) itself.
+        #expect(b.regions.count == 2)
+        let r = b.regions.last!.rect
+        // From b)'s first line to its marks, not down to the next part, and not the page's full width.
+        #expect(r[1] >= 150 && r[1] + r[3] <= 200)
+        #expect(r[0] > 0 && r[0] + r[2] < 595)
+        // The answer dots after c)(ii)'s marks are left out.
+        let cii = qs.first { $0.key == "1.3.2" }!
+        #expect(cii.regions.allSatisfy { $0.rect[1] + $0.rect[3] < 400 })
+    }
+
+    @Test func aSecondSplitReplacesTheFirst() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: nil, encrypted: false))
+        let page = [PageRegion(page: 0, rect: [0, 0, 595, 842])]
+        for key in ["1", "2", "3"] {
+            _ = await lib.addProblem(sourceKey: "item:x", key: key, pages: page, marks: nil, level: .other, label: "Paper Q\(key)")
+        }
+        _ = await lib.addProblem(sourceKey: "item:y", key: "2", pages: page, marks: nil, level: .other, label: "Other Q2")
+        #expect(await lib.problems().allSatisfy { $0.splitVersion == PaperSplitter.version })
+        await lib.removeProblems(sourceKey: "item:x", keeping: ["1", "1.3"])
+        let left = await lib.problems().map { "\($0.sourceKey)/\($0.key)" }.sorted()
+        #expect(left == ["item:x/1", "item:y/2"])
+    }
+
+    @Test func proseIsWordsNotAnswerLines() {
+        #expect(PaperSplitter.isProse("Photons made in the core take a random walk"))
+        #expect(!PaperSplitter.isProse("........................ m s−1"))
+        #expect(!PaperSplitter.isProse("Turn over for the next question"))
+        #expect(!PaperSplitter.isProse("(10)"))
+    }
+}

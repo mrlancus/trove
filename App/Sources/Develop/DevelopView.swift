@@ -391,10 +391,10 @@ struct PracticeView: View {
     }
 
     private func render(_ p: Problem) async -> CGImage? {
-        guard let region = p.pages.first, let data = await develop.pdfData(p) else { return nil }
+        guard !p.pages.isEmpty, let data = await develop.pdfData(p) else { return nil }
         return await Task.detached(priority: .userInitiated) {
             guard let pdf = PDFDocument(data: data) else { return nil }
-            return PaperPDF.image(pdf, region)
+            return PaperPDF.question(pdf, p.pages)
         }.value
     }
 

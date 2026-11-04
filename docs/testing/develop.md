@@ -367,3 +367,19 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   recent and pinned items; each tile does what it says; a card opens that item.
 - **Failure looks like**: the app opens on Recent or notes, a tile does nothing, or the shelf lags while scrolling.
 - **Automated by**: `TroveUITests.testLibraryScrollsAndShows` (opening only); the rest: manual.
+
+### TEST-DEV-037: A question shows only itself, with its context
+- **Feature**: splitting v2 (tight crops, lead-ins, stems; PaperSplitter.version 2)
+- **Priority**: critical
+- **Coverage**: auto-tested (`TightSplitTests`, `DevelopTests` regions); on real papers: not tested
+- **Platforms**: all
+- **Preconditions**: a paper split before this change (it's split again on launch), e.g. a BPhO paper with
+  "Question 1", parts "c)" and "(i)", marks "(10)".
+- **Steps**:
+  1. Open the app and wait a moment; Develop → Practise.
+  2. Look at a part like 1 c): the picture, then the same part in its working sketch.
+- **Expected**: the question's opening text (its stem) on top, then any paragraph that introduces this
+  part, then the part itself down to its marks. No other parts, no previous part's end, no answer lines or
+  blank space, no page margins. A diagram inside the part is kept.
+- **Failure looks like**: the whole page, another part's text, a lost diagram, or the stem missing.
+- **Automated by**: `TightSplitTests`, `DevelopTests/aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme`.

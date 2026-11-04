@@ -85,8 +85,28 @@ final class DevelopModel {
         for c in courses { await loadSpec(c.spec) }
         await seedConcepts()
         await reload()
+        await resplitOutdated()
         await readUploadTexts()
         await syncPapers()
+    }
+
+    /// The cached question text of a paper, named by the splitter's version, so an older split is read again.
+    static func textCache(_ base: String) -> String { "\(base)-questions-v\(PaperSplitter.version)" }
+
+    /// Papers split by an older splitter, split again on this device: tighter crops with the question's
+    /// context (docs/prompts/practice-space-home.md). Another device that does it first saves the work here.
+    func resplitOutdated() async {
+        guard let library = app?.library else { return }
+        let old = Set(problems.filter { $0.splitVersion < PaperSplitter.version }.map(\.sourceKey))
+        guard !old.isEmpty else { return }
+        for key in old where key.hasPrefix("item:") {
+            if let item = await library.item(String(key.dropFirst(5))) { await split(item: item, quietly: true) }
+        }
+        for spec in courseSpecs where old.contains(where: { $0.hasPrefix("cat:\(spec.id)-") }) {
+            let before = message
+            await split(spec)
+            message = before
+        }
     }
 
     /// Board papers in your trove ↔ this device's paper folder: papers another device downloaded are copied
@@ -287,11 +307,13 @@ final class DevelopModel {
         splitting = true
         defer { splitting = false }
         let skillConcepts = await library.concepts().filter { $0.type == .skill }
-        let done = Set(problems.map(\.sourceKey))
+        // Papers split by an older splitter are split again (their questions' crops change; keys that went away are removed).
+        let outdated = Set(problems.filter { $0.splitVersion < PaperSplitter.version }.map(\.sourceKey))
+        let done = Set(problems.map(\.sourceKey)).subtracting(outdated)
         var made = 0, unsplit = 0
         // A paper split on another device has its problems already (they sync); this device still reads its
         // text and mark scheme for itself, since those stay on the device.
-        for doc in spec.questionPapers where cached.contains(doc.id) && !(done.contains("cat:\(doc.id)") && loadPaperCache("\(doc.id)-questions") != nil) {
+        for doc in spec.questionPapers where cached.contains(doc.id) && !(done.contains("cat:\(doc.id)") && loadPaperCache(Self.textCache(doc.id)) != nil) {
             let known = done.contains("cat:\(doc.id)")
             let file = Self.file(doc.id)
             let parsed = await Task.detached(priority: .userInitiated) { () -> (lines: [PaperSplitter.Line], size: CGSize)? in
@@ -302,6 +324,7 @@ final class DevelopModel {
             let (questions, layout) = PaperSplitter.splitBest(parsed.lines, layouts: layouts, pageHeight: parsed.size.height, pageWidth: parsed.size.width)
             if questions.isEmpty { unsplit += 1; continue }
             var texts: [String: String] = [:]
+            if outdated.contains("cat:\(doc.id)") { await library.removeProblems(sourceKey: "cat:\(doc.id)", keeping: Set(questions.map(\.key))) }
             for q in questions {
                 texts[q.key] = q.text
                 if known { continue }
@@ -311,7 +334,7 @@ final class DevelopModel {
                 made += 1
             }
             questionText[doc.id] = texts
-            savePaperCache(texts, name: "\(doc.id)-questions")
+            savePaperCache(texts, name: Self.textCache(doc.id))
             if let ms = catalogue.companions(of: doc, in: spec).ms, cached.contains(ms.id) {
                 let msFile = Self.file(ms.id)
                 let lines = await Task.detached(priority: .userInitiated) { PDFDocument(url: msFile).map { PaperPDF.lines($0).lines } ?? [] }.value
@@ -474,7 +497,7 @@ final class DevelopModel {
     }
 
     /// Splits one of your PDF items into problems (they stay items in your vault and sync like any other).
-    func split(item: Item) async {
+    func split(item: Item, quietly: Bool = false) async {
         guard let library = app?.library, let att = item.attachments.first(where: { $0.mime == "application/pdf" }),
               let data = try? await library.attachmentData(att) else { message = "Couldn't open that PDF."; return }
         splitting = true
@@ -484,27 +507,30 @@ final class DevelopModel {
         }
         let skillConcepts = await library.concepts().filter { $0.type == .skill }
         var texts: [String: String] = [:]
+        await library.removeProblems(sourceKey: "item:\(item.id)", keeping: Set(questions.map(\.key)))
         for q in questions {
             texts[q.key] = q.text
             await library.addProblem(sourceKey: "item:\(item.id)", key: q.key, parent: q.parent, pages: q.regions, marks: q.marks, level: .other,
                                      label: "\(item.displayTitle) Q\(q.key)", skills: ConceptMatch.mentioned(in: q.text, concepts: skillConcepts))
         }
         questionText["item-\(item.id)"] = texts
-        savePaperCache(texts, name: "item-\(item.id)-questions")
-        message = questions.isEmpty ? "Nothing to practise in \(item.displayTitle)." : "\(questions.count) questions from \(item.displayTitle) ready to practise."
+        savePaperCache(texts, name: Self.textCache("item-\(item.id)"))
+        if !quietly {
+            message = questions.isEmpty ? "Nothing to practise in \(item.displayTitle)." : "\(questions.count) questions from \(item.displayTitle) ready to practise."
+        }
         await reload()
     }
 
     /// Uploads split on another device: their problems synced; read their text here too (it stays on the device).
     private func readUploadTexts() async {
         guard let library = app?.library else { return }
-        for id in practisedItems where loadPaperCache("item-\(id)-questions") == nil {
+        for id in practisedItems where loadPaperCache(Self.textCache("item-\(id)")) == nil {
             guard let item = await library.item(id), let att = item.attachments.first(where: { $0.mime == "application/pdf" }),
                   let data = try? await library.attachmentData(att),
                   let qs = await Task.detached(priority: .utility, operation: { Self.questions(inPDF: data) }).value else { continue }
             let texts = Dictionary(qs.map { ($0.key, $0.text) }, uniquingKeysWith: { a, _ in a })
             questionText["item-\(id)"] = texts
-            savePaperCache(texts, name: "item-\(id)-questions")
+            savePaperCache(texts, name: Self.textCache("item-\(id)"))
         }
     }
 
@@ -531,11 +557,11 @@ final class DevelopModel {
     /// The question's text, read from the paper on this device (never stored in the vault).
     func text(of p: Problem) -> String {
         if let id = itemId(p) {
-            if questionText["item-\(id)"] == nil { questionText["item-\(id)"] = loadPaperCache("item-\(id)-questions") ?? [:] }
+            if questionText["item-\(id)"] == nil { questionText["item-\(id)"] = loadPaperCache(Self.textCache("item-\(id)")) ?? [:] }
             return questionText["item-\(id)"]?[p.key] ?? ""
         }
         guard let doc = docId(p) else { return "" }
-        if questionText[doc] == nil { questionText[doc] = loadPaperCache("\(doc)-questions") ?? [:] }
+        if questionText[doc] == nil { questionText[doc] = loadPaperCache(Self.textCache(doc)) ?? [:] }
         return questionText[doc]?[p.key] ?? ""
     }
 
@@ -843,5 +869,54 @@ enum PaperPDF {
         ctx.translateBy(x: -r.minX, y: -r.minY)
         page.draw(with: .mediaBox, to: ctx)
         return ctx.makeImage()
+    }
+
+    /// The whole question as one picture: each of its regions (the question's stem and lead-in, then the
+    /// part itself, maybe on another page) trimmed of blank margins and stacked, a small gap between.
+    nonisolated static func question(_ pdf: PDFDocument, _ regions: [PageRegion], scale: CGFloat = 2) -> CGImage? {
+        let parts = regions.compactMap { image(pdf, $0, scale: scale).map { trimmed($0) } }
+        guard parts.count > 1 else { return parts.first }
+        let gap = Int(10 * scale)
+        let w = parts.map(\.width).max() ?? 1, h = parts.map(\.height).reduce(0, +) + gap * (parts.count - 1)
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return parts.first }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        // Core Graphics counts up from the bottom: the first part goes at the top.
+        var y = h
+        for part in parts {
+            y -= part.height
+            ctx.draw(part, in: CGRect(x: 0, y: y, width: part.width, height: part.height))
+            y -= gap
+        }
+        return ctx.makeImage()
+    }
+
+    /// The picture without blank white rows and columns round it (answer space, margins), keeping a little.
+    nonisolated static func trimmed(_ image: CGImage, keep: Int = 12) -> CGImage {
+        let w = image.width, h = image.height
+        guard w > 2 * keep, h > 2 * keep,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let data = ctx.data else { return image }
+        let px = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        func ink(_ x: Int, _ y: Int) -> Bool {
+            let i = (y * w + x) * 4
+            return Int(px[i]) + Int(px[i + 1]) + Int(px[i + 2]) < 3 * 235
+        }
+        var top = 0, bottom = h - 1, left = 0, right = w - 1
+        // Rows and columns are read with a stride of 2 (half the work, a 1-pixel line still found at 2×).
+        func rowHasInk(_ y: Int) -> Bool { stride(from: 0, to: w, by: 2).contains { ink($0, y) } }
+        func columnHasInk(_ x: Int) -> Bool { stride(from: top, through: bottom, by: 2).contains { ink(x, $0) } }
+        while top < bottom, !rowHasInk(top) { top += 1 }
+        while bottom > top, !rowHasInk(bottom) { bottom -= 1 }
+        guard bottom > top else { return image }
+        while left < right, !columnHasInk(left) { left += 1 }
+        while right > left, !columnHasInk(right) { right -= 1 }
+        // Memory rows run top-down here (the context draws upright into its bitmap), as cropping expects.
+        let crop = CGRect(x: max(0, left - keep), y: max(0, top - keep),
+                          width: min(w, right + keep + 1) - max(0, left - keep), height: min(h, bottom + keep + 1) - max(0, top - keep))
+        return ctx.makeImage()?.cropping(to: crop) ?? image
     }
 }
