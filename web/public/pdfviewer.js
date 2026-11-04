@@ -320,8 +320,10 @@ export async function pdfViewer(bytes, { onExpand, ink, marks = null, fileName =
   // ---------- highlighting selected text ----------
   const selbar = h("div", { class: "pdf-selbar", hidden: true, role: "toolbar", "aria-label": "Selected text" });
   let shownFor = null; // the highlight a tap opened, or null for the selection
+  let shownAtScroll = 0;
   function showBar(rect, forId = null) {
     shownFor = forId;
+    shownAtScroll = pages.scrollTop;
     const rr = root.getBoundingClientRect();
     const swatches = HIGHLIGHT_COLORS.map((c) => h("button", { type: "button", class: "ink-swatch pdf-swatch", style: `--swatch:${c}`,
       "aria-label": forId ? `Make it ${COLOUR_NAMES[c] ?? c}` : `Highlight in ${COLOUR_NAMES[c] ?? c}`, title: forId ? "Colour" : "Highlight",
@@ -416,7 +418,11 @@ export async function pdfViewer(bytes, { onExpand, ink, marks = null, fileName =
         .find((x) => highlightRects(x).some((r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h));
       if (hit) showBar({ left: e.clientX - 40, bottom: e.clientY + 4 }, hit.id); else hideBar();
     });
-    pages.addEventListener("scroll", () => { if (!selbar.hidden) hideBar(); }, { passive: true });
+    // Hide after a real scroll, not the few pixels a browser scrolls to bring the bar's button into
+    // view, or a finger's drift after selecting (which hid it before Quote could be tapped).
+    pages.addEventListener("scroll", () => {
+      if (!selbar.hidden && Math.abs(pages.scrollTop - shownAtScroll) > 40) hideBar();
+    }, { passive: true });
   }
 
   const io = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) render(e.target).catch(() => {}); }, { rootMargin: "600px" });
@@ -445,6 +451,10 @@ export async function pdfViewer(bytes, { onExpand, ink, marks = null, fileName =
       else el.checked = isOn(el, v);
     }
   };
+  // Highlights and other marks changed (here or on another device): redraw their overlays in place,
+  // instead of the item panel rebuilding the viewer (which decrypted and re-rendered every page, and
+  // dropped the selection you were making). Ink drawn into the page is redrawn on the next render.
+  root.refreshMarks = () => { for (let i = 0; i < count; i++) if (overlays[i]) drawOverlay(i); };
   return root;
 }
 

@@ -1592,6 +1592,11 @@ function renderDetail(force = false) {
     vault.folders().length, items.length, inkSig].join("|");
   if (!force && sig === panelCache.sig) return;
   panelCache.sig = sig;
+  // Previews are reused across redraws, but moving them (as soon as the new panel's parts are built)
+  // drops a text selection inside: in a PDF, the words you'd just selected to highlight or quote. Keep it.
+  const sel = getSelection();
+  const kept = sel && sel.rangeCount && !sel.isCollapsed && panel.contains(sel.anchorNode)
+    ? { sc: sel.getRangeAt(0).startContainer, so: sel.getRangeAt(0).startOffset, ec: sel.getRangeAt(0).endContainer, eo: sel.getRangeAt(0).endOffset } : null;
   panel.hidden = false;
   panel.classList.toggle("wide", state.wide);
   const scroll = panel.scrollTop;
@@ -1683,6 +1688,9 @@ function renderDetail(force = false) {
   }
   localGraph?.stop(); localGraph = null;
   panel.replaceChildren(...parts);
+  if (kept && kept.sc.isConnected && kept.ec.isConnected) {
+    try { const r = document.createRange(); r.setStart(kept.sc, kept.so); r.setEnd(kept.ec, kept.eo); sel.removeAllRanges(); sel.addRange(r); } catch { /* gone */ }
+  }
   panel.scrollTop = scroll;
   const stage = $("#local-graph", panel);
   if (stage) {
