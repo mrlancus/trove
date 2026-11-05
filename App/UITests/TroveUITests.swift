@@ -73,8 +73,12 @@ final class TroveUITests: XCTestCase {
         let options = XCTMeasureOptions()
         options.iterationCount = 3
         measure(metrics: [XCTOSSignpostMetric.scrollDecelerationMetric], options: options) {
+            // Each fling is left to come to rest inside its iteration: a swipe that caught the list still
+            // moving left iterations 1 and 2 with no deceleration to measure (iPhone 16 Pro Max, 5068d91).
             window.swipeUp(velocity: .fast)
+            sleep(2)
             window.swipeDown(velocity: .fast)
+            sleep(2)
         }
         shot(app, "notes-scrolled")
     }
