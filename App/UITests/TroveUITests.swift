@@ -101,9 +101,13 @@ final class TroveUITests: XCTestCase {
         XCTAssertTrue(waitForLibrary(app))
         let field = app.searchFields.firstMatch
         if !field.waitForExistence(timeout: 5) {
-            // iPhone: Search is its own tab (the last one).
-            let tabs = app.tabBars.buttons
-            if tabs.count > 0 { tabs.element(boundBy: tabs.count - 1).tap() }
+            // A narrow iPad (mini) folds the toolbar's search field into a Search button; tap it as a person would.
+            let button = app.navigationBars.buttons["Search"].firstMatch
+            if button.exists { button.tap() } else {
+                // iPhone: Search is its own tab (the last one).
+                let tabs = app.tabBars.buttons
+                if tabs.count > 0 { tabs.element(boundBy: tabs.count - 1).tap() }
+            }
         }
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
         field.tap()
