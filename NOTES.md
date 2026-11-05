@@ -3,8 +3,8 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-- Cloud session 2026-11-05 (session_01BrjgWvEbe6KQZPGGaKA59d): building `docs/plans/learn-pivot-plan.md` from
-  `docs/plans/learn-pivot-build-prompt.md`, step by step (see "Learn pivot" below for where it's got to).
+(nobody right now). The learn pivot's steps 0–9 are built (below); step 10 (national-cohort comparison, then study
+with friends from `docs/prompts/study-with-friends.md`) is next and not started.
 
 ## Learn pivot (2026-11-05): Trove is now a place to learn
 **Start here.** The plan is `docs/plans/learn-pivot-plan.md` (§9 order of work, §10 decisions, all taken),
@@ -21,6 +21,31 @@ anything it covers. Decisions from plan §10, short form:
 - Q9/Q10 close copies of real questions are the goal; only exact or near-exact wording is refused.
 - Q11 the shared question bank (uploads private to your users' vaults); Q12 overnight batches, off until the
   relay has `ANTHROPIC_API_KEY`.
+
+**Your manual steps** (nothing is deployed):
+1. Choose an 8-digit code and set it as the relay secret `VAULT_CREATE_CODE`: Cloudflare dashboard → Workers & Pages →
+   trove-relay → Settings → Variables and Secrets → Add → Secret (or `npx wrangler secret put VAULT_CREATE_CODE` in
+   `server/`). **Until it's set and the new relay is deployed, anyone with the URL can still create vaults.**
+2. For overnight batches, add `ANTHROPIC_API_KEY` as a relay secret the same way (your money; capped at 200
+   questions a night and by `AI_MONTHLY_LIMIT`, 10M tokens). Without it nothing runs.
+3. Say **"publish"** to deploy the relay and website (new: the vault code, the question bank, batches, the website's
+   hidden features and code field). The deploy adds two Durable Object classes (migration `v2`).
+4. Install the new app build on each device the same week (own courses can't be opened by older builds).
+5. For question writing in the apps, your own Claude key in Settings → AI.
+
+**Try it** (iPad first, then iPhone and Mac):
+- Make a test vault: "What are you learning?" → An exam course → AQA A-level Physics. Open the course: the
+  specification downloads and shows its topics; download a paper; Home's Up next says "3 questions on …".
+- Practise: Mark it before writing (the attempt notes it); a hint ladder with no working stops at the next step; a
+  right answer asks "why does it work?"; More like this (your key) adds Trove-made questions; This is wrong.
+- Learn → Add a course → Make your own… ("Japanese for a trip"): topics, a "Say it aloud" question, a "Do it and
+  rate it" one; Practise.
+- A note → Practise this; a sketch with a recorded lecture → Make questions from this lecture (iPad, iOS 26:
+  SpeechAnalyzer).
+- A clip → Save to a course…; Learn → Cards.
+- Check what's gone: no Connections, no Obsidian sync, no GitHub/Telegram in Bridges; Settings → Clipboard shows
+  location recording off; Mac: the readable Markdown copy is off.
+- Device tests: `docs/testing/learn.md` (TEST-LEARN-001 … 013); record results in `docs/testing/RESULTS.md`.
 
 Decisions this session took for you (undo in brackets):
 - The website doesn't pause bridges itself; the apps do it on launch (one place to get it right). [port
@@ -202,8 +227,8 @@ From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it").
 ## Status
 | Part | State | Tested |
 |---|---|---|
-| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done | 35 tests on the Workers runtime (incl. a real MIME email) |
-| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done | 233 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed; incl. Develop and trove-gen), plus an end-to-end test against `wrangler dev` |
+| `server/` relay (Worker + Durable Object + R2, WebDAV, email-in, AI proxy, price watches, publish-to-link, serves the web app) | ✅ Done (+ 2026-11-05: vault code, question bank, overnight batches; not deployed) | 73 tests on the Workers runtime (incl. a real MIME email) |
+| `Packages/TroveCore` (sync, crypto, merge, importers, search, library, price watches, publishing, folders, links, versions, GoodNotes ink, drawing, sketch tools, clip insights, power policy, notes, PDF marks) | ✅ Done (+ learn pivot: SpecReader, QuestionWriter, own courses, formats) | 325 tests (run on Linux with Swift 6.3.1 at `/opt/swift` when installed; incl. Develop and trove-gen), plus an end-to-end test against `wrangler dev` |
 | Crypto/sync compatibility Swift ⇄ Worker ⇄ extension ⇄ web app | ✅ Verified both directions | fixtures + scripts |
 | Import (zip, folders, exports; app + website) | 🟡 Core + website tested (Swift + JS on one zip fixture, Chromium e2e); app builds on CI, not run on a device | 5 Swift + 1 JS test, UI e2e |
 | `extensions/browser` (Chrome; Safari via app target) | ✅ Done | crypto test + real-Chromium e2e (save, offline queue) |
