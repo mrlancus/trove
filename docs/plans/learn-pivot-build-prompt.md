@@ -5,7 +5,56 @@ Saved 2026-11-05. Paste this into a new session: **"Read `docs/plans/learn-pivot
 ---
 
 You're building everything in `docs/plans/learn-pivot-plan.md`. The plan is the source of truth. This page
-says how to work.
+says what the change is and how to work.
+
+## 0. What this is: a change of direction for the product
+Trove was a "save anything" second brain with notes, sketching and a clipboard. **It's now a place to learn.**
+Start with students (GCSE, IGCSE, A-level, then university), and grow to anyone learning anything: a
+language, an instrument, a certificate, a hobby (the user's words: "any student or anyone trying to learn
+anything really … basically anything eventually").
+
+- **Learn (renamed from Develop) is the reason to open the app.** Home, first launch, the sidebar and the
+  iPhone tabs all lead with it:
+  - First launch asks "What are you learning?".
+  - Home leads with the next exam or goal and a small Up next session.
+  - The sidebar puts Learn second, after Home.
+  - The iPhone tabs are Home · Learn · Library · Clipboard · Search.
+- **Notes, sketches, PDFs and the clipboard stay, as tools you learn with.** They're secondary but fully
+  working: the Clipboard keeps its own iPhone tab and the Mac's ⌥Space. They should feed learning:
+  - notes per topic;
+  - Practise this on anything;
+  - lecture recordings made into questions;
+  - clips saved to a course.
+- **Hidden, not deleted, with nothing running in the background**:
+  - the AI-coding features: trove-mcp, and the GitHub and Telegram bridges;
+  - the Obsidian-style graph: Connections, the graph on items, the clipboard Map;
+  - the Obsidian folder sync.
+
+  Backlinks, `[[links]]`, RSS feeds and add addresses stay.
+- **How it teaches**, from the research in plan §1:
+  - testing yourself and spacing practice out come first;
+  - similar topics are mixed;
+  - hints come on a ladder;
+  - the tutor holds the answer back;
+  - sessions are small;
+  - streaks are quiet and missed days are never scolded;
+  - no XP.
+- **Questions**:
+  - real past papers first;
+  - then AI-made questions in the style of the real ones (close copies are the goal), checked before a
+    student sees them;
+  - shared through a question bank, so it gets cheaper as it grows.
+- **Private by default**:
+  - vaults stay end-to-end encrypted;
+  - location recording is off by default;
+  - the Markdown copy of notes is off by default;
+  - creating a vault on the relay needs an 8-digit code.
+
+  Many users will be under 18.
+- **The apps are the product.** The website keeps up only where it's cheap.
+
+The README, `CLAUDE.md`'s opening and `docs/RESEARCH.md`'s pitch must say this (step 0). Every later session
+reads those first.
 
 ## 1. Read first, in this order
 1. `CLAUDE.md` and `NOTES.md`.
@@ -103,13 +152,14 @@ is updated.
 | 2b | The 8-digit code to create a vault (relay, PROTOCOL, tests, website + app field) | §7 E2 |
 | 2c | The specification with each course: catalogue finders, download, spec statements. Also fix the catalogue bug in `learn-pivot-effort-tests.md`: history options paired by option | §C6 |
 | 3 | Navigation (sidebar, iPhone tabs Home · Learn · Library · Clipboard · Search), Home, first launch | §4 B1–B3 |
+| 3b | Study rules from the research: small Up next sessions, quiet streaks with rest days and no loss warnings, mixed topics in sets, "explain why" after a correct answer, the tutor holding back the full solution | §1.1, §9 step 3b |
 | 4 | Half-built Develop items: spec topics, thumbnails of working, the rest on `Theme` | §4 B4 |
 | 5 | Own courses, campaigns and course screen for them | §C1 |
 | 6 | Questions in the style of real papers: brief v1, structured output, code checks, check call, medium rewrite, tutor rule; then the test set run and logged | §C2.3, §C9, §1.1 |
 | 6b | The shared bank (relay routes, course files, uploads private to vault devices, pending → good, flags) | §C7 |
 | 6c | Overnight batches on the relay, off until the key exists | §C8 |
 | 7 | Cards in Learn | §4 B1 |
-| 8 | Lecture transcripts and "Make questions from this lecture", on the existing ink audio | §6 |
+| 8 | Notes and the clipboard as learning tools: notes per topic, Practise this on anything, lecture transcripts and questions on the existing ink audio, "Save to a course" on a clip | §6 |
 | 9 | Other kinds of practice (`format` field) and checkpoints | §C3, §C5 |
 | 10 | Then: national-cohort comparison, then study with friends (their prompt) | `docs/prompts/study-with-friends.md` |
 
