@@ -59,6 +59,8 @@ final class DevelopModel {
     @ObservationIgnored private var schemes: [String: [String: String]] = [:]
 
     var session: Session?
+    /// A study-group challenge being done in this session: each marked question becomes an answer (`Groups`).
+    var challengeRun: ChallengeRun?
     /// Each question's working sketch this session (problem id → sketch id), kept on its attempt when marked.
     var workInProgress: [String: String] = [:]
 
@@ -699,8 +701,9 @@ final class DevelopModel {
 
     /// Records the attempt and re-derives mastery.
     func record(_ p: Problem, score: Double?, marking: Marking, hint: Int = 0, uncertain: Bool = false,
-                shownAt: Double? = nil, shownBeforeTrying: Bool = false) async {
+                shownAt: Double? = nil, shownBeforeTrying: Bool = false, answerText: String? = nil) async {
         guard let library = app?.library else { return }
+        challengeRun?.add(p, score: score, marking: marking, hints: hint, text: answerText)
         let a = Attempt(id: "attempt.\(UUID().uuidString)", problem: p.id, skills: p.skills, at: Date().timeIntervalSince1970 * 1000,
                         hint: hint, marking: marking, score: score, uncertain: uncertain, b: Difficulty.b(p), sourceKey: p.sourceKey, label: p.label,
                         work: workInProgress[p.id] ?? "", solutionShownAt: shownAt, shownBeforeTrying: shownBeforeTrying)

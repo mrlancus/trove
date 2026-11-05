@@ -26,11 +26,15 @@ struct DevelopView: View {
             Diagnostics.shared.ready("Develop")
         }
         .onChange(of: model.dataVersion) { _, _ in Task { await develop.reload(); await develop.syncPapers() } }
+        .sheet(isPresented: Binding(get: { model.groupInvite != nil }, set: { if !$0 { model.groupInvite = nil } })) {
+            JoinGroupSheet(link: model.groupInvite ?? "")
+        }
     }
 
     private var home: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                if develop.challengeRun != nil { HandInBanner(develop: develop) }
                 nextCard
                 if let message = develop.message {
                     Label(message, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
@@ -39,6 +43,7 @@ struct DevelopView: View {
                 YourWorkCard(develop: develop)
                 CardsCard()
                 CoursesCard(develop: develop)
+                FriendsCard()
                 GoalsCard(develop: develop)
                 UploadsCard(develop: develop)
                 if develop.concepts.contains(where: { $0.type == .skill }) { skillsList }
@@ -245,6 +250,7 @@ struct PracticeView: View {
                     .accessibilityLabel(showSource ? "Hide where it's from" : "Show where it's from")
                 Button("End") { develop.session = nil }.buttonStyle(.bordered).controlSize(.small)
             }
+            if develop.challengeRun != nil { HandInBanner(develop: develop) }
             // Progress: one segment per question.
             HStack(spacing: 4) {
                 ForEach(0..<s.problems.count, id: \.self) { i in
@@ -369,7 +375,7 @@ struct PracticeView: View {
                 Spacer()
                 Button("Skip") {
                     Task {
-                        await develop.record(p, score: nil, marking: .none, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
+                        await develop.record(p, score: nil, marking: .none, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying, answerText: answer)
                         done = Outcome(score: nil, text: "Skipped: kept, but it counts as no evidence.")
                     }
                 }
@@ -438,7 +444,7 @@ struct PracticeView: View {
             Button("Done") {
                 let score = DevelopMarking.selfMarkScore(ticked: ticked.count, marks: p.marks, points: points.count)
                 Task {
-                    await develop.record(p, score: score, marking: .selfMarked, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
+                    await develop.record(p, score: score, marking: .selfMarked, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying, answerText: answer)
                     done = Outcome(score: score, text: "\(min(ticked.count, p.marks ?? ticked.count)) of \(p.marks ?? max(1, points.count)) marks, self-marked against the mark scheme.")
                 }
             }
@@ -501,7 +507,7 @@ struct PracticeView: View {
             if let work = develop.work(for: p) { image = await develop.workImage(work) }
             let r = try await develop.markWithAI(p, answer: await workSoFar(p), image: image)
             aiResult = r
-            await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
+            await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying, answerText: answer)
             done = Outcome(score: r.score, text: r.marking == .aiScheme ? "Marked by your AI against the mark scheme." : "Marked by your AI without a mark scheme (less sure).")
         } catch {
             self.error = error.localizedDescription

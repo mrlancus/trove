@@ -115,3 +115,32 @@ the relay seeing only ciphertext, app lock, extensions holding only the public k
 - **Expected**: Face ID / password before anything shows; the app switcher picture is hidden.
 - **Failure looks like**: content visible before unlocking.
 - **Automated by**: manual.
+
+### TEST-SYNC-010: Study groups: the relay holds only ciphertext
+- **Feature**: study with friends (PROTOCOL.md §4 "Study groups", DEVELOP_PLAN Appendix F)
+- **Priority**: critical
+- **Coverage**: auto-tested: `StudyGroupTests.twoVaultsStudyTogether` (three vaults against `wrangler dev`: every
+  entry body the relay serves is TRV1 and no name, group name, title, answer or paper id appears in what it
+  serves), `server/test/groups.test.ts` (bodies stored as sent; plain text refused); invite links keep the key in
+  the fragment (`inviteLinksKeepTheKeyInTheFragment`).
+- **Platforms**: relay, all apps
+- **Steps** (manual check on a real relay): make a group, a challenge and a submission; read the group's entries
+  with `curl` and the device and member tokens.
+- **Expected**: only random ids, kinds, times, sizes and base64 TRV1 bodies; nothing readable.
+- **Failure looks like**: a name, a title, an answer or a catalogue id in any response.
+- **Automated by**: as above.
+
+### TEST-SYNC-011: Leaving, removing and the new group key
+- **Feature**: study groups: leave, remove, key rotation, invites revoked
+- **Priority**: high
+- **Coverage**: auto-tested (`twoVaultsStudyTogether`, `groups.test.ts` "removing a member…")
+- **Platforms**: all apps
+- **Preconditions**: a group of three on two or three devices.
+- **Steps**:
+  1. As the creator, remove one person. On the removed person's device, open Learn.
+  2. On the creator's device open the group (it changes the key), then post a challenge.
+  3. On the third device open the group.
+- **Expected**: the removed person no longer sees the group's new things (opening it fails); the old invite link
+  no longer works; the third person sees the new challenge. Leaving deletes what you shared there.
+- **Failure looks like**: the removed person still reads new entries, or the others can't after the change.
+- **Automated by**: as above (relay and TroveCore); the screens: manual.

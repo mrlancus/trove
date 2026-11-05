@@ -405,3 +405,35 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   without a report. Never a number the report doesn't print.
 - **Failure looks like**: a figure on the wrong part, a made-up average, or a pause after marking.
 - **Automated by**: `ExaminerReportTests`.
+
+### TEST-DEV-039: Study with friends: a challenge from start to results (with a friend)
+- **Feature**: study groups in Learn (`FriendsCard`, `GroupScreen`, `ChallengeScreen`, `GroupFlow`)
+- **Priority**: high
+- **Coverage**: the flow is auto-tested in TroveCore against `wrangler dev` (`twoVaultsStudyTogether`: create,
+  invite, challenge, no peeking, self/AI/peer marking, remove, leave); the screens: not tested.
+- **Platforms**: iPhone, iPad, Mac (two people, each with their own vault on the same relay)
+- **Preconditions**: both have added the same course (e.g. AQA GCSE Physics 8463) and downloaded a paper.
+- **Steps**:
+  1. You: Learn → Study with friends → Start a group; name it and yourself. Make an invite link; send it.
+  2. Friend: tap the link (it opens the relay's page → Open in Trove), or paste it in Learn → Join with a link.
+  3. You: New challenge → the paper → whole paper or a few questions → by a date → Send.
+  4. Both: open the challenge → Start; mark one answer yourself against the scheme, one with AI (if set up),
+     leave one unmarked; Hand in. Before your friend hands in, look at the challenge.
+  5. After both hand in: compare answers per question; mark your friend's unmarked answer (Mark this answer).
+  6. Friend: see "Marked by …" on that answer and tap Accept.
+- **Expected**: before handing in you see only "1 handed in", never their answers. After: each question shows
+  both answers with marks, time, hints and how each was marked; a total each; no ranking. The accepted mark
+  shows in the friend's practice as a new attempt. Nothing of either person's uploads is shared.
+- **Failure looks like**: answers visible before handing in, a mark with no "how marked", or a peer mark
+  changing practice without Accept.
+- **Automated by**: `StudyGroupTests` (flow), `groups.test.ts` (relay rules); the screens: manual.
+
+### TEST-DEV-040: Study with friends: live mode
+- **Feature**: live challenges (the group's socket while its screen is open)
+- **Priority**: normal
+- **Coverage**: relay socket auto-tested (`groups.test.ts` "tells members' open sockets…"); in the app: not tested.
+- **Platforms**: two devices
+- **Steps**: make a Live challenge; both open it; one taps "Start for everyone in 10 seconds".
+- **Expected**: the other device shows the countdown within a couple of seconds without pulling to refresh, then Go.
+- **Failure looks like**: the other device only sees it after reopening the group.
+- **Automated by**: manual.

@@ -3,14 +3,19 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-Step 10 of the learn pivot. Part 1, the national-cohort comparison, is built: after marking a past-paper
-question, Learn shows the examiner report's own sentence about how candidates did ("Just over 50% of the students
-scored 1 mark", AQA examiner report, June 2025), or says the report gives no figure for it (`ExaminerReport` in
-TroveCore, `DevelopModel+Cohort.swift`, `CohortLine`; TEST-DEV-038). Only AQA's reports print per-question
-figures (checked on real 2024–25 reports from AQA, OCR, Pearson and Cambridge), so other boards' questions say
-"no figure". Not on the website (apps first). Next: part 2, study with friends (`docs/prompts/study-with-friends.md`
-§2–4), not started: design appendix in `docs/DEVELOP_PLAN.md` first (group key in the invite link's fragment,
-a group Durable Object, no push), then PROTOCOL, relay, Swift, JS and fixtures together.
+Step 10 of the learn pivot, both parts built; waiting for the first build of the group screens on CI.
+- **Part 1, how everyone did**: after marking a past-paper question, Learn shows the examiner report's own sentence
+  about how candidates did ("Just over 50% of the students scored 1 mark", AQA examiner report, June 2025), or says
+  the report gives no figure (`ExaminerReport`, `DevelopModel+Cohort.swift`, `CohortLine`; TEST-DEV-038). Only
+  AQA prints per-question figures (checked on real reports from AQA, OCR, Pearson, Cambridge).
+- **Part 2, study with friends**: design in `docs/DEVELOP_PLAN.md` Appendix F, contract in PROTOCOL.md §4 "Study
+  groups". Relay `GroupObject` (migration v3, `server/src/groups.ts`), TroveCore `StudyGroups.swift` and
+  `StudyGroups+Flow.swift`, app `App/Sources/Develop/Groups/` (Learn → Study with friends, group screen, new
+  challenge, hand in, results, peer marking, live start), `trove://join` links and the relay's `/join` page.
+  Tested: relay (10 tests), TroveCore unit tests and a three-vault run against `wrangler dev`
+  (TEST-SYNC-010/011, TEST-DEV-039/040). The website doesn't join groups (decision in Appendix F §5).
+- **Yours to check** (with a friend; both vaults on the same relay, so after "publish"): TEST-DEV-039 and 040.
+  Groups need the relay deployed with migration v3; until then the Friends card says it can't reach the group.
 
 ## Learn pivot (2026-11-05): Trove is now a place to learn
 **Start here.** The plan is `docs/plans/learn-pivot-plan.md` (§9 order of work, §10 decisions, all taken),

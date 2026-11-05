@@ -131,6 +131,10 @@ struct TroveApp: App {
             if let title = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "t" })?.value {
                 Task { await model.openWikilink(title) }
             }
+        case "join":
+            // A friend's study-group invite (PROTOCOL.md §4 "Study groups"): Learn shows who it's from first.
+            model.groupInvite = url.absoluteString
+            model.openLearn()
         case "pair":
             break // handled by onboarding's PairingInput when not set up
         default:

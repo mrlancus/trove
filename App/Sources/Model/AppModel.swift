@@ -129,6 +129,8 @@ final class AppModel {
     var showStudy = false
     /// Bumped by `openLearn()`, so the iPhone switches to its Learn tab.
     var learnRequests = 0
+    /// A study-group invite link opened in the app (`trove://join#…`), waiting for Learn to show it.
+    var groupInvite: String?
     /// First launch's "What are you learning?" (learn-pivot plan §4 B3): shown once, after a new vault is made.
     var askWhatLearning = false
     enum FirstLaunchChoice { case own }
