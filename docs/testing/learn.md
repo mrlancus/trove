@@ -199,3 +199,18 @@ added with each step of plan §9.
   minute at a time) and its questions use what was said; the clip appears under that topic.
 - **Failure looks like**: a transcript that stops after a minute or so; questions about something else.
 - **Automated by**: `QuestionWriterTests/yourOwnMaterialBecomesQuestions`.
+
+### TEST-LEARN-013: Do it and rate it, say it aloud, checkpoints
+- **Feature**: practice formats and checkpoints (plan §C3, §C5)
+- **Priority**: medium
+- **Coverage**: auto-tested (scores, evidence, plans); the screens and recording: not tested
+- **Platforms**: iPhone, iPad, Mac
+- **Steps**:
+  1. Own course → a topic → Add a question → Kind: Do it and rate it ("Play C major, two octaves"). Practise it:
+     start the timer, stop, tap Mostly.
+  2. Kind: Say it aloud ("Say: where is the station?" / "Eki wa doko desu ka"). Practise: record, stop, read
+     what Trove heard beside the answer, rate it.
+  3. A goal with a date two weeks away: look at its plan on days 1–5.
+- **Expected**: both attempts count in Your work like self-marked ones; day 4 is "a checkpoint: a short mixed quiz";
+  a 45-minute day is planned as 3 sessions.
+- **Automated by**: `PracticeFormatTests`, `CampaignTests/diagnosticFirstThenWhatSlipsAndNeverWhatsSafe`.

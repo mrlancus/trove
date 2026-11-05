@@ -1025,7 +1025,8 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   `scheme` (`{"catalogue": docId, "key": key}` or `{"item": id, "pages": [...]}`), `level`
   (`"gcse"` \| `"alevel"` \| `"competition"` \| `"university"` \| `"other"`), `nationalAverage`
   (fraction 0–1 or null), `splitBy` (`"auto"` \| `"user"`), `label`, `origin` (`"paper"` \| `"upload"`
-  \| `"user"`; `"generated"` is reserved and unused).
+  \| `"user"`; `"generated"` is reserved and unused), `format` (2026-11-05, learn-pivot plan §C3: `"recall"`,
+  `"rated"` or `"spoken"`; missing means `"written"`, so older builds treat every problem as written).
 - **`attempt`** `attempt.<uuid>`. Written once, then only `marking`, `score`, `points`, `uncertain`
   change (when I confirm or remark). Fields: `problem`, `skills` ([concept ids]), `at` (ms),
   `durationS`, `answer` (`{"text": …}` or `{"attachment": …}`), `hint` (0–5), `marking` (`"self"` \|

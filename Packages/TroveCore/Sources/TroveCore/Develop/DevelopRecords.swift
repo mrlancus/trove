@@ -112,6 +112,33 @@ public struct PageRegion: Sendable, Equatable, Codable {
     }
 }
 
+/// Kinds of practice that aren't exam questions (learn-pivot plan §C3; the field is `format`, not `kind`: review R5).
+/// Older builds don't know the field and treat every problem as written.
+public enum PracticeFormat: String, Sendable, Codable, CaseIterable {
+    /// An exam-style question, written out and marked (the default).
+    case written
+    /// "Explain X" in your own words, self-marked against key points (or by AI on a tap).
+    case recall
+    /// Something done away from the app (a scale on the piano, a speaking drill): a timer and a 1–4 rating.
+    case rated
+    /// Said aloud, written down on the device, checked against the answer.
+    case spoken
+
+    public var label: String {
+        switch self {
+        case .written: "Written question"
+        case .recall: "Explain in your own words"
+        case .rated: "Do it and rate it"
+        case .spoken: "Say it aloud"
+        }
+    }
+
+    /// A 1–4 rating ("Again", "Hard", "Good", "Easy" in spirit) as a score; rated practice counts as self-marked
+    /// evidence, like any self-marked attempt.
+    public static func score(rating: Int) -> Double { Double(min(max(rating, 1), 4) - 1) / 3 }
+    public static let ratings = ["Couldn't yet", "Shaky", "Mostly", "Nailed it"]
+}
+
 public struct Problem: Sendable, Equatable, Identifiable {
     public var id: String
     /// `cat:<doc id>` or `item:<item id>`.
@@ -127,6 +154,8 @@ public struct Problem: Sendable, Equatable, Identifiable {
     public var skills: [String]
     /// The `PaperSplitter.version` that made its regions (1 before versions were kept).
     public var splitVersion: Int
+    /// What kind of practice it is; missing means written.
+    public var format: PracticeFormat
 
     public init(_ r: Record) {
         id = r.id
@@ -142,6 +171,7 @@ public struct Problem: Sendable, Equatable, Identifiable {
         splitVersion = Int(r.fields["splitV"]?.number ?? 1)
         label = r.fields["label"]?.string ?? ""
         skills = r.fields["skills"]?.stringArray ?? []
+        format = PracticeFormat(rawValue: r.fields["format"]?.string ?? "") ?? .written
     }
 }
 
@@ -249,7 +279,8 @@ extension Library {
 
     @discardableResult
     public func addProblem(sourceKey: String, key: String, parent: String? = nil, pages: [PageRegion], marks: Int?, level: ProblemLevel,
-                           nationalAverage: Double? = nil, label: String, skills: [String] = [], splitBy: String = "auto") async -> String {
+                           nationalAverage: Double? = nil, label: String, skills: [String] = [], splitBy: String = "auto",
+                           format: PracticeFormat = .written) async -> String {
         let id = Develop.problemId(sourceKey: sourceKey, key: key)
         let source: JSONValue = sourceKey.hasPrefix("cat:") ? ["catalogue": .string(String(sourceKey.dropFirst(4)))]
             : ["item": .string(String(sourceKey.dropFirst(5)))]
@@ -259,6 +290,7 @@ extension Library {
         fields["marks"] = marks.map { .number(Double($0)) } ?? .null
         fields["nationalAverage"] = nationalAverage.map(JSONValue.number) ?? .null
         fields["splitV"] = .number(Double(PaperSplitter.version))
+        if format != .written { fields["format"] = .string(format.rawValue) }
         await engine.set(fields, record: id, kind: Develop.problemKind)
         for skill in skills { await setEdge(from: id, to: skill, type: .tests, state: .accepted, origin: .rule) }
         return id

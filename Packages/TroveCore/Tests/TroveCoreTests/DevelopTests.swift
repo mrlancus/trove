@@ -535,6 +535,28 @@ extension DevelopAI.Task {
     }
 }
 
+/// Learn pivot step 9 (plan §C3): kinds of practice. Do-and-rate counts as self-marked evidence, like any
+/// self-marked attempt with the same score; older records read as written.
+@Suite struct PracticeFormatTests {
+    @Test func ratedPracticeIsSelfMarkedEvidence() async {
+        #expect(PracticeFormat.score(rating: 1) == 0 && PracticeFormat.score(rating: 4) == 1 && abs(PracticeFormat.score(rating: 3) - 2.0 / 3) < 1e-9)
+        #expect(PracticeFormat.score(rating: 9) == 1 && PracticeFormat.ratings.count == 4)
+        let day = 86_400_000.0, now = 1_700_000_000_000.0
+        let rated = (0..<4).map { i in Attempt(id: "r\(i)", problem: "scale\(i)", skills: ["c-major-scale"], at: now - Double(4 - i) * day, hint: 0,
+                                                marking: .selfMarked, score: PracticeFormat.score(rating: 4), b: 0, sourceKey: "item:practice") }
+        let written = rated.map { a in var b = a; b.skills = ["momentum"]; return b }
+        let s = Mastery.evaluate(rated + written)
+        #expect(s["c-major-scale"]?.ability == s["momentum"]?.ability)
+        #expect(s["c-major-scale"]?.mastery == s["momentum"]?.mastery)
+        let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
+        let a = await lib.addProblem(sourceKey: "item:n1", key: "1", pages: [], marks: 1, level: .other, label: "Scale", format: .rated)
+        let b = await lib.addProblem(sourceKey: "item:n2", key: "1", pages: [], marks: 1, level: .other, label: "Old")
+        let ps = await lib.problems()
+        #expect(ps.first { $0.id == a }?.format == .rated && ps.first { $0.id == b }?.format == .written)
+        #expect(await lib.engine.record(b)?["format"] == nil, "written isn't written down, so nothing changes for older builds")
+    }
+}
+
 /// Campaigns (TEST-CUR-002).
 @Suite struct CampaignTests {
     @Test func diagnosticFirstThenWhatSlipsAndNeverWhatsSafe() async {
@@ -554,6 +576,15 @@ extension DevelopAI.Task {
         #expect(plan.proficient == ["strong"] && plan.total == 3)
         #expect(plan.why.hasPrefix("1 of 3 skills shown"))
         #expect(plan == CampaignPlanner.plan(goal, skills: ["weak", "strong", "new"], states: states, now: now))
+        // Learn pivot step 9 (plan §C5): a checkpoint every few days, mixed over what's been practised, never a safe
+        // skill; each day's time in sessions of at most 20 minutes.
+        let checks = plan.days.filter(\.checkpoint)
+        #expect(!checks.isEmpty && checks.allSatisfy { !$0.diagnostic && Set($0.skills).count == $0.skills.count && $0.skills.count >= 2 })
+        #expect(plan.days.firstIndex { $0.checkpoint } == CampaignPlanner.checkpointEvery - 1)
+        #expect(plan.days.allSatisfy { $0.sessions == 1 }) // 16 minutes a day
+        var long = goal
+        long.minutesPerDay = 45
+        #expect(CampaignPlanner.plan(long, skills: ["new", "strong", "weak"], states: states, now: now).days[1].sessions == 3)
         // Saved and read back like any record.
         let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
         await lib.saveCampaign(goal)

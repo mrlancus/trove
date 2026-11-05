@@ -207,6 +207,13 @@ struct PracticeView: View {
                         resultCard(done)
                     } else if marking {
                         schemeChecklist(p).padding(Theme.Space.l).card(cornerRadius: Theme.Radius.large)
+                    } else if p.format == .rated || p.format == .spoken {
+                        FormatPractice(develop: develop, problem: p) { score, text in
+                            Task {
+                                await develop.record(p, score: score, marking: .selfMarked, hint: hints.count)
+                                done = Outcome(score: score, text: text)
+                            }
+                        }
                     } else {
                         workCard(p)
                         hintList
@@ -508,6 +515,21 @@ struct PracticeView: View {
         guard shownAt == nil else { return }
         shownAt = Date().timeIntervalSince1970 * 1000
         shownBeforeTrying = !hasAnswer(p)
+    }
+}
+
+/// The rated and spoken kinds of practice, as their own view (keeps PracticeView's type shallow).
+private struct FormatPractice: View {
+    let develop: DevelopModel
+    let problem: Problem
+    let finished: (Double, String) -> Void
+
+    var body: some View {
+        if problem.format == .spoken {
+            AnyView(SpokenPracticeCard(develop: develop, problem: problem, finished: finished))
+        } else {
+            AnyView(RatedPracticeCard(develop: develop, problem: problem, finished: finished))
+        }
     }
 }
 

@@ -110,7 +110,16 @@ public enum CampaignPlanner {
         public var diagnostic: Bool
         /// How many questions fit that day's time.
         public var questions: Int = 0
+        /// A checkpoint (plan §C5): a short mixed quiz over what's been practised so far; its result re-plans.
+        public var checkpoint: Bool = false
+        /// The day's time in sessions of at most `sessionMinutes` each (small sessions get finished).
+        public var sessions: Int = 1
     }
+
+    /// A checkpoint every this many days of practice.
+    public static let checkpointEvery = 4
+    /// Every plan step is at most this long (plan §C5).
+    public static let sessionMinutes = 20
 
     public struct Plan: Sendable, Equatable {
         public var days: [Day]
@@ -160,13 +169,23 @@ public enum CampaignPlanner {
                     .sorted { chance($0) != chance($1) ? chance($0) < chance($1) : $0 < $1 }
                 for s in need.prefix(perDay - picks.count) { picks.append(s) }
             }
+            // Every few days, a checkpoint: a mixed quiz of what's been practised (not new skills).
+            // Safe skills stay out, as on any day, and it fits the day's time.
+            let practised = wanted.filter { last[$0] != nil && chance($0) < safeChance }
+            let isCheckpoint = !diagnostic && (days.count + 1) % checkpointEvery == 0 && practised.count >= 2 && perDay >= 2
+            if isCheckpoint {
+                // Mixed: one question each from the weakest practised skills (never one skill twice).
+                picks = Array(practised.sorted { chance($0) != chance($1) ? chance($0) < chance($1) : $0 < $1 }.prefix(perDay))
+            }
             // Planned practice counts as practice on that day for the days after (a modest step).
             for s in picks {
                 last[s] = date
                 stability[s] = max(stability[s] ?? 1, (stability[s] ?? 1) * 1.5)
                 ability[s] = (ability[s] ?? 0) + 0.1
             }
-            days.append(Day(date: date, skills: picks, diagnostic: diagnostic, questions: perDay))
+            let minutes = goal.minutes(on: date)
+            days.append(Day(date: date, skills: picks, diagnostic: diagnostic, questions: isCheckpoint ? picks.count : perDay,
+                            checkpoint: isCheckpoint, sessions: max(1, Int((Double(minutes) / Double(sessionMinutes)).rounded(.up)))))
             date += day
         }
         let proficient = wanted.filter { states[$0]?.proficient == true }

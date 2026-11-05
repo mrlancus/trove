@@ -140,6 +140,13 @@ Steps done (plan §9):
   installed (checked at runtime, installed on first use), else the old recognizer a minute at a time. A clip's
   details have **Save to a course…** (course → topic). Test: `yourOwnMaterialBecomesQuestions`, TEST-LEARN-012.
   The location permission text now says it's off unless chosen.
+- **Step 9** (other kinds of practice and checkpoints, plan §C3, §C5): problems carry `format` (`written` default and
+  not written down, `recall`, `rated`, `spoken`; PROTOCOL §13). In your own course, Add a question has a Kind. A
+  rated one shows a timer and four ratings (Couldn't yet / Shaky / Mostly / Nailed it → 0, ⅓, ⅔, 1), a spoken one
+  records you, writes it down on the device and shows it beside the answer, then you rate it; both are self-marked
+  evidence. Goal plans put a checkpoint (a short mixed quiz of what you've practised, never what's already safe)
+  every 4th day and split each day into sessions of at most 20 minutes. Tests: `PracticeFormatTests` (do-and-rate
+  is self-marked evidence; older records are written), checkpoints in `CampaignTests`.
 - **Catalogue rebuilt** (2026-11-05): 683 courses, 666 with their specification (AQA 111/111, OCR 96/96, Eduqas 77/77,
   WJEC 101/102, Cambridge 133/133, Pearson 148/164: some GCSEs aren't tagged by Pearson's search; AS courses
   share the A level's document). WJEC's Health and Social Care site didn't answer once (502); it kept its listing.

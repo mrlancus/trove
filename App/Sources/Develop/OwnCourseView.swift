@@ -32,12 +32,12 @@ extension DevelopModel {
     }
 
     /// A question you typed (C2.4): kept as a note in the course's folder, practised like an upload, marked by you.
-    func addTypedQuestion(_ question: String, answer: String, marks: Int, topic: Concept, course: Course) async {
+    func addTypedQuestion(_ question: String, answer: String, marks: Int, topic: Concept, course: Course, format: PracticeFormat = .written) async {
         guard let library = app?.library else { return }
         let body = answer.isEmpty ? question : "\(question)\n\n**Answer:** \(answer)"
         let note = await library.addNote(title: "Question: \(question.prefix(60))", body: body, folder: ["Learn", course.name, topic.name])
         await library.addProblem(sourceKey: "item:\(note)", key: "1", pages: [], marks: marks, level: .other,
-                                 label: "\(course.name): \(topic.name)", skills: [topic.id], splitBy: "user")
+                                 label: "\(course.name): \(topic.name)", skills: [topic.id], splitBy: "user", format: format)
         typedQuestions[note] = (question, answer)
         await app?.reload()
         await reload()
@@ -207,11 +207,17 @@ private struct TypedQuestionSheet: View {
     @State private var question = ""
     @State private var answer = ""
     @State private var marks = 1
+    @State private var format = PracticeFormat.written
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Question") { TextEditor(text: $question).frame(minHeight: 90) }
+                Section {
+                    Picker("Kind", selection: $format) {
+                        ForEach(PracticeFormat.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                }
+                Section(format == .rated ? "What to do" : "Question") { TextEditor(text: $question).frame(minHeight: 90) }
                 Section("Answer or mark points") { TextEditor(text: $answer).frame(minHeight: 90) }
                 Section { Stepper("\(marks) mark\(marks == 1 ? "" : "s")", value: $marks, in: 1...20) }
             }
@@ -222,7 +228,7 @@ private struct TypedQuestionSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         Task {
-                            await develop.addTypedQuestion(question, answer: answer, marks: marks, topic: topic, course: course)
+                            await develop.addTypedQuestion(question, answer: answer, marks: marks, topic: topic, course: course, format: format)
                             dismiss()
                         }
                     }

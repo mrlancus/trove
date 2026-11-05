@@ -106,7 +106,7 @@ struct GoalCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Today: \(first.questions) question\(first.questions == 1 ? "" : "s")").font(.subheadline.weight(.semibold))
                         Text(first.skills.isEmpty ? (goal.courses.isEmpty && develop.goalUploads(goal).isEmpty ? "From anything you've downloaded." : "From this goal's papers.")
-                             : first.skills.map(develop.name).joined(separator: ", ") + (first.diagnostic ? " (a first check)" : ""))
+                             : first.skills.map(develop.name).joined(separator: ", ") + (first.diagnostic ? " (a first check)" : first.checkpoint ? " (a checkpoint: a short mixed quiz)" : ""))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer()
