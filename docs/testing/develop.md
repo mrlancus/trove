@@ -384,3 +384,24 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
   blank space, no page margins. A diagram inside the part is kept.
 - **Failure looks like**: the whole page, another part's text, a lost diagram, or the stem missing.
 - **Automated by**: `TightSplitTests`, `DevelopTests/aPaperSplitsIntoQuestionsWithMarksAndMatchesItsScheme`.
+
+### TEST-DEV-038: How everyone did, from the examiner report
+- **Feature**: national-cohort comparison (study-with-friends prompt §1; `ExaminerReport`, `CohortLine`)
+- **Priority**: normal
+- **Coverage**: auto-tested (`ExaminerReportTests`, made-up text in each board's layout); on two real AQA
+  reports (GCSE Physics 8463/1H, A-level Physics 7408/1, June 2025) by `TROVE_REPORTS`: 32 and 14 questions
+  with figures, each checked by eye; real OCR, Pearson and Cambridge reports had no per-question figures.
+  In the app: not tested.
+- **Platforms**: all
+- **Preconditions**: an AQA course with a paper and its examiner report downloaded (e.g. GCSE Physics 8463,
+  June 2025 Paper 1 Higher).
+- **Steps**:
+  1. Learn → Practise a question from that paper; mark it (self-marked against the scheme, or by AI).
+  2. Look under the result. Then do a part the report says nothing numeric about (e.g. 01.2 there), and a
+     question from an OCR or Pearson paper.
+- **Expected**: under "How everyone did", the report's own sentence ("Just over 50% of the students scored
+  1 mark") with "AQA examiner report, June 2025"; for a part with no figure, "The AQA examiner report, June
+  2025 gives no figure for this question."; nothing at all for a skipped question, an own course or a paper
+  without a report. Never a number the report doesn't print.
+- **Failure looks like**: a figure on the wrong part, a made-up average, or a pause after marking.
+- **Automated by**: `ExaminerReportTests`.

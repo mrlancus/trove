@@ -393,6 +393,9 @@ struct PracticeView: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text(done.text).font(.callout).fixedSize(horizontal: false, vertical: true)
                 if DevelopHints.offerExplainWhy(score: done.score) { ExplainWhyBox() }
+                if let p = develop.session?.current, done.score != nil, develop.report(for: p) != nil {
+                    CohortLine(develop: develop, problem: p)
+                }
                 if let p = develop.session?.current { MoreLikeThisRow(develop: develop, problem: p) }
                 Button("Next question") { reset(); develop.advance() }
                     .buttonStyle(.borderedProminent)
@@ -534,6 +537,37 @@ private struct FormatPractice: View {
 }
 
 /// More like this (on a tap, your AI; learn-pivot plan §C2.3), and This is wrong on a Trove-made question.
+/// How everyone else did on this question, in the examiner report's own words (study-with-friends §1), or that
+/// the report gives no figure for it. Shown only for a past-paper question whose report is on this device.
+private struct CohortLine: View {
+    let develop: DevelopModel
+    let problem: Problem
+
+    var body: some View {
+        Group {
+            switch develop.cohort(for: problem) {
+            case .figures(let quotes, let source):
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Label("How everyone did", systemImage: "person.3").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(quotes.prefix(2), id: \.self) { q in
+                        Text("“\(q)”").font(.callout).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(source).font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(Theme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: Theme.Radius.medium))
+            case .noFigure(let source):
+                Text("The \(source) gives no figure for this question.").font(.caption).foregroundStyle(.secondary)
+            case nil:
+                // Not EmptyView: the read below runs when this appears, and an empty view may never appear.
+                Color.clear.frame(height: 0)
+            }
+        }
+        .task(id: problem.id) { await develop.readReport(for: problem) }
+    }
+}
+
 private struct MoreLikeThisRow: View {
     let develop: DevelopModel
     let problem: Problem

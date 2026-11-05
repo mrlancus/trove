@@ -3,8 +3,14 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-(nobody right now). The learn pivot's steps 0–9 are built (below); step 10 (national-cohort comparison, then study
-with friends from `docs/prompts/study-with-friends.md`) is next and not started.
+Step 10 of the learn pivot. Part 1, the national-cohort comparison, is built: after marking a past-paper
+question, Learn shows the examiner report's own sentence about how candidates did ("Just over 50% of the students
+scored 1 mark", AQA examiner report, June 2025), or says the report gives no figure for it (`ExaminerReport` in
+TroveCore, `DevelopModel+Cohort.swift`, `CohortLine`; TEST-DEV-038). Only AQA's reports print per-question
+figures (checked on real 2024–25 reports from AQA, OCR, Pearson and Cambridge), so other boards' questions say
+"no figure". Not on the website (apps first). Next: part 2, study with friends (`docs/prompts/study-with-friends.md`
+§2–4), not started: design appendix in `docs/DEVELOP_PLAN.md` first (group key in the invite link's fragment,
+a group Durable Object, no push), then PROTOCOL, relay, Swift, JS and fixtures together.
 
 ## Learn pivot (2026-11-05): Trove is now a place to learn
 **Start here.** The plan is `docs/plans/learn-pivot-plan.md` (§9 order of work, §10 decisions, all taken),

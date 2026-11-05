@@ -24,6 +24,8 @@ final class DevelopModel {
     private var specFiles: [String: Catalogue.Spec] = [:]
     /// Each course's specification statements, read on this device (`DevelopModel+Spec.swift`).
     var specStatements: [String: [SpecStatement]] = [:]
+    /// What each examiner report on this device says about how candidates did, by report id then question key.
+    var cohortFigures: [String: [String: [String]]] = [:]
     /// A statement's concept id → the name Your work groups it under ("3.4.1 Force, energy and momentum").
     @ObservationIgnored var specTopicNames: [String: String] = [:]
     @ObservationIgnored var specTried: Set<String> = []
