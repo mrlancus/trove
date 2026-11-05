@@ -16,8 +16,10 @@ timeout in testConnectionsIsHidden that passed on the run before and on the re-r
   challenge, hand in, results, peer marking, live start), `trove://join` links and the relay's `/join` page.
   Tested: relay (10 tests), TroveCore unit tests and a three-vault run against `wrangler dev`
   (TEST-SYNC-010/011, TEST-DEV-039/040). The website doesn't join groups (decision in Appendix F §5).
-- **Yours to check** (with a friend; both vaults on the same relay, so after "publish"): TEST-DEV-039 and 040.
-  Groups need the relay deployed with migration v3; until then the Friends card says it can't reach the group.
+- **Deployed** 2026-11-05 (version af3b8563, at 31ef8ad): the relay (vault code, question bank, batches, study
+  groups, migration v3) and the website. Checked on production: health, `/join`, `RelayIntegration` and
+  `twoVaultsStudyTogether` pass. `VAULT_CREATE_CODE` is **not set yet** (a vault can still be made without a code).
+- **Yours to check** (with a friend; both vaults on this relay): TEST-DEV-039 and 040.
 
 ## Learn pivot (2026-11-05): Trove is now a place to learn
 **Start here.** The plan is `docs/plans/learn-pivot-plan.md` (§9 order of work, §10 decisions, all taken),
@@ -35,7 +37,7 @@ anything it covers. Decisions from plan §10, short form:
 - Q11 the shared question bank (uploads private to your users' vaults); Q12 overnight batches, off until the
   relay has `ANTHROPIC_API_KEY`.
 
-**Your manual steps** (nothing is deployed):
+**Your manual steps** (deployed 2026-11-05, version af3b8563; steps 1–2 still yours):
 1. Choose an 8-digit code and set it as the relay secret `VAULT_CREATE_CODE`: Cloudflare dashboard → Workers & Pages →
    trove-relay → Settings → Variables and Secrets → Add → Secret (or `npx wrangler secret put VAULT_CREATE_CODE` in
    `server/`). **Until it's set and the new relay is deployed, anyone with the URL can still create vaults.**
