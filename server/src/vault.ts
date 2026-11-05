@@ -23,6 +23,8 @@ export interface Env {
   VAULT_CREATE_CODE?: string;
   /** Wrong-code counts for VAULT_CREATE_CODE (src/gate.ts). */
   GATE?: DurableObjectNamespace;
+  /** The shared question bank (src/bank.ts). */
+  BANK?: DurableObjectNamespace;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };

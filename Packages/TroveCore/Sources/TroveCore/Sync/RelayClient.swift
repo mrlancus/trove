@@ -404,6 +404,29 @@ public struct RelayClient: Sendable {
         return l.pages
     }
 
+    // MARK: Question bank (PROTOCOL.md §4 "Question bank", learn-pivot plan §C7)
+
+    /// A course's whole bank file (never one topic, so the relay can't see what you're revising).
+    public func bank(_ spec: String) async throws -> QuestionBank.File {
+        let data = try await raw("GET", vaultPath("bank/\(spec)"))
+        return try JSONDecoder().decode(QuestionBank.File.self, from: data)
+    }
+
+    /// Offers a question Trove wrote from board papers. Returns its bank id.
+    @discardableResult
+    public func addToBank(_ q: GeneratedQuestion, spec: String, brief: String, model: String, effort: String) async throws -> String {
+        let question = try JSONSerialization.jsonObject(with: JSONEncoder().encode(q))
+        struct R: Decodable { var id: String }
+        let r: R = try await json("POST", vaultPath("bank/\(spec)"), body: ["question": question, "brief": brief, "model": model, "effort": effort], expect: [200, 201])
+        return r.id
+    }
+
+    /// You practised a bank question (3 different vaults with no flag make it "good").
+    public func bankAttempted(_ id: String, spec: String) async throws { _ = try await raw("POST", vaultPath("bank/\(spec)/\(id)/attempt"), body: Data("{}".utf8), headers: ["Content-Type": "application/json"]) }
+
+    /// "This is wrong" (2 different vaults take it out).
+    public func bankFlag(_ id: String, spec: String) async throws { _ = try await raw("POST", vaultPath("bank/\(spec)/\(id)/flag"), body: Data("{}".utf8), headers: ["Content-Type": "application/json"]) }
+
     // MARK: Bridges (PROTOCOL.md §4 "Bridges")
 
     public func bridges() async throws -> [Bridge] {

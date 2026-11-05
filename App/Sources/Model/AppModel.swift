@@ -984,6 +984,7 @@ final class AppModel {
         case .saveCopiesOnOpen: return clipboard.captureOnOpen
         case .cloudAI: return config?.cloudAI ?? false
         case .recordPlaces: return clipboard.recordPlaces
+        case .shareQuestions: return sharedValues[key] ?? key.standard
         #if os(macOS)
         case .recordPages: return sharedValues[key] ?? ClipSourceProbe.recordPages
         case .autoUpdate: return sharedValues[key] ?? Updater.shared.automatic
@@ -1012,6 +1013,7 @@ final class AppModel {
         case .saveCopiesOnOpen: if clipboard.captureOnOpen != on { clipboard.captureOnOpen = on }
         case .cloudAI: if config?.cloudAI != on { updateConfig { $0.cloudAI = on } }
         case .recordPlaces: if clipboard.recordPlaces != on { clipboard.recordPlaces = on }
+        case .shareQuestions: break
         case .recordPages:
             #if os(macOS)
             ClipSourceProbe.recordPages = on

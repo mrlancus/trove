@@ -567,6 +567,12 @@ private struct AISection: View {
                 get: { model.isOn(.cloudAI) },
                 set: { model.setShared(.cloudAI, $0) }))
             .disabled(model.config?.relay == nil)
+            Toggle("Share the questions Trove writes from board papers", isOn: Binding(
+                get: { model.isOn(.shareQuestions) },
+                set: { model.setShared(.shareQuestions, $0) }))
+            .disabled(model.config?.relay == nil)
+            Text("Only questions written from exam boards' papers, without your name or account, go to the question bank on your relay, for the people who use it. Never questions made from your own notes, uploads or lectures.")
+                .font(.caption).foregroundStyle(.secondary)
             // Always there (only its words change), so nothing below jumps when work starts or stops.
             LabeledContent("Background work") {
                 HStack(spacing: 6) {

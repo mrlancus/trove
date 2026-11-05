@@ -698,6 +698,8 @@ final class DevelopModel {
         // The next try at the same question gets a fresh page; this one stays with its attempt.
         workInProgress[p.id] = nil
         await library.recordAttempt(a)
+        // A shared-bank question someone practised counts towards "good" (plan §C7); only a marked attempt.
+        if score != nil, let ref = bankRef(p) { Task { try? await app?.vault.relayClient?.bankAttempted(ref.id, spec: ref.spec) } }
         await reload()
     }
 

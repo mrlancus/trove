@@ -8,9 +8,9 @@
   // overlap /v1, /dav, /p or /health, so those still reach the Worker.
   "assets": { "directory": "../web/public" },
   "durable_objects": {
-    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }, { "name": "GATE", "class_name": "GateObject" }]
+    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }, { "name": "GATE", "class_name": "GateObject" }, { "name": "BANK", "class_name": "BankObject" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }, { "tag": "v2", "new_sqlite_classes": ["GateObject"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }, { "tag": "v2", "new_sqlite_classes": ["GateObject", "BankObject"] }],
   "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "trove-blobs-test" }],
   "vars": { "EMAIL_VAULT_ID": "", "CLAUDE_MODEL": "claude-opus-5-5" }
 }

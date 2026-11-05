@@ -33,6 +33,12 @@ Decisions this session took for you (undo in brackets):
 - Mixing topics: a set draws from topics it doesn't have yet first. [`Practice.mixTopics = false`]
 - "Explain why" isn't saved; saying it is the point. [keep it on the attempt if you'd like to see it again]
 - A typed question in your own course is a note (so it syncs, searches and shows its answer). [none needed]
+- Trove-made questions are notes in Learn → Trove-made → course, with the scheme under "**Answer:**". [none needed]
+- "More like this" writes 2 questions at a time. [`makeQuestions(like:count:)`]
+- The bank is one Durable Object for every course (simple, serialised); bank reads need a device of a vault on your
+  relay. [split per course if it ever gets busy]
+- Which bank questions this device has taken is kept on the device (UserDefaults), not synced. [sync it if you
+  practise the same course on two devices and see repeats]
 
 Steps done (plan §9):
 - **Step 0** (docs): README, CLAUDE.md's first lines and docs/RESEARCH.md's pitch lead with learning; "Develop"
@@ -97,6 +103,24 @@ Steps done (plan §9):
   catalogue doesn't know shows "Not in the catalogue" instead of a spinner. PROTOCOL §13. Tests: `CourseTests`
   (sync, topics, campaign filter, shared fixture `course-cases.json`), web `develop.test.mjs`. Update every device
   in the same week: older builds can't open an own course.
+- **Step 6** (questions in the style of real papers, plan §C2.3, §C9): `QuestionWriter` (TroveCore): brief v1 as a
+  cached system block, the topic's real questions and schemes as a cached block (`cache_control`), structured
+  output (`output_config.format`, a closed JSON schema), Haiku 5.5 at low; free code checks (scope, marks adding
+  up, answers inside their ranges, an earlier answer printed later, copied wording or guidance, every tag); a check
+  call at low that never sees the scheme; one rewrite at medium; dropped if it fails again. In the app: **More
+  like this** after marking a question (your key only), saving what passes as a "Trove-made, in the style of …"
+  note with `madeFrom` edges to its examples, and **This is wrong** on a Trove-made question. The tutor rule was
+  step 3b. **Test set run** (docs/plans/learn-pivot-effort-tests.md "Run 2"): no key of yours here, so it ran with
+  Haiku subagents on the real PDFs: 7 of 9 kept (5 at low, 2 after the rewrite), 2 dropped, rewrites 44%, so
+  writing stays at low. Tests: `QuestionWriterTests` (fixtures `question-cases.json`, a fake model for the whole
+  pipeline, the exact Claude request), `TestSetCodeChecks` (by hand, `TROVE_TESTSET=`).
+- **Step 6b** (shared bank, plan §C7): relay `server/src/bank.ts` (`BankObject`, R2 `bank/<spec>.json`), PROTOCOL §4
+  "Question bank": device tokens of this relay's vaults only, the whole course per file, well-formed uploads only,
+  50 a vault a day, pending → good after 3 different vaults' attempts, out after 2 flags, only hashes of vaults
+  kept. The app looks in the bank before writing (`QuestionBank.pick`: unseen, same spec point, good first), offers
+  what it writes from board papers (never from your own material; Settings → AI → "Share the questions Trove writes
+  from board papers", on by default), reports attempts and "This is wrong". Tests: `server/test/bank.test.ts` (5),
+  `anUnseenBankQuestionIsPickedBeforeWriting`. Not deployed.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

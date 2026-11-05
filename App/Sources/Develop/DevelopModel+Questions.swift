@@ -44,37 +44,87 @@ extension DevelopModel {
         let spec = p.sourceKey.hasPrefix("cat:") ? spec(ofDoc: String(p.sourceKey.dropFirst(4))) : nil
         let board = spec.map { boardName($0.board) } ?? "Your papers"
         let paper = docId(p).flatMap { id in spec?.docs.first { $0.id == id }?.paper }
-        let request = QuestionRequest(board: board, spec: spec?.id ?? "upload", paper: paper, level: p.level.rawValue, examples: examples,
-                                      specPoints: specPoints(for: p), questions: count, totalMarks: p.marks)
-        let report = try await QuestionWriter.write(request, model: ai)
+        let points = specPoints(for: p)
         let course = courseName(p.sourceKey)
-        for made in report.made {
-            let q = made.question
-            let label = QuestionWriter.label(board: board, spec: spec?.code ?? "", paper: paper)
-            let body = q.questionText + "\n\n**Answer:** " + q.schemeText
-            let note = await library.addNote(title: "Trove-made: \(topic(skills: p.skills, label: p.label))", body: body,
-                                             folder: ["Learn", "Trove-made", course])
-            let id = await library.addProblem(sourceKey: "item:\(note)", key: "1", pages: [], marks: q.totalMarks, level: p.level,
-                                              label: label, skills: p.skills, splitBy: "user")
-            _ = await library.engine.set(["origin": "ai", "brief": .string(made.brief), "effort": .string(made.effort), "model": .string(made.model)],
-                                     record: id, kind: Develop.problemKind)
-            for e in examples {
-                let parts = e.id.split(separator: "#", maxSplits: 1).map(String.init)
-                if parts.count == 2 { _ = await library.setEdge(from: id, to: Develop.problemId(sourceKey: parts[0], key: parts[1]), type: .madeFrom, state: .accepted, origin: .ai) }
+        // The shared bank first (plan §C7): unseen questions others' devices wrote for the same spec point cost nothing.
+        var fromBank = 0
+        if let spec, let relay = app?.vault.relayClient, let file = try? await relay.bank(spec.id) {
+            for e in QuestionBank.pick(file, specPoints: points, seen: Self.bankSeen, count: count) {
+                await save(e.question, brief: e.brief, effort: e.effort, model: e.model, like: p, board: board, code: spec.code, paper: paper,
+                           course: course, examples: [], bank: (e.id, spec.id))
+                fromBank += 1
             }
-            typedQuestions[note] = (q.questionText, q.schemeText)
+        }
+        guard fromBank < count else {
+            await app?.reload()
+            await reload()
+            message = "\(fromBank) question\(fromBank == 1 ? "" : "s") from the shared bank, in the style of \(board)."
+            return fromBank
+        }
+        let request = QuestionRequest(board: board, spec: spec?.id ?? "upload", paper: paper, level: p.level.rawValue, examples: examples,
+                                      specPoints: points, questions: count - fromBank, totalMarks: p.marks)
+        let report = try await QuestionWriter.write(request, model: ai)
+        let share = spec != nil && QuestionBank.shareable(request) && app?.isOn(.shareQuestions) == true
+        for made in report.made {
+            var bank: (String, String)?
+            if share, let spec, let relay = app?.vault.relayClient,
+               let id = try? await relay.addToBank(made.question, spec: spec.id, brief: made.brief, model: made.model, effort: made.effort) {
+                bank = (id, spec.id)
+            }
+            await save(made.question, brief: made.brief, effort: made.effort, model: made.model, like: p, board: board, code: spec?.code ?? "",
+                       paper: paper, course: course, examples: examples, bank: bank)
         }
         await app?.reload()
         await reload()
-        message = report.made.isEmpty
+        message = report.made.isEmpty && fromBank == 0
             ? "No new question passed its checks this time (\(report.dropped.count) dropped). Try again, or practise the real ones."
-            : "\(report.made.count) new question\(report.made.count == 1 ? "" : "s") ready, in the style of \(board)" + (report.rewrites > 0 ? " (\(report.rewrites) rewritten once)." : ".")
-        return report.made.count
+            : "\(report.made.count + fromBank) new question\(report.made.count + fromBank == 1 ? "" : "s") ready, in the style of \(board)"
+              + (fromBank > 0 ? " (\(fromBank) from the shared bank)" : "") + (report.rewrites > 0 ? " (\(report.rewrites) rewritten once)." : ".")
+        return report.made.count + fromBank
+    }
+
+    /// Bank questions this device has taken (bank id), and which note holds each (note id → bank id, course).
+    static var bankSeen: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "bank.seen") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "bank.seen") }
+    }
+    static var bankNotes: [String: [String]] {
+        get { (UserDefaults.standard.dictionary(forKey: "bank.notes") as? [String: [String]]) ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "bank.notes") }
+    }
+
+    /// The bank question behind a problem, if it came from (or went to) the bank.
+    func bankRef(_ p: Problem) -> (id: String, spec: String)? {
+        guard let note = itemId(p), let v = Self.bankNotes[note], v.count == 2 else { return nil }
+        return (v[0], v[1])
+    }
+
+    /// Saves one question as a Trove-made note and its problem, labelled honestly, linked to its examples.
+    private func save(_ q: GeneratedQuestion, brief: String, effort: String, model: String, like p: Problem, board: String, code: String,
+                      paper: String?, course: String, examples: [QuestionRequest.Example], bank: (String, String)?) async {
+        guard let library = app?.library else { return }
+        let label = QuestionWriter.label(board: board, spec: code, paper: paper)
+        let body = q.questionText + "\n\n**Answer:** " + q.schemeText
+        let note = await library.addNote(title: "Trove-made: \(topic(skills: p.skills, label: p.label))", body: body, folder: ["Learn", "Trove-made", course])
+        let id = await library.addProblem(sourceKey: "item:\(note)", key: "1", pages: [], marks: q.totalMarks, level: p.level,
+                                          label: label, skills: p.skills, splitBy: "user")
+        _ = await library.engine.set(["origin": "ai", "brief": .string(brief), "effort": .string(effort), "model": .string(model)],
+                                     record: id, kind: Develop.problemKind)
+        for e in examples {
+            let parts = e.id.split(separator: "#", maxSplits: 1).map(String.init)
+            if parts.count == 2 { _ = await library.setEdge(from: id, to: Develop.problemId(sourceKey: parts[0], key: parts[1]), type: .madeFrom, state: .accepted, origin: .ai) }
+        }
+        typedQuestions[note] = (q.questionText, q.schemeText)
+        if let (bankId, spec) = bank {
+            Self.bankSeen.insert(bankId)
+            Self.bankNotes[note] = [bankId, spec]
+        }
     }
 
     /// "This is wrong" on a Trove-made question: it goes, and its note goes to Recently deleted.
     func reportWrong(_ p: Problem) async {
         guard let library = app?.library, let note = itemId(p) else { return }
+        if let ref = bankRef(p) { try? await app?.vault.relayClient?.bankFlag(ref.id, spec: ref.spec) }
         await library.removeProblems(sourceKey: p.sourceKey, keeping: [])
         await library.delete(note)
         await app?.reload()

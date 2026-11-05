@@ -329,6 +329,22 @@ link-local, CGNAT and multicast ranges, and IPv6 literals, re-checks every redir
 4), stops after 8 seconds and reads at most 512 KB. 240 previews an hour per vault (`429`). Feeds are
 fetched under the same rules.
 
+### Question bank (2026-11-05, learn-pivot plan §C7)
+Questions Trove wrote from board papers (never from a student's own notes, uploads or lectures), shared between
+the vaults on this relay. Device token only (an inbox token is 403); `<spec>` is a catalogue spec id.
+
+| Method & path | Body → Response |
+|---|---|
+| `GET /vaults/:v/bank/:spec` | → `{v: 1, spec, questions: [{id, spec, state: "pending"\|"good", question, brief, model, effort, addedAt}]}`: the whole course, never one topic. Served from R2 `bank/<spec>.json` |
+| `POST /vaults/:v/bank/:spec` | `{question, brief, model, effort}` (`question` is TroveCore's `GeneratedQuestion` JSON) → `201 {id, state}`, or `{id, duplicate: true}`. `400` unless well-formed: number, stem, parts with label/text/commandWord/whole marks/scheme/guidance, a scheme whose marks add up to the part's (unless levels-marked), parts adding up to `totalMarks`, tags board/spec/level/specPoints/format/commandWords/madeFrom, and `tags.spec` equal to `:spec`. `413` over 32 KiB. `429` after 50 uploads by the vault that UTC day |
+| `POST /vaults/:v/bank/:spec/:id/attempt` | → `{id, state}`. 3 different vaults with no flag make a `pending` question `good` |
+| `POST /vaults/:v/bank/:spec/:id/flag` | → `{id, state}`; 2 different vaults' flags remove it (`"removed"`), whatever its state |
+
+The id is the first 16 hex characters of SHA-256 of the question's JSON. Nothing that identifies a student is kept:
+per question only SHA-256(question id + "\n" + vault id) of the vaults that attempted or flagged it, and the
+daily counter is keyed by SHA-256(vault id + "\n" + day). One Durable Object (`BankObject`, name `bank`) makes
+every change; older apps never call these routes.
+
 ## 5. Price-drop watches (opt-in per item)
 A device turns on "Track price drops" for a product item by sending `PUT /vaults/:v/watches/:id`
 with `{url, itemId}`. `id` is 8–64 of `[A-Za-z0-9_-]`; apps use the item id. The relay can see the
@@ -452,7 +468,8 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
   never leave the device), `saveSensitive` (default false: passwords and codes saved like any
   clip instead), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
-  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`, `saveSensitive` and, since 2026-11-05,
+  (Mac), `cloudAI`, `recordPlaces`, `shareQuestions` (offer questions written from board papers to the shared
+  bank; default true). A missing field means the default (all on, except `cloudAI`, `saveSensitive` and, since 2026-11-05,
   `recordPlaces`). A new vault writes `recordPlaces: false` explicitly, so builds that read a missing
   `recordPlaces` as on agree. A device whose
   own value differs from the default before the field exists writes it once. Things that belong

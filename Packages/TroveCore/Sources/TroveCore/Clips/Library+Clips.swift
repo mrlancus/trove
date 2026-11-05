@@ -344,6 +344,9 @@ public enum SharedSetting: String, CaseIterable, Sendable {
     case recordPlaces
     /// Passwords and codes saved like any other copy (synced, kept), instead of held briefly.
     case saveSensitive
+    /// Offer questions Trove writes from board papers to the shared bank on your relay (learn-pivot plan §C7):
+    /// without your name or account. On unless turned off.
+    case shareQuestions
 
     /// The value before anyone has changed it. Location recording is off unless chosen (learn-pivot plan §7:
     /// many users are under 18, and the Children's Code wants location off by default).

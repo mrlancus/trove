@@ -2,11 +2,13 @@
 // and turns incoming email (Cloudflare Email Routing) into sealed inbox entries.
 import PostalMime from "postal-mime";
 import { b64uDecode, randomId, type InboxHeader } from "./crypto";
+import { bankRoute } from "./bank";
 import { checkCreateCode } from "./gate";
 import { error, json, type Env } from "./vault";
 
 export { VaultObject } from "./vault";
 export { GateObject } from "./gate";
+export { BankObject } from "./bank";
 
 const VERSION = "0.1.0";
 const VAULT_ID = /^[A-Za-z0-9_-]{16,64}$/;
@@ -45,6 +47,7 @@ export default {
       }
       const vaultId = parts[2];
       if (!vaultId || !VAULT_ID.test(vaultId)) return error(404, "not found");
+      if (parts[3] === "bank") return bankRoute(request, env, vaultId, parts.slice(4), stub(env, vaultId));
       return forward(env, vaultId, request, "/api/" + parts.slice(3).join("/"));
     }
 

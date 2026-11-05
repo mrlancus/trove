@@ -59,3 +59,42 @@ the doc id.
   calls to Claude Code's session tools with empty or placeholder arguments. All were refused or did nothing,
   except one read-only environment listing.
 - This won't happen in Trove: its question writer is a plain API call with no tools.
+
+## Run 2, 2026-11-05: brief v1 through the whole pipeline (step 6)
+Brief v1 (`QuestionBrief.system`, the code's copy of `question-brief-v1.md`), written at **low**, then Trove's own
+code checks (`QuestionChecks.run`), then the check call at **low** (`QuestionBrief.checkSystem`, never shown the
+scheme; answers compared by `QuestionChecks.compare`'s rule), then **one rewrite at medium** for any failure, checked
+again the same way. **No API key of yours was available in this session**, so, as the build prompt says, each call was
+a Haiku 5.5 subagent in Claude Code reading the real PDF pages itself (fetched from the catalogue's links into a
+scratch folder, never committed). Same 7 tests and pages as above; test 5 asked for the whole electrode-potentials
+question (06: 7 parts, 9 marks), and test 6 asked for the SPaG marks as their own part.
+
+| Test | Low: code checks | Low: check call | Medium rewrite | Kept | Score |
+|---|---|---|---|---|---|
+| 1 A-level Physics (06, 8 marks) | pass | pass | – | yes, at low | 5 |
+| 2 GCSE Biology (01, 11 marks) | fail: 01.5 named 01.1's answer ("bacterium") | fail: "one other symptom" with no first one | pass both (malaria) | yes, at medium | 4: right, but mostly 1-mark recall |
+| 3 A-level Maths (07, 9 marks) | pass | pass | – | yes, at low | 5 (tangent 4y = 9x − 37 and the second point (65/16, −7/64) both check) |
+| 4 GCSE Maths: Q2 (5) | pass | pass | – | yes, at low | 5 |
+| 4 GCSE Maths: Q14 (5) | fail: a tag missing (a part with no command word) | pass | pass both | yes, at medium | 5 (18/42 vs 30/42, "No") |
+| 5 A-level Chemistry (06, 9 marks) | pass | pass | – | yes, at low | 5 (real E° values; EMF 1.59 V) |
+| 6 GCSE History: 03 (8) | pass | pass | – | yes, at low | 5 |
+| 6 GCSE History: 04 (16 + 4 SPaG) | pass | fail: the SPaG part contradicts "assessed in 04.1" | fail again: "a SPaG part with no task" | **dropped** | – (caused by the test asking for SPaG as a part; real papers mark it inside the essay) |
+| 7 IGCSE Physics (4, 10 marks) | pass | fail: "two words" with three correct ones | fail again: one mark for two tasks | **dropped** | – |
+
+- **Kept 7 of 9** (5 at low, 2 after the medium rewrite); **2 dropped** after the rewrite, as designed. No wrong fact or
+  number in any kept question.
+- **Rewrites: 4 of 9 (44%)**, under half, so **decision Q7 stands: write at low**, rewrite at medium only on failure.
+- **What caught what**: the code checks found 2 (a given-away answer, a missing tag); the check call found 3 (two
+  contradictions, an ambiguous answer); the second check call found 2 standard problems. Every fix the medium rewrite
+  made was one it was told about.
+- **Structured output matters**: 2 of the 7 low files didn't match the schema (a `null` command word; a number for a
+  level). With the API's `output_config.format` that can't happen; the decoder now tolerates both anyway, and the code
+  check counts an empty command word as a missing tag.
+- **Time and tokens per call** (Claude Code's tools and instructions included, so only roughly comparable): writing
+  33–54 s and 67–80k tokens; the check call for all 9 questions at once 59 s and 71k; each rewrite 34–48 s and 69–84k.
+- **Run notes**: as in run 1, several subagents made stray calls to session tools (a message to another session with
+  empty arguments, a list of scheduled tasks); all were refused or did nothing. Trove's writer is a plain API call
+  with no tools, so this can't happen there.
+- **Next time** (with your key): `TROVE_TESTSET=<folder> swift test --filter TestSetCodeChecks` runs the code checks
+  on a folder of written JSON; the real run should go through `QuestionWriter.write` so caching and the exact request
+  are what's measured.

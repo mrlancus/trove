@@ -96,6 +96,28 @@ import Testing
         #expect(Set(report.dropped[0].problems.map(\.kind)).isSuperset(of: ["check", "contradiction"]))
     }
 
+    /// The bank is searched before anything is written (plan §C7): unseen, matching, good before new.
+    @Test func anUnseenBankQuestionIsPickedBeforeWriting() throws {
+        let (_, c) = try Self.load()
+        let q = c.cases[0].question
+        var other = q; other.tags.specPoints = ["3.5.1.1"]
+        let raw: [String: Any] = ["v": 1, "spec": "aqa-7408", "questions": [
+            ["id": "a", "spec": "aqa-7408", "state": "pending", "question": try JSONSerialization.jsonObject(with: JSONEncoder().encode(q)), "brief": "v1", "model": "claude-haiku-5-5", "effort": "low", "addedAt": 1],
+            ["id": "b", "spec": "aqa-7408", "state": "good", "question": try JSONSerialization.jsonObject(with: JSONEncoder().encode(q)), "brief": "v1", "model": "claude-haiku-5-5", "effort": "low", "addedAt": 2],
+            ["id": "c", "spec": "aqa-7408", "state": "good", "question": try JSONSerialization.jsonObject(with: JSONEncoder().encode(other)), "brief": "v1", "model": "claude-haiku-5-5", "effort": "low", "addedAt": 3],
+            ["id": "broken", "spec": "aqa-7408", "state": "good", "question": ["number": 1], "brief": "v1", "model": "m", "effort": "low", "addedAt": 4],
+        ]]
+        let file = try JSONDecoder().decode(QuestionBank.File.self, from: JSONSerialization.data(withJSONObject: raw))
+        #expect(file.questions.map(\.id) == ["a", "b", "c"], "a question this build can't read is skipped")
+        #expect(QuestionBank.pick(file, specPoints: ["3.4.1.6 Momentum: p = mv"], seen: [], count: 5).map(\.id) == ["b", "a"])
+        #expect(QuestionBank.pick(file, specPoints: ["3.4.1.6"], seen: ["b"], count: 5).map(\.id) == ["a"])
+        #expect(QuestionBank.pick(file, specPoints: [], seen: [], count: 2).map(\.id) == ["b", "c"])
+        var req = QuestionRequest(board: "AQA", spec: "aqa-7408", level: "alevel", examples: [.init(id: "cat:aqa-7408-1-2025-06-qp#06", label: "", question: "", scheme: "")], specPoints: [])
+        #expect(QuestionBank.shareable(req))
+        req.examples.append(.init(id: "item:upload1#2", label: "", question: "", scheme: ""))
+        #expect(!QuestionBank.shareable(req), "never from your own uploads")
+    }
+
     @Test func noExamplesNoGeneration() async throws {
         var (req, _) = try Self.load()
         req.examples = []
@@ -127,5 +149,27 @@ import Testing
         #expect(output["effort"] as? String == "low" && (output["format"] as? [String: Any])?["type"] as? String == "json_schema")
         #expect(net.body["temperature"] == nil && net.body["top_p"] == nil && net.body["thinking"] == nil)
         #expect(net.body["model"] as? String == "claude-haiku-5-5")
+    }
+}
+
+/// The test set (learn-pivot plan §C9): questions written from real papers, run through the code checks.
+/// Not part of CI (the papers aren't committed and writing them costs money):
+/// TROVE_TESTSET=<folder of out-*.json> swift test --filter TestSetCodeChecks.
+@Suite struct TestSetCodeChecks {
+    @Test func everyWrittenQuestionThroughTheCodeChecks() throws {
+        guard let folder = ProcessInfo.processInfo.environment["TROVE_TESTSET"] else { return }
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder).filter { $0.hasPrefix("out-") && $0.hasSuffix(".json") }.sorted()
+        for f in files {
+            let data = try Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent(f))
+            let set: GeneratedSet
+            do { set = try JSONDecoder().decode(GeneratedSet.self, from: data) } catch {
+                print("TESTSET \(f): doesn't decode as brief v1 JSON: \(error)"); continue
+            }
+            for q in set.questions {
+                let req = QuestionRequest(board: q.tags.board, spec: q.tags.spec, level: q.tags.level, examples: [], specPoints: q.tags.specPoints)
+                let problems = QuestionChecks.run(q, request: req)
+                print("TESTSET \(f) Q\(q.number) [\(q.totalMarks)]: " + (problems.isEmpty ? "passes" : problems.map { "\($0.kind) \($0.label): \($0.detail)" }.joined(separator: "; ")))
+            }
+        }
     }
 }

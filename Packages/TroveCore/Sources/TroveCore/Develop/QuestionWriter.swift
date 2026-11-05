@@ -90,6 +90,16 @@ public struct GeneratedQuestion: Codable, Sendable, Equatable {
         /// "7–9".
         public var marks: String
         public var descriptor: String
+        /// Tolerant of a number where text is expected (a writer without structured output may send `"level": 3`).
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            func text(_ k: CodingKeys) -> String {
+                if let s = try? c.decode(String.self, forKey: k) { return s }
+                if let n = try? c.decode(Double.self, forKey: k) { return GeneratedQuestion.format(n) }
+                return ""
+            }
+            level = text(.level); marks = text(.marks); descriptor = text(.descriptor)
+        }
     }
     public struct Part: Codable, Sendable, Equatable {
         public var label: String
@@ -102,6 +112,20 @@ public struct GeneratedQuestion: Codable, Sendable, Equatable {
         public var guidance: [Guidance]
         public var levels: [Level]?
         public var indicativeContent: [String]?
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            label = try c.decode(String.self, forKey: .label)
+            text = try c.decode(String.self, forKey: .text)
+            marks = try c.decode(Int.self, forKey: .marks)
+            commandWord = (try? c.decodeIfPresent(String.self, forKey: .commandWord)) ?? ""
+            answerLine = try? c.decodeIfPresent(String.self, forKey: .answerLine)
+            answer = try? c.decodeIfPresent(Answer.self, forKey: .answer)
+            scheme = (try? c.decodeIfPresent([SchemePoint].self, forKey: .scheme)) ?? []
+            guidance = (try? c.decodeIfPresent([Guidance].self, forKey: .guidance)) ?? []
+            levels = try? c.decodeIfPresent([Level].self, forKey: .levels)
+            indicativeContent = try? c.decodeIfPresent([String].self, forKey: .indicativeContent)
+        }
     }
     public struct Tags: Codable, Sendable, Equatable {
         public var board: String
@@ -299,7 +323,8 @@ public enum QuestionChecks {
                 if schemeMarks != p.marks { out.append(.init(kind: "marks", label: p.label, detail: "the scheme gives \(schemeMarks), the part is worth \(p.marks)")) }
             }
             // A numeric answer sits inside its own accepted range.
-            if let a = p.answer, let v = a.value, let r = a.accept {
+            if let a = p.answer, let v = a.value, let given = a.accept, !given.isEmpty {
+                let r = given.count == 1 ? [given[0], given[0]] : given  // one value: exact
                 if r.count != 2 || r[0] > r[1] || v < r[0] - 1e-9 || v > r[1] + 1e-9 {
                     out.append(.init(kind: "answer", label: p.label, detail: "answer \(v) isn't in its accepted range \(r)"))
                 }
@@ -536,5 +561,47 @@ public enum QuestionWriter {
     /// "Trove-made, in the style of AQA 7408 Paper 1" (labelled honestly, plan §C2.3).
     public static func label(board: String, spec: String, paper: String?) -> String {
         "Trove-made, in the style of \(board) \(spec)\(paper.map { " Paper \($0)" } ?? "")"
+    }
+}
+
+// MARK: - The shared bank (plan §C7)
+
+public enum QuestionBank {
+    public struct Entry: Codable, Sendable, Equatable {
+        public var id: String
+        public var spec: String
+        /// "pending" (shown as new) or "good".
+        public var state: String
+        public var question: GeneratedQuestion
+        public var brief: String
+        public var model: String
+        public var effort: String
+    }
+    public struct File: Codable, Sendable, Equatable {
+        public var spec: String
+        public var questions: [Entry]
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            spec = try c.decode(String.self, forKey: .spec)
+            // A question this build can't read is skipped, not the whole file.
+            struct Lenient: Decodable { var entry: Entry?; init(from d: Decoder) throws { entry = try? Entry(from: d) } }
+            questions = (try c.decodeIfPresent([Lenient].self, forKey: .questions) ?? []).compactMap(\.entry)
+        }
+    }
+
+    /// Unseen bank questions for these spec points, good ones first, then pending (new), oldest first within each.
+    /// A spec point matches by its number ("3.4.1.6") or the same text; no points: anything in the course.
+    public static func pick(_ file: File, specPoints: [String], seen: Set<String>, count: Int) -> [Entry] {
+        func number(_ s: String) -> String { String(s.split(separator: " ").first ?? "").trimmingCharacters(in: CharacterSet(charactersIn: ":")) }
+        let wanted = Set(specPoints.map(number))
+        let fitting = file.questions.filter { e in
+            !seen.contains(e.id) && (wanted.isEmpty || !wanted.isDisjoint(with: e.question.tags.specPoints.map(number)))
+        }
+        return Array((fitting.filter { $0.state == "good" } + fitting.filter { $0.state != "good" }).prefix(count))
+    }
+
+    /// Only questions written from board papers go to the bank, never ones from your own notes or uploads.
+    public static func shareable(_ request: QuestionRequest) -> Bool {
+        !request.examples.isEmpty && request.examples.allSatisfy { $0.id.hasPrefix("cat:") } && request.material == nil
     }
 }
