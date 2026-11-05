@@ -287,12 +287,22 @@ depend on exam boards. What's missing is a way to make a course and questions wi
        under your own limits.
      - The relay's AI is only a fallback, and it isn't switched on today. The relay's secrets are
        `AI_MONTHLY_LIMIT` and `BRIDGE_KEY`, with no `ANTHROPIC_API_KEY` (checked 2026-11-04).
-   - **Effort: low for everything, A-level included** (your call, 2026-11-04: "is medium even needed for a
-     level?").
-     - Medium is used only to **retry once** when the checking pass rejects a question written at low.
+   - **Real questions first.** Practising the catalogue's real past questions costs nothing. Trove writes
+     new ones only where they run short: spec points with few or no past questions, or a topic whose real
+     questions you've all done. And it **looks in the shared bank first** (§C7).
+   - **Effort: write at low, check at low, rewrite at medium only on failure** (your call, 2026-11-05: "half
+     a penny … does add up").
+     - The 2026-11-05 tests (`learn-pivot-effort-tests.md`: 7 boards and subjects, real PDFs) found no wrong
+       facts or numbers at either level. Low had design flaws in 4 of 7 (a contradiction, a given-away
+       answer, the wrong scope, a stale copied guidance line). Medium was better or equal in all 7.
+     - Most of low's flaws are caught by the code checks (§C9) and the targeted check call. A question that
+       fails is rewritten **once at medium**.
+     - The test set decides: if more than half of the low questions need the medium rewrite, writing at
+       medium from the start is cheaper, so switch.
      - For generation, this replaces decision 7's "medium for hard questions by a fixed rule". Marking keeps
        decision 7's one medium re-check of uncertain marks.
-     - Measure how often the retry happens on the first real sets. If it's rare, low is enough.
+   - **Structured output**: the model returns JSON (question parts, marks, AO codes, answers, marking points,
+     guidance lines with their worked values, tags). That's what the code checks run on.
    - **Always from real examples.**
      - Each request carries 3–5 real questions on the same topic, with their real mark schemes, from the
        downloaded board papers and your uploads. Same course first, then the same board and level.
@@ -300,27 +310,34 @@ depend on exam boards. What's missing is a way to make a course and questions wi
        That also shows which spec points have no past questions yet, the best ones to make questions for.
      - Plus your own material for the topic (notes, transcript), if there is any.
      - No examples, no generation: the course asks you to download or upload a paper first.
-   - **Similar, not copied**:
-     - New contexts and numbers.
-     - The same command words ("calculate", "explain", "evaluate").
-     - The same mark values and part structure (a, b, c).
+   - **Close copies are the goal** (your call, 2026-11-05: "gcses and most of a level shld basically be the
+     same question just slightly different"):
+     - The same set-up, command words ("calculate", "explain", "evaluate"), mark values and part structure.
+     - New numbers, objects and details, so the answer is new.
+     - Guidance lines are **rewritten for the new numbers**, never copied (both GCSE Maths test runs left a
+       stale value behind by copying).
+     - Only a question whose wording matches a real one exactly, or near-exactly, is refused (a word-overlap
+       check on the device). Copyright is your call, logged in §10 Q10.
      - Diagrams described in words, or drawn as a simple sketch on the page.
-     - No sentence copied from an example.
    - **Mark schemes in the board's own format**:
      - M1/A1 method and accuracy marks for maths.
      - Marking points with alternatives ("allow …", "ignore …") for science.
      - Levels with indicative content for long answers.
      - The scheme's total must equal the question's marks.
-   - **Checked before you see it**: a second Haiku call solves each question from scratch without the
-     scheme. Then:
-     - Numbers are recalculated on the device where possible.
-     - A question is dropped if its answer and its scheme disagree, the marks don't add up, or it's too
-       close to an example (a word-overlap check on the device).
+   - **Checked before you see it** (§C9):
+     - First, the free checks in code.
+     - Then a separate low-effort Haiku call that never sees the mark scheme. It solves each part from
+       scratch, and answers targeted questions: does the set-up contradict itself? Does any part reveal
+       another part's answer? Is the scope what was asked for?
+     - A question that fails is rewritten once at medium. If it fails again, it's dropped.
    - **Labelled honestly**:
      - "Trove-made, in the style of AQA 7408 Paper 1".
      - `origin: ai`, with `madeFrom` edges to the examples and the material it used.
      - You can see those examples. "This is wrong" removes the question and is remembered.
-   - **Private**: kept in your vault only, never shared (study with friends shares only catalogue ids).
+   - **Where it's kept**:
+     - Made from board papers: in your vault, **and offered to the shared bank** (§C7).
+     - Made from your own notes, uploads or lectures: your vault only, never shared, because those could
+       contain anything.
    - **Difficulty**: the examples' level prior (`Difficulty.levelBase`), until your own attempts give an
      estimate.
 4. **Typed by you**: a question, its answer or mark points, and a topic.
@@ -415,6 +432,88 @@ says all possible questions and it gives ideas for possible questions to make an
 - **Copyright**: specifications are public documents on the boards' sites. They're downloaded from the board
   by each device, as papers are (DEVELOP_PLAN Appendix E), and never shipped or shared.
 
+### C7. The shared question bank (your idea, 2026-11-05)
+"anytime it generates a good question, it shld send it to cloudflare r2 so it can be used for other users so
+we eventually make our own backlog and it becomes virtually free"
+
+- **What goes in**: only AI-made questions written from board papers, with their mark schemes.
+  - Never questions made from a student's own notes, uploads or lectures.
+  - Nothing that identifies the student: no vault id or device id.
+- **Tags on every question**, so Trove can search the bank before deciding what to write next:
+  - board, course (spec id) and paper;
+  - spec point;
+  - question type and command words;
+  - marks and AO split;
+  - format (calculation, explain, data, essay, levels);
+  - difficulty prior;
+  - the brief version (§C9) and the model and effort that wrote it.
+- **Reading**:
+  - The app downloads the bank's file for each course it has, `bank/<spec>.json` plus parts if large, from
+    R2 through the relay. It gets the whole course, never one topic at a time, so the relay can't see what a
+    student is revising.
+  - It's cached, and refreshed at most once a day, as the catalogue is (decision 19).
+  - The question picker uses unseen bank questions before writing new ones.
+- **Writing**, which is private to your users (2026-11-05):
+  - `POST` needs a device token of a vault on your relay. Vaults need the 8-digit code (§7 E2), so only
+    people you've let in can upload.
+  - The relay accepts only well-formed questions: the JSON schema, every tag present, marks that add up,
+    the size under a limit.
+  - At most N uploads per vault per day (start with 50).
+  - Questions arrive as **pending**.
+- **Pending → good**: a pending question is served to other students marked "new". It becomes **good**
+  after it's been attempted by 3 different vaults with no "This is wrong".
+- **Flags**: "This is wrong" from 2 different vaults takes a question out of the bank, whatever its state.
+- **The relay change**:
+  - New routes for the bank file (read) and the pending queue (write), an R2 prefix `bank/`, and per-vault
+    counters in the Durable Object.
+  - PROTOCOL.md, relay tests, Swift, JS and fixtures change in the same commit (CLAUDE.md). Older apps
+    ignore it.
+- **Cost**: a question is a few KB, so R2's free allowance holds hundreds of thousands. Reads are served
+  from R2 with no egress fee.
+- **Under-18s**: what's shared is exam content, not personal data. The Settings line says plainly what's
+  shared ("questions Trove writes from board papers, without your name or account") and gives a switch to
+  stop contributing (on by default).
+
+### C8. Overnight batches on the relay (half price)
+- **How the batch service works**:
+  - Requests go to Anthropic in bundles (up to 100,000 requests or 256 MB per batch) and run when there's
+    spare capacity.
+  - Most finish within an hour, and every one within 24 hours.
+  - Everything costs **50% less**, including cached input.
+  - Results come back by request id, in any order.
+- **Why the relay runs it**: the apps can't check back while closed (no push on a free Apple ID), but the
+  relay can poll on a timer (a Durable Object alarm).
+- **The job**, once a night:
+  1. Find spec points in the bank that are short of questions, for courses your users have.
+  2. Send one batch at low effort, with the same brief, examples and checks as on the device.
+  3. Collect the results, run the checks, and add the passes as pending.
+  4. Rewrite the failures once at medium in the next night's batch.
+- **Examples**: the relay can't read anyone's vault, and the papers aren't stored on the relay. So the
+  batch fetches the real question pages from the board's public link in the catalogue, at batch time, the
+  way each device does. They're used only as examples and never stored.
+- **Off until you turn it on**: it needs an `ANTHROPIC_API_KEY` secret on the relay (your money; today
+  there is none). A nightly cap, for example 200 questions, keeps it inside `AI_MONTHLY_LIMIT`.
+- On-demand "Make questions now" stays on the normal, full-price route through your own key.
+
+### C9. The brief, the code checks and the test set (2026-11-05)
+- **The brief is a file in the repo**, `docs/plans/question-brief-v1.md`, with a version number. Every
+  question records the version that wrote it. A change gets a new version and a test-set run.
+- **Free code checks**, on the device and on the relay:
+  - the parts and marks are what was asked for, and the scheme's marks add up;
+  - every number in the answers and guidance recalculates (simple arithmetic and formulas, run by code);
+  - no later part prints an earlier part's answer, unless that part is a "Show that";
+  - no sentence matches a real question's wording exactly or near-exactly;
+  - every tag is present.
+- **The test set**: the 7 tests from 2026-11-05 to start with (AQA A-level Physics, AQA GCSE Biology, OCR
+  A-level Maths, Pearson GCSE Maths, AQA A-level Chemistry, AQA GCSE History, Cambridge IGCSE Physics),
+  growing to about 20.
+  - Each test lists the real paper and pages from the catalogue. The papers are fetched by a script, never
+    committed, like `RealPaperSplitTests`.
+  - It's scored with the rubric in `learn-pivot-effort-tests.md`.
+  - A run reports scores, time, tokens and how many questions needed the medium rewrite.
+  - It's run by hand, with your key, when the brief, model or effort changes. It's not part of CI, because
+    it costs money.
+
 ---
 
 ## 6. Part D: notes and the clipboard as learning tools
@@ -500,7 +599,9 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 | 3 | **Navigation, Home, first launch** (§4 B1–B3), and the name (§10 Q1) | M | iPhone and iPad UI tests; TEST-HOME updated |
 | 4 | **Half-built Develop items** (§4 B4) | M | NOTES "Not done" items closed |
 | 5 | **Own courses** (§5 C1) with PROTOCOL §13, Swift, JS, fixtures; campaigns and the course screen | M | `CourseTests` and campaign tests for own courses; interop fixture; no spinner for a course outside the catalogue |
-| 6 | **Questions from your material** (§5 C2.3–C2.4), tutor rule (§1.1) | L | Generation tests with a fake model; on the iPad, a note becomes 5 questions with sources |
+| 6 | **Questions in the style of real papers** (§5 C2.3–C2.4, §C9): brief v1, structured output, code checks, check call, medium rewrite, tutor rule (§1.1) | L | Code-check tests on fixtures (passing and failing questions); generation tests with a fake model; the test set run once with your key, results logged |
+| 6b | **The shared bank** (§C7): relay routes + PROTOCOL.md + tests; app reads the course file and searches it first; uploads, pending → good, flags | M | Relay tests: upload needs a vault device token, malformed and over-limit uploads refused, 2 flags remove, 3 clean attempts promote; app picks an unseen bank question before writing |
+| 6c | **Overnight batches** (§C8), off until the relay has a key | M | Relay tests with a fake Anthropic batch API: submit, poll, collect, check, add as pending, cap respected |
 | 7 | **Cards in Learn** (§4 B1) | S | Due cards in Up next |
 | 8 | **Lecture transcripts and questions** (§6), on the existing ink audio | M | A 30-minute recording transcribes on the iPad; questions cite the transcript |
 | 9 | **Other kinds of practice and checkpoints** (§5 C3, C5) | M | Mastery tests for do-and-rate |
@@ -520,9 +621,17 @@ Each step ends with tests in `docs/testing/` in the same commit, and NOTES.md up
 
 - Q6: the relay's AI allowance is **10M tokens a month**. It's set as the Worker secret `AI_MONTHLY_LIMIT`
   on 2026-11-04, with no code deployed. Your own key has your own limits.
-- Q7: questions are written at **low effort, A-level included**; medium is used only to retry a question the
-  check rejected (§C2.3).
+- Q7 (revised 2026-11-05 after the tests): **write at low, check at low, rewrite at medium only on failure**;
+  switch to medium-first if more than half need the rewrite (§C2.3).
 - Q8: **new vaults on the relay need an 8-digit code** (§7 E2). You set it yourself as a Cloudflare secret.
+
+- Q9: **close copies of real questions are the goal** for GCSE and most of A-level: the same question, slightly
+  different (§C2.3).
+- Q10: **copyright is your call** (2026-11-05: "they cannot do anything if its not exactly the same"). Only
+  exact or near-exact wording is refused. Decision 12's "get legal advice before a public launch" is
+  superseded by this for the bank.
+- Q11: **the shared bank** (§C7), with uploads private to your users' vaults.
+- Q12: **overnight batches on the relay** (§C8), switched on when you add `ANTHROPIC_API_KEY` to the relay.
 
 **Still open:** nothing.
 
