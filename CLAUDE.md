@@ -80,6 +80,8 @@ each change against this list before pushing, and say in the commit what you che
 - When rewriting a block with a script or a range replace, list the declarations in it first
   (`grep -n '^struct \|^final class \|^enum \|func '`) and make sure every one you didn't mean to
   remove is still there afterwards (ItemConceptsSection was cut out with the old answer pad).
+- Before appending to a Swift file, check for a file-wide `#if os(iOS)` / `#if os(macOS)`: code added
+  after its `#endif` builds for the other platform too (InkTiledPageLayer broke the Mac build).
 - Two branches can each add the same name (two `DiagnosticsSection`s after merging Sketch 2): grep a
   new type or view name across `App/` before adding it.
 

@@ -343,7 +343,6 @@ final class InkElementsLayer: CALayer {
         }
     }
 }
-#endif
 
 
 /// A PDF, picture or GoodNotes page drawn in 512-pixel tiles by Core Animation (as PDF readers do):
@@ -409,3 +408,4 @@ final class InkTiledPageLayer: CATiledLayer {
         }
     }
 }
+#endif
