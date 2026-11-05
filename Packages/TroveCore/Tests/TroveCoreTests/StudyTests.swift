@@ -56,3 +56,20 @@ struct StudyTests {
         #expect(FSRS.preview(nil, now: 0)[.again] == "10 min")
     }
 }
+
+/// Learn → Cards (learn-pivot plan §4 B1, step 7): decks with their due and new counts.
+@Suite struct DeckTests {
+    @Test func decksCountWhatsDueAndNew() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ms = now.timeIntervalSince1970 * 1000
+        func card(_ note: String, _ title: String, due: Double?) -> StudyCard {
+            StudyCard(id: UUID().uuidString, noteId: note, noteTitle: title, front: "f", back: "b",
+                      state: due.map { FSRS.State(stability: 1, difficulty: 5, reps: 1, lapses: 0, last: ms - 86_400_000, due: $0) })
+        }
+        let decks = Deck.summaries([card("a", "French verbs", due: ms - 1), card("a", "French verbs", due: ms + 1e9), card("a", "French verbs", due: nil),
+                                    card("b", "Biology words", due: nil), card("c", "Atoms", due: ms - 5), card("c", "Atoms", due: ms - 6)], now: now)
+        #expect(decks.map(\.title) == ["Atoms", "French verbs", "Biology words"])
+        #expect(decks[1].total == 3 && decks[1].due == 1 && decks[1].new == 1)
+        #expect(decks[2].due == 0 && decks[2].new == 1)
+    }
+}

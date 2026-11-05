@@ -112,6 +112,30 @@ public struct StudyCard: Identifiable, Equatable, Sendable {
     public var isNew: Bool { state == nil }
 }
 
+/// One deck in Learn → Cards (learn-pivot plan §4 B1): a flashcards note with how many cards are due now and how
+/// many are new. Studied as a block (vocabulary isn't mixed with other decks; plan §1.1).
+public struct Deck: Identifiable, Equatable, Sendable {
+    public var id: String { noteId }
+    public var noteId: String
+    public var title: String
+    public var total: Int
+    public var due: Int
+    public var new: Int
+
+    /// Decks by what's due, then by name.
+    public static func summaries(_ cards: [StudyCard], now: Date = Date()) -> [Deck] {
+        let ms = now.timeIntervalSince1970 * 1000
+        var byNote: [String: Deck] = [:]
+        for c in cards {
+            var d = byNote[c.noteId] ?? Deck(noteId: c.noteId, title: c.noteTitle, total: 0, due: 0, new: 0)
+            d.total += 1
+            if let s = c.state { if s.due <= ms { d.due += 1 } } else { d.new += 1 }
+            byNote[c.noteId] = d
+        }
+        return byNote.values.sorted { $0.due != $1.due ? $0.due > $1.due : $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+}
+
 extension Library {
     public static let cardKind = "card"
     /// New cards introduced per day (the rest wait for the next day).

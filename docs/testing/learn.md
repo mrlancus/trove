@@ -138,3 +138,47 @@ added with each step of plan §9.
   working.
 - **Automated by**: `PracticeStatsTests/aRestDayKeepsTheStreak`, `practicePicksAreSeededFreshAndFiltered`
   (mixing), `DevelopHintTests` (incl. a fake model).
+
+### TEST-LEARN-009: Questions in the style of real papers
+- **Feature**: QuestionWriter, More like this, This is wrong (plan §C2.3, §C9)
+- **Priority**: high
+- **Coverage**: auto-tested (code checks on fixtures, the pipeline with a fake model, the request); a real key: not tested
+- **Platforms**: iPhone, iPad, Mac (your own Claude key in Settings → AI)
+- **Preconditions**: a course with a split paper and its mark scheme.
+- **Steps**:
+  1. Practise a question and mark it.
+  2. Tap More like this; wait.
+  3. Practise one of the new questions; open its note (Learn → Trove-made → course).
+  4. Tap This is wrong on it.
+- **Expected**: one or two new questions, labelled "Trove-made, in the style of <board> <spec> Paper n", same kind
+  as the real one with new numbers; their scheme is in the board's format; Settings → AI → Activity lists the
+  write and check calls (Haiku 5.5, low; a rewrite at medium only when one failed); This is wrong removes it.
+- **Failure looks like**: a question copied word for word, marks that don't add up, a later part giving away an
+  earlier answer, a call at medium on every question.
+- **Automated by**: `QuestionWriterTests` (7), `DevelopHintTests`; the test set in learn-pivot-effort-tests.md Run 2.
+
+### TEST-LEARN-010: The shared bank
+- **Feature**: bank on the relay (plan §C7)
+- **Priority**: high
+- **Coverage**: auto-tested (relay, picking); between two real vaults: not tested
+- **Platforms**: all apps, on the relay
+- **Steps**:
+  1. Vault A: More like this on a board-paper question (sharing on).
+  2. Vault B, same course and question: More like this.
+  3. Turn sharing off in A (Settings → AI); More like this again.
+- **Expected**: B gets A's question from the bank without a model call ("from the shared bank"); A's question made
+  from an upload is never shared; with sharing off nothing is offered.
+- **Automated by**: `server/test/bank.test.ts`, `QuestionWriterTests/anUnseenBankQuestionIsPickedBeforeWriting`.
+
+### TEST-LEARN-011: Cards in Learn
+- **Feature**: Learn → Cards (plan §4 B1)
+- **Priority**: medium
+- **Coverage**: auto-tested (deck counts); the screen: not tested
+- **Platforms**: all apps
+- **Preconditions**: two notes with flashcards, some due.
+- **Steps**:
+  1. Open Learn; look at Cards. Tap a deck; then Study N due.
+  2. Look at Home's Up next.
+- **Expected**: each deck with its due and new counts, most due first; a deck studies only its own cards; Home
+  shows "N cards due".
+- **Automated by**: `DeckTests`.

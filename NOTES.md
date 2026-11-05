@@ -127,6 +127,9 @@ Steps done (plan §9):
   from the board at batch time, never stored); code checks; a check batch; passes added as pending; failures
   rewritten once at medium the next night. PROTOCOL §4. Tests: `server/test/batches.test.ts` (a fake batch API:
   submit, poll, results out of order, check, pending, medium rewrite, cap, allowance). Not deployed.
+- **Step 7** (cards in Learn, plan §4 B1): Learn → Cards lists your flashcard decks with due and new counts (most due
+  first) and opens the existing StudyView for a deck or for everything due; Home's Up next shows the due count.
+  Test: `DeckTests`, TEST-LEARN-011.
 - **Catalogue rebuilt** (2026-11-05): 683 courses, 666 with their specification (AQA 111/111, OCR 96/96, Eduqas 77/77,
   WJEC 101/102, Cambridge 133/133, Pearson 148/164: some GCSEs aren't tagged by Pearson's search; AS courses
   share the A level's document). WJEC's Health and Social Care site didn't answer once (502); it kept its listing.

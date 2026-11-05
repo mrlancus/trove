@@ -37,6 +37,7 @@ struct DevelopView: View {
                 }
                 if !develop.attempts.isEmpty { statsStrip }
                 YourWorkCard(develop: develop)
+                CardsCard()
                 CoursesCard(develop: develop)
                 GoalsCard(develop: develop)
                 UploadsCard(develop: develop)
