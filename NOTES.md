@@ -3,7 +3,9 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-Step 10 of the learn pivot, both parts built; waiting for the first build of the group screens on CI.
+(nobody right now). The learn pivot (steps 0–10) is built and CI is green at 7a062cb: Mac and iOS builds, Mac unit
+tests, UI tests on iPhone SE, iPhone 16 Pro Max, iPad mini and iPad Air 13 (iPad mini needed one re-run: a UI-query
+timeout in testConnectionsIsHidden that passed on the run before and on the re-run). Step 10:
 - **Part 1, how everyone did**: after marking a past-paper question, Learn shows the examiner report's own sentence
   about how candidates did ("Just over 50% of the students scored 1 mark", AQA examiner report, June 2025), or says
   the report gives no figure (`ExaminerReport`, `DevelopModel+Cohort.swift`, `CohortLine`; TEST-DEV-038). Only
