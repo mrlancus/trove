@@ -1,5 +1,9 @@
 # Trove: research report
-*Working name. A "save anything" brain and notes app that plugs into the apps you already use.*
+*Working name. **Since 2026-11-05 Trove is a place to learn** (docs/plans/learn-pivot-plan.md): practise
+real exam questions and anything else you're learning, get help when you're stuck, see that you're getting
+better. Students first (GCSE, IGCSE, A-level, university), then anyone learning anything. The "save
+anything" brain below is now the set of tools you learn with: notes, sketches, PDFs and the clipboard. The
+report below is the original research, kept for reference.*
 
 Researched October 2026. Sources are listed at the bottom. Where a fact couldn't be confirmed, it's marked **(verify)**, and the build prompt tells Claude to check it before relying on it.
 

@@ -49,7 +49,7 @@ struct PhoneRootView: View {
                 .task { await model.clipboard.reload() }
             }
             .badge(model.clipboard.ephemeral.count)
-            Tab("Practise", systemImage: "graduationcap", value: PhoneTab.practise) {
+            Tab("Learn", systemImage: "graduationcap", value: PhoneTab.practise) {
                 NavigationStack { DevelopView() }
             }
             Tab(value: PhoneTab.search, role: .search) {

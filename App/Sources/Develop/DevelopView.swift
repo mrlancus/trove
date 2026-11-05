@@ -19,7 +19,7 @@ struct DevelopView: View {
                 home
             }
         }
-        .navigationTitle("Develop")
+        .navigationTitle("Learn")
         .tint(Theme.accent)
         .task {
             await develop.start(model)
@@ -74,7 +74,7 @@ struct DevelopView: View {
                 }
                 .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(Theme.accent).controlSize(.large)
             } else {
-                Label("Develop", systemImage: "graduationcap.fill").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+                Label("Learn", systemImage: "graduationcap.fill").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
                 Text("Practise with real papers").font(.largeTitle.weight(.bold)).foregroundStyle(.white).minimumScaleFactor(0.7)
                 Text("Add a course below and Trove downloads its past papers from the exam board and splits them into questions. Work each one out on a page or a whiteboard, mark it against the mark scheme, and ask the tutor when you're stuck.")
                     .font(.callout).foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)

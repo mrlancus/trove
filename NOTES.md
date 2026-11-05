@@ -3,7 +3,29 @@
 _Last updated by a cloud session (Linux, no Xcode; Swift 6.3.1 for TroveCore can be installed to /opt/swift). The user has only an Intel Mac, so there is no local Xcode._
 
 ## In progress
-(nobody right now)
+- Cloud session 2026-11-05 (session_01BrjgWvEbe6KQZPGGaKA59d): building `docs/plans/learn-pivot-plan.md` from
+  `docs/plans/learn-pivot-build-prompt.md`, step by step (see "Learn pivot" below for where it's got to).
+
+## Learn pivot (2026-11-05): Trove is now a place to learn
+**Start here.** The plan is `docs/plans/learn-pivot-plan.md` (§9 order of work, §10 decisions, all taken),
+built from `docs/plans/learn-pivot-build-prompt.md`. Read the review (`learn-pivot-review.md`) before changing
+anything it covers. Decisions from plan §10, short form:
+- Q1 the section is **Learn** (was Develop); the app stays Trove (a rename later is the display name only).
+- Q2 RSS feeds and add addresses stay; the Telegram bot is hidden like the GitHub bridge.
+- Q3 the Mac's Markdown copy of notes is **off by default**, with a setting.
+- Q4/Q7 Haiku 5.5 writes questions in the style of real papers: write at low, check at low, rewrite once at
+  medium on failure; switch to medium-first if more than half need the rewrite.
+- Q5 iPhone tabs: Home · Learn · Library · Clipboard · Search.
+- Q6 relay AI allowance 10M tokens/month (Worker secret `AI_MONTHLY_LIMIT`, already set).
+- Q8 new vaults on the relay need an 8-digit code (`VAULT_CREATE_CODE`, which you set).
+- Q9/Q10 close copies of real questions are the goal; only exact or near-exact wording is refused.
+- Q11 the shared question bank (uploads private to your users' vaults); Q12 overnight batches, off until the
+  relay has `ANTHROPIC_API_KEY`.
+
+Steps done (plan §9):
+- **Step 0** (docs): README, CLAUDE.md's first lines and docs/RESEARCH.md's pitch lead with learning; "Develop"
+  is **Learn** in the UI (sidebar, iPhone tab, screen title, the Develop card label). Code names (`DevelopModel`,
+  `.develop`) are unchanged on purpose.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

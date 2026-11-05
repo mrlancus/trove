@@ -111,9 +111,9 @@ final class TroveUITests: XCTestCase {
     func testDevelop() {
         let app = launch()
         XCTAssertTrue(waitForLibrary(app))
-        let tab = app.tabBars.buttons["Practise"]
-        if tab.exists { tab.tap() } else { open(app, "Develop") }
-        XCTAssertTrue(app.staticTexts["Your courses"].firstMatch.waitForExistence(timeout: 20), "Develop didn't open")
+        let tab = app.tabBars.buttons["Learn"]
+        if tab.exists { tab.tap() } else { open(app, "Learn") }
+        XCTAssertTrue(app.staticTexts["Your courses"].firstMatch.waitForExistence(timeout: 20), "Learn didn't open")
         shot(app, "develop")
         // Add a course from the catalogue (every board's specs, bundled), then open it.
         app.buttons["Add a course"].firstMatch.tap()

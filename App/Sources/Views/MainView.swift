@@ -361,7 +361,7 @@ struct SidebarView: View {
                 // Right under Sketches.
                 Label("Clipboard", systemImage: "doc.on.clipboard")
                     .tag(AppModel.Selection.clipboard)
-                Label("Develop", systemImage: "graduationcap")
+                Label("Learn", systemImage: "graduationcap")
                     .tag(AppModel.Selection.develop)
                 Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(AppModel.Selection.graph)
@@ -709,7 +709,7 @@ struct LibraryView: View {
         case .graph: return "Connections"
         case .importer: return "Import"
         case .clipboard: return "Clipboard"
-        case .develop: return "Develop"
+        case .develop: return "Learn"
         case .home: return "Home"
         case nil: return "Trove"
         }

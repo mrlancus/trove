@@ -342,7 +342,7 @@ struct GoalForm: View {
                 }
                 Section {
                     if develop.courses.isEmpty {
-                        Text("Add courses on Develop's home to link them here.").font(.caption).foregroundStyle(.secondary)
+                        Text("Add courses in Learn to link them here.").font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(develop.courses) { c in
                         Toggle(isOn: Binding(get: { courses.contains(c.spec) }, set: { on in if on { courses.insert(c.spec) } else { courses.remove(c.spec) } })) {

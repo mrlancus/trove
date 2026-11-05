@@ -1,7 +1,10 @@
 # Trove: notes for Claude
 
-Trove is a "save anything" second brain plus notes app for Mac, iPhone and iPad. It syncs through
-the user's iCloud Drive, with an optional Cloudflare relay, and it's end-to-end encrypted. Start
+Trove is a place to learn, for Mac, iPhone and iPad: students first (GCSE, IGCSE, A-level, then
+university), growing to anyone learning anything. **Learn** (renamed from Develop) is the reason to open
+the app; notes, sketches, PDFs and the clipboard stay as the tools you learn with. The AI-coding features
+and the Obsidian-style graph are hidden behind `Features` flags, not deleted (docs/plans/learn-pivot-plan.md).
+It syncs through the user's iCloud Drive, with an optional Cloudflare relay, and it's end-to-end encrypted. Start
 every session by reading **NOTES.md** (status, what's next, manual steps). Specs:
 **The product is the Mac, iPhone and iPad apps** (the user's words: "the main thing of this is the app
 for mac and ios/ipados; the website is not primary and is there just because we can have it"). Build
