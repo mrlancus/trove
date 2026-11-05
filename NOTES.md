@@ -119,6 +119,10 @@ Your words are saved in that prompt first. Also this round: **Sketch 2 was merge
   average), and a redesigned practice screen (progress segments, question card, Work it out, result ring).
 - **Home**: the app opens on Home (sidebar top; the iPhone's first tab): greeting, New note / New sketch /
   Practise / Import, three numbers, Develop's next step, Jump back in, Pinned. TEST-HOME-001.
+- **Later the same night**: questions split v2 (only the question, cropped to its marks, with its stem and
+  lead-in; "c)", "(i)", "Question 1"; older splits redone on launch; TEST-DEV-037); PDF/picture pages
+  sharpen in tiles (`InkTiledPageLayer`); **crash on opening any sketch fixed** (the slim toolbar's SwiftUI
+  type overflowed the stack; 0.1.169's report). Builds at 340eaf1. CLAUDE.md now has an app quality checklist.
 - **Not done / next**: topics from the course's spec (on the device) instead of the paper; thumbnails of the
   working in Your work; the rest of the app on `Theme` (Library, Settings); a Lock button on the website.
 
