@@ -3,6 +3,7 @@
 // previews for links saved on the website.
 import { $, ago, h } from "./dom.js";
 import { icon } from "./icons.js";
+import { features } from "./features.js";
 
 /** Saves a link and, when it's new, asks the relay for its title and picture (no wait). */
 export function saveLink(vault, url, options = {}, onDone = () => {}) {
@@ -155,7 +156,8 @@ export function showBridges(vault, { toast = () => {} } = {}) {
   // vault's keys, so they run here on a device, never on the relay: such a bridge adds its own
   // section to this list, keeps its settings in a vault record (synced, encrypted) and does its work
   // from the website or the apps.
-  const sections = () => [webhookSection(), feedSection(), githubSection(), telegramSection(),
+  // GitHub and Telegram are hidden (features.js); the apps pause them on the relay.
+  const sections = () => [webhookSection(), feedSection(), ...(features.githubBridge ? [githubSection()] : []), ...(features.telegramBridge ? [telegramSection()] : []),
     h("section", {}, h("h3", { class: "section-title", text: "Link previews" }),
       h("p", { class: "hint", text: "Links you save on this website get their title, description and picture from your relay, which sees only the link." }))];
 

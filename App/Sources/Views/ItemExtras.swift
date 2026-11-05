@@ -286,7 +286,7 @@ struct ConnectionsSection: View {
             if outgoing.isEmpty, incoming.isEmpty, unmade.isEmpty, mentions.isEmpty, related.isEmpty {
                 Text("Type [[ and a title in your notes to link things, or use Connect to….").font(.caption).foregroundStyle(.secondary)
             }
-            if !outgoing.isEmpty || !incoming.isEmpty {
+            if Features.graph, !outgoing.isEmpty || !incoming.isEmpty {
                 GraphCanvas(focus: item.id, compact: true).frame(height: 220).card(cornerRadius: 14)
             }
         }

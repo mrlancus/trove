@@ -34,6 +34,28 @@ struct VaultConfig: Codable, Equatable {
     var screenshotsImport: Bool = false
     var lastScreenshotImport: Date?
     var appleNotesImport: Bool = false
+    /// "Keep a readable copy of my notes in iCloud Drive" (Mac, the mirror owner): plain `.md` files in
+    /// `<vault>/Notes`, not encrypted. Off unless chosen (learn-pivot plan §3 A3); optional so configs written
+    /// by older builds still decode.
+    var readableCopy: Bool?
+}
+
+extension VaultConfig {
+    /// What the Mac's mirror does after a sync (learn-pivot plan §3 A3, review R10).
+    struct MirrorPlan: Equatable {
+        /// Write the readable Markdown copy into `<vault>/Notes`.
+        var exportNotes: Bool
+        /// Sync both ways with this Obsidian folder.
+        var obsidianFolder: String?
+        var isEmpty: Bool { !exportNotes && obsidianFolder == nil }
+    }
+
+    /// Only the mirror owner does anything; the readable copy only when chosen; the Obsidian folder only
+    /// while that feature is shown (`Features.obsidian`).
+    func mirrorPlan(obsidian: Bool = Features.obsidian) -> MirrorPlan {
+        guard mirrorOwner else { return MirrorPlan(exportNotes: false, obsidianFolder: nil) }
+        return MirrorPlan(exportNotes: readableCopy == true, obsidianFolder: obsidian ? obsidianFolder : nil)
+    }
 }
 
 enum VaultError: LocalizedError {

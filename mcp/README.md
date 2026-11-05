@@ -1,5 +1,8 @@
 # trove-mcp: Trove for Claude
 
+> **Paused (2026-11-05).** Trove is now a place to learn (docs/plans/learn-pivot-plan.md §3). trove-mcp is
+> kept and its tests still run in CI, but nothing in the apps, the website or the README points to it.
+
 A small [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude Desktop and
 Claude Code search, read and add to your Trove. It runs on your own computer, joins your vault as its
 own device (kind `agent`, listed under Devices like any other) and talks to Claude over stdio. The

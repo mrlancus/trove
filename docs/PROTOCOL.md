@@ -445,6 +445,10 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI` and `saveSensitive`). A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
+- **Hidden features:** one synced record, id `settings.features`, kind `setting`: `pausedBridges`, the ids of
+  the relay bridges (GitHub, Telegram) that a build with that feature hidden switched off (`enabled: false`),
+  so a build that shows it again switches exactly those back on (learn-pivot plan §3 A2). Builds without the
+  flags ignore it.
 - **Your own AI:** one synced record, id `settings.ai`, kind `setting` (`AISettings`), end-to-end
   encrypted like every record: `provider` (`anthropic`, `openai`, `gemini`, `openrouter` or
   `custom`), `apiKey`, `customURL` (the base URL for `custom`, OpenAI-compatible), `model.fast`,

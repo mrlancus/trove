@@ -554,6 +554,9 @@ private struct AISection: View {
 private struct IntegrationsSection: View {
     @Environment(AppModel.self) private var model
     @State private var choosingObsidian = false
+    @State private var confirmingDelete = false
+    /// Whether `<vault>/Notes` is there, looked up once off the main thread (not in `body`).
+    @State private var copyExists = false
 
     var body: some View {
         Section {
@@ -569,14 +572,30 @@ private struct IntegrationsSection: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Button { choosingObsidian = true } label: {
-                Label(model.config?.obsidianFolder.map { "Obsidian vault: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Sync with an Obsidian vault…", systemImage: "point.3.connected.trianglepath.dotted")
+            if model.config?.mirrorOwner == true {
+                Toggle("Keep a readable copy of my notes in iCloud Drive", isOn: Binding(
+                    get: { model.config?.readableCopy ?? false },
+                    set: { on in model.updateConfig { $0.readableCopy = on } }))
+                Text("Plain Markdown files in Trove/Notes, for other apps to read. This copy isn't encrypted.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if model.config?.readableCopy != true, copyExists {
+                    Button("Delete the copy…", role: .destructive) { confirmingDelete = true }
+                        .confirmationDialog("Delete the readable copy of your notes in Trove/Notes? Your notes in Trove aren't touched.",
+                                            isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete the copy", role: .destructive) { model.deleteReadableCopy(); copyExists = false }
+                        }
+                }
             }
-            .fileImporter(isPresented: $choosingObsidian, allowedContentTypes: [.folder]) { result in
-                if case .success(let url) = result { model.updateConfig { $0.obsidianFolder = url.path } }
-            }
-            if model.config?.obsidianFolder != nil {
-                Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
+            if Features.obsidian {
+                Button { choosingObsidian = true } label: {
+                    Label(model.config?.obsidianFolder.map { "Obsidian vault: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Sync with an Obsidian vault…", systemImage: "point.3.connected.trianglepath.dotted")
+                }
+                .fileImporter(isPresented: $choosingObsidian, allowedContentTypes: [.folder]) { result in
+                    if case .success(let url) = result { model.updateConfig { $0.obsidianFolder = url.path } }
+                }
+                if model.config?.obsidianFolder != nil {
+                    Button("Stop syncing Obsidian") { model.updateConfig { $0.obsidianFolder = nil } }
+                }
             }
             #endif
             ScreenshotRoutesView()
@@ -584,6 +603,12 @@ private struct IntegrationsSection: View {
             Text("Other apps")
         } footer: {
             FormFooter("To bring in files, folders, zips and exports, use Import in the sidebar or drop them on the Trove window.")
+        }
+        .task {
+            #if os(macOS)
+            guard let folder = model.readableCopyFolder else { return }
+            copyExists = await Task.detached { FileManager.default.fileExists(atPath: folder.path) }.value
+            #endif
         }
     }
 }

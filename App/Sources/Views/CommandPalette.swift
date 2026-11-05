@@ -29,8 +29,7 @@ struct CommandPalette: View {
         Command(title: "Sync now", symbol: "arrow.triangle.2.circlepath") { m in Task { await m.syncNow() } },
         Command(title: "Make this week's digest", symbol: "calendar.badge.clock") { m in Task { await m.makeDigest() } },
         Command(title: "Show clipboard", symbol: "doc.on.clipboard") { m in m.selection = .clipboard },
-        Command(title: "Show connections graph", symbol: "point.3.connected.trianglepath.dotted") { m in m.selection = .graph },
-    ]
+    ] + (Features.graph ? [Command(title: "Show connections graph", symbol: "point.3.connected.trianglepath.dotted") { m in m.selection = .graph }] : [])
 
     var matches: [Command] { FuzzyMatch.rank(query, Self.commands, limit: 20) { $0.title } }
 

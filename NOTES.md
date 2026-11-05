@@ -22,10 +22,25 @@ anything it covers. Decisions from plan §10, short form:
 - Q11 the shared question bank (uploads private to your users' vaults); Q12 overnight batches, off until the
   relay has `ANTHROPIC_API_KEY`.
 
+Decisions this session took for you (undo in brackets):
+- The website doesn't pause bridges itself; the apps do it on launch (one place to get it right). [port
+  `BridgePause` to `web/public/core` if you want the website to do it too.]
+- The readable copy setting is per Mac (`VaultConfig.readableCopy`), like the mirror owner. [none needed]
+
 Steps done (plan §9):
 - **Step 0** (docs): README, CLAUDE.md's first lines and docs/RESEARCH.md's pitch lead with learning; "Develop"
   is **Learn** in the UI (sidebar, iPhone tab, screen title, the Develop card label). Code names (`DevelopModel`,
   `.develop`) are unchanged on purpose.
+- **Step 1** (hide, plan §3): `App/Sources/Platform/Features.swift` and `web/public/features.js` (`graph`,
+  `obsidian`, `githubBridge`, `telegramBridge`, all off). Hidden: Connections (sidebar, iPhone list, ⌘K), the
+  graph on items, the clipboard Map (website), Settings → Obsidian sync, GitHub and Telegram in Bridges. On
+  launch the app pauses running GitHub/Telegram bridges on the relay and remembers them in the synced
+  `settings.features` (PROTOCOL §8), so turning a flag on resumes exactly those (`BridgePause`). The Mac's
+  Markdown copy is **off by default**: Settings → Other apps → "Keep a readable copy of my notes in iCloud
+  Drive" (says it isn't encrypted), with "Delete the copy…". trove-mcp: a "paused" line in `mcp/README.md`.
+  Tests: `BridgePauseTests`, Mac `FeaturesTests`, UI `testConnectionsIsHidden` / `testConnectionsWithFeaturesOn`
+  (`-TroveFeatures all`), web e2e flags off and on (`trove.features`). Device tests: `docs/testing/learn.md`.
+  To show a feature again: set its flag to `shipped: true` (apps) or `true` (website) and build.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

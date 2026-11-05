@@ -79,7 +79,7 @@ struct PhoneRootView: View {
 
     @ViewBuilder private func destination(_ route: PhoneRoute) -> some View {
         switch route {
-        case .list(.graph): GraphScreen()
+        case .list(.graph): if Features.graph { GraphScreen() } else { HomeView() }
         case .list(.importer): ImportView()
         case .list(.clipboard): ClipboardScreen(embedded: true)
         case .list(.develop): DevelopView()

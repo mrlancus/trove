@@ -19,10 +19,10 @@ final class TroveUITests: XCTestCase {
         }
     }
 
-    func launch() -> XCUIApplication {
+    func launch(_ extra: [String] = []) -> XCUIApplication {
         prepare()
         let app = XCUIApplication()
-        app.launchArguments += ["-TroveTestVault", "small"]
+        app.launchArguments += ["-TroveTestVault", "small"] + extra
         app.launch()
         return app
     }
@@ -131,6 +131,26 @@ final class TroveUITests: XCTestCase {
             sleep(2)
             shot(app, "develop-course")
         }
+    }
+
+    /// Hidden features (learn-pivot plan §3): no Connections in the sidebar or the iPhone's list.
+    func testConnectionsIsHidden() {
+        let app = launch()
+        XCTAssertTrue(waitForLibrary(app))
+        XCTAssertTrue(app.staticTexts["Import"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Connections"].firstMatch.exists, "Connections shows with Features.graph off")
+        shot(app, "sidebar-no-connections")
+    }
+
+    /// The hidden graph still works: `-TroveFeatures all` brings Connections back (review R4).
+    func testConnectionsWithFeaturesOn() {
+        let app = launch(["-TroveFeatures", "all"])
+        XCTAssertTrue(waitForLibrary(app))
+        let row = app.staticTexts["Connections"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "-TroveFeatures all didn't bring Connections back")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Notes"].firstMatch.waitForExistence(timeout: 20) || app.buttons["Notes"].firstMatch.waitForExistence(timeout: 5), "the graph didn't open")
+        shot(app, "connections")
     }
 
     func testRotateAndShow() {

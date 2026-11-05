@@ -11,7 +11,7 @@ struct BridgesSection: View {
             Button { showing = true } label: { Label("Bridges…", systemImage: "point.3.filled.connected.trianglepath.dotted") }
                 .sheet(isPresented: $showing) { BridgesView() }
         } footer: {
-            FormFooter("Bring things in from other places: an add address for Shortcuts and scripts, feeds, GitHub stars and a Telegram bot. Your relay can add to your vault, never read it.")
+            FormFooter(Features.githubBridge || Features.telegramBridge ? "Bring things in from other places: an add address for Shortcuts and scripts, feeds, GitHub stars and a Telegram bot. Your relay can add to your vault, never read it." : "Bring things in from other places: an add address for Shortcuts and scripts, and feeds (lecture podcasts, blogs). Your relay can add to your vault, never read it.")
         }
     }
 }
@@ -39,8 +39,8 @@ struct BridgesView: View {
                     }
                     webhookSection
                     feedSection
-                    githubSection
-                    telegramSection
+                    if Features.githubBridge { githubSection }
+                    if Features.telegramBridge { telegramSection }
                 }
             }
             .formStyle(.grouped)

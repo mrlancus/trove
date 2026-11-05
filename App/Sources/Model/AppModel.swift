@@ -97,6 +97,8 @@ final class AppModel {
     var selection: Selection? = .home {
         didSet {
             guard selection != oldValue else { return }
+            // Hidden (Features.graph): anything that still asks for Connections gets Home.
+            if selection == .graph, !Features.graph { selection = .home; return }
             // Connections wants the whole window: what was open on the right closes.
             if selection == .graph { selectedItemID = nil }
             if selection != .clipboard { selectedClipID = nil }
@@ -302,6 +304,7 @@ final class AppModel {
         watchScreenshots()
         startSyncLoop()
         connectLive()
+        Task { await pauseHiddenBridges() }
         if !openedFiles.isEmpty {
             let files = openedFiles
             openedFiles = []
@@ -1265,13 +1268,15 @@ final class AppModel {
 
     private func mirrorIfOwner() async {
         #if os(macOS)
-        guard let config = vault.config, config.mirrorOwner, let library, !mirroring else { return }
+        guard let config = vault.config, let library, !mirroring else { return }
+        let plan = config.mirrorPlan()
+        guard !plan.isEmpty else { return }
         mirroring = true
         defer { mirroring = false }
-        if let folder = try? vault.folderURL() {
+        if plan.exportNotes, let folder = try? vault.folderURL() {
             await ObsidianMirrorService.shared.export(items: items, to: folder.appendingPathComponent("Notes"), library: library)
         }
-        if let custom = config.obsidianFolder {
+        if let custom = plan.obsidianFolder {
             await ObsidianMirrorService.shared.sync(items: items, folder: URL(fileURLWithPath: custom), library: library)
         }
         #endif

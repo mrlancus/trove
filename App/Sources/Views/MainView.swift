@@ -97,7 +97,7 @@ struct MainView: View {
     /// Connections takes the whole right side (list and detail columns); what was open closes, and a
     /// point tapped there opens over it.
     @ViewBuilder private var split: some View {
-        if model.selection == .graph, model.searchText.isEmpty { graphSplit }
+        if model.selection == .graph, Features.graph, model.searchText.isEmpty { graphSplit }
         else if model.selection == .develop, model.searchText.isEmpty { developSplit }
         else if model.selection == .home, model.searchText.isEmpty { homeSplit }
         else { columnsSplit }
@@ -363,8 +363,10 @@ struct SidebarView: View {
                     .tag(AppModel.Selection.clipboard)
                 Label("Learn", systemImage: "graduationcap")
                     .tag(AppModel.Selection.develop)
-                Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
-                    .tag(AppModel.Selection.graph)
+                if Features.graph {
+                    Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
+                        .tag(AppModel.Selection.graph)
+                }
                 Label("Import", systemImage: "square.and.arrow.down.on.square")
                     .badge(model.importRun.map { $0.finished ? 0 : $0.total - $0.done } ?? 0)
                     .tag(AppModel.Selection.importer)

@@ -18,6 +18,7 @@ import { pdfMarks } from "./pdfviewer.js";
 import { drawLoaded, loadDraw, openInkEditor, preloadWhenIdle, renderSketchPage, sketchThumbnail } from "./lazy.js";
 import { registerOffline } from "./offline.js";
 import { buildGraph, folderColor, graphCanvas } from "./graph.js";
+import { features } from "./features.js";
 import { editableInk, readNotebook } from "./core/goodnotes.js";
 import { saveLink, showBridges } from "./bridges.js";
 import { afterSync, initAi, noteAiMenu, runPageAction, showAiSettings, showAsk, showReview, suggestLinksButton } from "./ai.js";
@@ -548,15 +549,15 @@ function render() {
 
 function renderSidebar(items, collections, folders, unfiled, now) {
   const vault = state.vault;
-  const graph = memo("graph", () => linkGraph(items));
-  const connected = items.filter((i) => graph.outgoing[i.id] || graph.incoming[i.id]).length;
+  // Connections is hidden (features.graph); its count is only worked out when it shows.
+  const connected = features.graph ? (() => { const graph = memo("graph", () => linkGraph(items)); return items.filter((i) => graph.outgoing[i.id] || graph.incoming[i.id]).length; })() : 0;
 
   // The clipboard sits right under Sketches.
   $("#smart-list").replaceChildren(...smartCollections.flatMap((s) => {
     const count = items.filter((i) => s.contains(i, now)).length;
     const link = !count && !["all", "notes", "sketches", "pinned"].includes(s.id) ? [] : [navLink(s.id, s.title, count)];
     return s.id === "sketches" ? [...link, navLink("clips", "Clipboard", vault.clips().length)] : link;
-  }), navLink("graph", "Connections", connected || ""),
+  }), ...(features.graph ? [navLink("graph", "Connections", connected || "")] : []),
   navLink("import", "Import", state.importRun && !state.importRun.finished ? state.importRun.total - state.importRun.done : ""));
   renderFolderNav(folders, items, unfiled);
   $("#collection-list").replaceChildren(...collections.map((c) => navLink(`c:${c.id}`, c.name, items.filter((i) => i.collections.includes(c.id)).length)));
@@ -734,6 +735,7 @@ function navLink(id, title, count) {
 }
 
 function select(id) {
+  if (id === "graph" && !features.graph) id = "all";
   state.selection = id;
   // The graph wants the whole width: whatever was open on the right closes.
   if (id === "graph") { if (state.openId) closeItem(); state.openClip = null; }
@@ -1047,7 +1049,9 @@ function renderClips() {
     $("#heading").after(tools);
   }
   // List or map, and where/when filters.
-  $(".clip-view", tools).replaceChildren(...[["list", "List"], ["map", "Map"]].map(([id, title]) =>
+  if (!features.graph) state.clipShow = "list";
+  $(".clip-view", tools).hidden = !features.graph;
+  $(".clip-view", tools).replaceChildren(...(features.graph ? [["list", "List"], ["map", "Map"]] : []).map(([id, title]) =>
     h("button", { type: "button", role: "radio", "aria-checked": String(state.clipShow === id), onclick: () => { state.clipShow = id; render(); } }, title)));
   const choices = filterChoices(all, facts);
   const pick = (key, label, options) => {
@@ -2020,7 +2024,7 @@ function connectionsSection(item, items, graph) {
     group("Maybe related", suggestions.map((o) => chip(o, { action: h("button", { type: "button", class: "chip-action", onclick: () => { vault.connect(item.id, o.id); syncSoon(); } }, "Connect") }))),
     suggestLinksButton(item, state.vault, aiCtx),
     connectPicker(item));
-  if (out.length || inc.length) section.append(h("div", { class: "local-graph-wrap" }, h("div", { id: "local-graph", class: "local-graph" }),
+  if (features.graph && (out.length || inc.length)) section.append(h("div", { class: "local-graph-wrap" }, h("div", { id: "local-graph", class: "local-graph" }),
     h("button", { type: "button", class: "link-button", onclick: () => select("graph") }, "Open the whole graph →")));
   return section;
 }

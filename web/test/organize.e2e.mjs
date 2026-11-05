@@ -40,6 +40,8 @@ test("imports are filed into folders; files preview, edit into versions, and con
   const v = await createVault();
   const phone = await Vault.join(memoryStorage(), await v.setupCode(), { origin: BASE, deviceName: "iPhone" });
   const context = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  // The graph is hidden (features.js); its code keeps being tested with it switched back on (learn-pivot review R4).
+  await context.addInitScript(() => localStorage.setItem("trove.features", "all"));
   const page = await context.newPage();
   const problems = [];
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource.*404/.test(m.text())) problems.push(m.text()); });
@@ -166,6 +168,40 @@ test("imports are filed into folders; files preview, edit into versions, and con
   await page.waitForTimeout(400);
   if (shots) await page.screenshot({ path: join(shots, "web-phone-folders.png") });
 
+  assert.deepEqual(problems, []);
+  await context.close();
+});
+
+// Learn pivot step 1 (docs/plans/learn-pivot-plan.md §3): with the shipped flags, the graph, the clipboard Map
+// and the GitHub and Telegram bridges are gone; backlinks stay.
+test("hidden features are gone by default; backlinks stay", async () => {
+  const v = await createVault();
+  const phone = await Vault.join(memoryStorage(), await v.setupCode(), { origin: BASE, deviceName: "iPhone" });
+  const a = phone.addNote({ title: "Forces", body: "See [[Impulse]]" });
+  phone.addNote({ title: "Impulse", body: "Change in p" });
+  await phone.sync();
+  const context = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const page = await context.newPage();
+  const problems = [];
+  page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource.*404/.test(m.text())) problems.push(m.text()); });
+  page.on("pageerror", (e) => problems.push(e.message));
+  await page.goto(BASE + "/");
+  await page.getByRole("tab", { name: "Setup code" }).click();
+  await page.getByLabel("Setup code").fill(await v.setupCode());
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.locator(".card", { hasText: "Forces" }).first().waitFor();
+  assert.equal(await page.getByRole("link", { name: /^Connections/ }).count(), 0, "Connections is in the sidebar");
+  await page.locator(".card", { hasText: "Forces" }).first().click();
+  await page.locator(".connections .link-chip", { hasText: "Impulse" }).first().waitFor();
+  assert.equal(await page.locator("#local-graph").count(), 0, "the item's graph shows");
+  await page.getByRole("link", { name: /^Clipboard/ }).click();
+  assert.equal(await page.getByRole("radio", { name: "Map" }).count(), 0, "the clipboard Map shows");
+  await page.getByRole("button", { name: "Bridges" }).click();
+  const dialog = page.getByRole("dialog", { name: "Bridges" });
+  await dialog.getByRole("button", { name: "Make an add address" }).waitFor();
+  assert.equal(await dialog.getByText("GitHub", { exact: true }).count(), 0, "the GitHub bridge shows");
+  assert.equal(await dialog.getByText("Telegram", { exact: true }).count(), 0, "the Telegram bridge shows");
+  assert.ok(a);
   assert.deepEqual(problems, []);
   await context.close();
 });
