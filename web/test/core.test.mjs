@@ -846,7 +846,10 @@ test("clip copy and paste events, places and the clipboard map (core/clipmap.js)
   assert.ok(buildClipGraph(vault.clips(), facts, { groups: [], items: vault.items() }).edges.some((e) => e.a === b && e.b === note));
   vault.deleteClip(a);
   assert.equal(vault.clipEvents(a).length, 0);
-  // Places can be turned off for every device.
+  // Places are off unless chosen (changed 2026-11-05, learn-pivot plan §7: location off by default for
+  // under-18s; was on), and the choice applies to every device.
+  assert.equal(vault.appSetting("recordPlaces"), false);
+  vault.setAppSetting("recordPlaces", true);
   assert.equal(vault.appSetting("recordPlaces"), true);
   vault.setAppSetting("recordPlaces", false);
   assert.equal(vault.appSetting("recordPlaces"), false);

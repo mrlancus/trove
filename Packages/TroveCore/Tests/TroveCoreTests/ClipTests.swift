@@ -256,6 +256,22 @@ final class ClockBox: @unchecked Sendable {
     }
 }
 
+/// Learn pivot step 2 (plan §7, review R3): location recording is off unless chosen, and a new vault says so.
+@Suite struct PrivacyDefaultTests {
+    @Test func locationIsOffByDefaultAndWrittenIntoNewVaults() async {
+        #expect(SharedSetting.recordPlaces.standard == false)
+        let keys = VaultKeys.generate()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let mac = Library(engine: SyncEngine(device: "MAC", keys: keys, transports: [FolderTransport(root: folder)]))
+        await mac.writeNewVaultDefaults()
+        _ = await mac.engine.sync()
+        let other = Library(engine: SyncEngine(device: "IPAD", keys: keys, transports: [FolderTransport(root: folder)]))
+        _ = await other.engine.sync()
+        // Written, not just missing: an older build reading it sees false too.
+        #expect(await other.sharedSettings()[.recordPlaces] == false)
+    }
+}
+
 @Suite struct ClipEventTests {
     @Test func eventsReadLikeTheWebsite() throws {
         let url = try #require(Bundle.module.url(forResource: "clip-events", withExtension: "json", subdirectory: "Fixtures"))

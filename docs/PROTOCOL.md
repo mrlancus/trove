@@ -442,7 +442,9 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   every device follows: `clipboardHistory`, `holdSensitive` (the preference; held copies still
   never leave the device), `saveSensitive` (default false: passwords and codes saved like any
   clip instead), `saveCopiesOnOpen` (iPhone/iPad), `recordPages` and `autoUpdate`
-  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI` and `saveSensitive`). A device whose
+  (Mac), `cloudAI`, `recordPlaces`. A missing field means the default (all on, except `cloudAI`, `saveSensitive` and, since 2026-11-05,
+  `recordPlaces`). A new vault writes `recordPlaces: false` explicitly, so builds that read a missing
+  `recordPlaces` as on agree. A device whose
   own value differs from the default before the field exists writes it once. Things that belong
   to one machine (folder paths, permissions, layout) aren't shared.
 - **Hidden features:** one synced record, id `settings.features`, kind `setting`: `pausedBridges`, the ids of
@@ -519,7 +521,7 @@ from library items (`kind: "item"`). Fields (all `set`, last writer wins):
   `place` `{lat, lon, accuracy?, name?, city?}`: where the device was, from its own location
   (CoreLocation, the browser's geolocation), never an IP address; 5 decimal places, accuracy in
   metres, `name`/`city` looked up by Apple devices. Places are recorded while the shared setting
-  `recordPlaces` (in `settings.app`, on unless turned off) is on. Deleting or pruning a clip deletes
+  `recordPlaces` (in `settings.app`, off unless turned on) is on. Deleting or pruning a clip deletes
   its events. A copy that only bumps an existing clip still gets its own `copy` event.
 - **The clipboard map** joins clips to where they were copied from (the site for a page, else the
   app), where they were pasted, their places (by `name`, else position rounded to 3 decimals), days

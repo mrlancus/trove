@@ -80,6 +80,12 @@ export class RelayError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+/** Shared settings that are off when unset (Library+Clips.swift `SharedSetting.standard`). Location recording is
+ * off unless chosen (learn-pivot plan §7). */
+const APP_SETTINGS_OFF = new Set(["cloudAI", "saveSensitive", "recordPlaces"]);
+/** Written into every new vault (`SharedSetting.newVaultDefaults`). */
+export const NEW_VAULT_SETTINGS = Object.freeze({ recordPlaces: false });
+
 export class Vault {
   /**
    * @param storage {get(key), set(key, value), clear(), delete?(key)} – IndexedDB in the browser, a
@@ -162,6 +168,8 @@ export class Vault {
     const created = await res.json();
     const payload = { v: 1, vaultId: created.vaultId, keys: secrets.exported, encrypted: true, relayURL: origin, relayVaultId: created.vaultId };
     const vault = await Vault.finishJoin(storage, payload, origin, created.vaultId, created, await importVaultKeys(secrets.exported), deviceName, options);
+    // Written into every new vault so older builds (which read a missing setting as on) agree (learn-pivot review R3).
+    for (const [name, value] of Object.entries(NEW_VAULT_SETTINGS)) vault.setAppSetting(name, value);
     return { vault, recoveryCode: encodePayload(payload) };
   }
 
@@ -1190,7 +1198,7 @@ export class Vault {
   }
 
   /** A setting every device follows (`settings.app`, Library.sharedSettings); `standard` when unset. */
-  appSetting(name, standard = true) {
+  appSetting(name, standard = !APP_SETTINGS_OFF.has(name)) {
     const r = this.store.records.get("settings.app");
     const v = r && r.fields._deleted !== true ? r.fields[name] : undefined;
     return typeof v === "boolean" ? v : standard;

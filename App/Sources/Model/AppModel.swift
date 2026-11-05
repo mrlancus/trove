@@ -411,6 +411,7 @@ final class AppModel {
             try vault.createVault(folder: folder, encrypted: encrypted, picked: pickedFolder != nil)
             try await openLibrary()
             phase = .ready
+            await library?.writeNewVaultDefaults()
             await library?.addNote(title: "Welcome to Trove", body: Self.welcomeNote)
             await syncNow()
         } catch {

@@ -108,6 +108,8 @@ test("a vault made in the browser: recovery code, new devices, sealed inbox from
   await b.sync();
   assert.equal(b.item(note).body, "made on the web");
   assert.equal(b.canReadInbox, true);
+  // A new vault writes location recording off, so every build agrees (learn-pivot review R3).
+  assert.equal(b.store.records.get("settings.app")?.fields.recordPlaces, false);
 
   // The extension code seals to the vault; the next sync imports and acks it.
   const ext = parseExtensionCode(a.browserExtensionCode());

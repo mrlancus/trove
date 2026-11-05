@@ -933,7 +933,7 @@ private struct ClipboardSection: View {
                 .font(.caption).foregroundStyle(.secondary)
             #endif
             Toggle("Record where you copy and paste", isOn: shared(.recordPlaces))
-            Text("Each copy and paste keeps the app or site, the device, the time and where you were (from this device's location, never your IP address). Encrypted like everything else. Applies on every device.")
+            Text("Off unless you turn it on. With it on, each copy and paste also keeps where you were (this device's location, never your IP address). The app or site, the device and the time are always kept. Encrypted like everything else. Applies on every device.")
                 .font(.caption).foregroundStyle(.secondary)
             LabeledContent("Save to Trove automatically") {
                 VStack(alignment: .trailing, spacing: 4) {

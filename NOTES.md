@@ -41,6 +41,11 @@ Steps done (plan §9):
   Tests: `BridgePauseTests`, Mac `FeaturesTests`, UI `testConnectionsIsHidden` / `testConnectionsWithFeaturesOn`
   (`-TroveFeatures all`), web e2e flags off and on (`trove.features`). Device tests: `docs/testing/learn.md`.
   To show a feature again: set its flag to `shipped: true` (apps) or `true` (website) and build.
+- **Step 2** (privacy, plan §7): location recording is **off by default** (`SharedSetting.recordPlaces.standard`
+  false, `ClipboardStore.recordPlaces = false`, the website's `appSetting`), and every new vault writes
+  `recordPlaces: false` into `settings.app` (apps: `writeNewVaultDefaults`; website: `Vault.create`) so older
+  builds agree. Existing vaults keep an explicit choice; a vault where nobody chose now reads as off in new
+  builds. The Settings line says what it records. Tests: `PrivacyDefaultTests`, `core.test.mjs`, `relay.e2e.mjs`.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

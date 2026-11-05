@@ -345,8 +345,13 @@ public enum SharedSetting: String, CaseIterable, Sendable {
     /// Passwords and codes saved like any other copy (synced, kept), instead of held briefly.
     case saveSensitive
 
-    /// The value before anyone has changed it.
-    public var standard: Bool { self != .cloudAI && self != .saveSensitive }
+    /// The value before anyone has changed it. Location recording is off unless chosen (learn-pivot plan §7:
+    /// many users are under 18, and the Children's Code wants location off by default).
+    public var standard: Bool { self != .cloudAI && self != .saveSensitive && self != .recordPlaces }
+
+    /// Written into every new vault, so builds from before a default changed agree with this one (older
+    /// builds read a missing `recordPlaces` as on; review R3).
+    public static let newVaultDefaults: [SharedSetting: Bool] = [.recordPlaces: false]
 }
 
 extension Library {
@@ -358,6 +363,12 @@ extension Library {
         var out: [SharedSetting: Bool] = [:]
         for key in SharedSetting.allCases { if let value = r[key.rawValue]?.bool { out[key] = value } }
         return out
+    }
+
+    /// Called once when a vault is made (`SharedSetting.newVaultDefaults`).
+    public func writeNewVaultDefaults() async {
+        await engine.set(Dictionary(uniqueKeysWithValues: SharedSetting.newVaultDefaults.map { ($0.key.rawValue, JSONValue.bool($0.value)) }),
+                         record: Self.appSettingsId, kind: "setting")
     }
 
     public func setSharedSetting(_ key: SharedSetting, _ value: Bool) async {

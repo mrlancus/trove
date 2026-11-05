@@ -39,8 +39,8 @@ final class ClipboardStore {
     /// Saving what was copied whenever Trove opens. Synced, and still offered for the shared
     /// setting; iPhone and iPad no longer read the clipboard by themselves (`ClipboardWatcher`).
     var captureOnOpen: Bool { didSet { UserDefaults.standard.set(captureOnOpen, forKey: "clipboard.captureOnOpen") } }
-    /// Keep where you were with each copy and paste (synced: `recordPlaces`).
-    var recordPlaces = true
+    /// Keep where you were with each copy and paste (synced: `recordPlaces`). Off unless chosen (learn-pivot §7).
+    var recordPlaces = false
 
     /// The last copy this device recorded, for the status line in Settings.
     private(set) var lastCaptured: (date: Date, heldBriefly: Bool)?
