@@ -1,4 +1,4 @@
-// TRV1 symmetric mode (docs/PROTOCOL.md §2) for journal segments and attachments.
+// TRV1 symmetric mode (docs/PROTOCOL.md §4) for journal segments and attachments.
 // Byte-compatible with Packages/TroveCore/Sources/TroveCore/Crypto/TRV1.swift and server/src/crypto.ts.
 import { concat, u32 } from "./bytes.js";
 
@@ -52,7 +52,7 @@ export async function decrypt(box, key) {
   return concat(...parts);
 }
 
-/** Opens a sealed (mode 2) container with the vault private key (docs/PROTOCOL.md §2). */
+/** Opens a sealed (mode 2) container with the vault private key (docs/PROTOCOL.md §4). */
 export async function unseal(box, privateKey, vaultPublic) {
   if (!isTRV1(box) || box[4] !== 2) throw new Error("expected a sealed (mode 2) container");
   const chunkSize = new DataView(box.buffer, box.byteOffset + 5, 4).getUint32(0);

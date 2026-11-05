@@ -167,12 +167,35 @@ public struct RelayClient: Sendable {
     // MARK: Vault lifecycle
 
     /// `deviceId`: the journal id this device already uses (kept if free on the relay).
+    /// `createCode`: the relay's 8-digit code (PROTOCOL.md §4), sent only when the relay asked for one
+    /// (`needsCreateCode`).
     public static func createVault(baseURL: URL, publicKey: String, deviceName: String, deviceKind: String, deviceId: String? = nil,
-                                   session: URLSession = .shared) async throws -> Registration {
+                                   createCode: String? = nil, session: URLSession = .shared) async throws -> Registration {
         let client = RelayClient(baseURL: baseURL, session: session)
         var body: [String: Any] = ["vaultPublicKey": publicKey, "deviceName": deviceName, "deviceKind": deviceKind]
         if let deviceId { body["deviceId"] = deviceId }
-        return try await client.json("POST", "/v1/vaults", body: body, expect: [201])
+        var headers = ["Content-Type": "application/json"]
+        if let code = createCode?.trimmingCharacters(in: .whitespaces), !code.isEmpty { headers[createCodeHeader] = code }
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let out = try await client.raw("POST", "/v1/vaults", body: data, headers: headers, expect: [201])
+        return try JSONDecoder().decode(Registration.self, from: out)
+    }
+
+    public static let createCodeHeader = "x-trove-create-code"
+
+    /// Why the relay refused to create a vault, when it was about its code.
+    public enum CreateCodeProblem: Equatable, Sendable {
+        /// No code, or a wrong one (403 `create_code_required`).
+        case needed
+        /// Too many wrong codes; try again in an hour (429 `create_code_limited`).
+        case limited
+    }
+
+    public static func createCodeProblem(_ error: any Error) -> CreateCodeProblem? {
+        guard case TransportError.http(let status, let body) = error else { return nil }
+        if status == 403, body.contains("create_code_required") { return .needed }
+        if status == 429, body.contains("create_code_limited") { return .limited }
+        return nil
     }
 
     public static func join(baseURL: URL, vaultId: String, pairingCode: String, deviceName: String, deviceKind: String, deviceId: String? = nil,

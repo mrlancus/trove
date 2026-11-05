@@ -1631,9 +1631,10 @@ final class AppModel {
         (Bundle.main.object(forInfoDictionaryKey: "TroveDefaultRelay") as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    func connectRelay(_ urlString: String) async throws {
+    /// `createCode`: the relay's 8-digit code, when it asked for one (`RelayClient.createCodeProblem`).
+    func connectRelay(_ urlString: String, createCode: String? = nil) async throws {
         guard let url = URL(string: urlString.trimmingCharacters(in: .whitespaces)) else { throw URLError(.badURL) }
-        try await vault.connectRelay(url)
+        try await vault.connectRelay(url, createCode: createCode)
         try await openLibrary()
     }
 

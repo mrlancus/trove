@@ -1,4 +1,4 @@
-// TRV1 chunked AEAD container (docs/PROTOCOL.md §2), implemented with WebCrypto so the exact same
+// TRV1 chunked AEAD container (docs/PROTOCOL.md §4), implemented with WebCrypto so the exact same
 // file works in the Worker, in the browser extension and in tests. The Swift twin lives in
 // Packages/TroveCore/Sources/TroveCore/Crypto/TRV1.swift.
 

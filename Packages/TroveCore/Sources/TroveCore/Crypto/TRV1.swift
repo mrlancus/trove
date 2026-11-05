@@ -1,7 +1,7 @@
 import Foundation
 import Crypto
 
-/// TRV1 chunked AEAD container (docs/PROTOCOL.md §2). Byte-for-byte compatible with
+/// TRV1 chunked AEAD container (docs/PROTOCOL.md §4). Byte-for-byte compatible with
 /// server/src/crypto.ts. Used for journal segments, attachments and the sealed inbox.
 public enum TRV1 {
     public static let magic = Data("TRV1".utf8)

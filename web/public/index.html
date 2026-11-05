@@ -34,6 +34,11 @@
         <p class="hint">Start a new vault with this browser as its first device. You'll get a recovery code to keep safe.</p>
         <label for="create-name">Name this browser</label>
         <input id="create-name" required maxlength="60">
+        <div id="create-code-row" hidden>
+          <label for="create-code">The relay's 8-digit code</label>
+          <input id="create-code" inputmode="numeric" autocomplete="off" maxlength="16">
+          <p class="hint">This relay only lets people with its code create a vault. Ask whoever runs it. Joining an existing vault needs a setup code instead.</p>
+        </div>
         <button type="submit" class="primary">Create my vault</button>
         <p class="error" role="alert" hidden></p>
       </form>

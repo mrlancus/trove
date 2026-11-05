@@ -1025,3 +1025,20 @@ test("a failed save leaves the local op store readable and is redone in full", a
   assert.deepEqual([...m.keys()].filter((k) => k.startsWith("ops.")).sort(), [...listed].sort(), "no orphaned chunks");
   assert.ok(listed.size > 1, "small chunk limit gives several chunks");
 });
+
+test("creating a vault sends the relay's code and reports when it's needed (PROTOCOL.md §4)", async () => {
+  const { Vault } = await import("../public/core/vault.js");
+  const seen = [];
+  const relay = (status, body) => async (url, init) => { seen.push(init.headers); return new Response(JSON.stringify(body), { status }); };
+  const storage = { get: async () => undefined, set: async () => {}, delete: async () => {}, clear: async () => {} };
+  await assert.rejects(Vault.create(storage, { origin: "https://r", fetch: relay(403, { code: "create_code_required" }) }),
+    (e) => e.code === "create_code_required" && /needs its code/.test(e.message));
+  assert.equal(seen[0]["x-trove-create-code"], undefined);
+  await assert.rejects(Vault.create(storage, { origin: "https://r", createCode: "12345678", fetch: relay(403, { code: "create_code_required" }) }),
+    (e) => e.code === "create_code_required" && /isn't right/.test(e.message));
+  assert.equal(seen[1]["x-trove-create-code"], "12345678");
+  await assert.rejects(Vault.create(storage, { origin: "https://r", createCode: "1", fetch: relay(429, { code: "create_code_limited" }) }),
+    (e) => e.code === "create_code_limited");
+  await assert.rejects(Vault.create(storage, { origin: "https://r", fetch: relay(403, { error: "closed" }) }),
+    (e) => e.code === undefined && /isn't accepting/.test(e.message));
+});

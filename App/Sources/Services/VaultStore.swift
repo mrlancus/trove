@@ -249,10 +249,10 @@ final class VaultStore {
     }
 
     /// Registers this vault with a relay (first device) or attaches using an existing relay vault.
-    func connectRelay(_ url: URL) async throws {
+    func connectRelay(_ url: URL, createCode: String? = nil) async throws {
         guard var config, let keys else { throw VaultError.noKeys }
         let reg = try await RelayClient.createVault(baseURL: url, publicKey: keys.publicKeyBase64URL, deviceName: DeviceInfo.name,
-                                                    deviceKind: DeviceInfo.kind, deviceId: config.deviceId)
+                                                    deviceKind: DeviceInfo.kind, deviceId: config.deviceId, createCode: createCode)
         try Keychain.set(Data(reg.deviceToken.utf8), for: Self.relayTokenAccount)
         if reg.deviceId != config.deviceId {
             // Extremely unlikely (id collision); keep journals consistent by adopting the relay's id for new ops.

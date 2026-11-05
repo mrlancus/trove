@@ -46,6 +46,15 @@ Steps done (plan §9):
   `recordPlaces: false` into `settings.app` (apps: `writeNewVaultDefaults`; website: `Vault.create`) so older
   builds agree. Existing vaults keep an explicit choice; a vault where nobody chose now reads as off in new
   builds. The Settings line says what it records. Tests: `PrivacyDefaultTests`, `core.test.mjs`, `relay.e2e.mjs`.
+- **Step 2b** (vault code, plan §7 E2): `server/src/gate.ts`. With the secret `VAULT_CREATE_CODE` set, `POST
+  /v1/vaults` needs `x-trove-create-code`; 5 wrong per IP an hour, 50 across the relay an hour (then a pause);
+  hashed constant-time compare; `GateObject` Durable Object (migration `v2`). No secret: as before. The website's
+  Create form and the apps' Settings (Turn on the relay / Connect relay) show a code field only when the relay
+  asks. PROTOCOL §4 "Creating a vault". Tests: `server/test/gate.test.ts` (6), `VaultCodeTests`, `core.test.mjs`.
+  **Not deployed.** Your steps: (1) choose an 8-digit code; (2) Cloudflare dashboard → Workers & Pages →
+  trove-relay → Settings → Variables and Secrets → Add → type Secret, name `VAULT_CREATE_CODE` (or `npx wrangler
+  secret put VAULT_CREATE_CODE` in `server/`); (3) say "publish" so the new relay code is deployed. Until both
+  are done, the relay still accepts new vaults from anyone.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

@@ -10,9 +10,9 @@
   // overlap /v1, /dav, /p or /health, so those still reach the Worker.
   "assets": { "directory": "../web/public" },
   "durable_objects": {
-    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }]
+    "bindings": [{ "name": "VAULT", "class_name": "VaultObject" }, { "name": "GATE", "class_name": "GateObject" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VaultObject"] }, { "tag": "v2", "new_sqlite_classes": ["GateObject"] }],
   "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "trove-blobs" }],
   "ai": { "binding": "AI" },
   "vars": {
@@ -23,5 +23,6 @@
     // Set to "false" and redeploy once your vault exists, so nobody else can create vaults here.
     "ALLOW_NEW_VAULTS": "true"
   }
-  // Secret (not in this file): `npx wrangler secret put ANTHROPIC_API_KEY`
+  // Secrets (not in this file): `npx wrangler secret put ANTHROPIC_API_KEY`; `npx wrangler secret put
+  // VAULT_CREATE_CODE` (8 digits) so only people you give the code to can create vaults here (src/gate.ts).
 }

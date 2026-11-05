@@ -19,6 +19,10 @@ export interface Env {
   AI_MONTHLY_LIMIT?: string;
   /** Optional secret that encrypts bridge tokens (Telegram bot, GitHub) at rest (PROTOCOL.md §4 "Bridges"). */
   BRIDGE_KEY?: string;
+  /** The 8-digit code that creating a vault needs (src/gate.ts). Unset: anyone may create, as before. */
+  VAULT_CREATE_CODE?: string;
+  /** Wrong-code counts for VAULT_CREATE_CODE (src/gate.ts). */
+  GATE?: DurableObjectNamespace;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };

@@ -155,15 +155,28 @@ export class Vault {
    * Creates a brand-new vault on this relay with this browser as its first device. Returns the
    * recovery code: the only copy of the vault keys outside this browser's locked key store.
    */
-  static async create(storage, { origin, deviceName = "Web browser", ...options } = {}) {
+  /** `createCode`: the relay's 8-digit code, when it needs one (PROTOCOL.md §4). Errors about the code carry
+   * `code` ("create_code_required" or "create_code_limited"). */
+  static async create(storage, { origin, deviceName = "Web browser", createCode = "", ...options } = {}) {
     const secrets = await generateVaultSecrets();
     const doFetch = options.fetch ?? ((...a) => fetch(...a));
+    const headers = { "content-type": "application/json" };
+    if (createCode) headers["x-trove-create-code"] = createCode;
     const res = await doFetch(`${origin}/v1/vaults`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify({ vaultPublicKey: secrets.publicKey, deviceName, deviceKind: "web", deviceId: crypto.randomUUID().toUpperCase() }),
     });
-    if (res.status === 403) throw new Error("This relay isn't accepting new vaults.");
+    if (res.status === 403 || res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      if (body.code === "create_code_required" || body.code === "create_code_limited") {
+        const e = new Error(body.code === "create_code_limited" ? "Too many wrong codes. Try again in an hour."
+          : createCode ? "That code isn't right." : "This relay needs its code to create a vault.");
+        e.code = body.code;
+        throw e;
+      }
+      throw new Error("This relay isn't accepting new vaults.");
+    }
     if (!res.ok) throw new Error(`The relay said ${res.status}: ${await res.text()}`);
     const created = await res.json();
     const payload = { v: 1, vaultId: created.vaultId, keys: secrets.exported, encrypted: true, relayURL: origin, relayVaultId: created.vaultId };

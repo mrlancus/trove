@@ -154,9 +154,19 @@ Base: `https://<worker>/v1`. Auth: `Authorization: Bearer <token>`.
 | **device** | Everything in its vault |
 | **inbox** | Only `POST /vaults/:v/inbox` and WebDAV uploads (write-only) |
 
+**Creating a vault: the create code** (2026-11-05, learn-pivot plan §7 E2). When the Worker secret
+`VAULT_CREATE_CODE` is set (8 digits, chosen by the relay's owner), `POST /vaults` needs the header
+`x-trove-create-code: <code>`. Order of checks: `ALLOW_NEW_VAULTS: "false"` → `403` (closed completely);
+too many wrong codes → `429 {"error", "code": "create_code_limited"}`; no code or a wrong one →
+`403 {"error", "code": "create_code_required"}`. Codes are compared by SHA-256 hash in constant time. Wrong
+codes are limited to 5 per IP (`cf-connecting-ip`) an hour, after which that IP's next try is refused even with
+the right code, and to 50 an hour across the relay, after which creation pauses for everyone for an hour
+(Durable Object `GateObject`, name `create`). Without the secret the relay behaves as before. Clients show a
+code field only after a `create_code_*` answer. Joining (pairing codes) and recovery are unaffected.
+
 | Method & path | Auth | Body → Response |
 |---|---|---|
-| `POST /vaults` | none | `{vaultPublicKey, deviceName, deviceKind?, deviceId?}` → `{vaultId, deviceId, deviceToken, inboxToken}` |
+| `POST /vaults` | none (the create code, below) | `{vaultPublicKey, deviceName, deviceKind?, deviceId?}` → `{vaultId, deviceId, deviceToken, inboxToken}` |
 | `POST /vaults/:v/pairings` | device | → `{pairingCode, expiresAt}` (single use, 10 min) |
 | `POST /vaults/:v/devices` | none (pairing code in body) | `{pairingCode, deviceName, deviceKind?, deviceId?}` → `{deviceId, deviceToken}` |
 | `GET /vaults/:v/devices` | device | → `{devices:[{deviceId,name,kind,createdAt,lastSeenAt,revoked}]}` |

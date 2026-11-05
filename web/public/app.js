@@ -105,8 +105,14 @@ function showSetup(message) {
     });
   };
   wire($("#create-form"), async () => {
-    const { vault, recoveryCode } = await Vault.create(storage, { origin: location.origin, deviceName: $("#create-name").value.trim() });
-    showRecovery(vault, recoveryCode);
+    try {
+      const { vault, recoveryCode } = await Vault.create(storage, { origin: location.origin, deviceName: $("#create-name").value.trim(), createCode: $("#create-code").value.trim() });
+      showRecovery(vault, recoveryCode);
+    } catch (e) {
+      // The relay asked for its code (PROTOCOL.md §4): show the field, then let the person try again.
+      if (e.code === "create_code_required" || e.code === "create_code_limited") { $("#create-code-row").hidden = false; $("#create-code").focus(); }
+      throw e;
+    }
   });
   wire($("#setup-form"), async () => {
     showMain(await Vault.join(storage, $("#setup-code").value, { origin: location.origin, deviceName: $("#device-name").value.trim() }));

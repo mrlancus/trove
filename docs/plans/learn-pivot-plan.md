@@ -554,7 +554,7 @@ we eventually make our own backlog and it becomes virtually free"
 
 ### E2. New vaults on the relay need an 8-digit code (your choice, 2026-11-04)
 - **Today** the relay accepts a new vault from anyone: `ALLOW_NEW_VAULTS: "true"` in `server/wrangler.jsonc`,
-  checked in `server/src/index.ts:32` (PROTOCOL §2, `POST /vaults`).
+  checked in `server/src/index.ts:32` (PROTOCOL §4, `POST /vaults`; the plan said §2, fixed 2026-11-05).
   - NOTES says to set it to `"false"` once your vault exists, which hasn't been done.
   - Anyone who finds the URL can make vaults, which use your relay's storage, and its AI if a key is ever
     added there.

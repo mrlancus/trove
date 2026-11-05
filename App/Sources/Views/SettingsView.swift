@@ -187,6 +187,8 @@ struct WebSection: View {
     @State private var code: String?
     @State private var working = false
     @State private var error: String?
+    @State private var createCode = ""
+    @State private var codeProblem: RelayClient.CreateCodeProblem?
 
     var body: some View {
         Section {
@@ -208,6 +210,7 @@ struct WebSection: View {
             } else {
                 Text("The website syncs through your Cloudflare relay. Turn it on to use Trove in any browser, with the browser extension, email-in and GoodNotes backups.")
                     .font(.callout).foregroundStyle(.secondary)
+                if let codeProblem { RelayCreateCodeField(code: $createCode, problem: codeProblem) }
                 if let relay = AppModel.defaultRelay {
                     Button { turnOnRelay(relay) } label: {
                         BusyLabel("Turn on the relay (\(URL(string: relay)?.host ?? relay))", busy: working)
@@ -226,8 +229,9 @@ struct WebSection: View {
         working = true
         error = nil
         Task {
-            do { try await model.connectRelay(url); working = false; makeCode() } catch {
-                self.error = error.localizedDescription
+            do { try await model.connectRelay(url, createCode: createCode); working = false; codeProblem = nil; makeCode() } catch {
+                codeProblem = RelayClient.createCodeProblem(error)
+                self.error = codeProblem == nil ? error.localizedDescription : nil
                 working = false
             }
         }
@@ -278,11 +282,32 @@ private struct DevicesSection: View {
     private func load() async { devices = (try? await model.vault.relayClient?.devices()) ?? [] }
 }
 
+/// The relay's 8-digit code to create a vault (PROTOCOL.md §4), shown only once the relay asked for it.
+private struct RelayCreateCodeField: View {
+    @Binding var code: String
+    let problem: RelayClient.CreateCodeProblem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            SecureField("The relay's 8-digit code", text: $code)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+            Text(problem == .limited
+                 ? "Too many wrong codes. Try again in an hour."
+                 : "This relay only lets people with its code create a vault. Ask whoever runs it (it's set in Cloudflare as VAULT_CREATE_CODE). Joining an existing vault needs a setup code instead.")
+                .font(.caption).foregroundStyle(problem == .limited ? .orange : .secondary)
+        }
+    }
+}
+
 private struct RelaySection: View {
     @Environment(AppModel.self) private var model
     @State private var url = AppModel.defaultRelay ?? ""
     @State private var error: String?
     @State private var working = false
+    @State private var createCode = ""
+    @State private var codeProblem: RelayClient.CreateCodeProblem?
 
     var body: some View {
         Section {
@@ -308,10 +333,18 @@ private struct RelaySection: View {
                     .textContentType(.URL)
                     .textInputAutocapitalization(.never)
                     #endif
+                if let codeProblem { RelayCreateCodeField(code: $createCode, problem: codeProblem) }
                 Button {
                     working = true
                     Task {
-                        do { try await model.connectRelay(url); error = nil } catch { self.error = error.localizedDescription }
+                        do {
+                            try await model.connectRelay(url, createCode: createCode)
+                            error = nil
+                            codeProblem = nil
+                        } catch {
+                            codeProblem = RelayClient.createCodeProblem(error)
+                            self.error = codeProblem == nil ? error.localizedDescription : nil
+                        }
                         working = false
                     }
                 } label: { BusyLabel("Connect relay", busy: working) }
