@@ -1,0 +1,401 @@
+Command line invocation:
+    /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/xcodebuild -project App/Trove.xcodeproj -scheme TroveiOSUITests -destination "platform=iOS Simulator,name=iPad Air 13-inch (M2)" -derivedDataPath build/udd -resultBundlePath build/tests/ui-iPad_Air_13-inch__M2_.xcresult "-skip-testing:TroveUITests/TroveUITests/testLaunchTime" test-without-building
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  TroveCore: /Users/runner/work/trove/trove/Packages/TroveCore
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.3
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 5.0.1
+
+Writing result bundle at path:
+	/Users/runner/work/trove/trove/build/tests/ui-iPad_Air_13-inch__M2_.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A, OS:26.2, name:iPad Air 13-inch (M2) }
+{ platform:iOS Simulator, arch:x86_64, id:81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A, OS:26.2, name:iPad Air 13-inch (M2) }
+2026-11-05 10:48:17.614726+0000 TroveUITests-Runner[55450:158880] [Default] Running tests...
+2026-11-05 10:48:17.652036+0000 TroveUITests-Runner[55450:158880] [UIKit App Config] Update the Info.plist: Launch screens will soon be required.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-11-05 10:48:35.861.
+Test Suite 'TroveUITests.xctest' started at 2026-11-05 10:48:35.861.
+Test Suite 'TroveUITests' started at 2026-11-05 10:48:35.862.
+Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' started.
+    t =     0.00s Start Test at 2026-11-05 10:48:35.864
+    t =     0.76s Set Up
+    t =     0.76s Open com.mrlancus.trove
+    t =     0.76s     Launch com.mrlancus.trove
+    t =    31.95s         Setting up automation session
+    t =    35.79s         Wait for com.mrlancus.trove to idle
+    t =    37.11s Checking existence of `"Sketches" StaticText`
+    t =    38.00s Waiting 10.0s for "Import" StaticText to exist
+    t =    39.01s     Checking `Expect predicate `existsNoRetry == 1` for object "Import" StaticText`
+    t =    39.01s         Checking existence of `"Import" StaticText`
+    t =    48.29s         Capturing element debug description
+    t =    48.29s     Checking existence of `"Import" StaticText`
+    t =    52.28s Checking existence of `"Connections" StaticText`
+    t =    52.56s Getting device orientation
+    t =    52.57s Find the Target Application 'com.mrlancus.trove'
+    t =    53.23s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-sidebar-no-connections'
+    t =    53.23s Tear Down
+Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (53.973 seconds).
+Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' started.
+    t =     0.00s Start Test at 2026-11-05 10:49:29.837
+    t =     0.05s Set Up
+    t =     0.05s Open com.mrlancus.trove
+    t =     0.05s     Launch com.mrlancus.trove
+    t =     0.05s         Terminate com.mrlancus.trove:56199
+    t =     1.88s         Setting up automation session
+    t =     3.05s         Wait for com.mrlancus.trove to idle
+    t =     5.07s Checking existence of `"Sketches" StaticText`
+    t =     6.42s Waiting 10.0s for "Connections" StaticText to exist
+    t =     7.43s     Checking `Expect predicate `existsNoRetry == 1` for object "Connections" StaticText`
+    t =     7.43s         Checking existence of `"Connections" StaticText`
+    t =     7.94s Tap "Connections" StaticText
+    t =     7.94s     Wait for com.mrlancus.trove to idle
+    t =     7.94s     Find the "Connections" StaticText
+    t =     8.34s     Check for interrupting elements affecting "Connections" StaticText
+    t =     8.49s         Wait for com.apple.springboard to idle
+    t =     8.62s     Synthesize event
+    t =     9.05s     Wait for com.mrlancus.trove to idle
+    t =     9.92s Waiting 20.0s for "Notes" StaticText to exist
+    t =    10.93s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    10.93s         Checking existence of `"Notes" StaticText`
+    t =    11.35s Getting device orientation
+    t =    11.36s Find the Target Application 'com.mrlancus.trove'
+    t =    12.82s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-connections'
+    t =    12.82s Tear Down
+Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (13.074 seconds).
+Test Case '-[TroveUITests.TroveUITests testDevelop]' started.
+    t =     0.00s Start Test at 2026-11-05 10:49:42.911
+    t =     0.03s Set Up
+    t =     0.03s Open com.mrlancus.trove
+    t =     0.03s     Launch com.mrlancus.trove
+    t =     0.03s         Terminate com.mrlancus.trove:57365
+    t =     1.98s         Setting up automation session
+    t =     3.25s         Wait for com.mrlancus.trove to idle
+    t =     5.30s Checking existence of `"Sketches" StaticText`
+    t =     6.57s Checking existence of `"Learn" Button`
+    t =     6.75s Waiting 10.0s for "Learn" StaticText to exist
+    t =     7.75s     Checking `Expect predicate `existsNoRetry == 1` for object "Learn" StaticText`
+    t =     7.75s         Checking existence of `"Learn" StaticText`
+    t =     7.96s Tap "Learn" StaticText
+    t =     7.96s     Wait for com.mrlancus.trove to idle
+    t =     7.97s     Find the "Learn" StaticText
+    t =     8.17s     Check for interrupting elements affecting "Learn" StaticText
+    t =     8.28s         Wait for com.apple.springboard to idle
+    t =     8.31s     Synthesize event
+    t =     8.63s     Wait for com.mrlancus.trove to idle
+    t =     9.25s Waiting 20.0s for "Your courses" StaticText to exist
+    t =    10.26s     Checking `Expect predicate `existsNoRetry == 1` for object "Your courses" StaticText`
+    t =    10.26s         Checking existence of `"Your courses" StaticText`
+    t =    10.39s Getting device orientation
+    t =    10.39s Find the Target Application 'com.mrlancus.trove'
+    t =    10.76s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-develop'
+    t =    10.76s Tap "Add a course" Button
+    t =    10.76s     Wait for com.mrlancus.trove to idle
+    t =    10.76s     Find the "Add a course" Button
+    t =    10.92s     Check for interrupting elements affecting "Add a course" Button
+    t =    11.03s         Wait for com.apple.springboard to idle
+    t =    11.06s     Synthesize event
+    t =    11.35s     Wait for com.mrlancus.trove to idle
+    t =    11.81s Waiting 10.0s for "Add a course" NavigationBar to exist
+    t =    12.88s     Checking `Expect predicate `existsNoRetry == 1` for object "Add a course" NavigationBar`
+    t =    12.88s         Checking existence of `"Add a course" NavigationBar`
+    t =    13.08s Getting device orientation
+    t =    13.08s Find the Target Application 'com.mrlancus.trove'
+    t =    13.50s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-develop-courses'
+    t =    13.51s Waiting 5.0s for SearchField (First Match) to exist
+    t =    14.54s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    14.54s         Checking existence of `SearchField (First Match)`
+    t =    14.64s Tap SearchField (First Match)
+    t =    14.64s     Wait for com.mrlancus.trove to idle
+    t =    14.64s     Find the SearchField (First Match)
+    t =    14.71s     Check for interrupting elements affecting "Subject, board or code" SearchField
+    t =    14.86s         Wait for com.apple.springboard to idle
+    t =    14.88s     Synthesize event
+    t =    15.19s     Wait for com.mrlancus.trove to idle
+    t =    17.34s Type 'physics' into "Subject, board or code" SearchField
+    t =    17.55s     Wait for com.mrlancus.trove to idle
+    t =    17.72s     Find the "Subject, board or code" SearchField
+    t =    18.34s     Check for interrupting elements affecting "Subject, board or code" SearchField
+    t =    18.59s         Wait for com.apple.springboard to idle
+    t =    18.63s     Synthesize event
+    t =    18.97s     Wait for com.mrlancus.trove to idle
+    t =    20.09s Getting device orientation
+    t =    20.09s Find the Target Application 'com.mrlancus.trove'
+    t =    20.48s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-develop-courses-physics'
+    t =    20.48s Waiting 5.0s for Button (First Match) to exist
+    t =    21.49s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    21.49s         Checking existence of `Button (First Match)`
+    t =    22.06s Tap Button (First Match)
+    t =    22.06s     Wait for com.mrlancus.trove to idle
+    t =    22.07s     Find the Button (First Match)
+    t =    22.47s     Check for interrupting elements affecting "AQA A-level, Spec 7408 · 80 papers · 2017–2025" Button
+    t =    22.62s         Wait for com.apple.springboard to idle
+    t =    22.64s     Synthesize event
+    t =    23.03s     Wait for com.mrlancus.trove to idle
+    t =    24.02s Waiting 10.0s for "A-level Physics" StaticText to exist
+    t =    25.07s     Checking `Expect predicate `existsNoRetry == 1` for object "A-level Physics" StaticText`
+    t =    25.07s         Checking existence of `"A-level Physics" StaticText`
+    t =    25.27s Tap "A-level Physics" StaticText
+    t =    25.27s     Wait for com.mrlancus.trove to idle
+    t =    25.40s     Find the "A-level Physics" StaticText
+    t =    25.64s     Check for interrupting elements affecting "A-level Physics" StaticText
+    t =    25.77s         Wait for com.apple.springboard to idle
+    t =    25.79s     Synthesize event
+    t =    26.08s     Wait for com.mrlancus.trove to idle
+    t =    29.44s Getting device orientation
+    t =    29.45s Find the Target Application 'com.mrlancus.trove'
+    t =    29.90s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-develop-course'
+    t =    29.91s Tear Down
+Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (30.205 seconds).
+Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' started.
+    t =     0.00s Start Test at 2026-11-05 10:50:13.118
+    t =     0.06s Set Up
+    t =     0.06s Open com.mrlancus.trove
+    t =     0.06s     Launch com.mrlancus.trove
+    t =     0.06s         Terminate com.mrlancus.trove:57971
+    t =     1.83s         Setting up automation session
+    t =     3.79s         Wait for com.mrlancus.trove to idle
+    t =     5.88s Waiting 60.0s for "Up next" StaticText to exist
+    t =     6.96s     Checking `Expect predicate `existsNoRetry == 1` for object "Up next" StaticText`
+    t =     6.96s         Checking existence of `"Up next" StaticText`
+    t =     7.70s Get number of matches for: Descendants matching type Button
+    t =    13.17s Waiting 10.0s for "Learn" StaticText to exist
+    t =    14.18s     Checking `Expect predicate `existsNoRetry == 1` for object "Learn" StaticText`
+    t =    14.18s         Checking existence of `"Learn" StaticText`
+    t =    14.54s Checking existence of `"Home" StaticText`
+    t =    14.61s Find the "Home" StaticText
+    t =    14.68s Find the "Learn" StaticText
+    t =    15.10s Find the "Learn" StaticText
+    t =    15.51s Find the "Sketches" StaticText
+    t =    16.40s Tap "Learn" StaticText
+    t =    16.40s     Wait for com.mrlancus.trove to idle
+    t =    16.40s     Find the "Learn" StaticText
+    t =    17.90s     Check for interrupting elements affecting "Learn" StaticText
+    t =    18.05s         Wait for com.apple.springboard to idle
+    t =    18.08s     Synthesize event
+    t =    18.39s     Wait for com.mrlancus.trove to idle
+    t =    19.03s Waiting 20.0s for "Your courses" StaticText to exist
+    t =    20.05s     Checking `Expect predicate `existsNoRetry == 1` for object "Your courses" StaticText`
+    t =    20.05s         Checking existence of `"Your courses" StaticText`
+    t =    20.21s Getting device orientation
+    t =    20.21s Find the Target Application 'com.mrlancus.trove'
+    t =    20.57s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-learn'
+    t =    20.57s Tear Down
+Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (20.973 seconds).
+Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' started.
+    t =     0.00s Start Test at 2026-11-05 10:50:34.092
+    t =     0.03s Set Up
+    t =     0.03s Open com.mrlancus.trove
+    t =     0.03s     Launch com.mrlancus.trove
+    t =     0.03s         Terminate com.mrlancus.trove:59192
+    t =     1.66s         Setting up automation session
+    t =     2.85s         Wait for com.mrlancus.trove to idle
+    t =     4.97s Waiting 60.0s for "Up next" StaticText to exist
+    t =     6.01s     Checking `Expect predicate `existsNoRetry == 1` for object "Up next" StaticText`
+    t =     6.01s         Checking existence of `"Up next" StaticText`
+    t =     6.32s Checking existence of `"New sketch" Button`
+    t =    11.23s Getting device orientation
+    t =    11.23s Find the Target Application 'com.mrlancus.trove'
+    t =    11.66s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-home'
+    t =    11.66s Checking existence of `"Sketches" StaticText`
+    t =    12.03s Getting device orientation
+    t =    12.03s Find the Target Application 'com.mrlancus.trove'
+    t =    12.31s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-sidebar'
+    t =    12.31s Waiting 10.0s for "Notes" StaticText to exist
+    t =    13.34s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    13.34s         Checking existence of `"Notes" StaticText`
+    t =    13.66s Tap "Notes" StaticText
+    t =    13.66s     Wait for com.mrlancus.trove to idle
+    t =    13.66s     Find the "Notes" StaticText
+    t =    13.96s     Check for interrupting elements affecting "Notes" StaticText
+    t =    14.07s         Wait for com.apple.springboard to idle
+    t =    14.10s     Synthesize event
+    t =    14.40s     Wait for com.mrlancus.trove to idle
+    t =    17.85s Getting device orientation
+    t =    17.85s Find the Target Application 'com.mrlancus.trove'
+    t =    18.27s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-notes'
+    t =    18.28s Swipe up Window (First Match)
+    t =    18.28s     Wait for com.mrlancus.trove to idle
+    t =    18.28s     Find the Window (First Match)
+    t =    18.30s     Check for interrupting elements affecting Window
+    t =    18.41s         Wait for com.apple.springboard to idle
+    t =    18.43s     Synthesize event
+    t =    18.82s     Wait for com.mrlancus.trove to idle
+    t =    23.10s Swipe down Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    23.10s     Wait for com.mrlancus.trove to idle
+    t =    23.11s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    23.12s     Check for interrupting elements affecting Window
+    t =    23.23s         Wait for com.apple.springboard to idle
+    t =    23.25s     Synthesize event
+    t =    23.65s     Wait for com.mrlancus.trove to idle
+    t =    29.49s Swipe up Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    29.49s     Wait for com.mrlancus.trove to idle
+    t =    29.49s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    29.51s     Check for interrupting elements affecting Window
+    t =    29.63s         Wait for com.apple.springboard to idle
+    t =    29.66s     Synthesize event
+    t =    30.05s     Wait for com.mrlancus.trove to idle
+    t =    34.28s Swipe down Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    34.29s     Wait for com.mrlancus.trove to idle
+    t =    34.29s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    34.31s     Check for interrupting elements affecting Window
+    t =    34.47s         Wait for com.apple.springboard to idle
+    t =    34.50s     Synthesize event
+    t =    34.89s     Wait for com.mrlancus.trove to idle
+    t =    39.72s Swipe up Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    39.72s     Wait for com.mrlancus.trove to idle
+    t =    39.72s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    39.73s     Check for interrupting elements affecting Window
+    t =    39.84s         Wait for com.apple.springboard to idle
+    t =    39.86s     Synthesize event
+    t =    40.25s     Wait for com.mrlancus.trove to idle
+    t =    44.48s Swipe down Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    44.48s     Wait for com.mrlancus.trove to idle
+    t =    44.48s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    44.49s     Check for interrupting elements affecting Window
+    t =    44.60s         Wait for com.apple.springboard to idle
+    t =    44.62s     Synthesize event
+    t =    45.01s     Wait for com.mrlancus.trove to idle
+    t =    49.82s Swipe up Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    49.82s     Wait for com.mrlancus.trove to idle
+    t =    49.83s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    49.84s     Check for interrupting elements affecting Window
+    t =    49.95s         Wait for com.apple.springboard to idle
+    t =    49.97s     Synthesize event
+    t =    50.37s     Wait for com.mrlancus.trove to idle
+    t =    54.59s Swipe down Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    54.59s     Wait for com.mrlancus.trove to idle
+    t =    54.59s     Find the Window at {{0.0, 0.0}, {1024.0, 1366.0}}
+    t =    54.60s     Check for interrupting elements affecting Window
+    t =    54.71s         Wait for com.apple.springboard to idle
+    t =    54.74s     Synthesize event
+    t =    55.13s     Wait for com.mrlancus.trove to idle
+/Users/runner/work/trove/trove/App/UITests/TroveUITests.swift:75: Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' measured [Duration (Scroll_Deceleration), s] average: 2.416, relative standard deviation: 0.028%, values: [2.416220, 2.416843, 2.415191], performanceMetricID:com.apple.dt.XCTMetric_OSSignpost-Scroll_Deceleration.duration, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.000, maxStandardDeviation: 0.000
+    t =    60.23s Getting device orientation
+    t =    60.23s Find the Target Application 'com.mrlancus.trove'
+    t =    60.56s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-notes-scrolled'
+    t =    60.56s Tear Down
+Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (60.882 seconds).
+Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' started.
+    t =     0.00s Start Test at 2026-11-05 10:51:34.974
+    t =     0.02s Set Up
+    t =     0.03s Open com.mrlancus.trove
+    t =     0.03s     Launch com.mrlancus.trove
+    t =     0.03s         Terminate com.mrlancus.trove:59971
+    t =     1.74s         Setting up automation session
+    t =     3.66s         Wait for com.mrlancus.trove to idle
+    t =     5.80s Checking existence of `"Sketches" StaticText`
+    t =     7.47s Waiting 10.0s for "Sketches" StaticText to exist
+    t =     8.53s     Checking `Expect predicate `existsNoRetry == 1` for object "Sketches" StaticText`
+    t =     8.53s         Checking existence of `"Sketches" StaticText`
+    t =     8.93s Tap "Sketches" StaticText
+    t =     8.93s     Wait for com.mrlancus.trove to idle
+    t =     9.17s     Find the "Sketches" StaticText
+    t =     9.59s     Check for interrupting elements affecting "Sketches" StaticText
+    t =     9.77s         Wait for com.apple.springboard to idle
+    t =     9.82s     Synthesize event
+    t =    10.13s     Wait for com.mrlancus.trove to idle
+    t =    11.50s Waiting 30.0s for "Generated notebook" StaticText to exist
+    t =    12.53s     Checking `Expect predicate `existsNoRetry == 1` for object "Generated notebook" StaticText`
+    t =    12.53s         Checking existence of `"Generated notebook" StaticText`
+    t =    13.00s Tap "Generated notebook" StaticText
+    t =    13.00s     Wait for com.mrlancus.trove to idle
+    t =    13.01s     Find the "Generated notebook" StaticText
+    t =    13.37s     Check for interrupting elements affecting "Generated notebook" StaticText
+    t =    13.47s         Wait for com.apple.springboard to idle
+    t =    13.50s     Synthesize event
+    t =    13.79s     Wait for com.mrlancus.trove to idle
+    t =    17.18s Getting device orientation
+    t =    17.19s Find the Target Application 'com.mrlancus.trove'
+    t =    17.61s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-notebook-item'
+    t =    17.61s Swipe up Window (First Match)
+    t =    17.61s     Wait for com.mrlancus.trove to idle
+    t =    17.62s     Find the Window (First Match)
+    t =    17.63s     Check for interrupting elements affecting Window
+    t =    17.79s         Wait for com.apple.springboard to idle
+    t =    17.81s     Synthesize event
+    t =    18.24s     Wait for com.mrlancus.trove to idle
+    t =    18.75s Getting device orientation
+    t =    18.76s Find the Target Application 'com.mrlancus.trove'
+    t =    19.18s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-notebook-item-scrolled'
+    t =    19.18s Tear Down
+Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (19.448 seconds).
+Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' started.
+    t =     0.00s Start Test at 2026-11-05 10:51:54.423
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:62308
+    t =     1.69s         Setting up automation session
+    t =     2.88s         Wait for com.mrlancus.trove to idle
+    t =     4.88s Checking existence of `"Sketches" StaticText`
+    t =     6.33s Setting device orientation to Landscape Left
+    t =     6.34s     Device orientation changed to Landscape Left
+    t =     6.48s     Interface orientation changed to Landscape Right
+    t =     6.95s     Wait for com.mrlancus.trove to idle
+    t =    12.88s     Wait for com.apple.springboard to idle
+    t =    14.91s Getting device orientation
+    t =    14.91s Find the Target Application 'com.mrlancus.trove'
+    t =    15.28s Added attachment named 'iPad_Air_13-inch_(M2)-landscape-sidebar'
+    t =    15.28s Setting device orientation to Portrait
+    t =    15.28s     Device orientation changed to Portrait
+    t =    15.40s     Interface orientation changed to Portrait
+    t =    15.46s     Wait for com.mrlancus.trove to idle
+    t =    16.75s     Wait for com.apple.springboard to idle
+    t =    17.76s Tear Down
+Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (18.013 seconds).
+Test Case '-[TroveUITests.TroveUITests testSearch]' started.
+    t =     0.00s Start Test at 2026-11-05 10:52:12.436
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:63005
+    t =     1.63s         Setting up automation session
+    t =     2.89s         Wait for com.mrlancus.trove to idle
+    t =     4.88s Checking existence of `"Sketches" StaticText`
+    t =     5.99s Waiting 5.0s for SearchField (First Match) to exist
+    t =     7.00s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =     7.00s         Checking existence of `SearchField (First Match)`
+    t =     8.58s Waiting 10.0s for SearchField (First Match) to exist
+    t =     9.60s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =     9.60s         Checking existence of `SearchField (First Match)`
+    t =     9.66s Tap SearchField (First Match)
+    t =     9.66s     Wait for com.mrlancus.trove to idle
+    t =     9.66s     Find the SearchField (First Match)
+    t =     9.72s     Check for interrupting elements affecting "Search everything… try tag:recipe or is:pinned" SearchField
+    t =     9.86s         Wait for com.apple.springboard to idle
+    t =     9.88s     Synthesize event
+    t =    10.21s     Wait for com.mrlancus.trove to idle
+    t =    12.70s Find the "Search everything… try tag:recipe or is:pinned" SearchField
+    t =    12.86s Type 'momentum' into "Search everything… try tag:recipe or is:pinned" SearchField
+    t =    12.86s     Wait for com.mrlancus.trove to idle
+    t =    12.87s     Find the "Search everything… try tag:recipe or is:pinned" SearchField
+    t =    13.00s     Check for interrupting elements affecting "Search everything… try tag:recipe or is:pinned" SearchField
+    t =    13.17s         Wait for com.apple.springboard to idle
+    t =    13.19s     Synthesize event
+    t =    13.53s     Wait for com.mrlancus.trove to idle
+    t =    15.57s Getting device orientation
+    t =    15.58s Find the Target Application 'com.mrlancus.trove'
+    t =    16.09s Added attachment named 'iPad_Air_13-inch_(M2)-portrait-search'
+    t =    16.09s Tear Down
+Test Case '-[TroveUITests.TroveUITests testSearch]' passed (16.458 seconds).
+Test Suite 'TroveUITests' passed at 2026-11-05 10:52:28.894.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.032) seconds
+Test Suite 'TroveUITests.xctest' passed at 2026-11-05 10:52:28.894.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.033) seconds
+Test Suite 'Selected tests' passed at 2026-11-05 10:52:28.895.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.034) seconds
+2026-11-05 10:52:52.654 xcodebuild[52179:149155] [MT] IDETestOperationsObserverDebug: 392.706 elapsed -- Testing started completed.
+2026-11-05 10:52:52.654 xcodebuild[52179:149155] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-05 10:52:52.654 xcodebuild[52179:149155] [MT] IDETestOperationsObserverDebug: 392.706 sec, +392.706 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/trove/trove/build/tests/ui-iPad_Air_13-inch__M2_.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

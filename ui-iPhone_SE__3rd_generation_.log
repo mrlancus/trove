@@ -1,0 +1,605 @@
+Command line invocation:
+    /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/xcodebuild -project App/Trove.xcodeproj -scheme TroveiOSUITests -destination "platform=iOS Simulator,name=iPhone SE (3rd generation)" -derivedDataPath build/udd -resultBundlePath build/tests/ui-iPhone_SE__3rd_generation_.xcresult test-without-building
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.3
+  TroveCore: /Users/runner/work/trove/trove/Packages/TroveCore
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 5.0.1
+
+Writing result bundle at path:
+	/Users/runner/work/trove/trove/build/tests/ui-iPhone_SE__3rd_generation_.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:B220EC43-535F-472F-935A-5B2D0E9F2975, OS:26.2, name:iPhone SE (3rd generation) }
+{ platform:iOS Simulator, arch:x86_64, id:B220EC43-535F-472F-935A-5B2D0E9F2975, OS:26.2, name:iPhone SE (3rd generation) }
+2026-11-05 10:27:14.575010+0000 TroveUITests-Runner[10142:34421] [Default] Running tests...
+Test Suite 'All tests' started at 2026-11-05 10:27:33.453.
+Test Suite 'TroveUITests.xctest' started at 2026-11-05 10:27:33.454.
+Test Suite 'TroveUITests' started at 2026-11-05 10:27:33.454.
+Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' started.
+    t =     0.00s Start Test at 2026-11-05 10:27:33.455
+    t =     0.56s Set Up
+    t =     0.58s Open com.mrlancus.trove
+    t =     0.58s     Launch com.mrlancus.trove
+    t =    31.38s         Setting up automation session
+    t =    37.25s         Wait for com.mrlancus.trove to idle
+    t =    38.69s Checking existence of `"Sketches" StaticText`
+    t =    39.35s Checking existence of `"Library" Button`
+    t =    39.57s Find the "Library" Button
+    t =    39.61s Tap "Library" Button
+    t =    39.61s     Wait for com.mrlancus.trove to idle
+    t =    39.61s     Find the "Library" Button
+    t =    40.63s     Check for interrupting elements affecting "Library" Button
+    t =    40.77s     Synthesize event
+    t =    41.37s     Wait for com.mrlancus.trove to idle
+    t =    43.92s Checking existence of `"Recent" NavigationBar`
+    t =    44.02s Checking existence of `Button (First Match)`
+    t =    44.08s Tap Button (First Match)
+    t =    44.08s     Wait for com.mrlancus.trove to idle
+    t =    44.09s     Find the Button (First Match)
+    t =    44.17s     Check for interrupting elements affecting "BackButton" Button
+    t =    44.22s     Synthesize event
+    t =    44.53s     Wait for com.mrlancus.trove to idle
+    t =    46.43s Checking existence of `"Sketches" StaticText`
+    t =    46.68s Waiting 10.0s for "Import" StaticText to exist
+    t =    47.71s     Checking `Expect predicate `existsNoRetry == 1` for object "Import" StaticText`
+    t =    47.71s         Checking existence of `"Import" StaticText`
+    t =    47.93s Checking existence of `"Connections" StaticText`
+    t =    48.15s Getting device orientation
+    t =    48.15s Find the Target Application 'com.mrlancus.trove'
+    t =    48.28s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-sidebar-no-connections'
+    t =    48.28s Tear Down
+Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (48.673 seconds).
+Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' started.
+    t =     0.00s Start Test at 2026-11-05 10:28:22.128
+    t =     0.05s Set Up
+    t =     0.05s Open com.mrlancus.trove
+    t =     0.05s     Launch com.mrlancus.trove
+    t =     0.05s         Terminate com.mrlancus.trove:11965
+    t =     1.62s         Setting up automation session
+    t =     2.97s         Wait for com.mrlancus.trove to idle
+    t =     4.97s Checking existence of `"Sketches" StaticText`
+    t =     5.32s Checking existence of `"Library" Button`
+    t =     5.53s Find the "Library" Button
+    t =     5.58s Tap "Library" Button
+    t =     5.58s     Wait for com.mrlancus.trove to idle
+    t =     5.58s     Find the "Library" Button
+    t =     5.63s     Check for interrupting elements affecting "Library" Button
+    t =     5.68s     Synthesize event
+    t =     6.01s     Wait for com.mrlancus.trove to idle
+    t =     8.28s Checking existence of `"Recent" NavigationBar`
+    t =     8.36s Checking existence of `Button (First Match)`
+    t =     8.41s Tap Button (First Match)
+    t =     8.41s     Wait for com.mrlancus.trove to idle
+    t =     8.41s     Find the Button (First Match)
+    t =     8.46s     Check for interrupting elements affecting "BackButton" Button
+    t =     8.51s     Synthesize event
+    t =     8.82s     Wait for com.mrlancus.trove to idle
+    t =    10.61s Checking existence of `"Sketches" StaticText`
+    t =    10.79s Waiting 10.0s for "Connections" StaticText to exist
+    t =    11.81s     Checking `Expect predicate `existsNoRetry == 1` for object "Connections" StaticText`
+    t =    11.81s         Checking existence of `"Connections" StaticText`
+    t =    12.02s Tap "Connections" StaticText
+    t =    12.02s     Wait for com.mrlancus.trove to idle
+    t =    12.02s     Find the "Connections" StaticText
+    t =    12.19s     Check for interrupting elements affecting "Connections" StaticText
+    t =    12.26s     Synthesize event
+    t =    12.57s     Wait for com.mrlancus.trove to idle
+    t =    14.10s Waiting 20.0s for "Notes" StaticText to exist
+    t =    15.16s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    15.16s         Checking existence of `"Notes" StaticText`
+    t =    15.51s         Capturing element debug description
+    t =    16.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    16.11s         Checking existence of `"Notes" StaticText`
+    t =    16.43s         Capturing element debug description
+    t =    17.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    17.13s         Checking existence of `"Notes" StaticText`
+    t =    17.33s         Capturing element debug description
+    t =    18.13s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    18.13s         Checking existence of `"Notes" StaticText`
+    t =    18.22s         Capturing element debug description
+    t =    19.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    19.13s         Checking existence of `"Notes" StaticText`
+    t =    19.24s         Capturing element debug description
+    t =    20.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    20.18s         Checking existence of `"Notes" StaticText`
+    t =    20.43s         Capturing element debug description
+    t =    21.13s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    21.13s         Checking existence of `"Notes" StaticText`
+    t =    21.34s         Capturing element debug description
+    t =    22.13s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    22.13s         Checking existence of `"Notes" StaticText`
+    t =    22.31s         Capturing element debug description
+    t =    23.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    23.13s         Checking existence of `"Notes" StaticText`
+    t =    23.22s         Capturing element debug description
+    t =    24.19s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    24.19s         Checking existence of `"Notes" StaticText`
+    t =    24.46s         Capturing element debug description
+    t =    25.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    25.11s         Checking existence of `"Notes" StaticText`
+    t =    25.35s         Capturing element debug description
+    t =    26.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    26.17s         Checking existence of `"Notes" StaticText`
+    t =    26.24s         Capturing element debug description
+    t =    27.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    27.13s         Checking existence of `"Notes" StaticText`
+    t =    27.25s         Capturing element debug description
+    t =    28.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    28.17s         Checking existence of `"Notes" StaticText`
+    t =    28.43s         Capturing element debug description
+    t =    29.16s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    29.16s         Checking existence of `"Notes" StaticText`
+    t =    29.31s         Capturing element debug description
+    t =    30.14s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    30.14s         Checking existence of `"Notes" StaticText`
+    t =    30.20s         Capturing element debug description
+    t =    31.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    31.13s         Checking existence of `"Notes" StaticText`
+    t =    31.21s         Capturing element debug description
+    t =    32.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    32.11s         Checking existence of `"Notes" StaticText`
+    t =    32.43s         Capturing element debug description
+    t =    33.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    33.17s         Checking existence of `"Notes" StaticText`
+    t =    33.32s         Capturing element debug description
+    t =    34.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    34.11s         Checking existence of `"Notes" StaticText`
+    t =    34.18s         Capturing element debug description
+    t =    34.18s     Checking existence of `"Notes" StaticText`
+    t =    34.35s Collecting debug information to assist test failure triage
+    t =    34.35s     Requesting snapshot of accessibility hierarchy for app with pid 12886
+    t =    36.07s Waiting 5.0s for "Notes" Button to exist
+    t =    37.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" Button`
+    t =    37.13s         Checking existence of `"Notes" Button`
+    t =    37.27s Getting device orientation
+    t =    37.27s Find the Target Application 'com.mrlancus.trove'
+    t =    38.05s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-connections'
+    t =    38.05s Tear Down
+Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (38.405 seconds).
+Test Case '-[TroveUITests.TroveUITests testDevelop]' started.
+    t =     0.00s Start Test at 2026-11-05 10:29:00.534
+    t =     0.06s Set Up
+    t =     0.06s Open com.mrlancus.trove
+    t =     0.06s     Launch com.mrlancus.trove
+    t =     0.06s         Terminate com.mrlancus.trove:12886
+    t =     1.55s         Setting up automation session
+    t =     3.89s         Wait for com.mrlancus.trove to idle
+    t =     6.12s Checking existence of `"Sketches" StaticText`
+    t =     6.99s Checking existence of `"Library" Button`
+    t =     7.18s Find the "Library" Button
+    t =     7.24s Tap "Library" Button
+    t =     7.24s     Wait for com.mrlancus.trove to idle
+    t =     8.16s     Find the "Library" Button
+    t =     8.23s     Check for interrupting elements affecting "square.grid.2x2" Button
+    t =     8.28s     Synthesize event
+    t =     8.61s     Wait for com.mrlancus.trove to idle
+    t =    10.93s Checking existence of `"Recent" NavigationBar`
+    t =    11.00s Checking existence of `Button (First Match)`
+    t =    11.05s Tap Button (First Match)
+    t =    11.05s     Wait for com.mrlancus.trove to idle
+    t =    11.06s     Find the Button (First Match)
+    t =    11.11s     Check for interrupting elements affecting "BackButton" Button
+    t =    11.16s     Synthesize event
+    t =    11.47s     Wait for com.mrlancus.trove to idle
+    t =    13.33s Checking existence of `"Sketches" StaticText`
+    t =    13.54s Checking existence of `"Learn" Button`
+    t =    13.62s Tap "Learn" Button
+    t =    13.62s     Wait for com.mrlancus.trove to idle
+    t =    13.63s     Find the "Learn" Button
+    t =    13.68s     Check for interrupting elements affecting "graduationcap" Button
+    t =    13.74s     Synthesize event
+    t =    14.04s     Wait for com.mrlancus.trove to idle
+    t =    15.71s Waiting 20.0s for "Your courses" StaticText to exist
+    t =    16.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Your courses" StaticText`
+    t =    16.72s         Checking existence of `"Your courses" StaticText`
+    t =    16.80s Getting device orientation
+    t =    16.80s Find the Target Application 'com.mrlancus.trove'
+    t =    16.91s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-develop'
+    t =    16.91s Tap "Add a course" Button
+    t =    16.91s     Wait for com.mrlancus.trove to idle
+    t =    16.91s     Find the "Add a course" Button
+    t =    16.98s     Check for interrupting elements affecting "Add a course" Button
+    t =    17.02s     Synthesize event
+    t =    17.30s     Wait for com.mrlancus.trove to idle
+    t =    17.62s Waiting 10.0s for "Add a course" NavigationBar to exist
+    t =    18.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Add a course" NavigationBar`
+    t =    18.65s         Checking existence of `"Add a course" NavigationBar`
+    t =    18.76s Getting device orientation
+    t =    18.76s Find the Target Application 'com.mrlancus.trove'
+    t =    18.88s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-develop-courses'
+    t =    18.88s Waiting 5.0s for SearchField (First Match) to exist
+    t =    19.90s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    19.91s         Checking existence of `SearchField (First Match)`
+    t =    20.02s Tap SearchField (First Match)
+    t =    20.02s     Wait for com.mrlancus.trove to idle
+    t =    20.03s     Find the SearchField (First Match)
+    t =    20.16s     Check for interrupting elements affecting "Subject, board or code" SearchField
+    t =    20.23s     Synthesize event
+    t =    20.53s     Wait for com.mrlancus.trove to idle
+    t =    22.66s Type 'physics' into "Subject, board or code" SearchField
+    t =    22.66s     Wait for com.mrlancus.trove to idle
+    t =    22.69s     Find the "Subject, board or code" SearchField
+    t =    23.35s     Check for interrupting elements affecting "Subject, board or code" SearchField
+    t =    23.45s     Synthesize event
+    t =    23.79s     Wait for com.mrlancus.trove to idle
+    t =    25.10s Getting device orientation
+    t =    25.10s Find the Target Application 'com.mrlancus.trove'
+    t =    25.24s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-develop-courses-physics'
+    t =    25.24s Waiting 5.0s for Button (First Match) to exist
+    t =    26.26s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    26.26s         Checking existence of `Button (First Match)`
+    t =    26.56s Tap Button (First Match)
+    t =    26.56s     Wait for com.mrlancus.trove to idle
+    t =    26.56s     Find the Button (First Match)
+    t =    26.90s     Check for interrupting elements affecting "AQA A-level, Spec 7408 · 80 papers · 2017–2025" Button
+    t =    26.98s     Synthesize event
+    t =    27.30s     Wait for com.mrlancus.trove to idle
+    t =    39.00s Waiting 10.0s for "A-level Physics" StaticText to exist
+    t =    40.06s     Checking `Expect predicate `existsNoRetry == 1` for object "A-level Physics" StaticText`
+    t =    40.07s         Checking existence of `"A-level Physics" StaticText`
+    t =    40.24s Tap "A-level Physics" StaticText
+    t =    40.24s     Wait for com.mrlancus.trove to idle
+    t =    40.25s     Find the "A-level Physics" StaticText
+    t =    40.82s     Check for interrupting elements affecting "A-level Physics" StaticText
+    t =    41.04s     Synthesize event
+    t =    41.37s     Wait for com.mrlancus.trove to idle
+    t =    44.48s Getting device orientation
+    t =    44.48s Find the Target Application 'com.mrlancus.trove'
+    t =    44.61s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-develop-course'
+    t =    44.61s Tear Down
+Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (44.919 seconds).
+Test Case '-[TroveUITests.TroveUITests testLaunchTime]' started.
+    t =     0.00s Start Test at 2026-11-05 10:29:45.454
+    t =     0.06s Set Up
+    t =     0.06s Open com.mrlancus.trove
+    t =     0.06s     Launch com.mrlancus.trove
+    t =     0.06s         Terminate com.mrlancus.trove:14849
+    t =     1.68s         Setting up automation session
+    t =     3.27s         Wait for com.mrlancus.trove to idle
+    t =     5.27s Terminate com.mrlancus.trove:17144
+    t =     6.28s Open com.mrlancus.trove
+    t =     6.28s     Launch com.mrlancus.trove
+    t =     6.71s         Setting up automation session
+    t =     7.78s         Wait for com.mrlancus.trove to idle
+    t =    11.66s Terminate com.mrlancus.trove:17484
+    t =    12.69s Open com.mrlancus.trove
+    t =    12.69s     Launch com.mrlancus.trove
+    t =    12.94s         Setting up automation session
+    t =    14.13s         Wait for com.mrlancus.trove to idle
+    t =    16.63s Terminate com.mrlancus.trove:17652
+    t =    17.63s Open com.mrlancus.trove
+    t =    17.63s     Launch com.mrlancus.trove
+    t =    18.08s         Setting up automation session
+    t =    19.10s         Wait for com.mrlancus.trove to idle
+    t =    21.50s Terminate com.mrlancus.trove:17868
+    t =    22.52s Open com.mrlancus.trove
+    t =    22.52s     Launch com.mrlancus.trove
+    t =    22.95s         Setting up automation session
+    t =    23.94s         Wait for com.mrlancus.trove to idle
+/Users/runner/work/trove/trove/App/UITests/TroveUITests.swift:204: Test Case '-[TroveUITests.TroveUITests testLaunchTime]' measured [Duration (ApplicationFirstFramePresentationResponsive), s] average: 2.262, relative standard deviation: 3.145%, values: [2.339522, 2.277824, 2.167569], performanceMetricID:com.apple.dt.XCTMetric_ApplicationLaunch-ApplicationFirstFramePresentationResponsive.duration, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.000, maxStandardDeviation: 0.000
+    t =    26.57s Tear Down
+Test Case '-[TroveUITests.TroveUITests testLaunchTime]' passed (26.850 seconds).
+Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' started.
+    t =     0.00s Start Test at 2026-11-05 10:30:12.304
+    t =     0.04s Set Up
+    t =     0.04s Open com.mrlancus.trove
+    t =     0.04s     Launch com.mrlancus.trove
+    t =     0.04s         Terminate com.mrlancus.trove:18257
+    t =     1.37s         Setting up automation session
+    t =     2.46s         Wait for com.mrlancus.trove to idle
+    t =     4.28s Waiting 60.0s for "Up next" StaticText to exist
+    t =     5.37s     Checking `Expect predicate `existsNoRetry == 1` for object "Up next" StaticText`
+    t =     5.37s         Checking existence of `"Up next" StaticText`
+    t =     5.55s Get number of matches for: Descendants matching type Button
+    t =     5.63s Find the Button (Element at index 0)
+    t =     5.68s Find the Button (Element at index 1)
+    t =     5.72s Find the Button (Element at index 2)
+    t =     5.76s Find the Button (Element at index 3)
+    t =     5.79s Tap Button (Element at index 1)
+    t =     5.79s     Wait for com.mrlancus.trove to idle
+    t =     5.79s     Find the Button (Element at index 1)
+    t =     5.83s     Check for interrupting elements affecting "Learn" Button
+    t =     5.88s     Synthesize event
+    t =     6.22s     Wait for com.mrlancus.trove to idle
+    t =     8.17s Waiting 20.0s for "Your courses" StaticText to exist
+    t =     9.20s     Checking `Expect predicate `existsNoRetry == 1` for object "Your courses" StaticText`
+    t =     9.20s         Checking existence of `"Your courses" StaticText`
+    t =     9.27s Getting device orientation
+    t =     9.28s Find the Target Application 'com.mrlancus.trove'
+    t =     9.39s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-learn'
+    t =     9.39s Tear Down
+Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (9.637 seconds).
+Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' started.
+    t =     0.00s Start Test at 2026-11-05 10:30:21.941
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:18553
+    t =     1.30s         Setting up automation session
+    t =     2.48s         Wait for com.mrlancus.trove to idle
+    t =     4.31s Waiting 60.0s for "Up next" StaticText to exist
+    t =     5.38s     Checking `Expect predicate `existsNoRetry == 1` for object "Up next" StaticText`
+    t =     5.38s         Checking existence of `"Up next" StaticText`
+    t =     5.59s Checking existence of `"New sketch" Button`
+    t =     5.71s Getting device orientation
+    t =     5.71s Find the Target Application 'com.mrlancus.trove'
+    t =     5.81s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-home'
+    t =     5.81s Checking existence of `"Sketches" StaticText`
+    t =     5.93s Checking existence of `"Library" Button`
+    t =     5.99s Find the "Library" Button
+    t =     6.03s Tap "Library" Button
+    t =     6.03s     Wait for com.mrlancus.trove to idle
+    t =     6.03s     Find the "Library" Button
+    t =     6.06s     Check for interrupting elements affecting "Library" Button
+    t =     6.10s     Synthesize event
+    t =     6.41s     Wait for com.mrlancus.trove to idle
+    t =     9.07s Checking existence of `"Recent" NavigationBar`
+    t =     9.15s Checking existence of `Button (First Match)`
+    t =     9.20s Tap Button (First Match)
+    t =     9.20s     Wait for com.mrlancus.trove to idle
+    t =     9.20s     Find the Button (First Match)
+    t =     9.27s     Check for interrupting elements affecting "BackButton" Button
+    t =     9.32s     Synthesize event
+    t =     9.63s     Wait for com.mrlancus.trove to idle
+    t =    11.51s Checking existence of `"Sketches" StaticText`
+    t =    11.66s Getting device orientation
+    t =    11.66s Find the Target Application 'com.mrlancus.trove'
+    t =    11.78s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-sidebar'
+    t =    11.78s Waiting 10.0s for "Notes" StaticText to exist
+    t =    12.83s     Checking `Expect predicate `existsNoRetry == 1` for object "Notes" StaticText`
+    t =    12.83s         Checking existence of `"Notes" StaticText`
+    t =    13.00s Tap "Notes" StaticText
+    t =    13.00s     Wait for com.mrlancus.trove to idle
+    t =    13.01s     Find the "Notes" StaticText
+    t =    13.17s     Check for interrupting elements affecting "Notes" StaticText
+    t =    13.29s     Synthesize event
+    t =    13.59s     Wait for com.mrlancus.trove to idle
+    t =    16.57s Getting device orientation
+    t =    16.58s Find the Target Application 'com.mrlancus.trove'
+    t =    16.71s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-notes'
+    t =    16.71s Swipe up Window (First Match)
+    t =    16.71s     Wait for com.mrlancus.trove to idle
+    t =    16.72s     Find the Window (First Match)
+    t =    16.72s     Check for interrupting elements affecting Window
+    t =    16.78s     Synthesize event
+    t =    17.17s     Wait for com.mrlancus.trove to idle
+    t =    21.42s Swipe down Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    21.42s     Wait for com.mrlancus.trove to idle
+    t =    21.42s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    21.43s     Check for interrupting elements affecting Window
+    t =    21.50s     Synthesize event
+    t =    21.90s     Wait for com.mrlancus.trove to idle
+    t =    27.39s Swipe up Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    27.39s     Wait for com.mrlancus.trove to idle
+    t =    27.39s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    27.40s     Check for interrupting elements affecting Window
+    t =    27.47s     Synthesize event
+    t =    27.86s     Wait for com.mrlancus.trove to idle
+    t =    32.35s Swipe down Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    32.35s     Wait for com.mrlancus.trove to idle
+    t =    32.35s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    32.36s     Check for interrupting elements affecting Window
+    t =    32.44s     Synthesize event
+    t =    32.83s     Wait for com.mrlancus.trove to idle
+    t =    38.07s Swipe up Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    38.07s     Wait for com.mrlancus.trove to idle
+    t =    38.07s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    38.12s     Check for interrupting elements affecting Window
+    t =    38.21s     Synthesize event
+    t =    38.62s     Wait for com.mrlancus.trove to idle
+    t =    43.11s Swipe down Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    43.11s     Wait for com.mrlancus.trove to idle
+    t =    43.12s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    43.14s     Check for interrupting elements affecting Window
+    t =    43.20s     Synthesize event
+    t =    43.58s     Wait for com.mrlancus.trove to idle
+    t =    47.91s Swipe up Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    47.91s     Wait for com.mrlancus.trove to idle
+    t =    47.92s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    47.93s     Check for interrupting elements affecting Window
+    t =    47.99s     Synthesize event
+    t =    48.38s     Wait for com.mrlancus.trove to idle
+    t =    52.63s Swipe down Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    52.63s     Wait for com.mrlancus.trove to idle
+    t =    52.63s     Find the Window at {{0.0, 0.0}, {375.0, 667.0}}
+    t =    52.65s     Check for interrupting elements affecting Window
+    t =    52.71s     Synthesize event
+    t =    53.10s     Wait for com.mrlancus.trove to idle
+/Users/runner/work/trove/trove/App/UITests/TroveUITests.swift:75: Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' measured [Duration (Scroll_Deceleration), s] average: 2.443, relative standard deviation: 0.166%, values: [2.447036, 2.443727, 2.437259], performanceMetricID:com.apple.dt.XCTMetric_OSSignpost-Scroll_Deceleration.duration, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.000, maxStandardDeviation: 0.000
+    t =    57.60s Getting device orientation
+    t =    57.60s Find the Target Application 'com.mrlancus.trove'
+    t =    57.72s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-notes-scrolled'
+    t =    57.72s Tear Down
+Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (57.980 seconds).
+Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' started.
+    t =     0.00s Start Test at 2026-11-05 10:31:19.922
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:18887
+    t =     1.53s         Setting up automation session
+    t =     3.00s         Wait for com.mrlancus.trove to idle
+    t =     5.02s Checking existence of `"Sketches" StaticText`
+    t =     5.58s Checking existence of `"Library" Button`
+    t =     5.76s Find the "Library" Button
+    t =     5.84s Tap "Library" Button
+    t =     5.84s     Wait for com.mrlancus.trove to idle
+    t =     6.69s     Find the "Library" Button
+    t =     6.78s     Check for interrupting elements affecting "square.grid.2x2" Button
+    t =     6.85s     Synthesize event
+    t =     7.20s     Wait for com.mrlancus.trove to idle
+    t =     9.65s Checking existence of `"Recent" NavigationBar`
+    t =     9.78s Checking existence of `Button (First Match)`
+    t =     9.89s Tap Button (First Match)
+    t =     9.89s     Wait for com.mrlancus.trove to idle
+    t =     9.90s     Find the Button (First Match)
+    t =    10.03s     Check for interrupting elements affecting "BackButton" Button
+    t =    10.09s     Synthesize event
+    t =    10.40s     Wait for com.mrlancus.trove to idle
+    t =    12.28s Checking existence of `"Sketches" StaticText`
+    t =    12.53s Waiting 10.0s for "Sketches" StaticText to exist
+    t =    13.57s     Checking `Expect predicate `existsNoRetry == 1` for object "Sketches" StaticText`
+    t =    13.57s         Checking existence of `"Sketches" StaticText`
+    t =    13.70s Tap "Sketches" StaticText
+    t =    13.70s     Wait for com.mrlancus.trove to idle
+    t =    13.70s     Find the "Sketches" StaticText
+    t =    13.85s     Check for interrupting elements affecting "Sketches" StaticText
+    t =    13.93s     Synthesize event
+    t =    14.21s     Wait for com.mrlancus.trove to idle
+    t =    15.19s Waiting 30.0s for "Generated notebook" StaticText to exist
+    t =    16.23s     Checking `Expect predicate `existsNoRetry == 1` for object "Generated notebook" StaticText`
+    t =    16.23s         Checking existence of `"Generated notebook" StaticText`
+    t =    16.34s Tap "Generated notebook" StaticText
+    t =    16.34s     Wait for com.mrlancus.trove to idle
+    t =    16.36s     Find the "Generated notebook" StaticText
+    t =    16.45s     Check for interrupting elements affecting "Generated notebook" StaticText
+    t =    16.50s     Synthesize event
+    t =    16.79s     Wait for com.mrlancus.trove to idle
+    t =    20.17s Getting device orientation
+    t =    20.17s Find the Target Application 'com.mrlancus.trove'
+    t =    20.35s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-notebook-item'
+    t =    20.35s Swipe up Window (First Match)
+    t =    20.35s     Wait for com.mrlancus.trove to idle
+    t =    20.35s     Find the Window (First Match)
+    t =    20.36s     Check for interrupting elements affecting Window
+    t =    20.43s     Synthesize event
+    t =    20.85s     Wait for com.mrlancus.trove to idle
+    t =    23.00s Getting device orientation
+    t =    23.01s Find the Target Application 'com.mrlancus.trove'
+    t =    23.18s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-notebook-item-scrolled'
+    t =    23.18s Tear Down
+Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (23.401 seconds).
+Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' started.
+    t =     0.00s Start Test at 2026-11-05 10:31:43.323
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:21350
+    t =     1.49s         Setting up automation session
+    t =     2.57s         Wait for com.mrlancus.trove to idle
+    t =     4.51s Checking existence of `"Sketches" StaticText`
+    t =     4.92s Checking existence of `"Library" Button`
+    t =     5.00s Find the "Library" Button
+    t =     5.11s Tap "Library" Button
+    t =     5.11s     Wait for com.mrlancus.trove to idle
+    t =     5.11s     Find the "Library" Button
+    t =     5.19s     Check for interrupting elements affecting "Library" Button
+    t =     5.27s     Synthesize event
+    t =     5.66s     Wait for com.mrlancus.trove to idle
+    t =     7.99s Checking existence of `"Recent" NavigationBar`
+    t =     8.08s Checking existence of `Button (First Match)`
+    t =     8.14s Tap Button (First Match)
+    t =     8.14s     Wait for com.mrlancus.trove to idle
+    t =     8.14s     Find the Button (First Match)
+    t =     8.20s     Check for interrupting elements affecting "BackButton" Button
+    t =     8.25s     Synthesize event
+    t =     8.55s     Wait for com.mrlancus.trove to idle
+    t =    10.46s Checking existence of `"Sketches" StaticText`
+    t =    10.62s Setting device orientation to Landscape Left
+    t =    10.64s     Device orientation changed to Landscape Left
+    t =    10.75s     Interface orientation changed to Landscape Right
+    t =    10.75s     Wait for com.mrlancus.trove to idle
+    t =    12.98s Getting device orientation
+    t =    12.98s Find the Target Application 'com.mrlancus.trove'
+    t =    13.09s Added attachment named 'iPhone_SE_(3rd_generation)-landscape-sidebar'
+    t =    13.09s Setting device orientation to Portrait
+    t =    13.09s     Device orientation changed to Portrait
+    t =    13.15s     Interface orientation changed to Portrait
+    t =    13.15s     Wait for com.mrlancus.trove to idle
+    t =    15.58s Tear Down
+Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (15.801 seconds).
+Test Case '-[TroveUITests.TroveUITests testSearch]' started.
+    t =     0.00s Start Test at 2026-11-05 10:31:59.124
+    t =     0.02s Set Up
+    t =     0.02s Open com.mrlancus.trove
+    t =     0.02s     Launch com.mrlancus.trove
+    t =     0.02s         Terminate com.mrlancus.trove:22847
+    t =     1.48s         Setting up automation session
+    t =     2.52s         Wait for com.mrlancus.trove to idle
+    t =     4.45s Checking existence of `"Sketches" StaticText`
+    t =     4.97s Checking existence of `"Library" Button`
+    t =     5.08s Find the "Library" Button
+    t =     5.14s Tap "Library" Button
+    t =     5.14s     Wait for com.mrlancus.trove to idle
+    t =     5.99s     Find the "Library" Button
+    t =     6.06s     Check for interrupting elements affecting "square.grid.2x2" Button
+    t =     6.09s     Synthesize event
+    t =     6.42s     Wait for com.mrlancus.trove to idle
+    t =     8.69s Checking existence of `"Recent" NavigationBar`
+    t =     8.79s Checking existence of `Button (First Match)`
+    t =     8.86s Tap Button (First Match)
+    t =     8.86s     Wait for com.mrlancus.trove to idle
+    t =     8.86s     Find the Button (First Match)
+    t =     8.92s     Check for interrupting elements affecting "BackButton" Button
+    t =     8.96s     Synthesize event
+    t =     9.28s     Wait for com.mrlancus.trove to idle
+    t =    11.16s Checking existence of `"Sketches" StaticText`
+    t =    11.42s Waiting 5.0s for SearchField (First Match) to exist
+    t =    12.45s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    12.45s         Checking existence of `SearchField (First Match)`
+    t =    12.66s         Capturing element debug description
+    t =    13.44s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    13.45s         Checking existence of `SearchField (First Match)`
+    t =    13.65s         Capturing element debug description
+    t =    14.46s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    14.46s         Checking existence of `SearchField (First Match)`
+    t =    14.66s         Capturing element debug description
+    t =    15.50s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    15.50s         Checking existence of `SearchField (First Match)`
+    t =    15.70s         Capturing element debug description
+    t =    16.42s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    16.42s         Checking existence of `SearchField (First Match)`
+    t =    16.64s         Capturing element debug description
+    t =    16.64s     Checking existence of `SearchField (First Match)`
+    t =    16.83s Collecting debug information to assist test failure triage
+    t =    16.83s     Requesting snapshot of accessibility hierarchy for app with pid 23559
+    t =    16.94s Checking existence of `"Search" Button`
+    t =    17.14s Get number of matches for: Descendants matching type Button
+    t =    17.19s Get number of matches for: Descendants matching type Button
+    t =    17.24s Tap Button (Element at index 4)
+    t =    17.24s     Wait for com.mrlancus.trove to idle
+    t =    17.25s     Find the Button (Element at index 4)
+    t =    17.31s     Check for interrupting elements affecting "magnifyingglass" Button
+    t =    17.36s     Synthesize event
+    t =    17.68s     Wait for com.mrlancus.trove to idle
+    t =    18.92s Waiting 10.0s for SearchField (First Match) to exist
+    t =    19.93s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =    19.93s         Checking existence of `SearchField (First Match)`
+    t =    19.98s Tap SearchField (First Match)
+    t =    19.98s     Wait for com.mrlancus.trove to idle
+    t =    19.99s     Find the SearchField (First Match)
+    t =    20.03s     Check for interrupting elements affecting "Everything you saved" SearchField
+    t =    20.10s     Synthesize event
+    t =    20.41s     Wait for com.mrlancus.trove to idle
+    t =    22.68s Find the "Everything you saved" SearchField
+    t =    22.82s Type 'momentum' into "Everything you saved" SearchField
+    t =    22.82s     Wait for com.mrlancus.trove to idle
+    t =    22.82s     Find the "Everything you saved" SearchField
+    t =    22.94s     Check for interrupting elements affecting "Everything you saved" SearchField
+    t =    23.00s     Synthesize event
+    t =    23.36s     Wait for com.mrlancus.trove to idle
+    t =    24.38s Getting device orientation
+    t =    24.38s Find the Target Application 'com.mrlancus.trove'
+    t =    24.49s Added attachment named 'iPhone_SE_(3rd_generation)-portrait-search'
+    t =    24.49s Tear Down
+Test Case '-[TroveUITests.TroveUITests testSearch]' passed (24.712 seconds).
+Test Suite 'TroveUITests' passed at 2026-11-05 10:32:23.836.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.382) seconds
+Test Suite 'TroveUITests.xctest' passed at 2026-11-05 10:32:23.836.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.383) seconds
+Test Suite 'All tests' passed at 2026-11-05 10:32:23.837.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.384) seconds
+2026-11-05 10:32:54.888 xcodebuild[9153:30017] [MT] IDETestOperationsObserverDebug: 438.933 elapsed -- Testing started completed.
+2026-11-05 10:32:54.889 xcodebuild[9153:30017] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-05 10:32:54.889 xcodebuild[9153:30017] [MT] IDETestOperationsObserverDebug: 438.933 sec, +438.933 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/trove/trove/build/tests/ui-iPhone_SE__3rd_generation_.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

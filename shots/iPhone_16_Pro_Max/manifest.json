@@ -1,0 +1,185 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "EDDE3979-210E-47B3-9B2A-323CD3D23CEA.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-sidebar-no-connections_0_987A77A9-9BF5-4915-AA44-6AA91423B8C6.png",
+        "timestamp" : 1793874943.31
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testConnectionsIsHidden()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testConnectionsIsHidden"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "5BAAEB5B-3DC5-416B-B15A-750230CDF571.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-connections_0_DB2FE8EF-4DA9-42A5-A430-28790F49BB98.png",
+        "timestamp" : 1793874986.798
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testConnectionsWithFeaturesOn()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testConnectionsWithFeaturesOn"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "5239015E-968B-46CD-87A3-E74E5F66657F.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-develop-course_0_077C5BE1-DA50-4F3E-AA97-0C50795955A2.png",
+        "timestamp" : 1793875020.447
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "66D71EA9-A698-45A3-9F49-09C55D564934.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-develop-courses-physics_0_1606F0A8-930B-4CCC-B158-C14506851F3D.png",
+        "timestamp" : 1793875012.192
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "E9195188-3523-43AD-8BCC-E79F9C3614A1.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-develop-courses_0_B8F24122-53E2-47B0-BE9A-F43A219D9C13.png",
+        "timestamp" : 1793875005.641
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "390398FD-555C-4F7E-B70E-A973935CE721.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-develop_0_482A9EF7-9B76-4F97-A1E8-4C5668C96C0C.png",
+        "timestamp" : 1793875003.414
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testDevelop()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testDevelop"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "8D119E44-24F2-44EE-84E9-2A8F231F0DBD.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-learn_0_CDEDA60A-47A8-4A6F-8BC4-1D1BE6F2F89B.png",
+        "timestamp" : 1793875037.05
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testLearnComesSecond()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testLearnComesSecond"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "9AFC7BD4-AC04-4487-A6F8-0391E4E64406.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-notes-scrolled_0_2B08CEBC-41AC-4D9C-A255-663AE36C0EFD.png",
+        "timestamp" : 1793875096.795
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "4205A9EF-2C87-4BD0-AFAD-E9A4820485E5.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-notes_0_D42A0EEB-29F7-471F-9D18-AB7B33C57AD7.png",
+        "timestamp" : 1793875055.321
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "69713CD1-A875-4D02-9A2A-5DCF572669BF.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-sidebar_0_F9C8F2BA-1EEC-486F-A3E4-0E8E31FB72F8.png",
+        "timestamp" : 1793875050.272
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "22378E80-9E43-4E16-8DF6-731A099672BC.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-home_0_B385C749-9CBE-4CFA-83C5-3F61FAE68454.png",
+        "timestamp" : 1793875043.667
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testLibraryScrollsAndShows()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testLibraryScrollsAndShows"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "FB33DEEE-3E7A-471C-91E7-C879F47ACEEB.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-notebook-item-scrolled_0_F3BF838C-12EF-4923-A153-344EC288BDB6.png",
+        "timestamp" : 1793875118.947
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "8461EF56-1D50-4532-848C-F0D6550E3CDD.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-notebook-item_0_AEE2662A-F4A4-44BD-88BB-ED1EAF4152CB.png",
+        "timestamp" : 1793875116.037
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testOpenTheNotebook()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testOpenTheNotebook"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "8F7CDFA8-D9B3-4F3B-98D8-4E413B5A2CFC.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-landscape-sidebar_0_6F8E4931-C1D2-4938-87FC-4BE3451C8E1C.png",
+        "timestamp" : 1793875133.25
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testRotateAndShow()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testRotateAndShow"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "A765D722-4A0B-4A3A-99B7-112DC46F1647",
+        "deviceName" : "iPhone 16 Pro Max",
+        "exportedFileName" : "43BEB378-066F-4D44-A88F-D267E29EACA7.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPhone_16_Pro_Max-portrait-search_0_E5267352-4C5D-4406-B2DD-01290EE4A7CD.png",
+        "timestamp" : 1793875161.057
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testSearch()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testSearch"
+  }
+]

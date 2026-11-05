@@ -1,0 +1,62 @@
+Test Case '-[TroveTests.DiagnosticsTests testPercentiles]' passed (0.002 seconds).
+Test Case '-[TroveTests.DiagnosticsTests testTheExportHasTheDeviceAndBudgets]' passed (0.004 seconds).
+Test Case '-[TroveTests.DiagnosticsTests testTheWatchdogSeesABlockedMainThread]' passed (0.607 seconds).
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.613 (0.614) seconds
+Test Case '-[TroveTests.FeaturesTests testAnOlderConfigDecodes]' passed (0.001 seconds).
+Test Case '-[TroveTests.FeaturesTests testHiddenBridgeKinds]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testOnlyTheMirrorOwnerWritesAnything]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testTheObsidianFolderIsLeftAloneWhileHidden]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testTheReadableCopyIsOffUnlessChosen]' passed (0.000 seconds).
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Case '-[TroveTests.PerformanceTests testMaterialiseAVault]' passed (5.694 seconds).
+Test Case '-[TroveTests.PerformanceTests testOnePageReadsOnlyItsStrokes]' passed (0.105 seconds).
+Test Case '-[TroveTests.PerformanceTests testSearchKeystrokes]' passed (5.208 seconds).
+Test Case '-[TroveTests.PerformanceTests testTroveGenIsFastEnoughForUITests]' passed (4.047 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 15.055 (15.056) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 15.671 (15.675) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 15.671 (15.675) seconds
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (48.673 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (38.405 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (44.919 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testLaunchTime]' passed (26.850 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (9.637 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (57.980 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (23.401 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (15.801 seconds).
+[iPhone SE (3rd generation)] Test Case '-[TroveUITests.TroveUITests testSearch]' passed (24.712 seconds).
+[iPhone SE (3rd generation)] 	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.382) seconds
+[iPhone SE (3rd generation)] 	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.383) seconds
+[iPhone SE (3rd generation)] 	 Executed 9 tests, with 0 failures (0 unexpected) in 290.378 (290.384) seconds
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (51.890 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (43.609 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (33.533 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (16.516 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (59.764 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (22.119 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (16.611 seconds).
+[iPhone 16 Pro Max] Test Case '-[TroveUITests.TroveUITests testSearch]' passed (25.739 seconds).
+[iPhone 16 Pro Max] 	 Executed 8 tests, with 0 failures (0 unexpected) in 269.780 (269.783) seconds
+[iPhone 16 Pro Max] 	 Executed 8 tests, with 0 failures (0 unexpected) in 269.780 (269.784) seconds
+[iPhone 16 Pro Max] 	 Executed 8 tests, with 0 failures (0 unexpected) in 269.780 (269.785) seconds
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (112.970 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (13.573 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (26.837 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (11.190 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (35.184 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (17.116 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (11.745 seconds).
+[iPad mini (A17 Pro)] Test Case '-[TroveUITests.TroveUITests testSearch]' passed (20.738 seconds).
+[iPad mini (A17 Pro)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 249.354 (249.357) seconds
+[iPad mini (A17 Pro)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 249.354 (249.358) seconds
+[iPad mini (A17 Pro)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 249.354 (249.359) seconds
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testConnectionsIsHidden]' passed (53.973 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testConnectionsWithFeaturesOn]' passed (13.074 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testDevelop]' passed (30.205 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testLearnComesSecond]' passed (20.973 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testLibraryScrollsAndShows]' passed (60.882 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testOpenTheNotebook]' passed (19.448 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testRotateAndShow]' passed (18.013 seconds).
+[iPad Air 13-inch (M2)] Test Case '-[TroveUITests.TroveUITests testSearch]' passed (16.458 seconds).
+[iPad Air 13-inch (M2)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.032) seconds
+[iPad Air 13-inch (M2)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.033) seconds
+[iPad Air 13-inch (M2)] 	 Executed 8 tests, with 0 failures (0 unexpected) in 233.027 (233.034) seconds

@@ -1,0 +1,185 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "A979167A-940F-40DB-AF02-00F539611A3F.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-sidebar-no-connections_0_69B7A78E-FE9F-4288-9D4A-E5DA45F7886A.png",
+        "timestamp" : 1793875769.092
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testConnectionsIsHidden()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testConnectionsIsHidden"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "E15C7667-0258-4A61-BDA3-62025AA11BCF.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-connections_0_469AC651-57B7-4C1E-A0C2-04510B1BFFBA.png",
+        "timestamp" : 1793875782.656
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testConnectionsWithFeaturesOn()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testConnectionsWithFeaturesOn"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "821444A4-38AA-43C2-B288-1E40B0618FEE.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-develop-course_0_04072DB2-2EA4-41F4-910F-CE0D76CA385A.png",
+        "timestamp" : 1793875812.807
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "74F23095-1C54-442B-BA5F-9263D5509A1F.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-develop-courses-physics_0_27C0A02F-22E0-4778-BC2B-FC7213B5682A.png",
+        "timestamp" : 1793875803.394
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "221BECD4-DBDB-43B4-9AFE-0CDD6EC15D66.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-develop-courses_0_0C3DBB8E-D46D-4FB1-9028-17D22E4DF541.png",
+        "timestamp" : 1793875796.416
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "B714FF5C-A61B-4550-B812-E9D708AC7990.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-develop_0_92699028-A177-4BD0-9437-77A38EF24E3E.png",
+        "timestamp" : 1793875793.669
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testDevelop()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testDevelop"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "A9A7EC38-A72B-49FA-89CC-41E43A23FB20.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-learn_0_947A0AD4-A843-4400-ADC5-0BAF73CBA9A7.png",
+        "timestamp" : 1793875833.69
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testLearnComesSecond()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testLearnComesSecond"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "83C245A6-22EA-48A2-9482-4D52924820A9.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-notes-scrolled_0_30868382-8096-49B4-BAD0-D759362F33FA.png",
+        "timestamp" : 1793875894.652
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "C306C504-40C6-4815-9EE7-D781B4070871.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-notes_0_EACF744A-A592-4961-8B65-E7A202D88519.png",
+        "timestamp" : 1793875852.358
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "BE5922C0-7096-4A48-A95B-DF783E541382.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-sidebar_0_3095B0CC-9BEF-49EE-A035-6090A6769536.png",
+        "timestamp" : 1793875846.405
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "D271A763-89A6-4704-AE8F-E84FC86B2F8C.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-home_0_EACF7E64-7C89-4154-B466-F60EE10F3FB3.png",
+        "timestamp" : 1793875845.751
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testLibraryScrollsAndShows()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testLibraryScrollsAndShows"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "37DD9569-E8BF-42E4-9400-DF78A8752CFC.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-notebook-item-scrolled_0_AD708437-86C6-4DA4-88D0-3F48ACEC5AB2.png",
+        "timestamp" : 1793875914.155
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "F6A474F2-7A2E-4849-9363-C5526B2FA456.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-notebook-item_0_2A5FA5B3-F367-4332-85AF-5CF0C3BDB544.png",
+        "timestamp" : 1793875912.586
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testOpenTheNotebook()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testOpenTheNotebook"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "A4863A6A-54A6-42DA-8DDA-AE6A5526D877.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-landscape-sidebar_0_77743F4C-9E8F-4DA9-939D-4270F7BFE762.png",
+        "timestamp" : 1793875929.704
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testRotateAndShow()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testRotateAndShow"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "81BE15E6-D796-4DB6-80F4-7C9A7FC3D83A",
+        "deviceName" : "iPad Air 13-inch (M2)",
+        "exportedFileName" : "149D0EB0-A687-4CFB-974D-E75B102032F0.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "iPad_Air_13-inch_(M2)-portrait-search_0_D58F9CBA-BDC0-468B-8B1B-7DE3DBE90EA6.png",
+        "timestamp" : 1793875948.522
+      }
+    ],
+    "testIdentifier" : "TroveUITests/testSearch()",
+    "testIdentifierURL" : "test://com.apple.xcode/Trove/TroveUITests/TroveUITests/testSearch"
+  }
+]

@@ -1,0 +1,17 @@
+Test Case '-[TroveTests.DiagnosticsTests testPercentiles]' passed (0.002 seconds).
+Test Case '-[TroveTests.DiagnosticsTests testTheExportHasTheDeviceAndBudgets]' passed (0.004 seconds).
+Test Case '-[TroveTests.DiagnosticsTests testTheWatchdogSeesABlockedMainThread]' passed (0.607 seconds).
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.613 (0.614) seconds
+Test Case '-[TroveTests.FeaturesTests testAnOlderConfigDecodes]' passed (0.001 seconds).
+Test Case '-[TroveTests.FeaturesTests testHiddenBridgeKinds]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testOnlyTheMirrorOwnerWritesAnything]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testTheObsidianFolderIsLeftAloneWhileHidden]' passed (0.000 seconds).
+Test Case '-[TroveTests.FeaturesTests testTheReadableCopyIsOffUnlessChosen]' passed (0.000 seconds).
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Case '-[TroveTests.PerformanceTests testMaterialiseAVault]' passed (5.694 seconds).
+Test Case '-[TroveTests.PerformanceTests testOnePageReadsOnlyItsStrokes]' passed (0.105 seconds).
+Test Case '-[TroveTests.PerformanceTests testSearchKeystrokes]' passed (5.208 seconds).
+Test Case '-[TroveTests.PerformanceTests testTroveGenIsFastEnoughForUITests]' passed (4.047 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 15.055 (15.056) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 15.671 (15.675) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 15.671 (15.675) seconds
