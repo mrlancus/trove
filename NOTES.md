@@ -121,6 +121,15 @@ Steps done (plan §9):
   what it writes from board papers (never from your own material; Settings → AI → "Share the questions Trove writes
   from board papers", on by default), reports attempts and "This is wrong". Tests: `server/test/bank.test.ts` (5),
   `anUnseenBankQuestionIsPickedBeforeWriting`. Not deployed.
+- **Step 6c** (overnight batches, plan §C8): `server/src/batches.ts`, run by the bank's alarm, **off until the relay has
+  `ANTHROPIC_API_KEY`** (your money). Nightly: short spec points (under 3 questions) in courses your users read,
+  ≤ 200 requests, within `AI_MONTHLY_LIMIT`; Message Batches at low with the real paper and scheme as PDFs (fetched
+  from the board at batch time, never stored); code checks; a check batch; passes added as pending; failures
+  rewritten once at medium the next night. PROTOCOL §4. Tests: `server/test/batches.test.ts` (a fake batch API:
+  submit, poll, results out of order, check, pending, medium rewrite, cap, allowance). Not deployed.
+- **Catalogue rebuilt** (2026-11-05): 683 courses, 666 with their specification (AQA 111/111, OCR 96/96, Eduqas 77/77,
+  WJEC 101/102, Cambridge 133/133, Pearson 148/164: some GCSEs aren't tagged by Pearson's search; AS courses
+  share the A level's document). WJEC's Health and Social Care site didn't answer once (502); it kept its listing.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

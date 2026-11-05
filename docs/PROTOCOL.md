@@ -345,6 +345,17 @@ per question only SHA-256(question id + "\n" + vault id) of the vaults that atte
 daily counter is keyed by SHA-256(vault id + "\n" + day). One Durable Object (`BankObject`, name `bank`) makes
 every change; older apps never call these routes.
 
+**Overnight batches** (learn-pivot plan §C8; `server/src/batches.ts`): only when the relay has an
+`ANTHROPIC_API_KEY` secret. Reading a course's bank file records the course (no vault id), and sets the bank's
+alarm for 02:00 UTC. Each night: spec points with fewer than 3 bank questions (in courses that were read) get one
+request each, at most 200 a night and none once `AI_MONTHLY_LIMIT` is used up (the whole relay's metered tokens,
+cache reads at a tenth), in one Message Batch: Haiku 5.5, low effort, brief v1 as a cached system block, the real
+question paper and mark scheme (fetched at batch time from the catalogue's board links, sent as PDF documents,
+never stored), structured output. The alarm polls hourly until `processing_status` is `ended`, reads the results
+by `custom_id`, runs the code checks, and sends the passes to a check batch (low, without the scheme); what passes
+that joins the bank as `pending`. A failure is rewritten once at medium in the next night's batch; a second
+failure is dropped.
+
 ## 5. Price-drop watches (opt-in per item)
 A device turns on "Track price drops" for a product item by sending `PUT /vaults/:v/watches/:id`
 with `{url, itemId}`. `id` is 8–64 of `[A-Za-z0-9_-]`; apps use the item id. The relay can see the

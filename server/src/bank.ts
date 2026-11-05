@@ -12,6 +12,8 @@
 // One Durable Object (name "bank") serialises every change.
 import { DurableObject } from "cloudflare:workers";
 import { error, json, type Env } from "./vault";
+import { step, MODEL, BRIEF_VERSION, type Deps } from "./batches";
+import { DEFAULT_MONTHLY_TOKENS } from "./ai";
 
 export const BANK_DAILY_UPLOADS = 50;
 export const BANK_MAX_BYTES = 32 * 1024;
@@ -83,6 +85,7 @@ export class BankObject extends DurableObject<Env> {
     const vault = request.headers.get("x-trove-vault") ?? "";
     const [, spec, id, action] = url.pathname.split("/"); // /<spec>[/<id>/<action>]
     if (!spec || !SPEC.test(spec)) return error(400, "unknown course");
+    if (request.method === "POST" && id === "read") return this.read(spec);
     if (request.method === "POST" && !id) return this.upload(request, spec, vault);
     if (request.method === "POST" && id && (action === "attempt" || action === "flag")) return this.mark(spec, id, vault, action);
     if (request.method === "GET" && !id) return json(await this.file(spec));
@@ -130,6 +133,40 @@ export class BankObject extends DurableObject<Env> {
     return json({ id, state: entry.state });
   }
 
+  /** A device read this course's file: the course is one "your users have", for the night's batch (no vault kept). */
+  private async read(spec: string): Promise<Response> {
+    const courses = (await this.ctx.storage.get<string[]>("courses")) ?? [];
+    if (!courses.includes(spec)) await this.ctx.storage.put("courses", [...courses, spec].sort());
+    if (this.env.ANTHROPIC_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(nextNight(Date.now()));
+    return json({ ok: true });
+  }
+
+  /** The overnight batch (src/batches.ts): only with an ANTHROPIC_API_KEY; hourly while a batch runs. */
+  async alarm(): Promise<void> {
+    if (!this.env.ANTHROPIC_API_KEY) return;
+    const phase = await step(this.ctx.storage, this.deps(this.env.ANTHROPIC_API_KEY));
+    await this.ctx.storage.setAlarm(phase === "idle" ? nextNight(Date.now()) : Date.now() + 3_600_000);
+  }
+
+  deps(apiKey: string, fetcher: Deps["fetch"] = (u, i) => fetch(u, i)): Deps {
+    const month = () => new Date().toISOString().slice(0, 7);
+    return {
+      apiKey, fetch: fetcher,
+      bankQuestions: async (spec) => [...(await this.ctx.storage.list<Stored>({ prefix: `q:${spec}:` })).values()].map((e) => ({ id: e.id, question: e.question })),
+      addPending: async (spec, question, effort) => {
+        const id = (await sha256Hex(JSON.stringify(question))).slice(0, 16);
+        const key = `q:${spec}:${id}`;
+        if (await this.ctx.storage.get(key)) return;
+        const entry: Stored = { id, spec, state: "pending", question, brief: BRIEF_VERSION, model: MODEL, effort, addedAt: Date.now(), attempted: [], flagged: [] };
+        await this.ctx.storage.put(key, entry);
+        await this.publish(spec);
+      },
+      courses: async () => (await this.ctx.storage.get<string[]>("courses")) ?? [],
+      usage: async () => ({ used: (await this.ctx.storage.get<number>(`usage:${month()}`)) ?? 0, limit: Number(this.env.AI_MONTHLY_LIMIT ?? DEFAULT_MONTHLY_TOKENS) }),
+      addUsage: async (n) => { const k = `usage:${month()}`; await this.ctx.storage.put(k, ((await this.ctx.storage.get<number>(k)) ?? 0) + n); },
+    };
+  }
+
   /** The course's whole file, as served: no hashes, no counts of who. */
   private async file(spec: string): Promise<{ v: 1; spec: string; questions: BankEntry[] }> {
     const rows = await this.ctx.storage.list<Stored>({ prefix: `q:${spec}:` });
@@ -153,10 +190,19 @@ export async function bankRoute(request: Request, env: Env, vaultId: string, res
   const [spec, id, action] = rest;
   if (!spec || !SPEC.test(spec)) return error(400, "unknown course");
   if (request.method === "GET" && !id) {
+    // Which courses are read is all the night's batch needs to know (no vault id is passed).
+    await env.BANK.get(env.BANK.idFromName("bank")).fetch(new Request(`https://bank/${spec}/read`, { method: "POST" }));
     const obj = await env.BLOBS.get(`bank/${spec}.json`);
     return new Response(obj ? obj.body : JSON.stringify({ v: 1, spec, questions: [] }), { headers: { "content-type": "application/json" } });
   }
   const bank = env.BANK.get(env.BANK.idFromName("bank"));
   const path = [spec, id, action].filter(Boolean).join("/");
   return bank.fetch(new Request(`https://bank/${path}`, { method: request.method, headers: { "x-trove-vault": vaultId }, body: request.method === "POST" ? await request.text() : undefined }));
+}
+
+/** 02:00 UTC tomorrow (or today, if it's earlier than that). */
+export function nextNight(now: number): number {
+  const d = new Date(now);
+  const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 2);
+  return t > now ? t : t + 86_400_000;
 }

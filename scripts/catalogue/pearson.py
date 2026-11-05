@@ -181,6 +181,19 @@ def add_specifications(cfg, specs, codes):
     for sid, (_, title, url) in best.items():
         if sid in specs:
             specs[sid]["docs"].append(spec_doc(sid, url, re.sub(r"\s+", " ", title).strip() or "Specification"))
+    share_as_level(specs)
+
+
+def share_as_level(specs):
+    """Pearson publishes one specification for AS and A level: an AS course (8PH0) without its own takes the A
+    level's (9PH0)."""
+    for sid, s in specs.items():
+        if any(d["type"] == "spec" for d in s["docs"]) or not re.fullmatch(r"pearson-8[a-z]{2}\d", sid):
+            continue
+        a = specs.get("pearson-9" + sid[len("pearson-8"):])
+        doc = next((d for d in (a or {}).get("docs", []) if d["type"] == "spec"), None)
+        if doc:
+            s["docs"].append(spec_doc(sid, doc["url"], doc.get("title") or "Specification"))
 
 
 def find():
