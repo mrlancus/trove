@@ -356,6 +356,64 @@ by `custom_id`, runs the code checks, and sends the passes to a check batch (low
 that joins the bank as `pending`. A failure is rewritten once at medium in the next night's batch; a second
 failure is dropped.
 
+### Study groups (2026-11-05, study-with-friends prompt §2–3)
+Friends practise the same catalogue questions as a challenge and see each other's answers and marks after
+submitting. **The relay holds only ciphertext for group data**: names, the group's name, challenges (which
+questions), answers and marks are TRV1 under the group key, which travels only in invite links' fragments and
+in boxes sealed to members' keys. It sees: a group id, random member ids and their public keys, who is the
+creator, entry kinds, sizes and times, random challenge ids, and which member submitted to which challenge.
+It never sees which vault a member is (none is stored in the group) or a name. Routes need a device token of a
+vault on this relay (an inbox token is 403); routes on one group also need `x-trove-member: <memberToken>`.
+Older apps never call them.
+
+**Keys.** Group key `GK_e`: 32 random bytes for epoch `e` (starts at 1). Entry key = HKDF-SHA256(ikm = `GK_e`,
+empty salt, info `trove/v1/group-entry`, L = 32); an entry body is TRV1 mode 1 under it. Each member makes an
+X25519 key pair per group when creating or joining; the private key stays in the member's vault (record
+`group.<groupId>`, below). After a member leaves or is removed, the relay sets `rotate: true`; the creator's app
+then makes `GK_{e+1}`, seals it (TRV1 mode 2, as the inbox: info `trove/v1/sealed`, the member's public key in
+place of the vault's) to every remaining member and posts the boxes. New entries use the newest epoch; old
+entries stay readable with old keys, which members keep.
+
+**Invite link** (a member sends it to a friend; never searchable, no discovery):
+`https://<relay>/join#g=<groupId>&i=<inviteSecret>&k=<GK b64u>&e=<epoch>` — the fragment never reaches the
+relay. The relay's `/join` page (`web/public/join.html`, no data, nothing sent) offers "Open in Trove", which
+hands the fragment to `trove://join#…&r=<relay origin>`; the apps also take a pasted link (relay = its origin).
+A member joins with their own vault's device token on that relay. An invite lasts 7 days, up to 20 uses, at most 10 open per
+group; any member can make one, its maker or the creator can revoke it, and removing a member revokes every
+invite (they carry the old key).
+
+| Method & path | Body → Response |
+|---|---|
+| `POST /vaults/:v/groups` | `{memberKey}` (X25519 public, b64u) → `201 {groupId, memberId, memberToken, epoch: 1}`; you're the creator. `429` after 5 new groups by the vault in a UTC day |
+| `GET /vaults/:v/groups/:g` | → `{groupId, epoch, rotate, members: [{memberId, memberKey, creator, joinedAt}], invites: [{id, by, uses, maxUses, expiresAt}]}` |
+| `DELETE /vaults/:v/groups/:g` | creator only → `204`: the group and everything in it are deleted |
+| `POST /vaults/:v/groups/:g/invites` | `{maxUses?}` (1–20, default 20) → `201 {id, secret, expiresAt}`; `429` with 10 open |
+| `DELETE /vaults/:v/groups/:g/invites/:id` | its maker or the creator → `204` |
+| `POST /vaults/:v/groups/:g/members` | no member token; `{invite, memberKey}` → `201 {memberId, memberToken, epoch}`; `403` for a wrong, used-up, revoked or expired invite; `409` when the group has 30 members |
+| `DELETE /vaults/:v/groups/:g/members/:m` | yourself (leave) or the creator (remove) → `204`; the member's token stops working, their entries are deleted, `rotate` becomes true. The creator leaves by deleting the group |
+| `GET /vaults/:v/groups/:g/keys` | → `{boxes: [{epoch, box}]}`: the keys sealed to you |
+| `POST /vaults/:v/groups/:g/keys` | creator only; `{epoch, boxes: [{memberId, box}]}` with `epoch` = current + 1 and a box for every member → `{epoch}`; `rotate` becomes false |
+| `POST /vaults/:v/groups/:g/entries` | `{kind, epoch, body, challenge?, about?}` → `201 {id, cursor}`. `body` is b64u TRV1, at most 64 KiB decoded (`413`). `kind`: `profile`, `about`, `challenge`, `start`, `submission`, `mark` (`challenge` required for the last three; `about` = the marked member for `mark`). At most 2,000 entries a group and 100 a member a UTC day (`429`) |
+| `GET /vaults/:v/groups/:g/entries?after=<cursor>` | → `{entries: [{id, cursor, kind, member, epoch, body, challenge?, about?, createdAt}], waiting: [{challenge, submitted}], more}`. **No peeking:** another member's `submission`, and every `mark` about another member, of challenge C is left out until you've posted a submission to C; `waiting` says how many have submitted to each challenge you haven't |
+| `DELETE /vaults/:v/groups/:g/entries/:id` | your own entry → `204` |
+| `GET /vaults/:v/groups/:g/live` | WebSocket (token and member token may be sent as `?token=&member=`). Server → client: `{"type":"entry", cursor, kind, member, challenge?}` for each new entry (no body), `{"type":"members"}` when someone joins or leaves |
+
+**Entry bodies** (JSON inside the TRV1, all `v: 1`): `profile {name}` (your name in this group, posted on
+joining); `about {name}` (the group's name; creator); `challenge {id, title, questions: [{doc, key, marks?}],
+mode: "deadline"|"live", deadline?, minutes?}` (only catalogue questions, as catalogue doc ids and question keys:
+each device downloads the paper from the board; never an upload); `start {challenge, at}` (live mode: everyone
+starts at `at`); `submission {challenge, answers: [{doc, key, text?, marks?, of?, seconds, hints, marking:
+"self"|"ai"|"none"}], submittedAt}`; `mark {challenge, member, doc, key, marks, of, note?}` (peer marking: the
+marker saw the answer and the mark scheme). A friend's mark changes your practice record only when you accept it.
+
+**In the vault** (synced to your own devices like any record): `group.<groupId>` with fields `{relay, groupId,
+memberId, memberToken, memberPrivate, keys: {"<epoch>": GK b64u}, name, creator, joinedAt}`. Leaving deletes it.
+
+One Durable Object per group (`GroupObject`, name = group id) holds it; the per-vault daily limit on new groups is
+kept in a `GroupObject` named `limits` under SHA-256(vault id + "\n" + day).
+
+---
+
 ## 5. Price-drop watches (opt-in per item)
 A device turns on "Track price drops" for a product item by sending `PUT /vaults/:v/watches/:id`
 with `{url, itemId}`. `id` is 8–64 of `[A-Za-z0-9_-]`; apps use the item id. The relay can see the

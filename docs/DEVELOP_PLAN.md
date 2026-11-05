@@ -730,3 +730,50 @@ Other sources read on 2026-11-03: Anthropic prompt caching
 images), Anki packaged decks (https://docs.ankiweb.net/importing/packaged-decks.html) and text files
 (https://docs.ankiweb.net/importing/text-files.html), OpenRouter prompt caching
 (https://openrouter.ai/docs/prompt-caching: OpenAI caches prompts of 1,024+ tokens automatically).
+
+## Appendix F. Study with friends: design (2026-11-05)
+
+Answers to `docs/prompts/study-with-friends.md` §3. The contract is PROTOCOL.md §4 "Study groups".
+
+1. **Encryption.** Each group has a key `GK_e` (32 random bytes, epoch `e`); entries are TRV1 under
+   HKDF(`GK_e`, `trove/v1/group-entry`). The invite link carries the group id, a single invite secret and
+   `GK_e` in the URL fragment (`https://<relay>/join#g=…&i=…&k=…&e=…`), which browsers never send to a server,
+   so the relay sees only the invite secret when the app joins. Each member makes an X25519 key pair for the
+   group; the private key lives in the member's own vault (record `group.<id>`, encrypted like everything in the
+   vault, synced to their devices; vault keys themselves stay in the Keychain as before). When someone leaves or
+   is removed, the relay revokes their token, deletes their entries and every open invite, and flags the group;
+   the creator's app then makes `GK_{e+1}` and seals it to each remaining member's public key (TRV1 mode 2).
+   Old entries stay readable with old keys. What a removed member already saw can't be unseen; nothing new
+   reaches them. **The relay sees** group ids, random member ids and public keys, who created the group, entry
+   kinds, sizes and times, random challenge ids, and who submitted to which challenge; **never** names, the
+   group's name, which questions, answers, marks, or which vault a member is. The app says so on the group
+   screen: "Your friends in this group see your name, your answers and marks. The relay sees none of it."
+2. **The relay.** One Durable Object per group (`GroupObject`, migration v3) holds members (hashed tokens),
+   invites (hashed secrets), sealed key boxes and entries (ciphertext). No peeking is enforced by the relay, not
+   only the app: another member's submission or marks for a challenge are served only after you've submitted.
+   Live mode uses the group's own socket (`/groups/:g/live`), not the vault's: the vault socket belongs to one
+   vault's object and can't reach friends. Older clients never call `/groups` and ignore unknown records.
+   **Cost** (Workers Paid, Durable Objects at $0.15 per million requests plus duration, SQLite storage
+   $0.20/GB-month): a group of 10 doing a challenge a day makes about 10 × (open + submit + a few reads) ≈ 60
+   requests a day, 1,800 a month; 1,000 such groups ≈ 1.8 M requests ≈ $0.30 a month, storage under 1 GB.
+   Sockets hibernate between messages. Effectively free at the user's scale.
+3. **No push notifications** (free Apple ID). Friends find out (a) on opening Learn, which fetches every
+   group's new entries (one request a group); (b) over the group's socket while its screen is open (live mode
+   and "3 of 5 have submitted"); (c) through the invite link itself. A new challenge shows as a card on Home's
+   Up next; a finished one shows its results there.
+4. **Abuse.** Friends only: no profiles, no search, no discovery; joining needs an invite a member made
+   (7 days, ≤ 20 uses, ≤ 10 open). The creator removes members and revokes any invite; anyone leaves; you delete
+   what you posted; the creator deletes the group and everything in it. Limits: 30 members, 2,000 entries a
+   group, 100 entries a member a day, 64 KiB an entry, 5 new groups a vault a day. Only catalogue questions go
+   into a challenge (ids, never files); your own uploads can't be shared, and a peer marker sees your typed
+   answer and the board's mark scheme, never your files. Many users are under 18: nothing here is public.
+5. **The website** could join (WebCrypto has X25519 and AES-GCM, and `web/core` already does TRV1), but it has
+   no practice screen for catalogue papers, so a challenge there would be half a feature. Decision: the apps
+   only for now; the website's `/join` page hands the link to the app. Revisit when the website practises papers.
+
+**Marking and mastery.** A submission carries each answer's marks and how they were found (self-marked against
+the scheme, AI-marked on the device, or none yet). Each of your answers also becomes an ordinary practice attempt
+in your vault, labelled the same way. A friend's peer mark (`mark` entry) shows next to your answer, labelled
+"marked by <name>"; it changes your record only if you accept it (a new attempt marked `peer`). Results show per
+question (marks, time, hints, how marked) and a total for the challenge; no leaderboard across challenges, no XP,
+no streak pressure.

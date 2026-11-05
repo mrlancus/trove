@@ -25,6 +25,8 @@ export interface Env {
   GATE?: DurableObjectNamespace;
   /** The shared question bank (src/bank.ts). */
   BANK?: DurableObjectNamespace;
+  /** Study groups (src/groups.ts). */
+  GROUP?: DurableObjectNamespace;
 }
 
 export type Caller = { kind: "device"; deviceId: string } | { kind: "inbox" };
