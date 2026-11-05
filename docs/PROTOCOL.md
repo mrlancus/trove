@@ -1088,7 +1088,7 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
 - **`attempt`** `attempt.<uuid>`. Written once, then only `marking`, `score`, `points`, `uncertain`
   change (when I confirm or remark). Fields: `problem`, `skills` ([concept ids]), `at` (ms),
   `durationS`, `answer` (`{"text": …}` or `{"attachment": …}`), `hint` (0–5), `marking` (`"self"` \|
-  `"aiScheme"` \| `"aiNoScheme"` \| `"none"`), `score` (0–1 or null), `points` ([{`text`, `got`,
+  `"aiScheme"` \| `"aiNoScheme"` \| `"peer"` (a study-group friend's marks I accepted, weight 0.9) \| `"none"`), `score` (0–1 or null), `points` ([{`text`, `got`,
   `quote`}]), `uncertain` (bool), `ai` ({`model`, `effort`, `tokens`, `cost`, `confidence`,
   `rationale`}), `b` (difficulty used, number), `level`, `label`, `source` (`sourceKey`, for
   "where did this come from?" after the problem is gone), `work` (optional: the id of the sketch item

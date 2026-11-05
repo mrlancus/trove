@@ -50,6 +50,8 @@ public enum Marking: String, Sendable, Codable, CaseIterable {
     /// Ticked against the mark scheme by me.
     case selfMarked = "self"
     case aiScheme, aiNoScheme
+    /// A friend's marks against the mark scheme that I accepted (study groups, PROTOCOL.md §4).
+    case peer
     case none
 }
 

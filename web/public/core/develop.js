@@ -59,7 +59,7 @@ export function fsrsReview(state, g, now) {
 /** MasteryConstants.standard, with the same reasons (Mastery.swift). */
 export const CONSTANTS = Object.freeze({
   k0: 0.8, trivialMargin: 1, ceilingMargin: 1, independence: [1, 0.85, 0.7, 0.5, 0.3, 0],
-  markingWeight: { self: 1, aiScheme: 0.9, aiNoScheme: 0.5, none: 0 }, goodScore: 0.85, hardScore: 0.5, skillRetention: 0.85,
+  markingWeight: { self: 1, aiScheme: 0.9, aiNoScheme: 0.5, peer: 0.9, none: 0 }, goodScore: 0.85, hardScore: 0.5, skillRetention: 0.85,
   reassessAfterFailureDays: 1, proficientMastery: 0.7, proficientSuccesses: 3, proficientProblems: 2, proficientSources: 2,
   successScore: 0.7, prerequisiteGapDays: 1, referenceDifficulty: 0,
 });

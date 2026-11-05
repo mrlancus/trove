@@ -15,7 +15,7 @@ public struct MasteryConstants: Sendable, Equatable {
     public var independence: [Double] = [1.0, 0.85, 0.7, 0.5, 0.3, 0.0]
     /// I decide what I got right with the scheme in front of me; AI may misapply the scheme (checked by
     /// the eval set); without a scheme an AI mark is a guess; unmarked is no evidence.
-    public var markingWeight: [Marking: Double] = [.selfMarked: 1.0, .aiScheme: 0.9, .aiNoScheme: 0.5, .none: 0]
+    public var markingWeight: [Marking: Double] = [.selfMarked: 1.0, .aiScheme: 0.9, .aiNoScheme: 0.5, .peer: 0.9, .none: 0]
     /// FSRS grades from the independence-adjusted score: ≥ good → Good, ≥ hard → Hard, else Again.
     public var goodScore = 0.85
     public var hardScore = 0.5
