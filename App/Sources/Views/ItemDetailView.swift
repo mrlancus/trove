@@ -31,14 +31,14 @@ struct ItemDetailView: View {
                         Text(ocr).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding()
-                    .card(cornerRadius: 14)
+                    .card(cornerRadius: Theme.Radius.medium)
                 }
                 tags
                 ItemConceptsSection(item: item)
                 ConnectionsSection(item: item)
                 if !similar.isEmpty { similarSection }
             }
-            .padding(20)
+            .padding(Theme.Space.xl)
             .frame(maxWidth: 820, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -80,8 +80,8 @@ struct ItemDetailView: View {
     // MARK: Sections
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
                 Image(systemName: ItemStyle.symbol(for: item)).foregroundStyle(ItemStyle.tint(for: item))
                 Text(ItemStyle.sourceLabel(item.source))
                 Text("·")
@@ -111,7 +111,7 @@ struct ItemDetailView: View {
     }
 
     @ViewBuilder private var editor: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
                 Text(item.kind == .note ? "Note" : "Your notes").font(.headline)
                 Spacer()
@@ -145,7 +145,7 @@ struct ItemDetailView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(Theme.Space.l)
         .card(cornerRadius: 16)
     }
 
@@ -177,7 +177,7 @@ struct ItemDetailView: View {
         VStack(alignment: .leading) {
             Text("Similar").font(.headline)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.m) {
                     ForEach(similar) { other in
                         Button { model.selectedItemID = other.id } label: {
                             ItemCard(item: other).frame(width: 220)
@@ -248,7 +248,7 @@ struct ConflictBanner: View {
                 .foregroundStyle(.yellow)
             DisclosureGroup("Other version\(item.conflictingVersions.count > 1 ? "s" : "")", isExpanded: $expanded) {
                 ForEach(Array(item.conflictingVersions.enumerated()), id: \.offset) { _, version in
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Theme.Space.s) {
                         Text(version).font(.callout).textSelection(.enabled)
                         HStack {
                             Button("Use this version") { Task { await model.resolveConflicts(item, keeping: version) } }
@@ -256,7 +256,7 @@ struct ConflictBanner: View {
                         }
                     }
                     .padding(10)
-                    .card(cornerRadius: 10)
+                    .card(cornerRadius: Theme.Radius.small)
                 }
             }
             Button("Keep current version") { Task { await model.resolveConflicts(item, keeping: item.body) } }
@@ -305,7 +305,7 @@ struct ExtractedCards: View {
                     }
                 }
             }
-            .padding(16).card(cornerRadius: 16)
+            .padding(Theme.Space.l).card(cornerRadius: 16)
         }
         if let p = x["product"]?.object {
             HStack {
@@ -314,7 +314,7 @@ struct ExtractedCards: View {
                 if let price = p["price"]?.number { Text(price.formatted(.currency(code: p["currency"]?.string ?? "GBP"))).font(.title3.weight(.semibold)) }
                 if let a = p["availability"]?.string { Text(a.replacingOccurrences(of: "InStock", with: "In stock")).font(.caption).foregroundStyle(.secondary) }
             }
-            .padding(16).card(cornerRadius: 16)
+            .padding(Theme.Space.l).card(cornerRadius: 16)
         }
         if item.watchableURL != nil { priceTracking }
         if let place = x["place"]?.object {
@@ -331,7 +331,7 @@ struct ExtractedCards: View {
     }
 
     private var priceTracking: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Toggle(isOn: Binding(get: { item.priceWatch != nil }, set: { on in Task { await model.setTracking(item, on) } })) {
                 Label("Track price drops", systemImage: "bell.badge")
             }
@@ -354,7 +354,7 @@ struct ExtractedCards: View {
                 }
             }
         }
-        .padding(16).card(cornerRadius: 16)
+        .padding(Theme.Space.l).card(cornerRadius: 16)
     }
 
     private func placeCard(name: String, address: String?, lat: Double?, lon: Double?) -> some View {
@@ -366,7 +366,7 @@ struct ExtractedCards: View {
                 Link("Directions", destination: url).buttonStyle(.bordered)
             }
         }
-        .padding(16).card(cornerRadius: 16)
+        .padding(Theme.Space.l).card(cornerRadius: 16)
     }
 
     private func eventCard(name: String, start: Date?, venue: String?) -> some View {
@@ -383,7 +383,7 @@ struct ExtractedCards: View {
                     .disabled(calendarMessage != nil)
             }
         }
-        .padding(16).card(cornerRadius: 16)
+        .padding(Theme.Space.l).card(cornerRadius: 16)
     }
 
     static func mapsURL(name: String, address: String?, lat: Double?, lon: Double?) -> URL? {

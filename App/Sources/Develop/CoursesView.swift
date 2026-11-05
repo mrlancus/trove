@@ -54,14 +54,19 @@ struct SubjectBadge: View {
 struct CoursesCard: View {
     @Bindable var develop: DevelopModel
     @State private var adding = false
+    @State private var makingOwn = false
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Your courses").font(.headline)
                 Spacer()
-                Button { adding = true } label: { Label("Add a course", systemImage: "plus") }
-                    .buttonStyle(.bordered).controlSize(.small)
+                Menu {
+                    Button("From the exam boards…", systemImage: "graduationcap") { adding = true }
+                    Button("Make your own…", systemImage: "sparkles") { makingOwn = true }
+                } label: { Label("Add a course", systemImage: "plus") } primaryAction: { adding = true }
+                .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
             }
             if develop.courses.isEmpty {
                 Button { adding = true } label: {
@@ -82,7 +87,7 @@ struct CoursesCard: View {
             ForEach(develop.courses) { course in
                 let spec = develop.courseSpecs.first { $0.id == course.spec }
                 NavigationLink {
-                    CourseView(develop: develop, course: course)
+                    if course.isOwn { OwnCourseView(develop: develop, course: course) } else { CourseView(develop: develop, course: course) }
                 } label: {
                     CourseRow(develop: develop, course: course, spec: spec)
                 }
@@ -96,6 +101,11 @@ struct CoursesCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(cornerRadius: Theme.Radius.large)
         .sheet(isPresented: $adding) { CoursePicker(develop: develop) }
+        .sheet(isPresented: $makingOwn) { OwnCourseSheet(develop: develop) }
+        // First launch's "Something of my own" lands here once.
+        .task {
+            if model.firstLaunchChoice == .own { model.firstLaunchChoice = nil; makingOwn = true }
+        }
     }
 }
 
@@ -109,12 +119,17 @@ struct CourseRow: View {
             SubjectBadge(subject: spec?.subject ?? course.name)
             VStack(alignment: .leading, spacing: 4) {
                 Text(spec.map { "\($0.qualification) \($0.subject)" } ?? course.name).font(.subheadline.weight(.semibold))
-                if let spec {
+                if course.isOwn {
+                    let n = develop.ownTopics[course.spec]?.count ?? 0
+                    Text("Your own course · \(n) topic\(n == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+                } else if let spec {
                     let have = develop.downloaded(spec), total = spec.questionPapers.count
                     Text("\(develop.boardName(spec.board)) · \(spec.code) · \(have) of \(total) papers on this device")
                         .font(.caption).foregroundStyle(.secondary)
                     ProgressView(value: Double(have), total: Double(max(total, 1)))
                         .tint(SubjectStyle.symbol(spec.subject).color)
+                } else if develop.catalogue != nil, develop.catalogue?.spec(course.spec) == nil {
+                    Text("Not in this device's catalogue").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text("Loading…").font(.caption).foregroundStyle(.secondary)
                 }
@@ -267,6 +282,7 @@ struct CourseView: View {
                     Toggle("Sync downloaded papers to my other devices", isOn: $develop.syncBoardPapers)
                         .font(.callout)
                 }
+                SpecificationSection(develop: develop, spec: spec)
                 if tiers(spec).count > 1 {
                     Picker("Tier", selection: $tier) {
                         Text("All").tag("All")
@@ -282,6 +298,8 @@ struct CourseView: View {
                         }
                     }
                 }
+            } else if develop.catalogue != nil, develop.catalogue?.spec(course.spec) == nil {
+                NotInCatalogueView(course: course)
             } else {
                 ProgressView()
             }
@@ -322,6 +340,63 @@ struct CourseView: View {
 
     private func tiers(_ spec: Catalogue.Spec) -> [String] {
         Array(Set(spec.questionPapers.compactMap(\.tier))).sorted { $0 == "Higher" && $1 != "Higher" }
+    }
+}
+
+/// The course's specification (learn-pivot plan §C6): its topics, each opening to its statements. Read on the
+/// device from the board's PDF; before that, one button to get it.
+struct SpecificationSection: View {
+    let develop: DevelopModel
+    let spec: Catalogue.Spec
+    @State private var working = false
+
+    var body: some View {
+        let statements = develop.statements(spec)
+        if develop.catalogue?.specification(of: spec) != nil {
+            Section {
+                if statements.isEmpty {
+                    Button {
+                        working = true
+                        Task { await develop.fetchSpecification(spec); working = false }
+                    } label: {
+                        BusyLabel(develop.cached.contains(develop.catalogue?.specification(of: spec)?.id ?? "") ? "Read the specification" : "Download the specification", busy: working)
+                    }
+                    .disabled(working)
+                } else {
+                    ForEach(SpecReader.topics(statements)) { topic in
+                        SpecTopicRow(topic: topic, statements: statements)
+                    }
+                }
+            } header: {
+                Text("Specification")
+            } footer: {
+                Text(statements.isEmpty
+                     ? "Everything that can be asked, from \(develop.boardName(spec.board))'s own specification. Downloaded on Wi-Fi."
+                     : "\(statements.count) statements, read on this device from the board's specification.")
+            }
+            .task { await develop.readSpecification(spec) }
+        }
+    }
+}
+
+private struct SpecTopicRow: View {
+    let topic: SpecStatement
+    let statements: [SpecStatement]
+
+    var body: some View {
+        DisclosureGroup {
+            ForEach(SpecReader.under(topic.number, in: statements)) { s in
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(s.label).font(.subheadline.weight(s.depth <= topic.depth + 1 ? .semibold : .regular))
+                    if !s.text.isEmpty {
+                        Text(s.text).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                    }
+                }
+                .padding(.leading, CGFloat(max(0, s.depth - topic.depth - 1)) * Theme.Space.m)
+            }
+        } label: {
+            Text(topic.label).font(.body.weight(.medium))
+        }
     }
 }
 

@@ -5,7 +5,7 @@ The page lists, per tab (A Level, AS Level, GCSE), "Question papers, mark scheme
 OCR keeps the most recent series on Teach Cambridge for teachers, so those aren't public.
 """
 import re
-from common import fetch, doc_id, level_of
+from common import fetch, doc_id, level_of, spec_doc
 
 BASE = "https://www.ocr.org.uk"
 LEVELS = {"gcse": "GCSE", "as-and-a-level": "A-level"}
@@ -75,6 +75,23 @@ def as_codes(url):
     return set(codes[: len(codes) // 2]) if len(codes) >= 2 else set()
 
 
+SPEC_LINK = re.compile(r'<a href="([^"]*specification[^"]*\.pdf)"[^>]*class="button"[^>]*>\s*Download ([^<]*?)specification', re.I)
+
+
+def specification(page, code, qual):
+    """The specification PDF for one code from the qualification's main page: by the code in the file name,
+    else by the button's level ("Download AS Level specification")."""
+    links = [(h if h.startswith("http") else BASE + h, label.strip().lower()) for h, label in SPEC_LINK.findall(page)]
+    for url, _ in links:
+        if code.lower() in url.lower():
+            return url
+    want = "gcse" if qual == "GCSE" else "as level" if qual == "AS" else "a level"
+    for url, label in links:
+        if label.startswith(want):
+            return url
+    return links[0][0] if len(links) == 1 else None
+
+
 def find():
     specs = []
     for level, url in qualifications():
@@ -94,11 +111,18 @@ def find():
                     d["paper"] = f"{code}/{d['paper']}"
                 code = own[-1]
             grouped.setdefault(code, []).extend(docs)
+        try:
+            main = fetch(url)
+        except Exception:  # noqa: BLE001
+            main = ""
         for code, docs in grouped.items():
             qual = "GCSE" if level == "GCSE" else ("AS" if code.lower() in as_codes(url) else "A-level")
             sid = f"ocr-{code.lower()}"
             for d in docs:
                 d["id"] = doc_id(sid, d["type"], d["paper"], d["tier"], d["series"], d["year"])
+            spec_url = specification(main, code, qual)
+            if spec_url:
+                docs.append(spec_doc(sid, spec_url))
             specs.append({"id": sid, "board": "ocr", "qualification": qual, "subject": subject, "code": code,
                           "level": level_of(qual), "url": url,
                           "docs": [{k: v for k, v in d.items() if v is not None} for d in docs]})

@@ -127,6 +127,13 @@ final class AppModel {
     @ObservationIgnored private var shownInkStamp = ""
     /// Study mode (StudyView): open, and which deck (nil: everything due).
     var showStudy = false
+    /// Bumped by `openLearn()`, so the iPhone switches to its Learn tab.
+    var learnRequests = 0
+    /// First launch's "What are you learning?" (learn-pivot plan §4 B3): shown once, after a new vault is made.
+    var askWhatLearning = false
+    enum FirstLaunchChoice { case own }
+    /// What was answered, for Learn to act on once (own course: open "Make your own course").
+    var firstLaunchChoice: FirstLaunchChoice?
     /// The New sketch sheet, and the folder it was asked for in.
     var showNewSketch = false
     var newSketchFolder: String?
@@ -413,6 +420,7 @@ final class AppModel {
             phase = .ready
             await library?.writeNewVaultDefaults()
             await library?.addNote(title: "Welcome to Trove", body: Self.welcomeNote)
+            askWhatLearning = true
             await syncNow()
         } catch {
             phase = .failed(error.localizedDescription)
@@ -1690,16 +1698,17 @@ final class AppModel {
     }
 
     static let welcomeNote = """
-    Trove keeps everything you save, organises it for you, and finds it again.
+    Trove is where you learn: small practice sessions from real exam papers, a tutor that holds the answer back, and progress you can see.
 
     **Try it**
-    - Paste a link or type a thought into Capture (⌘⇧Space on Mac).
-    - Share anything to Trove from other apps.
-    - Search by meaning: “that ramen place”, “tax pdf from March”.
-    - Use #tags anywhere in a note.
+    - Open Learn and add your course, or make one of your own.
+    - Practise a question on a page or a whiteboard, then mark it against the mark scheme.
+    - Keep your notes, sketches and PDFs here too, and search them by meaning.
+    - Your clipboard is kept as well (⌥Space on Mac).
 
-    Your iPad (Apple Intelligence) adds smart titles and summaries to everything, even items saved on other devices.
+    Everything is end-to-end encrypted and syncs through your own iCloud Drive.
     """
+
 }
 
 private extension Array {

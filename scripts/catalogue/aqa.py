@@ -5,7 +5,7 @@ like "Question paper (Higher) : Paper 1 Non-calculator - June 2023"; modified (l
 sound files, transcripts and candidate materials are skipped.
 """
 import re
-from common import fetch_json, doc_id, level_of
+from common import fetch_json, doc_id, level_of, spec_doc
 
 SEARCH = ("https://www.aqa.org.uk/api/search?type=aqaResource&location=/find-past-papers-and-mark-schemes"
           "&prefilter=scope&scope=findPastPapers&limit=1000&page={page}")
@@ -52,6 +52,31 @@ def parse(r):
                         "title": m["rest"].strip(), "series": series, "year": year, "url": asset["url"]}
 
 
+ALL = "https://www.aqa.org.uk/api/search?type=aqaResource&limit=1000&page={page}"
+# Specification PDFs have ids like "resources.physics.specifications.AQA-7407-7408-SP-2015_PDF".
+SPEC_ID = re.compile(r"specifications\.AQA-([0-9A-Z-]+?)-SP-(\d{4})")
+
+
+def specifications():
+    """{spec number: (first teaching year, title, url)}: the newest specification PDF for each number."""
+    out, page, seen = {}, 1, 0
+    while True:
+        d = fetch_json(ALL.format(page=page))
+        for r in (d.get("references") or {}).values():
+            m = SPEC_ID.search(r.get("_id") or "")
+            asset = ((r.get("file") or {}).get("asset") or {})
+            if not m or asset.get("extension") != "pdf" or not asset.get("url"):
+                continue
+            codes = {str(q.get("specificationNumber")) for q in r.get("qualifications") or []} | set(re.findall(r"\d{4}", m.group(1)))
+            for c in codes:
+                if c not in out or m.group(2) > out[c][0]:
+                    out[c] = (m.group(2), r.get("title") or "Specification", asset["url"])
+        seen += len(d.get("results") or [])
+        if not d.get("results") or seen >= d.get("hits", 0):
+            return out
+        page += 1
+
+
 def find():
     specs = {}
     for r in resources():
@@ -66,4 +91,13 @@ def find():
                                       "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes", "docs": []})
         doc["id"] = doc_id(sid, doc["type"], doc["paper"], doc["tier"], doc["series"], doc["year"])
         spec["docs"].append({k: v for k, v in doc.items() if v is not None})
+    try:
+        found = specifications()
+    except Exception as e:  # noqa: BLE001
+        print("aqa: specifications skipped", e)
+        found = {}
+    for sid, spec in specs.items():
+        if spec["code"] in found:
+            _, title, url = found[spec["code"]]
+            spec["docs"].append(spec_doc(sid, url, title))
     return {"id": "aqa", "name": "AQA", "site": "https://www.aqa.org.uk", "layout": LAYOUT}, list(specs.values())

@@ -36,3 +36,18 @@ test("ids and slugs match TroveCore", () => {
   assert.equal(edgeId("item.1", "about", "concept.x"), "edge." + sha256Hex("item.1\nabout\nconcept.x").slice(0, 12));
   assert.equal(problemId("cat:aqa-7408-1-2023-06-qp", "2.1"), "problem." + sha256Hex("cat:aqa-7408-1-2023-06-qp\n2.1").slice(0, 12));
 });
+
+test("own courses read the same as in Swift (Fixtures/course-cases.json)", async () => {
+  const { course, courseConcept, ownCourseTopics, topicId } = await import("../public/core/develop.js");
+  const c = JSON.parse(readFileSync(new URL("../../Packages/TroveCore/Tests/TroveCoreTests/Fixtures/course-cases.json", import.meta.url)));
+  const courses = c.records.filter((r) => r.kind === "course").map((r) => course(r.fields));
+  assert.deepEqual(courses.filter((x) => !x.own).map((x) => x.spec), c.expect.catalogueCourses);
+  for (const want of c.expect.ownCourses) {
+    const got = courses.find((x) => x.spec === want.spec);
+    assert.ok(got?.own);
+    assert.equal(got.name, want.name);
+    assert.equal(courseConcept(want.spec), want.concept);
+    assert.deepEqual(ownCourseTopics(want.spec, c.records).map((t) => t.name), want.topics);
+    assert.deepEqual(want.topics.map((n) => topicId(want.spec, n)), want.topicIds);
+  }
+});

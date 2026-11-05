@@ -43,14 +43,14 @@ struct ItemCard: View {
                     Text(price).font(.subheadline.weight(.semibold)).foregroundStyle(.pink)
                 }
                 if !item.tags.isEmpty {
-                    HStack(spacing: 4) { ForEach(item.tags.prefix(3), id: \.self) { TagChip(tag: $0) } }
+                    HStack(spacing: Theme.Space.xs) { ForEach(item.tags.prefix(3), id: \.self) { TagChip(tag: $0) } }
                         .tint(ItemStyle.tint(for: item))
                 }
             }
-            .padding(12)
+            .padding(Theme.Space.m)
         }
         .card()
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.large))
     }
 
     private var subtitle: String { Self.subtitle(item) }
@@ -324,7 +324,7 @@ struct NotebookCoverView: View {
                 ctx.fill(Path(CGRect(x: 0, y: 0, width: 10, height: size.height)), with: .color(.black.opacity(0.18)))
             }
             if !title.isEmpty {
-                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2).shadow(radius: 2).padding(.leading, 18).padding(12)
+                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2).shadow(radius: 2).padding(.leading, 18).padding(Theme.Space.m)
             }
         }
     }

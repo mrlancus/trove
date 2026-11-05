@@ -104,7 +104,8 @@ private struct AttemptRow: View {
             }
             Spacer(minLength: 0)
             if !attempt.work.isEmpty {
-                Button { Task { await develop.openWork(of: attempt) } } label: { Image(systemName: "doc.richtext") }
+                Button { Task { await develop.openWork(of: attempt) } } label: { WorkThumb(itemId: attempt.work) }
+                    .buttonStyle(.plain)
                     .help("Open the working")
                     .accessibilityLabel("Open the working")
             }
@@ -116,6 +117,33 @@ private struct AttemptRow: View {
         .controlSize(.small)
         .padding(Theme.Space.s)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+    }
+}
+
+/// A small picture of the working (the sketch's card picture, made when it was last closed), so attempts can be
+/// told apart at a glance (learn-pivot plan §B4). Decoded off the main thread at this size, by ThumbnailCache.
+private struct WorkThumb: View {
+    @Environment(AppModel.self) private var model
+    let itemId: String
+    @State private var image: PlatformImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(platformImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "pencil.and.scribble").font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.secondary.opacity(0.1))
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).stroke(Color.secondary.opacity(0.2)))
+        .task(id: itemId) {
+            guard let library = model.library, let thumb = await library.item(itemId)?.thumbnail else { return }
+            image = await ThumbnailCache.image(for: thumb, from: library)
+        }
     }
 }
 

@@ -31,6 +31,15 @@ Modified (large-print, braille) papers, sound files, transcripts and confidentia
 - `catalogue/specs/<spec id>.json`: that spec's documents. Ids are stable
   (`aqa-7408-2-2023-06-qp`, `ocr-j249-1-h-2023-06-ms`); problems point at `cat:<doc id>`, so an id never
   changes once published. Papers sharing a number (History's options) get their title in the id.
+- **Specifications** (2026-11-05, learn-pivot plan §C6): each course's specification is one doc of type
+  `spec`, id `<spec id>-spec`, linked on the board's own site: AQA (its resource search, ids
+  `…specifications.AQA-<code>-SP-<year>`), OCR (the qualification page's "Download … specification"
+  button), Eduqas and WJEC (the qualification's "Key documents" tab, DocumentType `Specification`),
+  Cambridge (the syllabus page; the syllabus whose years include this year, updates skipped), Pearson
+  (documents of type `Specification`, matched to a course by the Specification-Code tags its past papers
+  carry; public files only). The apps download it first when you add a course and read it into statements
+  on the device (`SpecReader`); it's never shipped. A real-spec check: `scripts/catalogue/spec-sample.py
+  <folder> aqa-7408 …` then `TROVE_SPEC_LINES=<folder> swift test --filter RealSpec`.
 
 The apps bundle the folder as a fallback and fetch newer copies from this repo
 (`raw.githubusercontent.com/mrlancus/trove/main/catalogue/`) at most once a day, and a spec's file only

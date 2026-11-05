@@ -149,6 +149,9 @@ public enum Practice {
         /// Source keys starting with any of these ("cat:aqa-7408-": a course's papers).
         public var sourcePrefixes: Set<String> = []
         public var levels: Set<ProblemLevel> = []
+        /// A problem testing any of these passes the source filters too (your own courses' topics, which have no
+        /// source prefix; learn-pivot plan §C1). With no source filters set, these alone choose.
+        public var orSkills: Set<String> = []
         public var minMarks: Int?
         public var maxMarks: Int?
         public init() {}
@@ -156,6 +159,45 @@ public enum Practice {
 
     /// Not shown again within this many days.
     public static let recentDays = 3.0
+    static func sourceOK(_ p: Problem, _ f: Filter) -> Bool {
+        let bySource = (f.sources.isEmpty || f.sources.contains(p.sourceKey))
+            && (f.sourcePrefixes.isEmpty || f.sourcePrefixes.contains { p.sourceKey.hasPrefix($0) })
+        if f.orSkills.isEmpty { return bySource }
+        let byTopic = !f.orSkills.isDisjoint(with: p.skills)
+        let noSource = f.sources.isEmpty && f.sourcePrefixes.isEmpty
+        return byTopic || (!noSource && bySource)
+    }
+
+    /// Up next is always a small session (learn-pivot plan §1.1, step 3b): about 3 questions, ~10 minutes.
+    public static let smallSession = 3
+    /// While some problems have a topic the set doesn't have yet, the next pick comes from those, so a set mixes
+    /// similar topics (interleaving, plan §1.1) instead of repeating one.
+    public static let mixTopics = true
+
+    /// Minutes a set takes, roughly: a minute a mark (the boards' own pace), at least 2 a question.
+    public static func minutes(_ problems: [Problem]) -> Int {
+        problems.reduce(0) { $0 + max(2, $1.marks ?? 3) }
+    }
+
+    /// Orders a set so no two problems in a row share their first topic, when that's possible: each time, the
+    /// topic with the most left that isn't the one just used (ties: the first picked). Within a topic, as picked.
+    public static func interleave(_ problems: [Problem]) -> [Problem] {
+        var queues: [(topic: String, items: [Problem])] = []
+        for p in problems {
+            let t = p.skills.first ?? ""
+            if let i = queues.firstIndex(where: { $0.topic == t }) { queues[i].items.append(p) } else { queues.append((t, [p])) }
+        }
+        var out: [Problem] = []
+        var last: String?
+        while queues.contains(where: { !$0.items.isEmpty }) {
+            let order = queues.indices.filter { !queues[$0].items.isEmpty }
+            let best = order.filter { queues[$0].topic != last || queues[$0].topic.isEmpty }.max { queues[$0].items.count < queues[$1].items.count }
+                ?? order.max { queues[$0].items.count < queues[$1].items.count }!
+            out.append(queues[best].items.removeFirst())
+            last = queues[best].topic
+        }
+        return out
+    }
     /// A due or weak skill's problems are up to this many times likelier than a well-known one's.
     public static let maxWeight = 5.0
 
@@ -165,8 +207,7 @@ public enum Practice {
         let pool = problems.filter { p in
             !recent.contains(p.id)
                 && (filter.skills.isEmpty || !filter.skills.isDisjoint(with: p.skills))
-                && (filter.sources.isEmpty || filter.sources.contains(p.sourceKey))
-                && (filter.sourcePrefixes.isEmpty || filter.sourcePrefixes.contains { p.sourceKey.hasPrefix($0) })
+                && sourceOK(p, filter)
                 && (filter.levels.isEmpty || filter.levels.contains(p.level))
                 && (filter.minMarks.map { (p.marks ?? 0) >= $0 } ?? true)
                 && (filter.maxMarks.map { (p.marks ?? 0) <= $0 } ?? true)
@@ -183,14 +224,21 @@ public enum Practice {
         var random = TroveGen.Seeded(seed)
         var picked: [Problem] = []
         var candidates = pool
+        var have = Set<String>()
         while picked.count < count, !candidates.isEmpty {
-            let total = weights.reduce(0, +)
+            // Mix topics: while some candidates bring a topic the set doesn't have, draw only from those.
+            let fresh = mixTopics ? candidates.indices.filter { !candidates[$0].skills.isEmpty && Set(candidates[$0].skills).isDisjoint(with: have) } : []
+            let allowed = fresh.isEmpty ? Array(candidates.indices) : fresh
+            let total = allowed.reduce(0) { $0 + weights[$1] }
             var r = random.unit() * total
-            var i = 0
-            while i < weights.count - 1, r >= weights[i] { r -= weights[i]; i += 1 }
-            picked.append(candidates.remove(at: i))
+            var k = 0
+            while k < allowed.count - 1, r >= weights[allowed[k]] { r -= weights[allowed[k]]; k += 1 }
+            let i = allowed[k]
+            let chosen = candidates.remove(at: i)
+            picked.append(chosen)
             weights.remove(at: i)
+            have.formUnion(chosen.skills)
         }
-        return picked
+        return interleave(picked)
     }
 }

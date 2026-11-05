@@ -60,7 +60,9 @@ final class TroveUITests: XCTestCase {
     func testLibraryScrollsAndShows() {
         let app = launch()
         // Where the app opens (docs/prompts/practice-space-home.md).
-        XCTAssertTrue(app.staticTexts["New sketch"].firstMatch.waitForExistence(timeout: 60), "the app didn't open on Home")
+        // Home leads with learning (learn-pivot plan §4 B2): Up next first; New sketch is a small button below.
+        XCTAssertTrue(app.staticTexts["Up next"].firstMatch.waitForExistence(timeout: 60), "the app didn't open on Home")
+        XCTAssertTrue(app.buttons["New sketch"].firstMatch.exists || app.staticTexts["New sketch"].firstMatch.exists, "no New sketch on Home")
         shot(app, "home")
         XCTAssertTrue(waitForLibrary(app), "the generated vault never showed")
         shot(app, "sidebar")
@@ -131,6 +133,27 @@ final class TroveUITests: XCTestCase {
             sleep(2)
             shot(app, "develop-course")
         }
+    }
+
+    /// Learn comes second (learn-pivot plan §4 B1): the iPhone's tabs are Home · Learn · Library · Clipboard ·
+    /// Search; the iPad's sidebar has Learn right under Home.
+    func testLearnComesSecond() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["Up next"].firstMatch.waitForExistence(timeout: 60))
+        let tabs = app.tabBars.buttons
+        if tabs.count >= 5 {
+            XCTAssertEqual((0..<4).map { tabs.element(boundBy: $0).label }, ["Home", "Learn", "Library", "Clipboard"])
+            tabs.element(boundBy: 1).tap()
+        } else {
+            let learn = app.staticTexts["Learn"].firstMatch
+            XCTAssertTrue(learn.waitForExistence(timeout: 10), "no Learn in the sidebar")
+            let home = app.staticTexts["Home"].firstMatch
+            if home.exists { XCTAssertLessThan(home.frame.minY, learn.frame.minY) }
+            XCTAssertLessThan(learn.frame.minY, app.staticTexts["Sketches"].firstMatch.frame.minY, "Learn isn't above Notes & Sketches")
+            learn.tap()
+        }
+        XCTAssertTrue(app.staticTexts["Your courses"].firstMatch.waitForExistence(timeout: 20), "Learn didn't open")
+        shot(app, "learn")
     }
 
     /// Hidden features (learn-pivot plan §3): no Connections in the sidebar or the iPhone's list.

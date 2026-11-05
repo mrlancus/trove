@@ -75,8 +75,18 @@ public enum CampaignPlanner {
             minutesPerDay = minutes
         }
 
-        /// Problems from the goal's courses: their catalogue papers' source keys start with these.
-        public var sourcePrefixes: Set<String> { Set(courses.map { "cat:\($0)-" }) }
+        /// Problems from the goal's courses: their catalogue papers' source keys start with these. Your own
+        /// courses have no catalogue papers: their problems are found by topic (`practiceFilter`; review R2).
+        public var sourcePrefixes: Set<String> { Set(courses.filter { !$0.hasPrefix("own.") }.map { "cat:\($0)-" }) }
+
+        /// What to practise for the goal: its courses' papers and its uploads, or a problem testing a topic of one
+        /// of its own courses (`ownTopics`: the topic ids of those courses).
+        public func practiceFilter(uploads: [String], ownTopics: Set<String>) -> Practice.Filter {
+            var f = Practice.Filter()
+            f.sourcePrefixes = sourcePrefixes(uploads: uploads)
+            f.orSkills = ownTopics
+            return f
+        }
 
         /// Its courses' papers and its uploads (`GoalUploads.effective`). Empty: anything you have.
         public func sourcePrefixes(uploads: [String]) -> Set<String> { sourcePrefixes.union(uploads.map { "item:\($0)" }) }

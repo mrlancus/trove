@@ -20,8 +20,17 @@ final class DevelopModel {
     @ObservationIgnored weak var app: AppModel?
 
     private(set) var catalogue: Catalogue?
-    private(set) var courses: [Course] = []
+    var courses: [Course] = []
     private var specFiles: [String: Catalogue.Spec] = [:]
+    /// Each course's specification statements, read on this device (`DevelopModel+Spec.swift`).
+    var specStatements: [String: [SpecStatement]] = [:]
+    /// A statement's concept id → the name Your work groups it under ("3.4.1 Force, energy and momentum").
+    @ObservationIgnored var specTopicNames: [String: String] = [:]
+    @ObservationIgnored var specTried: Set<String> = []
+    /// Your own courses' topics (`OwnCourseView.swift`), by course spec.
+    var ownTopics: [String: [Concept]] = [:]
+    /// Questions you typed this session (note id → question, answer), before the note's text is read back.
+    @ObservationIgnored var typedQuestions: [String: (question: String, answer: String)] = [:]
     private(set) var cached: Set<String> = []
     private(set) var problems: [Problem] = []
     private(set) var attempts: [Attempt] = []
@@ -88,6 +97,11 @@ final class DevelopModel {
         await resplitOutdated()
         await readUploadTexts()
         await syncPapers()
+        // Each course's specification: read from its cache, or fetched once per launch (Wi-Fi only).
+        for spec in courseSpecs where !specTried.contains(spec.id) {
+            specTried.insert(spec.id)
+            Task { await fetchSpecification(spec) }
+        }
     }
 
     /// The cached question text of a paper, named by the splitter's version, so an older split is read again.
@@ -118,7 +132,7 @@ final class DevelopModel {
         var arrived = 0
         let saved = await library.boardPaperDocIds()
         for spec in courseSpecs {
-            for doc in spec.docs where doc.type != .spec && (saved.contains(doc.id) != cached.contains(doc.id)) {
+            for doc in spec.docs where saved.contains(doc.id) != cached.contains(doc.id) {
                 if cached.contains(doc.id) {
                     if syncBoardPapers, let data = try? Data(contentsOf: Self.file(doc.id)) {
                         _ = try? await library.saveBoardPaper(data, docId: doc.id, title: paperName(doc, in: spec), folder: ["Practice papers", boardName(spec.board)])
@@ -139,6 +153,7 @@ final class DevelopModel {
         var paper = doc.title ?? doc.paper.map { "Paper \($0)" } ?? ""
         if let p = doc.paper, !paper.isEmpty, !paper.localizedCaseInsensitiveContains(p) { paper = "Paper \(p): \(paper)" }
         let when = [doc.series, doc.year.map(String.init)].compactMap { $0 }.joined(separator: " ")
+        if doc.type == .spec { return "\(boardName(spec.board)) \(spec.qualification) \(spec.subject) specification" }
         let kind = ["ms": " (mark scheme)", "er": " (examiner report)", "data": " (insert)"][doc.type.rawValue] ?? ""
         let head = ["\(boardName(spec.board)) \(spec.qualification) \(spec.subject)", paper, doc.tier].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         return head + (when.isEmpty ? "" : ", " + when) + kind
@@ -156,6 +171,7 @@ final class DevelopModel {
         concepts = await library.concepts()
         goals = await library.campaigns()
         index = EdgeIndex(edges: await library.edges(), concepts: concepts)
+        await loadOwnTopics()
         let all = attempts
         skills = await Task.detached(priority: .userInitiated) { Mastery.evaluate(all) }.value
     }
@@ -227,6 +243,8 @@ final class DevelopModel {
         courses = await library.courses()
         await loadSpec(spec.id)
         await seedConcepts()
+        // The specification comes first (learn-pivot plan §C6).
+        if let full = specFiles[spec.id] { Task { await fetchSpecification(full) } }
     }
 
     func removeCourse(_ course: Course) async {
@@ -328,7 +346,8 @@ final class DevelopModel {
             for q in questions {
                 texts[q.key] = q.text
                 if known { continue }
-                let tagged = ConceptMatch.mentioned(in: q.text, concepts: skillConcepts)
+                var tagged = ConceptMatch.mentioned(in: q.text, concepts: skillConcepts)
+                if let s = specConcept(for: q.text, in: spec), !tagged.contains(s) { tagged.append(s) }
                 await library.addProblem(sourceKey: "cat:\(doc.id)", key: q.key, parent: q.parent, pages: q.regions, marks: q.marks,
                                          level: spec.level, label: catalogue.label(doc, in: spec, question: q.key), skills: tagged)
                 made += 1
@@ -558,7 +577,13 @@ final class DevelopModel {
     func text(of p: Problem) -> String {
         if let id = itemId(p) {
             if questionText["item-\(id)"] == nil { questionText["item-\(id)"] = loadPaperCache(Self.textCache("item-\(id)")) ?? [:] }
-            return questionText["item-\(id)"]?[p.key] ?? ""
+            if let t = questionText["item-\(id)"]?[p.key], !t.isEmpty { return t }
+            // A question you typed (an own course's note): the note's question, without its answer.
+            if let typed = typedQuestions[id] { return typed.question }
+            if let note = app?.items.first(where: { $0.id == id }), note.kind == .note {
+                return note.body.components(separatedBy: "\n\n**Answer:**").first ?? note.body
+            }
+            return ""
         }
         guard let doc = docId(p) else { return "" }
         if questionText[doc] == nil { questionText[doc] = loadPaperCache(Self.textCache(doc)) ?? [:] }
@@ -567,6 +592,10 @@ final class DevelopModel {
 
     /// The matched mark-scheme entry, if any.
     func scheme(of p: Problem) -> String? {
+        // A typed question's answer is its scheme.
+        if let id = itemId(p), let typed = typedQuestions[id] { return typed.answer.isEmpty ? nil : typed.answer }
+        if let id = itemId(p), let note = app?.items.first(where: { $0.id == id }), note.kind == .note,
+           let r = note.body.range(of: "\n\n**Answer:** ") { return String(note.body[r.upperBound...]) }
         guard let docId = docId(p), let catalogue, let spec = spec(ofDoc: docId), let qp = spec.docs.first(where: { $0.id == docId }),
               let ms = catalogue.companions(of: qp, in: spec).ms else { return nil }
         if schemes[ms.id] == nil { schemes[ms.id] = loadPaperCache("\(ms.id)-scheme") ?? [:] }
@@ -660,11 +689,12 @@ final class DevelopModel {
     }
 
     /// Records the attempt and re-derives mastery.
-    func record(_ p: Problem, score: Double?, marking: Marking, hint: Int = 0, uncertain: Bool = false) async {
+    func record(_ p: Problem, score: Double?, marking: Marking, hint: Int = 0, uncertain: Bool = false,
+                shownAt: Double? = nil, shownBeforeTrying: Bool = false) async {
         guard let library = app?.library else { return }
         let a = Attempt(id: "attempt.\(UUID().uuidString)", problem: p.id, skills: p.skills, at: Date().timeIntervalSince1970 * 1000,
                         hint: hint, marking: marking, score: score, uncertain: uncertain, b: Difficulty.b(p), sourceKey: p.sourceKey, label: p.label,
-                        work: workInProgress[p.id] ?? "")
+                        work: workInProgress[p.id] ?? "", solutionShownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
         // The next try at the same question gets a fresh page; this one stays with its attempt.
         workInProgress[p.id] = nil
         await library.recordAttempt(a)
@@ -738,8 +768,9 @@ final class DevelopModel {
     /// Today's practice for a goal: as many questions as today's time allows, from its courses' papers.
     func startGoal(_ goal: CampaignPlanner.Goal) {
         let plan = plan(goal)
-        var filter = Practice.Filter()
-        filter.sourcePrefixes = goal.sourcePrefixes(uploads: goalUploads(goal))
+        // Own courses have no papers: their problems are found by topic (learn-pivot plan §C1, review R2).
+        let ownTopics = Set(goal.courses.filter { $0.hasPrefix("own.") }.flatMap { (self.ownTopics[$0] ?? []).map(\.id) })
+        var filter = goal.practiceFilter(uploads: goalUploads(goal), ownTopics: ownTopics)
         if let today = plan.days.first, !today.skills.isEmpty, !goal.courses.isEmpty || !goal.skills.isEmpty { filter.skills = Set(today.skills) }
         let count = max(1, plan.days.first?.questions ?? 3)
         let seed = UInt64.random(in: 1...UInt64.max)

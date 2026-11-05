@@ -17,7 +17,7 @@ kept if it has a public question paper from 2019 on and no newer spec replaces i
 """
 import json, re, sys, os, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import fetch, doc_id, level_of  # noqa: E402
+from common import fetch, doc_id, level_of, spec_doc  # noqa: E402
 
 PAGE = "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html"
 
@@ -153,9 +153,40 @@ def parse(hit, family):
     return sid, spec, doc
 
 
+def spec_codes(hit):
+    """Every Specification-Code tag on a record ("gcse-physics-2016", ".../2016/gcse-physics-2016")."""
+    return {c.rsplit("/", 1)[-1] for c in hit.get("category", []) if c.startswith("Pearson-UK:Specification-Code/")}
+
+
+def add_specifications(cfg, specs, codes):
+    """Each course's specification PDF (learn-pivot plan §C6): Pearson's "Specification" documents, matched to a
+    course through the Specification-Code tags its past papers carry (`codes`: tag → spec id). Public files only."""
+    best = {}
+    for family in FAMILIES:
+        try:
+            hits = records(cfg, f'category:"Pearson-UK:Qualification-Family/{family}" AND category:"Pearson-UK:Document-Type/Specification"')
+        except Exception as e:  # noqa: BLE001
+            print("pearson: specifications skipped", family, e)
+            continue
+        for h in hits:
+            url = h.get("url") or ""
+            if not url.startswith("/content/dam/pdf/") or not url.lower().endswith(".pdf"):
+                continue
+            name = url.rsplit("/", 1)[-1].lower()
+            score = (("spec" in name) * 2 + ("issue" in name or "-iss" in name), name)  # newer issues sort later
+            for tag in spec_codes(h):
+                sid = codes.get(tag)
+                if sid and (sid not in best or score > best[sid][0]):
+                    best[sid] = (score, h.get("title") or "Specification", SITE + urllib.parse.quote(url))
+    for sid, (_, title, url) in best.items():
+        if sid in specs:
+            specs[sid]["docs"].append(spec_doc(sid, url, re.sub(r"\s+", " ", title).strip() or "Specification"))
+
+
 def find():
     cfg = config()
     specs = {}
+    codes = {}
     for family in FAMILIES:
         for dt in KINDS:
             hits = records(cfg, f'category:"Pearson-UK:Qualification-Family/{family}" AND category:"Pearson-UK:Document-Type/{dt}"')
@@ -164,6 +195,8 @@ def find():
                 if not p:
                     continue
                 sid, fields, doc = p
+                for tag in spec_codes(h):
+                    codes.setdefault(tag, sid)
                 spec = specs.setdefault(sid, {"id": sid, "board": "pearson", **fields, "url": PAGE, "docs": []})
                 doc["id"] = doc_id(sid, doc["type"], doc["paper"], doc["tier"], doc["series"], doc["year"])
                 spec["docs"].append({k: v for k, v in doc.items() if v is not None})
@@ -182,6 +215,7 @@ def find():
     current = [s for sid, s in specs.items() if last[sid] >= CURRENT and all(last[sid] >= newest[k] for k in keys(s))]
     for s in current:
         s["subject"] = NAMES.get(s["code"]) or (s["subject"][:1].upper() + s["subject"][1:]) or s["code"]
+    add_specifications(cfg, {s["id"]: s for s in current}, codes)
     return {"id": "pearson", "name": "Pearson Edexcel", "site": SITE}, current
 
 

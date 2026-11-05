@@ -22,8 +22,9 @@ struct RootView: View {
                 .sheet(isPresented: $model.showTrash) { TrashView() }
                 .sheet(isPresented: $model.showCommands) { CommandPalette() }
                 .sheet(isPresented: $model.showNewSketch) { NewSketchSheet(folder: model.newSketchFolder) }
+                .sheet(isPresented: $model.askWhatLearning) { WhatAreYouLearningView() }
         case .failed(let message):
-            VStack(spacing: 16) {
+            VStack(spacing: Theme.Space.l) {
                 EmptyState(symbol: "exclamationmark.triangle", title: "Trove couldn't open your vault", message: message)
                 Button("Try again") { Task { model.phase = .loading } }.buttonStyle(.borderedProminent)
                 Button("Set up this device again", role: .destructive) { model.resetThisDevice() }
@@ -275,8 +276,8 @@ struct WindowDropOverlay: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .strokeBorder(LinearGradient(colors: [.orange, .pink], startPoint: .topLeading, endPoint: .bottomTrailing),
                               style: StrokeStyle(lineWidth: 3, dash: [12, 8]))
-                .padding(20)
-            VStack(spacing: 12) {
+                .padding(Theme.Space.xl)
+            VStack(spacing: Theme.Space.m) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
@@ -357,12 +358,14 @@ struct SidebarView: View {
             Section {
                 Label("Home", systemImage: "house")
                     .tag(AppModel.Selection.home)
+                // Learn second: the reason to open the app (learn-pivot plan §4 B1). Notes, sketches and the
+                // clipboard follow, as the tools you learn with.
+                Label("Learn", systemImage: "graduationcap")
+                    .tag(AppModel.Selection.develop)
                 ForEach(primary) { s in row(s) }
                 // Right under Sketches.
                 Label("Clipboard", systemImage: "doc.on.clipboard")
                     .tag(AppModel.Selection.clipboard)
-                Label("Learn", systemImage: "graduationcap")
-                    .tag(AppModel.Selection.develop)
                 if Features.graph {
                     Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
                         .tag(AppModel.Selection.graph)
@@ -611,7 +614,7 @@ struct LibraryView: View {
                             .buttonStyle(.plain)
                             .overlay {
                                 if model.picked.contains(item.id) || (!model.selecting && model.selectedItemID == item.id) {
-                                    RoundedRectangle(cornerRadius: 18).strokeBorder(.tint, lineWidth: model.picked.contains(item.id) ? 3 : 2)
+                                    RoundedRectangle(cornerRadius: Theme.Radius.large).strokeBorder(.tint, lineWidth: model.picked.contains(item.id) ? 3 : 2)
                                 }
                             }
                             .overlay(alignment: .topLeading) {
@@ -621,10 +624,10 @@ struct LibraryView: View {
                             .draggable(item.id) { ItemCard(item: item).frame(width: 220).opacity(0.9) }
                     }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
                 .animation(.spring(duration: 0.35), value: items.count)
                 if !model.clipResults.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         Text("From your clipboard").font(.headline).padding(.bottom, 4)
                         ClipSearchRows()
                     }
@@ -645,7 +648,7 @@ struct LibraryView: View {
             }
             ForEach(items) { item in
                 Button { tap(item, in: items) } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.m) {
                         if model.selecting { PickMark(on: model.picked.contains(item.id)) }
                         ItemRow(item: item)
                     }
@@ -820,7 +823,7 @@ struct ItemRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             Thumbnail(item: item, square: 52)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.displayTitle).font(.body.weight(.semibold)).lineLimit(2)
@@ -1041,9 +1044,9 @@ struct FolderHeader: View {
     var body: some View {
         let path = model.folderPath(folderId)
         let children = model.folders.filter { $0.parent == folderId }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             if path.count > 1 {
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.xs) {
                     ForEach(Array(path.enumerated()), id: \.element.id) { index, folder in
                         if index > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary) }
                         Button(folder.name) { model.selection = .folder(folder.id) }
@@ -1063,7 +1066,7 @@ struct FolderHeader: View {
                                 Spacer()
                                 Text("\(model.folderCount(child.id))").foregroundStyle(.secondary).font(.caption)
                             }
-                            .padding(12)
+                            .padding(Theme.Space.m)
                             .card(cornerRadius: 12)
                         }
                         .buttonStyle(.plain)
@@ -1085,7 +1088,7 @@ struct SketchesHeader: View {
     @State private var name = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             Button { Task { await model.newSketch() } } label: {
                 HStack(spacing: 14) {
                     Image(systemName: "pencil.tip.crop.circle.badge.plus").font(.system(size: 34)).foregroundStyle(.tint)
@@ -1096,7 +1099,7 @@ struct SketchesHeader: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card(cornerRadius: 16)
             }
@@ -1112,7 +1115,7 @@ struct SketchesHeader: View {
                             Spacer()
                             Text("\(model.folderCount(folder.id))").foregroundStyle(.secondary).font(.caption)
                         }
-                        .padding(12)
+                        .padding(Theme.Space.m)
                         .card(cornerRadius: 12)
                     }
                     .buttonStyle(.plain)
@@ -1127,7 +1130,7 @@ struct SketchesHeader: View {
                         Text("New folder").lineLimit(1)
                         Spacer()
                     }
-                    .padding(12)
+                    .padding(Theme.Space.m)
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])).foregroundStyle(.secondary))
                 }
                 .buttonStyle(.plain)

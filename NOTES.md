@@ -26,6 +26,13 @@ Decisions this session took for you (undo in brackets):
 - The website doesn't pause bridges itself; the apps do it on launch (one place to get it right). [port
   `BridgePause` to `web/public/core` if you want the website to do it too.]
 - The readable copy setting is per Mac (`VaultConfig.readableCopy`), like the mirror owner. [none needed]
+- Specification statements are worked out on each device and cached, not stored as records (they're the same on
+  every device from the same PDF, and a course has hundreds). Problems and attempts name them by concept id.
+  [store them as `spec` records with `inSpec` edges if the website ever needs them without the PDF]
+- A streak's rest day: one missed day between practice days. [`PracticeStats`: allow more, or none]
+- Mixing topics: a set draws from topics it doesn't have yet first. [`Practice.mixTopics = false`]
+- "Explain why" isn't saved; saying it is the point. [keep it on the attempt if you'd like to see it again]
+- A typed question in your own course is a note (so it syncs, searches and shows its answer). [none needed]
 
 Steps done (plan §9):
 - **Step 0** (docs): README, CLAUDE.md's first lines and docs/RESEARCH.md's pitch lead with learning; "Develop"
@@ -55,6 +62,41 @@ Steps done (plan §9):
   trove-relay → Settings → Variables and Secrets → Add → type Secret, name `VAULT_CREATE_CODE` (or `npx wrangler
   secret put VAULT_CREATE_CODE` in `server/`); (3) say "publish" so the new relay code is deployed. Until both
   are done, the relay still accepts new vaults from anyone.
+- **Step 2c** (specifications, plan §C6): every finder records the course's specification as a `spec` doc
+  (`<spec id>-spec`; how each board is read: docs/CATALOGUE.md "Specifications"); the catalogue was rebuilt.
+  Choosing a course downloads it first (`downloadPlan` puts it first; `fetchSpecification` on adding a course and
+  once per launch for existing ones, Wi-Fi only; synced like a downloaded paper). `SpecReader` (TroveCore) reads it
+  on the device into numbered statements with their text (headings, codes like AQA Maths' N1, History's options;
+  contents pages, running footers and front/admin chapters dropped), cached per file. The course screen shows a
+  Specification section (topics → statements). Catalogue bug fixed: option papers (AQA GCSE History) pair with
+  their own option's mark scheme (`Catalogue.optionKey`), never another's. Tests: `SpecReaderTests`,
+  `optionPapersPairWithTheirOwnOptionsScheme`, `RealSpecTests` (real specs by `scripts/catalogue/spec-sample.py`,
+  never committed; checked on AQA 7408 (191 statements), 8461 (126), 8300 (79), 8145 (22)).
+- **Step 3** (navigation, Home, first launch, plan §4 B1–B3): iPhone tabs Home · Learn · Library · Clipboard ·
+  Search; the sidebar has Learn second. Home: greeting and the next goal date, Up next (one small session, due
+  cards), three quiet numbers, Continue, Jump back in, Pinned, and small New note / New sketch / Import. Split into
+  small views; the shelves are worked out off the main thread when the library changes. After a new vault: "What
+  are you learning?" (an exam course → the course picker; something of my own → Make your own course; just my
+  notes). Tests: UI `testLearnComesSecond`, `testLibraryScrollsAndShows`; TEST-HOME-001 updated; TEST-LEARN-007.
+- **Step 3b** (study rules, plan §1.1): Up next is 3 questions (~10 min); "days in a row" counts a single missed
+  day as a rest day (two in a row end it), shown with a calendar, no flame and no warnings; `Practice.pick` mixes
+  topics (draws from new topics first) and `interleave` keeps the same topic from coming twice in a row (cards
+  are untouched: StudyView keeps decks in blocks); "Got it right. In a sentence, why does it work?" after a right
+  answer only; the hint ladder never gives the full solution before you've written something; attempts record
+  `shownAt` / `shownBeforeTrying` when the scheme or a full solution was shown. Tests: `aRestDayKeepsTheStreak`,
+  interleaving in `practicePicksAreSeededFreshAndFiltered`, `DevelopHintTests` (with a fake model).
+- **Step 4** (half-built items, plan §4 B4): Your work groups questions by the specification's subtopic
+  (questions are tagged with the statement they're about when split, and old ones once the spec is read:
+  `SpecReader.best`, `Library.addSkills`); thumbnails of the working on each attempt; Library, Settings, item card
+  and item detail moved onto `Theme` tokens where the values matched exactly (no visual change). Still to do
+  from "Not done": a Lock button on the website.
+- **Step 5** (own courses, plan §C1): Learn → Add a course → Make your own… (or first launch's "Something of my
+  own"): a name and topics. The course screen lists topics with Add a question (typed question and answer, kept
+  as a note, marked by you) and New note for this topic, and Practise (its topics' questions, mixed). Goals on own
+  courses find questions by topic (`Goal.practiceFilter`, `Practice.Filter.orSkills`). A course this device's
+  catalogue doesn't know shows "Not in the catalogue" instead of a spinner. PROTOCOL §13. Tests: `CourseTests`
+  (sync, topics, campaign filter, shared fixture `course-cases.json`), web `develop.test.mjs`. Update every device
+  in the same week: older builds can't open an own course.
 
 ## Decisions taken for you (Develop, performance and testing; overrule any of them)
 From `docs/prompts/develop-perf-testing.md` ("don't ask me, decide and log it"). Full reasoning:

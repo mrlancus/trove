@@ -21,8 +21,12 @@ extension DevelopModel {
         return "My papers"
     }
 
+    /// A question's topic: its specification statement's (learn-pivot plan §B4), else its skill's, else the paper's.
     func topic(skills: [String], label: String) -> String {
-        PracticeWork.topic(skills: skills, label: label) { id in self.concepts.first { $0.id == id }?.name }
+        let spec = skills.filter { specTopicNames[$0] != nil }
+        return PracticeWork.topic(skills: spec + skills.filter { specTopicNames[$0] == nil }, label: label) { id in
+            self.specTopicNames[id] ?? self.concepts.first { $0.id == id }?.name
+        }
     }
 
     /// Every attempt with a score or working, by course and topic (Develop → Your work).

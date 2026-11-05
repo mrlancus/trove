@@ -54,6 +54,11 @@ def doc_id(spec_id, kind, paper=None, tier=None, series=None, year=None):
     return "-".join(parts)
 
 
+def spec_doc(spec_id, url, title="Specification"):
+    """The course's specification (learn-pivot plan §C6): one "spec" doc per course, id "<spec id>-spec"."""
+    return {"type": "spec", "title": title, "url": url, "id": doc_id(spec_id, "spec")}
+
+
 def level_of(qualification):
     q = qualification.lower()
     if "igcse" in q or "international gcse" in q:

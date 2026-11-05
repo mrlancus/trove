@@ -7,7 +7,7 @@ pastpapers.download.wjec.co.uk. File names carry the unit code: Eduqas A420U10-1
 C420 (GCSE); WJEC 1420 (A level), 2420 (AS), 3420 (GCSE). Legacy specs (8420-01) are skipped.
 """
 import html as htmllib, json, re
-from common import fetch, doc_id, level_of
+from common import fetch, doc_id, level_of, spec_doc
 
 SITES = {"eduqas": ("Eduqas", "https://www.eduqas.co.uk", "/home/past-papers-and-mark-schemes/"),
          "wjec": ("WJEC", "https://www.wjec.co.uk", "/")}
@@ -30,6 +30,47 @@ def qualifications(base, path):
             return [q for q in d["qualifications"] if re.search(r"\b(GCSE|AS/A Level|AS and A Level|A Level)\b", q["name"])
                     and "withdrawn" not in q["name"].lower() and not q.get("isLegacy")]
     return []
+
+
+def ids(page):
+    qid = re.search(r'id="QualificationId"[^>]*value="([^"]*)"', page) or re.search(r'value="([^"]*)"[^>]*id="QualificationId"', page)
+    cid = re.search(r'id="CultureId"[^>]*value="([^"]*)"', page) or re.search(r'value="([^"]*)"[^>]*id="CultureId"', page)
+    return (qid.group(1) if qid else None), (cid.group(1) if cid else "en-GB")
+
+
+def walk(x):
+    if isinstance(x, dict):
+        yield x
+        for v in x.values():
+            yield from walk(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from walk(v)
+
+
+def specifications(base, qid, cid):
+    """The "Key documents" tab: entries with DocumentType "Specification" → [(name, url)]."""
+    out = []
+    tab = fetch(f"{base}/umbraco/surface/TabSurface/GetkeydocumentsTab?qualificationId={qid}&cultureId={cid}")
+    for d in props(tab):
+        for x in walk(d):
+            if x.get("DocumentType") == "Specification" and str(x.get("Link") or "").lower().endswith(".pdf"):
+                link = x["Link"]
+                out.append((x.get("Name") or "Specification", link if link.startswith("http") else base + link))
+    return out
+
+
+def spec_for(found, qual):
+    """Picks the specification for "A-level", "AS" or "GCSE" by its name ("AS Level Physics Specification")."""
+    if len(found) == 1:
+        return found[0]
+    def level(name):
+        n = name.lower()
+        return "AS" if re.search(r"\bas\b(?! and)", n) else "GCSE" if "gcse" in n else "A-level" if "a level" in n else None
+    for name, url in found:
+        if level(name) == qual:
+            return name, url
+    return None
 
 
 def items(base, link):
@@ -90,6 +131,12 @@ def find_site(board):
             print(board, "skipped", q["link"], e)
             continue
         subject = re.sub(r"\s*(GCSE|AS/A Level|AS and A Level|A Level).*$", "", q["name"]).strip()
+        try:
+            qid, cid = ids(fetch(base + q["link"]))
+            found_specs = specifications(base, qid, cid) if qid else []
+        except Exception:  # noqa: BLE001
+            found_specs = []
+        before = set(specs)
         known = {}
         for it in listed:
             p = parse(it)
@@ -106,6 +153,10 @@ def find_site(board):
                                           "code": code, "level": level_of(qual), "url": base + q["link"], "docs": []})
             doc["id"] = doc_id(sid, doc["type"], doc["paper"], doc["tier"], doc["series"], doc["year"])
             spec["docs"].append({k: v for k, v in doc.items() if v is not None})
+        for sid in set(specs) - before:
+            pick = spec_for(found_specs, specs[sid]["qualification"])
+            if pick:
+                specs[sid]["docs"].append(spec_doc(sid, pick[1], pick[0]))
     return {"id": board, "name": name, "site": base}, list(specs.values())
 
 

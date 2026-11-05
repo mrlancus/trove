@@ -223,6 +223,14 @@ import Crypto
             if Practice.pick(1, from: problems, attempts: attempts, skills: skills, now: now, seed: seed).first?.skills == ["s.weak"] { weak += 1 }
         }
         #expect(weak > 100)
+        // Learn pivot step 3b (plan §1.1): a small set mixes similar topics, and none repeats back to back.
+        for seed in 0..<50 as Range<UInt64> {
+            let set = Practice.pick(Practice.smallSession, from: problems, attempts: attempts, skills: skills, now: now, seed: seed)
+            #expect(set.count == 3)
+            #expect(Set(set.compactMap(\.skills.first)).count == 2, "seed \(seed): one topic only")
+            #expect(zip(set, set.dropFirst()).allSatisfy { $0.skills.first != $1.skills.first }, "seed \(seed): same topic twice in a row")
+        }
+        #expect(Practice.minutes(Array(problems.prefix(3))) == 2 + 2 + 3)
     }
 
     // TEST-DEV-008
@@ -277,10 +285,37 @@ import Crypto
         #expect(er?.id == "aqa-7408-2-2023-06-er")
         #expect(cat.label(qp, in: spec, question: "4.2") == "AQA 7408/2 June 2023 Q4.2")
         // Choosing one paper downloads it with its mark scheme and report, nothing else.
-        #expect(Set(cat.downloadPlan(spec: spec, cached: [], papers: [qp.id]).map(\.id)) == [qp.id, "aqa-7408-2-2023-06-ms", "aqa-7408-2-2023-06-er"])
-        #expect(cat.downloadPlan(spec: spec, cached: [qp.id]).count == spec.docs.filter { $0.type != .spec }.count - 1)
+        // Changed 2026-11-05 (learn-pivot plan §C6): the course's specification comes first in every plan.
+        let specDocs = Set(spec.docs.filter { $0.type == .spec }.map(\.id))
+        #expect(Set(cat.downloadPlan(spec: spec, cached: [], papers: [qp.id]).map(\.id)) == Set([qp.id, "aqa-7408-2-2023-06-ms", "aqa-7408-2-2023-06-er"]).union(specDocs))
+        #expect(cat.downloadPlan(spec: spec, cached: [qp.id]).count == spec.docs.count - 1)
+        if let first = specDocs.first { #expect(cat.downloadPlan(spec: spec, cached: []).first?.id == first) }
         #expect(cat.search("aqa phys", level: .alevel).contains { $0.id == "aqa-7408" })
         #expect(cat.layout(for: "aqa").parts != true && cat.layout(for: "ocr") == PaperSplitter.genericLayout)
+    }
+
+    /// learn-pivot-effort-tests.md "Catalogue bug": AQA GCSE History lists five "Paper 1"s; each question
+    /// paper pairs with its own option's mark scheme, and never with another option's.
+    @Test func optionPapersPairWithTheirOwnOptionsScheme() throws {
+        let cat = try Catalogue.decode(Data(contentsOf: Self.catalogueFolder.appendingPathComponent("index.json")))
+        func doc(_ type: Catalogue.DocType, _ title: String) -> Catalogue.Doc {
+            Catalogue.Doc(id: "aqa-8145-1-2025-06-\(type.rawValue)-\(title.lowercased().replacingOccurrences(of: " ", with: "-").prefix(40))",
+                          type: type, paper: "1", title: title, series: "June", year: 2025, url: "https://cdn.sanity.io/x.pdf")
+        }
+        let qpA = doc(.qp, "Paper 1 Section B Option A Conflict and tension: The First World War, 1894-1918")
+        let qpC = doc(.qp, "Paper 1 Section B Option C Conflict and tension between East and West, 1945-1972")
+        // The scheme's title is worded a little differently, so only the option tells them apart.
+        let msC = doc(.ms, "Paper 1 Section B Option C Conflict and tension East and West 1945-1972")
+        let msB = doc(.ms, "Paper 1 Section B Option B Conflict and tension: The inter-war years, 1918-1939")
+        let msAA = doc(.ms, "Paper 1 Section A Option A America, 1840-1895: Expansion and consolidation")
+        let er = doc(.er, "Paper 1")
+        let spec = Catalogue.Spec(id: "aqa-8145", board: "aqa", qualification: "GCSE", subject: "History", code: "8145", level: .gcse,
+                                  url: "https://www.aqa.org.uk", docs: [qpA, qpC, msB, msAA, msC, er])
+        #expect(cat.companions(of: qpC, in: spec).ms?.id == msC.id)
+        // Option A of section B has no scheme listed: none, not section A's option A or option B's.
+        #expect(cat.companions(of: qpA, in: spec).ms == nil)
+        #expect(cat.companions(of: qpA, in: spec).er?.id == er.id, "one report covers every option")
+        #expect(Catalogue.optionKey(qpC) == "b-c" && Catalogue.optionKey(msAA) == "a-a" && Catalogue.optionKey(er) == nil)
     }
 
     // TEST-DEV-010
@@ -434,6 +469,38 @@ extension DevelopAI.Task {
         #expect(!five.contains("<mark_scheme>"))
         #expect(DevelopHints.levels.count == MasteryConstants.standard.independence.count - 1)
     }
+
+    /// Learn pivot step 3b (plan §1.1): no full solution before you've tried; "explain why" only after a right answer.
+    @Test func theTutorHoldsTheSolutionBackUntilYouveTried() {
+        #expect(DevelopHints.allowedLevel(5, workSoFar: "") == 4)
+        #expect(DevelopHints.allowedLevel(5, workSoFar: "p = 2 × 3") == 5)
+        let early = DevelopHints.prompt(level: 5, question: "Find p.", scheme: "p = mv", workSoFar: "  ", earlier: [])
+        #expect(early.contains("the next step") && !early.contains("a full worked solution"))
+        #expect(early.contains("try a first line"))
+        #expect(DevelopHints.offerExplainWhy(score: 1) && !DevelopHints.offerExplainWhy(score: 0.5) && !DevelopHints.offerExplainWhy(score: nil))
+    }
+
+    /// The same rule with a fake model: what's sent for a level-5 hint with no working asks for the next step only.
+    @Test func aFakeModelIsNeverAskedForTheSolutionBeforeAnAttempt() async throws {
+        final class Net: @unchecked Sendable {
+            var sent: [String] = []
+            var transport: AIClient.Transport {
+                { [self] request in
+                    sent.append(String(decoding: request.httpBody ?? Data(), as: UTF8.self))
+                    return (Data(#"{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"Try writing p = mv first."}],"usage":{"input_tokens":5,"output_tokens":5}}"#.utf8), 200)
+                }
+            }
+        }
+        let net = Net()
+        var s = AISettings()
+        s.apiKey = "sk-test"
+        let client = AIClient(settings: s, transport: net.transport)
+        _ = try await client.developHint(level: 5, question: "Find p.", scheme: "p = mv = 6", workSoFar: "", earlier: [], about: "test")
+        _ = try await client.developHint(level: 5, question: "Find p.", scheme: "p = mv = 6", workSoFar: "m = 2, v = 3", earlier: [], about: "test")
+        #expect(net.sent.count == 2)
+        #expect(net.sent[0].contains("the next step") && !net.sent[0].contains("a full worked solution"))
+        #expect(net.sent[1].contains("a full worked solution"))
+    }
 }
 
 /// The Anki package (TEST-CARD-011).
@@ -557,6 +624,68 @@ extension DevelopAI.Task {
         #expect(await lib.courses().map(\.spec) == ["aqa-7408"])
         #expect(Course.id("aqa-7408") == "course.aqa-7408")
     }
+
+    /// Your own courses (learn-pivot plan §C1): a course record outside the catalogue, topics as skills joined by
+    /// `partOf` edges, synced; removing a topic sticks.
+    @Test func yourOwnCourseHasTopicsThatSync() async {
+        let keys = VaultKeys.generate()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let mac = Library(engine: SyncEngine(device: "MAC", keys: keys, transports: [FolderTransport(root: folder)]))
+        let ipad = Library(engine: SyncEngine(device: "IPAD", keys: keys, transports: [FolderTransport(root: folder)]))
+        let course = await mac.makeOwnCourse("Japanese for a trip", topics: ["Greetings", "Numbers", "Ordering food", "Numbers"])
+        #expect(course.isOwn && course.spec.hasPrefix("own.") && course.fields["source"] == "own")
+        #expect(Course(spec: "aqa-7408", name: "x").fields["source"] == nil, "catalogue courses are unchanged")
+        let other = await mac.makeOwnCourse("Piano grade 3", topics: ["Numbers"])
+        #expect(course.topicId("Numbers") != other.topicId("Numbers"), "topics are scoped to their course")
+        await mac.removeTopic(course.topicId("Ordering food"), from: course)
+        _ = await mac.engine.sync()
+        _ = await ipad.engine.sync()
+        #expect(await ipad.courses().contains { $0.spec == course.spec && $0.name == "Japanese for a trip" })
+        #expect(await ipad.topics(of: course).map(\.name) == ["Greetings", "Numbers"])
+        #expect(await ipad.topics(of: course).allSatisfy { $0.type == .skill })
+    }
+
+    /// The shared fixture (also read by web/test/develop.test.mjs): the same ids and topics in Swift and JS.
+    @Test func ownCoursesMatchTheSharedFixture() async throws {
+        let doc = try JSONDecoder().decode(JSONValue.self, from: DevelopTests.fixture("course-cases"))
+        let lib = Library(engine: SyncEngine(device: "A", keys: nil, encrypted: false))
+        for r in doc.object?["records"]?.array ?? [] {
+            let o = try #require(r.object)
+            await lib.engine.set(o["fields"]?.object ?? [:], record: o["id"]?.string ?? "", kind: o["kind"]?.string)
+        }
+        let expect = try #require(doc.object?["expect"]?.object)
+        let courses = await lib.courses()
+        #expect(courses.filter { !$0.isOwn }.map(\.spec) == expect["catalogueCourses"]?.stringArray)
+        for want in expect["ownCourses"]?.array ?? [] {
+            let w = try #require(want.object)
+            let c = try #require(courses.first { $0.spec == w["spec"]?.string })
+            #expect(c.isOwn && c.concept == w["concept"]?.string)
+            #expect(await lib.topics(of: c).map(\.name) == w["topics"]?.stringArray)
+            #expect((w["topics"]?.stringArray ?? []).map(c.topicId) == w["topicIds"]?.stringArray)
+        }
+    }
+
+    /// Campaigns take an own course's problems by topic, since it has no catalogue papers (review R2).
+    @Test func aGoalOnYourOwnCourseFindsItsProblemsByTopic() {
+        func problem(_ id: String, source: String, skills: [String]) -> Problem {
+            Problem(Record(id: id, kind: Develop.problemKind, fields: [
+                "source": source.hasPrefix("cat:") ? ["catalogue": .string(String(source.dropFirst(4)))] : ["item": .string(String(source.dropFirst(5)))],
+                "key": "1", "marks": 2, "level": "other", "skills": JSONValue(skills),
+            ], createdHLC: "1", updatedHLC: "1"))
+        }
+        let own = Course.own(name: "Japanese")
+        let greet = own.topicId("Greetings")
+        let problems = [problem("p.cat", source: "cat:aqa-7408-1-2023-06-qp", skills: ["concept.momentum"]),
+                        problem("p.own", source: "item:note1", skills: [greet]),
+                        problem("p.other", source: "item:note2", skills: ["concept.elsewhere"])]
+        let onlyOwn = CampaignPlanner.Goal(id: "g", name: "Trip", deadline: 2e12, skills: [], minutesPerDay: 20, courses: [own.spec])
+        #expect(onlyOwn.sourcePrefixes.isEmpty)
+        let f1 = onlyOwn.practiceFilter(uploads: [], ownTopics: [greet])
+        #expect(Practice.pick(5, from: problems, attempts: [], skills: [:], filter: f1, now: 1e12, seed: 1).map(\.id) == ["p.own"])
+        let both = CampaignPlanner.Goal(id: "g2", name: "Both", deadline: 2e12, skills: [], minutesPerDay: 20, courses: [own.spec, "aqa-7408"])
+        let f2 = both.practiceFilter(uploads: [], ownTopics: [greet])
+        #expect(Set(Practice.pick(5, from: problems, attempts: [], skills: [:], filter: f2, now: 1e12, seed: 1).map(\.id)) == ["p.cat", "p.own"])
+    }
 }
 
 /// Papers from boards without their own layout (OCR, WJEC, Eduqas, Cambridge) split by the generic one (TEST-CUR-004).
@@ -677,5 +806,98 @@ extension DevelopAI.Task {
             print("SPLIT \(s.doc): \(qs.count) questions, \(total) marks: \(qs.prefix(14).map { "\($0.key)[\($0.marks!)]" }.joined(separator: " "))")
             #expect(qs.count >= 5, "\(s.doc) split into only \(qs.count) marked questions")
         }
+    }
+}
+
+/// Real specifications read into statements (learn-pivot plan §C6). Fetched by
+/// `scripts/catalogue/spec-sample.py <folder> …`, never committed: TROVE_SPEC_LINES=<folder> swift test --filter RealSpec.
+@Suite struct RealSpecTests {
+    struct Sample: Decodable {
+        struct L: Decodable { var page: Int; var x, y, width, height: Double; var text: String }
+        var doc: String
+        var spec: String
+        var lines: [L]
+    }
+
+    @Test func eachSpecificationReadsIntoStatements() throws {
+        guard let folder = ProcessInfo.processInfo.environment["TROVE_SPEC_LINES"] else { return }
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder).filter { $0.hasSuffix(".json") }.sorted()
+        #expect(!files.isEmpty)
+        for f in files {
+            let s = try JSONDecoder().decode(Sample.self, from: Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent(f)))
+            let lines = s.lines.map { PaperSplitter.Line(page: $0.page, x: $0.x, y: $0.y, width: $0.width, height: $0.height, text: $0.text) }
+            let st = SpecReader.statements(lines, course: s.spec)
+            let topics = SpecReader.topics(st)
+            let withText = st.filter { $0.text.count >= 40 }.count
+            print("SPEC \(s.doc): \(st.count) statements (\(withText) with text), topics: \(topics.map(\.label).prefix(12).joined(separator: " | "))")
+            if ProcessInfo.processInfo.environment["TROVE_SPEC_DUMP"] != nil { for x in st { print("  \(x.number) [\(x.parent ?? "-")] \(x.title.prefix(60)) :: \(x.text.prefix(70).replacingOccurrences(of: "\n", with: " "))") } }
+            #expect(st.count >= 10, "\(s.doc) read into only \(st.count) statements")
+            #expect(Double(withText) >= Double(st.count) * 0.5, "\(s.doc): most statements should have text")
+            #expect(Set(st.map(\.number)).count == st.count, "\(s.doc) has a number twice")
+            #expect(!st.contains { $0.title.lowercased().hasPrefix("why choose") }, "\(s.doc) kept front matter")
+        }
+    }
+}
+
+/// SpecReader on lines written for this test (no board text): contents pages, running footers, numbers printed
+/// apart from their titles, codes on their own line, front matter (learn-pivot plan §C6).
+@Suite struct SpecReaderTests {
+    func lines() -> [PaperSplitter.Line] {
+        var out: [PaperSplitter.Line] = []
+        var y = 0.0
+        func add(_ page: Int, _ text: String, x: Double = 57, h: Double = 12, sameRow: Bool = false) {
+            if !sameRow { y += 14 }
+            out.append(.init(page: page, x: x, y: y, width: 300, height: h, text: text))
+        }
+        // Page 0: contents (the same numbers, no text of their own).
+        add(0, "Contents", h: 20)
+        add(0, "1.1 Why choose this course", h: 12)
+        add(0, "3.1 Mechanics", h: 12)
+        add(0, "3.1.1 Momentum", h: 12)
+        for p in 1...6 { y = 0; add(p, "Visit example.org/0000 for the most up-to-date specification \(p + 2)", x: 250, h: 9) }
+        y = 20
+        add(1, "1.1 Why choose this course", h: 16); add(1, "Because it is a good course and you will enjoy it a lot.")
+        add(1, "1.2 Support for you", h: 16); add(1, "Lots of support is offered by the people who wrote it.")
+        add(2, "3.1", h: 24); add(2, "Mechanics", x: 100, h: 24, sameRow: true)
+        add(2, "Forces and motion of bodies, studied with care across these topics.")
+        add(2, "3.1.1 Momentum", h: 16); add(2, "Momentum = mass × velocity. Conservation of linear momentum in collisions.")
+        add(3, "3.1.2 Impulse", h: 16); add(3, "Impulse is the change of momentum; force–time graphs and the area under them.")
+        add(3, "N1", h: 16); add(3, "order positive and negative"); add(3, "integers, decimals and fractions on a number line")
+        add(4, "3.2 Waves", h: 24); add(4, "Progressive and stationary waves of every kind are covered here in turn.")
+        add(4, "3.2.1 Refraction", h: 16); add(4, "Refractive index n = c / cs and Snell's law at a plane surface.")
+        add(5, "1.5 2.0 2.5", h: 12)
+        add(5, "4.1 Scheme of assessment", h: 16); add(5, "Two papers of two hours each are taken at the end of the course.")
+        add(5, "4.1.1 Paper 1", h: 16); add(5, "Ninety marks, written answers, in the summer of the second year.")
+        return out
+    }
+
+    @Test func numberedStatementsWithTheirText() throws {
+        let st = SpecReader.statements(lines(), course: "aqa-0000")
+        #expect(st.map(\.number) == ["3.1", "3.1.1", "3.1.2", "N1", "3.2", "3.2.1"])
+        let momentum = try #require(st.first { $0.number == "3.1.1" })
+        #expect(momentum.title == "Momentum" && momentum.parent == "3.1")
+        #expect(momentum.text.hasPrefix("Momentum = mass × velocity"), "the contents line was replaced by the real heading")
+        #expect(momentum.concept == Develop.conceptId("aqa-0000 3.1.1"))
+        #expect(st.first { $0.number == "3.1" }?.title == "Mechanics", "a number printed apart from its title")
+        let n1 = try #require(st.first { $0.number == "N1" })
+        #expect(n1.title.hasPrefix("order positive and negative") && n1.parent == "3.1.2")
+        #expect(!st.contains { $0.text.contains("up-to-date specification") }, "the running footer was dropped")
+        #expect(SpecReader.topics(st).map(\.number) == ["3.1", "3.2"])
+        #expect(SpecReader.under("3.1", in: st).map(\.number) == ["3.1.1", "3.1.2"])
+        // The same lines give the same statements on every device.
+        #expect(SpecReader.statements(lines(), course: "aqa-0000") == st)
+        // A question finds its statement by the words they share; Your work groups it one below the topic.
+        let q = "A trolley of mass 2 kg collides with another. Use conservation of linear momentum to find the speed after the collision."
+        #expect(SpecReader.best(for: q, in: st)?.number == "3.1.1")
+        #expect(SpecReader.best(for: "Draw a graph of your results.", in: st) == nil)
+        #expect(SpecReader.subtopic(of: momentum, in: st).number == "3.1.1")
+        #expect(SpecReader.subtopic(of: n1, in: st).number == "3.1.2")
+    }
+
+    @Test func aStatementFoundLaterIsAddedToAProblem() async {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let id = await lib.addProblem(sourceKey: "cat:aqa-7408-1-2023-06-qp", key: "1.1", pages: [], marks: 2, level: .alevel, label: "Q1.1", skills: ["concept.momentum"])
+        await lib.addSkills(["concept.aqa-7408-3-4-1-6", "concept.momentum"], to: id)
+        #expect(await lib.problems().first?.skills == ["concept.momentum", "concept.aqa-7408-3-4-1-6"])
     }
 }

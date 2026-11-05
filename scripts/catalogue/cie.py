@@ -6,7 +6,8 @@ Link texts look like "June 2024 Question Paper 11", "June 2024 Mark Scheme Paper
 "June 2024 Examiner Report", "2022 Specimen Paper 1".
 """
 import re
-from common import fetch, doc_id, level_of
+import datetime
+from common import fetch, doc_id, level_of, spec_doc
 
 BASE = "https://www.cambridgeinternational.org"
 LISTS = {"IGCSE": "/programmes-and-qualifications/cambridge-upper-secondary/cambridge-igcse/subjects/",
@@ -61,6 +62,26 @@ def parse(html):
     return docs
 
 
+SYLLABUS = re.compile(r'href="([^"]*?-(\d{4})(?:-(\d{4}))?-syllabus\.pdf)"', re.I)
+
+
+def syllabus(html, year=None):
+    """The syllabus PDF for this year from the syllabus page ("595430-2023-2025-syllabus.pdf"; updates skipped):
+    the one whose years include `year`, else the newest that has started, else the earliest."""
+    year = year or datetime.date.today().year
+    found = []
+    for href, start, end in SYLLABUS.findall(html):
+        url = href if href.startswith("http") else BASE + href
+        found.append((int(start), int(end or start), url))
+    if not found:
+        return None
+    for start, end, url in sorted(found, reverse=True):
+        if start <= year <= end:
+            return url
+    started = [f for f in found if f[0] <= year]
+    return (max(started) if started else min(found))[2]
+
+
 def find():
     specs = []
     for qual, slug, code in syllabuses():
@@ -79,6 +100,12 @@ def find():
         sid = f"cie-{code}"
         for d in docs:
             d["id"] = doc_id(sid, d["type"], d["paper"], None, d["series"], d["year"])
+        try:
+            url = syllabus(fetch(f"{BASE}/programmes-and-qualifications/{slug}/"))
+        except Exception:  # noqa: BLE001
+            url = None
+        if url:
+            docs.append(spec_doc(sid, url, "Syllabus"))
         specs.append({"id": sid, "board": "cie", "qualification": qual, "subject": subject, "code": code,
                       "level": "igcse" if qual == "IGCSE" else "alevel",
                       "url": f"{BASE}/programmes-and-qualifications/{slug}/",

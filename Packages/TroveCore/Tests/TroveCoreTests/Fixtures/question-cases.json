@@ -1,0 +1,1115 @@
+{
+ "note": "Written for these tests (no board text). The request's example is invented too. Read by QuestionWriterTests.",
+ "request": {
+  "board": "aqa",
+  "spec": "aqa-7408",
+  "paper": "1",
+  "level": "alevel",
+  "parts": 2,
+  "totalMarks": 5,
+  "example": {
+   "id": "ex1",
+   "label": "Example 06",
+   "question": "A stone of mass 0.15 kg is thrown horizontally from the top of a tall vertical cliff at 9.0 m s-1. Calculate its momentum.",
+   "scheme": "MP1 p = mv\nAllow 1.8 for both marks if g = 10 is used\nMP2 1.35"
+  }
+ },
+ "cases": [
+  {
+   "name": "passes",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": []
+  },
+  {
+   "name": "total doesn't add up",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 6,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "marks",
+    "scope"
+   ]
+  },
+  {
+   "name": "scheme short of the part's marks",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "marks"
+   ]
+  },
+  {
+   "name": "a later part prints an earlier answer",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "The ball's momentum is 2.4 kg m s-1. Determine the time the ball takes to reach the sea.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "givenAway"
+   ]
+  },
+  {
+   "name": "a Show that may be printed later",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Show that the momentum is about 2.4 kg m s-1.",
+      "marks": 2,
+      "commandWord": "Show that",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Using 2.4 kg m s-1, determine the time the ball takes to reach the sea.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": []
+  },
+  {
+   "name": "answer outside its own range",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.0,
+        2.2
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "answer"
+   ]
+  },
+  {
+   "name": "wording copied from the real question",
+   "question": {
+    "number": "06",
+    "stem": "A stone of mass 0.15 kg is thrown horizontally from the top of a tall vertical cliff at 9.0 m s-1 into the sea.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "nearCopy"
+   ]
+  },
+  {
+   "name": "guidance copied from the real scheme",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "allow",
+        "mistake": null,
+        "produces": null,
+        "text": "Allow 1.8 for both marks if g = 10 is used"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [
+      "3.4.1.6"
+     ],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "copiedGuidance"
+   ]
+  },
+  {
+   "name": "a tag missing",
+   "question": {
+    "number": "06",
+    "stem": "A ball of mass 0.20 kg is thrown horizontally from the top of a cliff at 12 m s-1. Ignore air resistance.",
+    "diagrams": [
+     {
+      "id": "Figure 1",
+      "description": "The cliff is 30 m high; the ball leaves its top edge horizontally."
+     }
+    ],
+    "parts": [
+     {
+      "label": "06.1",
+      "text": "Calculate the momentum of the ball as it leaves the cliff.",
+      "marks": 2,
+      "commandWord": "Calculate",
+      "answerLine": "momentum = ______ kg m s-1",
+      "answer": {
+       "value": 2.4,
+       "unit": "kg m s-1",
+       "accept": [
+        2.35,
+        2.45
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "M1",
+        "ao": "AO1",
+        "text": "p = mv = 0.20 × 12"
+       },
+       {
+        "point": "MP2",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.4"
+       }
+      ],
+      "guidance": [
+       {
+        "kind": "doNotAllow",
+        "mistake": "uses mass in grams",
+        "produces": "2400",
+        "text": "2400: mass left in grams"
+       }
+      ],
+      "levels": null,
+      "indicativeContent": null
+     },
+     {
+      "label": "06.2",
+      "text": "Determine the time the ball takes to reach the sea below.",
+      "marks": 3,
+      "commandWord": "Determine",
+      "answerLine": "time = ______ s",
+      "answer": {
+       "value": 2.47,
+       "unit": "s",
+       "accept": [
+        2.4,
+        2.5
+       ],
+       "text": null
+      },
+      "scheme": [
+       {
+        "point": "MP1",
+        "mark": "C1",
+        "ao": "AO1",
+        "text": "s = 1/2 g t^2"
+       },
+       {
+        "point": "MP2",
+        "mark": "C1",
+        "ao": "AO2",
+        "text": "t^2 = 60/9.81"
+       },
+       {
+        "point": "MP3",
+        "mark": "A1",
+        "ao": "AO2",
+        "text": "2.47 s"
+       }
+      ],
+      "guidance": [],
+      "levels": null,
+      "indicativeContent": null
+     }
+    ],
+    "totalMarks": 5,
+    "tags": {
+     "board": "aqa",
+     "spec": "aqa-7408",
+     "paper": "1",
+     "level": "alevel",
+     "specPoints": [],
+     "format": [
+      "calculation"
+     ],
+     "commandWords": [
+      "Calculate",
+      "Determine"
+     ],
+     "ao": {
+      "AO1": 2,
+      "AO2": 3,
+      "AO3": 0
+     },
+     "difficulty": 0.0,
+     "madeFrom": [
+      "ex1"
+     ]
+    }
+   },
+   "expect": [
+    "tags"
+   ]
+  }
+ ]
+}

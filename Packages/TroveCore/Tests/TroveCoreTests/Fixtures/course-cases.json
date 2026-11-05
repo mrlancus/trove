@@ -1,0 +1,113 @@
+{
+ "note": "Own courses (learn-pivot plan §C1, PROTOCOL.md §13): read by DevelopTests (Swift) and web/test/develop.test.mjs.",
+ "records": [
+  {
+   "id": "course.own-0f3c2b1a-1111-4222-8333-944455556666",
+   "kind": "course",
+   "fields": {
+    "spec": "own.0f3c2b1a-1111-4222-8333-944455556666",
+    "name": "Japanese for a trip",
+    "active": true,
+    "source": "own"
+   }
+  },
+  {
+   "id": "concept.own-0f3c2b1a-1111-4222-8333-944455556666",
+   "kind": "concept",
+   "fields": {
+    "name": "Japanese for a trip",
+    "type": "concept",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-greetings",
+   "kind": "concept",
+   "fields": {
+    "name": "Greetings",
+    "type": "skill",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "edge.0bc11cfcf683",
+   "kind": "edge",
+   "fields": {
+    "from": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-greetings",
+    "to": "concept.own-0f3c2b1a-1111-4222-8333-944455556666",
+    "type": "partOf",
+    "state": "accepted",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-numbers",
+   "kind": "concept",
+   "fields": {
+    "name": "Numbers",
+    "type": "skill",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "edge.5716870eaedc",
+   "kind": "edge",
+   "fields": {
+    "from": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-numbers",
+    "to": "concept.own-0f3c2b1a-1111-4222-8333-944455556666",
+    "type": "partOf",
+    "state": "accepted",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-ordering-food",
+   "kind": "concept",
+   "fields": {
+    "name": "Ordering food",
+    "type": "skill",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "edge.951268093bbd",
+   "kind": "edge",
+   "fields": {
+    "from": "concept.own-0f3c2b1a-1111-4222-8333-944455556666-ordering-food",
+    "to": "concept.own-0f3c2b1a-1111-4222-8333-944455556666",
+    "type": "partOf",
+    "state": "rejected",
+    "origin": "user"
+   }
+  },
+  {
+   "id": "course.aqa-7408",
+   "kind": "course",
+   "fields": {
+    "spec": "aqa-7408",
+    "name": "AQA A-level Physics (7408)",
+    "active": true
+   }
+  }
+ ],
+ "expect": {
+  "ownCourses": [
+   {
+    "spec": "own.0f3c2b1a-1111-4222-8333-944455556666",
+    "name": "Japanese for a trip",
+    "concept": "concept.own-0f3c2b1a-1111-4222-8333-944455556666",
+    "topics": [
+     "Greetings",
+     "Numbers"
+    ],
+    "topicIds": [
+     "concept.own-0f3c2b1a-1111-4222-8333-944455556666-greetings",
+     "concept.own-0f3c2b1a-1111-4222-8333-944455556666-numbers"
+    ]
+   }
+  ],
+  "catalogueCourses": [
+   "aqa-7408"
+  ]
+ }
+}

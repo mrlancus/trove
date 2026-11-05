@@ -355,18 +355,19 @@ Not yet on a device. Pencil answers, hints and timed mocks aren't built yet.
 - **Automated by**: `PracticeWorkTests`, `PracticeStatsTests`; the screen: manual.
 
 ### TEST-HOME-001: The app opens on Home
-- **Feature**: Home (docs/prompts/practice-space-home.md)
+- **Feature**: Home (docs/prompts/practice-space-home.md; changed 2026-11-05 by learn-pivot plan §4 B2)
 - **Priority**: high
-- **Coverage**: UI test `testLibraryScrollsAndShows` checks it opens on Home and screenshots it
+- **Coverage**: UI test `testLibraryScrollsAndShows` checks it opens on Home (Up next) and screenshots it
 - **Platforms**: iPhone (Home tab), iPad and Mac (Home at the top of the sidebar)
 - **Steps**:
   1. Launch the app.
-  2. Tap each of New note, New sketch, Practise and Import, coming back to Home each time.
-  3. Tap a card under Jump back in.
-- **Expected**: Home shows a greeting, four tiles, three numbers, Develop's next step (with a course) and
-  recent and pinned items; each tile does what it says; a card opens that item.
-- **Failure looks like**: the app opens on Recent or notes, a tile does nothing, or the shelf lags while scrolling.
-- **Automated by**: `TroveUITests.testLibraryScrollsAndShows` (opening only); the rest: manual.
+  2. Tap Start in Up next; come back. Tap the due cards button if there is one.
+  3. Tap Continue; tap a card under Jump back in; tap New note, New sketch and Import at the bottom.
+- **Expected**: Home shows the greeting and the next goal date, Up next (one small session and due cards; with
+  no course, "What are you learning?"), three numbers (after some practice), Continue, Jump back in, Pinned, and
+  the three small buttons; each does what it says.
+- **Failure looks like**: the app opens on Recent or notes, a button does nothing, or the shelf lags while scrolling.
+- **Automated by**: `TroveUITests.testLibraryScrollsAndShows` (opening only), `testLearnComesSecond`; the rest: manual.
 
 ### TEST-DEV-037: A question shows only itself, with its context
 - **Feature**: splitting v2 (tight crops, lead-ins, stems; PaperSplitter.version 2)

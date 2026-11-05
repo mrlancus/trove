@@ -108,6 +108,20 @@ struct PracticeStatsTests {
         #expect(PracticeStats([a(now - 3 * day, 1)], now: now, calendar: utc).streak == 0)
         #expect(PracticeStats([], now: now, calendar: utc).recentAverage == nil)
     }
+
+    /// Learn pivot step 3b (plan §1.1): one missed day is a rest day and keeps the streak; two in a row end it.
+    @Test func aRestDayKeepsTheStreak() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let now = 20 * day + 12 * 3_600_000
+        // Today, (rest on day 19), 18, 17, (rest on 16), 15: five days, four practised, two rests.
+        let s = PracticeStats([a(now, 1), a(now - 2 * day, 1), a(now - 3 * day, 1), a(now - 5 * day, 1)], now: now, calendar: utc)
+        #expect(s.streak == 4 && s.restDays == 2)
+        // Two missed days in a row (15 and 14) end it before day 13.
+        #expect(PracticeStats([a(now, 1), a(now - 7 * day, 1)], now: now, calendar: utc).streak == 1)
+        // Nothing today yet and a rest yesterday: still going.
+        #expect(PracticeStats([a(now - 2 * day, 1)], now: now, calendar: utc).streak == 1)
+    }
 }
 
 /// Splitting v2 (docs/prompts/practice-space-home.md): only the question, with its context.

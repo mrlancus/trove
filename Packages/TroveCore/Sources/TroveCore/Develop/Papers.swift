@@ -126,9 +126,30 @@ public struct Catalogue: Codable, Sendable, Equatable {
     public func companions(of qp: Doc, in spec: Spec) -> (ms: Doc?, er: Doc?) {
         func match(_ t: DocType) -> Doc? {
             let same = spec.docs.filter { $0.type == t && $0.paper == qp.paper && $0.series == qp.series && $0.year == qp.year && $0.tier == qp.tier }
-            return same.count > 1 ? (same.first { $0.title == qp.title } ?? same.first) : same.first
+            guard same.count > 1 else {
+                // One candidate: still not another option's scheme (an option paper with only some schemes listed).
+                if let mine = Self.optionKey(qp), let theirs = same.first.flatMap(Self.optionKey), mine != theirs { return nil }
+                return same.first
+            }
+            if let exact = same.first(where: { $0.title == qp.title }) { return exact }
+            // Option papers (AQA GCSE History lists five "Paper 1"s): pair by section and option, never guess.
+            if let key = Self.optionKey(qp) { return same.first { Self.optionKey($0) == key } }
+            return same.first
         }
         return (match(.ms), match(.er))
+    }
+
+    /// "Paper 1 Section B Option C Conflict and tension…" → "b-c"; "…-qp-paper-1-section-a-option-d-…" → "a-d".
+    /// Nil when the doc isn't an option paper. Examiner reports usually cover every option: they have no key.
+    public static func optionKey(_ doc: Doc) -> String? {
+        for text in [doc.title ?? "", doc.id.replacingOccurrences(of: "-", with: " ")] {
+            let t = text.lowercased()
+            guard let o = t.range(of: #"\boption ([a-z0-9]{1,2})\b"#, options: .regularExpression) else { continue }
+            let option = t[o].split(separator: " ").last.map(String.init) ?? ""
+            let section = t.range(of: #"\bsection ([a-z])\b"#, options: .regularExpression).flatMap { t[$0].split(separator: " ").last.map(String.init) } ?? ""
+            return "\(section)-\(option)"
+        }
+        return nil
     }
 
     /// What to download for a spec, given what's cached already (doc id → present).
@@ -139,8 +160,14 @@ public struct Catalogue: Codable, Sendable, Equatable {
                 return [qp.id, c.ms?.id, c.er?.id].compactMap { $0 }
             })
         }
-        return spec.docs.filter { $0.type != .spec && !cached.contains($0.id) && (wanted?.contains($0.id) ?? true) }
+        // The specification comes first, whatever's chosen (learn-pivot plan §C6): it lists everything that can
+        // be asked, so topics, coverage and new questions are worked out from it.
+        let specs = spec.docs.filter { $0.type == .spec && !cached.contains($0.id) }
+        return specs + spec.docs.filter { $0.type != .spec && !cached.contains($0.id) && (wanted?.contains($0.id) ?? true) }
     }
+
+    /// The course's specification document, when the catalogue has one.
+    public func specification(of spec: Spec) -> Doc? { spec.docs.first { $0.type == .spec } }
 
     /// "AQA 7408/2 June 2023 Q4.2", "OCR J249/1H June 2023 Q3": the source line shown on request.
     public func label(_ doc: Doc, in spec: Spec, question key: String) -> String {
@@ -483,7 +510,23 @@ public struct Course: Sendable, Equatable, Identifiable {
         self.init(spec: spec, name: r.fields["name"]?.string ?? spec, active: r.fields["active"]?.bool ?? true)
     }
     public static func id(_ spec: String) -> String { "course.\(Develop.slug(spec))" }
-    public var fields: [String: JSONValue] { ["spec": .string(spec), "name": .string(name), "active": .bool(active)] }
+    public var fields: [String: JSONValue] {
+        var f: [String: JSONValue] = ["spec": .string(spec), "name": .string(name), "active": .bool(active)]
+        if isOwn { f["source"] = "own" }
+        return f
+    }
+
+    // MARK: Your own courses (learn-pivot plan §C1)
+
+    /// A course you made, not in the catalogue: `spec` is `own.<uuid>`, `source` is "own" (PROTOCOL.md §13).
+    public static func own(name: String, uuid: UUID = UUID()) -> Course {
+        Course(spec: "own.\(uuid.uuidString.lowercased())", name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+    public var isOwn: Bool { spec.hasPrefix("own.") }
+    /// The concept that stands for the course; its topics are `partOf` it.
+    public var concept: String { "concept.\(Develop.slug(spec))" }
+    /// A topic's concept id, scoped to the course, so two courses' "Vocabulary" stay apart.
+    public func topicId(_ name: String) -> String { "concept.\(Develop.slug(spec + " " + name))" }
 }
 
 extension Library {
@@ -495,5 +538,42 @@ extension Library {
     /// Chosen courses, by name.
     public func courses() async -> [Course] {
         await engine.records(kind: Course.kind).compactMap(Course.init).filter(\.active).sorted { $0.name < $1.name }
+    }
+
+    /// Makes your own course with its topics (learn-pivot plan §C1): the course record, a concept for it, and
+    /// each topic a skill joined to it by a `partOf` edge (no topics array: review R8).
+    @discardableResult
+    public func makeOwnCourse(_ name: String, topics: [String]) async -> Course {
+        let course = Course.own(name: name)
+        await setCourse(course)
+        await engine.set(["name": .string(course.name), "type": .string(ConceptType.concept.rawValue), "origin": .string(DevelopOrigin.user.rawValue),
+                          "createdAt": .number(now().timeIntervalSince1970 * 1000)], record: course.concept, kind: Develop.conceptKind)
+        for t in topics { await addTopic(t, to: course) }
+        return course
+    }
+
+    /// Adds a topic to your own course; the same name twice is one topic.
+    @discardableResult
+    public func addTopic(_ name: String, to course: Course) async -> String {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = course.topicId(clean)
+        guard !clean.isEmpty else { return id }
+        if await engine.record(id).map({ $0.isDeleted }) ?? true {
+            await engine.set(["name": .string(clean), "type": .string(ConceptType.skill.rawValue), "origin": .string(DevelopOrigin.user.rawValue),
+                              "createdAt": .number(now().timeIntervalSince1970 * 1000)], record: id, kind: Develop.conceptKind)
+        }
+        await setEdge(from: id, to: course.concept, type: .partOf, state: .accepted, origin: .user)
+        return id
+    }
+
+    /// Takes a topic out of the course (the edge is rejected, so the removal syncs; attempts keep their skill).
+    public func removeTopic(_ id: String, from course: Course) async {
+        await setEdge(from: id, to: course.concept, type: .partOf, state: .rejected, origin: .user)
+    }
+
+    /// A course's topics: the skills `partOf` its concept and not rejected, by name.
+    public func topics(of course: Course) async -> [Concept] {
+        let ids = Set(await edges().filter { $0.type == .partOf && $0.to == course.concept && $0.state != .rejected }.map(\.from))
+        return await concepts().filter { ids.contains($0.id) }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }

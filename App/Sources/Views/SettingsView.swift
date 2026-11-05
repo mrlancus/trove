@@ -163,7 +163,7 @@ private struct RecoveryCodeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Theme.Space.l) {
             Text("Recovery code").font(.title2.bold())
             Text("If you lose every device, this code (plus your iCloud folder) is the only way back in. Print it or keep it in a password manager.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary)
@@ -653,7 +653,7 @@ private struct ScreenshotRoutesView: View {
     @State private var devices: [(id: String, name: String, kind: String)] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Text("Screenshots").font(.headline)
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow {
@@ -969,7 +969,7 @@ private struct ClipboardSection: View {
             Text("Off unless you turn it on. With it on, each copy and paste also keeps where you were (this device's location, never your IP address). The app or site, the device and the time are always kept. Encrypted like everything else. Applies on every device.")
                 .font(.caption).foregroundStyle(.secondary)
             LabeledContent("Save to Trove automatically") {
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                     ForEach(Self.autoSaveKinds, id: \.kind) { option in
                         Toggle(option.title, isOn: Binding(get: { clipboard.autoSave.contains(option.kind) },
                                                            set: { on in Task { await clipboard.setAutoSave(option.kind, on) } }))

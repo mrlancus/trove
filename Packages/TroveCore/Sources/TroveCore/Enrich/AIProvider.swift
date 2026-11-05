@@ -240,15 +240,21 @@ public struct AIClient: Sendable {
     /// plans searches over several steps, is medium. The user's choice.
     /// `think: false` turns thinking off for a small, simple reply (a goal question), on the models that allow
     /// it (`canSkipThinking`); on the rest thinking stays on and `effort` keeps it short.
+    /// `system` replaces the default system prompt; `cached` parts go first in the message and are marked for
+    /// prompt caching with the system prompt (Claude: `cache_control` on the system block and on the last cached
+    /// part; a prefix under the model's minimum, 512 tokens on Haiku 5.5, simply isn't cached). Other providers
+    /// get the same text, uncached.
     public func complete(_ parts: [Part], tier: AISettings.Tier = .fast, schema: [String: Any]? = nil, maxTokens: Int = 4000,
-                         effort: String = "medium", think: Bool = true, purpose: Purpose = Purpose(.action)) async throws -> Reply {
+                         effort: String = "medium", think: Bool = true, system: String? = nil, cached: [Part] = [],
+                         purpose: Purpose = Purpose(.action)) async throws -> Reply {
         let model = settings.model(tier)
         guard !model.isEmpty else { throw Failure(status: 0, message: "Choose a model in Settings → AI.") }
         if settings.provider == .anthropic {
             return try await anthropic(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort,
-                                       think: think || !Self.canSkipThinking(model, effort: effort), purpose: purpose)
+                                       think: think || !Self.canSkipThinking(model, effort: effort), system: system, cached: cached, purpose: purpose)
         }
-        return try await openAI(parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
+        let prefix = system.map { [Part.text($0)] } ?? []
+        return try await openAI(prefix + cached + parts, model: model, schema: schema, maxTokens: maxTokens, effort: effort, purpose: purpose)
     }
 
     /// The usage in a Claude or OpenAI-style reply, logged with the meter.
@@ -299,19 +305,22 @@ public struct AIClient: Sendable {
     }
 
     private func anthropic(_ parts: [Part], model: String, schema: [String: Any]?, maxTokens: Int, effort: String, think: Bool = true,
-                           purpose: Purpose) async throws -> Reply {
-        var content: [[String: Any]] = []
-        for part in parts {
+                           system: String? = nil, cached: [Part] = [], purpose: Purpose) async throws -> Reply {
+        func block(_ part: Part) -> [String: Any] {
             switch part {
-            case .text(let t): content.append(["type": "text", "text": t])
+            case .text(let t): return ["type": "text", "text": t]
             case .image(let data, let mime):
-                content.append(["type": "image", "source": ["type": "base64", "media_type": mime, "data": data.base64EncodedString()]])
+                return ["type": "image", "source": ["type": "base64", "media_type": mime, "data": data.base64EncodedString()]]
             }
         }
+        var content = cached.map(block)
+        if !content.isEmpty { content[content.count - 1]["cache_control"] = ["type": "ephemeral"] }
+        content += parts.map(block)
         var output: [String: Any] = ["effort": effort]
         if let schema { output["format"] = ["type": "json_schema", "schema": schema] }
+        let systemValue: Any = system.map { [["type": "text", "text": $0, "cache_control": ["type": "ephemeral"]]] as [[String: Any]] } ?? Self.system
         var body: [String: Any] = [
-            "model": model, "max_tokens": maxTokens, "system": Self.system,
+            "model": model, "max_tokens": maxTokens, "system": systemValue,
             "messages": [["role": "user", "content": content]], "output_config": output,
         ]
         if !think { body["thinking"] = ["type": "disabled"] }

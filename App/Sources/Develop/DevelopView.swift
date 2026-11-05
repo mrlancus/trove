@@ -191,6 +191,10 @@ struct PracticeView: View {
     }
     @State private var hints: [String] = []
     @State private var kind = DevelopModel.workKind
+    /// When the mark scheme or a full solution was first shown, and whether that was before any working
+    /// (learn-pivot plan §1.1: recorded with the attempt).
+    @State private var shownAt: Double?
+    @State private var shownBeforeTrying = false
 
     var body: some View {
         if let s = develop.session, let p = s.current {
@@ -341,7 +345,7 @@ struct PracticeView: View {
     private func actions(_ p: Problem) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
-                Button { marking = true } label: { Label("Mark it", systemImage: "checklist").frame(maxWidth: .infinity) }
+                Button { noteShown(p); marking = true } label: { Label("Mark it", systemImage: "checklist").frame(maxWidth: .infinity) }
                     .buttonStyle(.bordered).controlSize(.large)
                 Button { Task { await markWithAI(p) } } label: {
                     Label(working ? "Marking…" : "Mark with AI", systemImage: "sparkles").frame(maxWidth: .infinity)
@@ -357,7 +361,7 @@ struct PracticeView: View {
                 Spacer()
                 Button("Skip") {
                     Task {
-                        await develop.record(p, score: nil, marking: .none, hint: hints.count)
+                        await develop.record(p, score: nil, marking: .none, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
                         done = Outcome(score: nil, text: "Skipped: kept, but it counts as no evidence.")
                     }
                 }
@@ -380,6 +384,8 @@ struct PracticeView: View {
             .frame(width: 64, height: 64)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text(done.text).font(.callout).fixedSize(horizontal: false, vertical: true)
+                if DevelopHints.offerExplainWhy(score: done.score) { ExplainWhyBox() }
+                if let p = develop.session?.current { MoreLikeThisRow(develop: develop, problem: p) }
                 Button("Next question") { reset(); develop.advance() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
@@ -421,7 +427,7 @@ struct PracticeView: View {
             Button("Done") {
                 let score = DevelopMarking.selfMarkScore(ticked: ticked.count, marks: p.marks, points: points.count)
                 Task {
-                    await develop.record(p, score: score, marking: .selfMarked, hint: hints.count)
+                    await develop.record(p, score: score, marking: .selfMarked, hint: hints.count, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
                     done = Outcome(score: score, text: "\(min(ticked.count, p.marks ?? ticked.count)) of \(p.marks ?? max(1, points.count)) marks, self-marked against the mark scheme.")
                 }
             }
@@ -467,7 +473,10 @@ struct PracticeView: View {
         working = true
         defer { working = false }
         do {
-            hints.append(try await develop.hint(p, level: hints.count + 1, workSoFar: await workSoFar(p), earlier: hints))
+            let work = await workSoFar(p)
+            let level = DevelopHints.allowedLevel(hints.count + 1, workSoFar: work)
+            hints.append(try await develop.hint(p, level: level, workSoFar: work, earlier: hints))
+            if level == DevelopHints.levels.count { noteShown(p) }  // the full worked solution
         } catch {
             self.error = error.localizedDescription
         }
@@ -481,7 +490,7 @@ struct PracticeView: View {
             if let work = develop.work(for: p) { image = await develop.workImage(work) }
             let r = try await develop.markWithAI(p, answer: await workSoFar(p), image: image)
             aiResult = r
-            await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain)
+            await develop.record(p, score: r.score, marking: r.marking, hint: hints.count, uncertain: r.uncertain, shownAt: shownAt, shownBeforeTrying: shownBeforeTrying)
             done = Outcome(score: r.score, text: r.marking == .aiScheme ? "Marked by your AI against the mark scheme." : "Marked by your AI without a mark scheme (less sure).")
         } catch {
             self.error = error.localizedDescription
@@ -490,6 +499,59 @@ struct PracticeView: View {
 
     private func reset() {
         answer = ""; typing = false; showSource = false; marking = false; ticked = []; aiResult = nil; error = nil; picture = nil; done = nil; hints = []
+        shownAt = nil; shownBeforeTrying = false
+    }
+
+    /// The first time the scheme or a full solution is shown for this question.
+    private func noteShown(_ p: Problem) {
+        guard shownAt == nil else { return }
+        shownAt = Date().timeIntervalSince1970 * 1000
+        shownBeforeTrying = !hasAnswer(p)
+    }
+}
+
+/// More like this (on a tap, your AI; learn-pivot plan §C2.3), and This is wrong on a Trove-made question.
+private struct MoreLikeThisRow: View {
+    let develop: DevelopModel
+    let problem: Problem
+    @State private var working = false
+    @State private var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(spacing: Theme.Space.s) {
+                if develop.hasAI {
+                    Button {
+                        working = true
+                        Task {
+                            do { _ = try await develop.makeQuestions(like: problem); note = develop.message } catch { note = error.localizedDescription }
+                            working = false
+                        }
+                    } label: { BusyLabel("More like this", busy: working) }
+                    .disabled(working)
+                }
+                if problem.label.hasPrefix("Trove-made") {
+                    Button("This is wrong", role: .destructive) { Task { await develop.reportWrong(problem); note = develop.message } }
+                }
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+/// After a right answer (never before): say in a sentence why it works (learn-pivot plan §1.1). Optional, and
+/// kept on this screen only: saying it is the point.
+private struct ExplainWhyBox: View {
+    @State private var why = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(DevelopHints.explainWhyPrompt).font(.caption).foregroundStyle(.secondary)
+            TextField("Because…", text: $why, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...3)
+        }
     }
 }
 

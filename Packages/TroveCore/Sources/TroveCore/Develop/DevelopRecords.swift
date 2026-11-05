@@ -162,11 +162,18 @@ public struct Attempt: Sendable, Equatable, Identifiable {
     public var label: String
     /// The sketch the working was written in (an item id), "" for none (PROTOCOL.md §13).
     public var work: String
+    /// When the full solution or mark scheme was shown (Unix ms), nil if it wasn't (learn-pivot plan §1.1: the
+    /// tutor holds the answer back until you've tried; a mark made after seeing it is weaker evidence).
+    public var solutionShownAt: Double?
+    /// Whether the solution was shown before you'd written anything (`shownBeforeTrying`).
+    public var shownBeforeTrying: Bool
 
     public init(id: String, problem: String, skills: [String], at: Double, hint: Int, marking: Marking, score: Double?,
-                uncertain: Bool = false, b: Double, sourceKey: String, label: String = "", work: String = "") {
+                uncertain: Bool = false, b: Double, sourceKey: String, label: String = "", work: String = "",
+                solutionShownAt: Double? = nil, shownBeforeTrying: Bool = false) {
         self.id = id; self.problem = problem; self.skills = skills; self.at = at; self.hint = hint; self.marking = marking
         self.score = score; self.uncertain = uncertain; self.b = b; self.sourceKey = sourceKey; self.label = label; self.work = work
+        self.solutionShownAt = solutionShownAt; self.shownBeforeTrying = shownBeforeTrying
     }
 
     public init(_ r: Record) {
@@ -174,7 +181,8 @@ public struct Attempt: Sendable, Equatable, Identifiable {
         self.init(id: r.id, problem: f["problem"]?.string ?? "", skills: f["skills"]?.stringArray ?? [], at: f["at"]?.number ?? 0,
                   hint: Int(f["hint"]?.number ?? 0), marking: Marking(rawValue: f["marking"]?.string ?? "") ?? .none,
                   score: f["score"]?.number, uncertain: f["uncertain"]?.bool ?? false, b: f["b"]?.number ?? 0,
-                  sourceKey: f["source"]?.string ?? "", label: f["label"]?.string ?? "", work: f["work"]?.string ?? "")
+                  sourceKey: f["source"]?.string ?? "", label: f["label"]?.string ?? "", work: f["work"]?.string ?? "",
+                  solutionShownAt: f["shownAt"]?.number, shownBeforeTrying: f["shownBeforeTrying"]?.bool ?? false)
     }
 
     var fields: [String: JSONValue] {
@@ -185,6 +193,7 @@ public struct Attempt: Sendable, Equatable, Identifiable {
         ]
         out["score"] = score.map(JSONValue.number) ?? .null
         if !work.isEmpty { out["work"] = .string(work) }
+        if let solutionShownAt { out["shownAt"] = .number(solutionShownAt); out["shownBeforeTrying"] = .bool(shownBeforeTrying) }
         return out
     }
 }
@@ -256,6 +265,16 @@ extension Library {
     }
 
     public func problems() async -> [Problem] { await engine.records(kind: Develop.problemKind).map(Problem.init) }
+
+    /// Adds skills to a problem (a spec statement found later; learn-pivot plan §B4). What it has is kept.
+    public func addSkills(_ skills: [String], to problemId: String) async {
+        guard let r = await engine.record(problemId), !r.isDeleted else { return }
+        let have = r["skills"]?.stringArray ?? []
+        let new = skills.filter { !have.contains($0) }
+        guard !new.isEmpty else { return }
+        await engine.set(["skills": JSONValue(have + new)], record: problemId, kind: Develop.problemKind)
+        for skill in new { await setEdge(from: problemId, to: skill, type: .tests, state: .accepted, origin: .spec) }
+    }
 
     /// After splitting a paper again: its questions that the new split no longer has are removed (their
     /// attempts keep their label, so Your work still shows them).

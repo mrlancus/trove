@@ -116,3 +116,21 @@ export function evaluate(attempts, c = CONSTANTS) {
   }
   return new Map([...bySkill].map(([s, list]) => [s, evaluateSkill(list, c)]));
 }
+
+// ---------- Your own courses (learn-pivot plan §C1, PROTOCOL.md §13; Papers.swift Course) ----------
+
+/** A course record's fields → {spec, name, active, own}. Own courses have spec "own.<uuid>" and source "own". */
+export function course(fields) {
+  const spec = String(fields.spec ?? "");
+  return { spec, name: fields.name ?? spec, active: fields.active !== false, own: spec.startsWith("own.") };
+}
+export const courseConcept = (spec) => `concept.${slug(spec)}`;
+export const topicId = (spec, name) => `concept.${slug(`${spec} ${name}`)}`;
+
+/** An own course's topics: skill concepts with a `partOf` edge to the course's concept that isn't rejected. */
+export function ownCourseTopics(spec, records) {
+  const to = courseConcept(spec);
+  const ids = new Set(records.filter((r) => r.kind === "edge" && r.fields.type === "partOf" && r.fields.to === to && r.fields.state !== "rejected").map((r) => r.fields.from));
+  return records.filter((r) => r.kind === "concept" && ids.has(r.id)).map((r) => ({ id: r.id, name: r.fields.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

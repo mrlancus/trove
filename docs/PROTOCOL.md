@@ -1006,10 +1006,17 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
   `rationale`}), `b` (difficulty used, number), `level`, `label`, `source` (`sourceKey`, for
   "where did this come from?" after the problem is gone), `work` (optional: the id of the sketch item
   the working was written in; it lives in the sketch folder `Practice/<course>/<topic>`, and the
-  question is a picture element on its first page).
+  question is a picture element on its first page), `shownAt` (optional, ms: when the mark scheme or a full
+  worked solution was first shown) with `shownBeforeTrying` (bool: shown before any working; learn-pivot plan
+  §1.1, the tutor holds the answer back).
 - **`spec`** `spec.<board>-<code>-<version>` (slugged). Fields: `board`, `code`, `version`, `title`,
   `catalogue` (spec id in the catalogue), `topics` ([{`ref`, `title`, `concept`}], made on the
   device).
+- **Specification statements** (2026-11-05, learn-pivot plan §C6) aren't records: each device reads the
+  course's downloaded specification (catalogue doc type `spec`, synced as a `paper.<doc id>` item like a
+  downloaded paper) with `SpecReader` and keeps the result in its own cache. They're deterministic from the PDF,
+  so every device gets the same numbers and the same concept ids, `concept.<slug(course + " " + number)>`
+  (e.g. `concept.aqa-7408-3-4-1-6`), which problems and attempts can name as skills.
 
 - **`campaign`** `campaign.<uuid>`: `name`, `deadline` (ms), `skills` ([concept ids]; empty = every skill),
   `minutesPerDay`, `courses` ([catalogue spec ids]), `papers`, `uploads` ([item ids] you picked),
@@ -1019,6 +1026,13 @@ Unknown fields and kinds are kept and ignored by clients that don't know them.
 - **`course`** `course.<catalogue spec id>` (slugged): `spec` (catalogue spec id, e.g. `aqa-7408`), `name`
   ("AQA A-level Physics (7408)", for readers without the catalogue), `active` (bool; removing a course sets
   it false, so the removal syncs). Problems from a course's papers have `sourceKey` `cat:<doc id>`.
+  **Your own courses** (2026-11-05, learn-pivot plan §C1): `spec` is `own.<uuid>` (lowercase) and `source` is
+  `"own"`. The course has a concept `concept.<slug(spec)>`; each topic is a `skill` concept
+  `concept.<slug(spec + " " + topic name)>` with a `partOf` edge to it (a rejected edge removes the topic). No
+  topics array. Campaigns find an own course's problems by topic (a problem whose `skills` include one), since
+  it has no `cat:` papers. A question you type is a note item with a problem `item:<note id>`, key `1`. Builds
+  without own courses show it as a course they can't find in the catalogue. Shared fixture:
+  `Fixtures/course-cases.json` (Swift and `web/core/develop.js`).
 - **Edge rules.** An edge's id comes from its ends and type, so the same link made on two devices
   is one record. Changing its `state` is a plain LWW `set`. A client never deletes a `rejected` edge,
   and nothing but the user's own action changes a rejected edge's state (suggesters check for it).

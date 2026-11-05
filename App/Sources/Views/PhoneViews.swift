@@ -21,13 +21,18 @@ struct PhoneRootView: View {
     @State private var libraryPath: [PhoneRoute] = [.list(.smart(.recent))]
     @State private var searchPath: [PhoneRoute] = []
 
-    enum PhoneTab: Hashable { case home, library, clipboard, practise, search }
+    /// In tab order: Home · Learn · Library · Clipboard · Search (learn-pivot plan §4 B1, §10 Q5).
+    enum PhoneTab: Hashable { case home, practise, library, clipboard, search }
 
     var body: some View {
         @Bindable var model = model
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: PhoneTab.home) {
                 NavigationStack { HomeView() }
+            }
+            // Learn is the reason to open the app: second, after Home (learn-pivot plan §4 B1).
+            Tab("Learn", systemImage: "graduationcap", value: PhoneTab.practise) {
+                NavigationStack { DevelopView() }
             }
             Tab("Library", systemImage: "square.grid.2x2", value: PhoneTab.library) {
                 NavigationStack(path: $libraryPath) {
@@ -49,9 +54,6 @@ struct PhoneRootView: View {
                 .task { await model.clipboard.reload() }
             }
             .badge(model.clipboard.ephemeral.count)
-            Tab("Learn", systemImage: "graduationcap", value: PhoneTab.practise) {
-                NavigationStack { DevelopView() }
-            }
             Tab(value: PhoneTab.search, role: .search) {
                 NavigationStack(path: $searchPath) {
                     PhoneSearch()
@@ -69,6 +71,7 @@ struct PhoneRootView: View {
             if tab == .search { open(id, on: &searchPath) } else { open(id, on: &libraryPath) }
         }
         .onChange(of: libraryPath) { _, path in if tab == .library { follow(path) } }
+        .onChange(of: model.learnRequests) { _, _ in tab = .practise }
         .onChange(of: searchPath) { _, path in if tab == .search { follow(path) } }
         .onChange(of: tab) { old, new in
             if old == .search { model.searchText = "" }

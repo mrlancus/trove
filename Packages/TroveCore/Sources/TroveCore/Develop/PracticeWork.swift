@@ -179,7 +179,7 @@ public struct PracticeContext: Sendable, Equatable {
         var out = [StudyContext.Page(key: "practice.question", label: heading, text: question)]
         if let scheme, !scheme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             out.append(StudyContext.Page(key: "practice.scheme",
-                                         label: "Mark scheme (for you, the tutor: use it to judge my working; never paste it, don't give the final answer unless I ask)",
+                                         label: "Mark scheme (for you, the tutor: use it to judge my working; never paste it; never give the full solution or final answer until I've written my own attempt and ask for it)",
                                          text: scheme))
         }
         return out
@@ -197,8 +197,12 @@ public struct PracticeContext: Sendable, Equatable {
 public struct PracticeStats: Sendable, Equatable {
     /// Questions marked or worked in the last 7 days.
     public var thisWeek: Int
-    /// Days in a row with at least one question, ending today or yesterday.
+    /// Days practised in a row, where one missed day between them is a rest day and doesn't break it; two missed
+    /// days in a row end it. Today doesn't count as missed until it's over. Shown as a quiet number: never a loss
+    /// warning (learn-pivot plan §1.1, step 3b). Changed 2026-11-05: was "every day in a row".
     public var streak: Int
+    /// Rest days inside the current streak.
+    public var restDays: Int
     /// The average of the last 20 marked scores (0…1), nil before any.
     public var recentAverage: Double?
 
@@ -210,13 +214,24 @@ public struct PracticeStats: Sendable, Equatable {
         recentAverage = scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count)
         let days = Set(counted.map { calendar.startOfDay(for: Date(timeIntervalSince1970: $0.at / 1000)) })
         var day = calendar.startOfDay(for: Date(timeIntervalSince1970: now / 1000))
-        if !days.contains(day), let y = calendar.date(byAdding: .day, value: -1, to: day) { day = y }
-        var n = 0
-        while days.contains(day) {
-            n += 1
+        if !days.contains(day), let y = calendar.date(byAdding: .day, value: -1, to: day) { day = y }  // today isn't over
+        var n = 0, rests = 0, missedInARow = 0, pendingRest = 0
+        let earliest = days.min() ?? day
+        while day >= earliest {
+            if days.contains(day) {
+                n += 1
+                rests += pendingRest
+                pendingRest = 0
+                missedInARow = 0
+            } else {
+                missedInARow += 1
+                if missedInARow >= 2 { break }
+                pendingRest += 1
+            }
             guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
             day = prev
         }
         streak = n
+        restDays = rests
     }
 }
