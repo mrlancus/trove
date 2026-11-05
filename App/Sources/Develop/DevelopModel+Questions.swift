@@ -146,17 +146,17 @@ extension DevelopModel {
         guard material.count > 40 else { throw DevelopError("There isn't enough here to make questions from yet.") }
         let topics = Set(await library.edges().filter { $0.from == item.id && $0.type == .about && $0.state == .accepted }.map(\.to))
         let like = practisable.first { !topics.isDisjoint(with: $0.skills) }
-        let examples = like.map { examples(like: $0) } ?? []
-        let spec = like.flatMap { $0.sourceKey.hasPrefix("cat:") ? spec(ofDoc: String($0.sourceKey.dropFirst(4))) : nil }
+        let realOnes = like.map { self.examples(like: $0) } ?? []
+        let spec = like.flatMap { $0.sourceKey.hasPrefix("cat:") ? self.spec(ofDoc: String($0.sourceKey.dropFirst(4))) : nil }
         let board = spec.map { boardName($0.board) } ?? "Your notes"
-        let request = QuestionRequest(board: board, spec: spec?.id ?? "notes", level: like?.level.rawValue ?? "other", examples: examples,
+        let request = QuestionRequest(board: board, spec: spec?.id ?? "notes", level: like?.level.rawValue ?? "other", examples: realOnes,
                                       specPoints: like.map { specPoints(for: $0) } ?? [item.displayTitle], material: material, questions: count)
         let report = try await QuestionWriter.write(request, model: ai)
         let before = Set(problems.map(\.id))
         let skills = like?.skills ?? Array(topics)
         for made in report.made {
             await save(made.question, brief: made.brief, effort: made.effort, model: made.model, skills: skills, level: like?.level ?? .other, topic: item.displayTitle, board: board, code: spec?.code ?? "",
-                       paper: nil, course: like.map { courseName($0.sourceKey) } ?? "My notes", examples: examples, bank: nil, source: item.id)
+                       paper: nil, course: like.map { courseName($0.sourceKey) } ?? "My notes", examples: realOnes, bank: nil, source: item.id)
         }
         await app?.reload()
         await reload()
