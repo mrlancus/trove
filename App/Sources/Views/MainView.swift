@@ -145,9 +145,13 @@ struct MainView: View {
             SidebarView(showSettings: $showSettings)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
-            NavigationStack { HomeView() }
-                .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
-                .toolbar { toolbar }
+            // The search field and toolbar go on Home inside its stack: put on the stack itself, the
+            // iPad showed the buttons but no search field (testSearch, iPad mini and Air).
+            NavigationStack {
+                HomeView()
+                    .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search everything… try tag:recipe or is:pinned")
+                    .toolbar { toolbar }
+            }
         }
     }
 
