@@ -182,3 +182,20 @@ added with each step of plan §9.
 - **Expected**: each deck with its due and new counts, most due first; a deck studies only its own cards; Home
   shows "N cards due".
 - **Automated by**: `DeckTests`.
+
+### TEST-LEARN-012: Notes and the clipboard as learning tools
+- **Feature**: notes per topic, Practise this, lectures, Save to a course (plan §6)
+- **Priority**: high
+- **Coverage**: auto-tested (material and material-only writing); the screens, transcription: not tested
+- **Platforms**: iPad (lecture recording), iPhone, Mac
+- **Steps**:
+  1. A course's Specification → open a topic → New note for this topic; write a paragraph.
+  2. On that note: Practise this.
+  3. In a sketch, record a 30-minute lecture while writing; close it and wait; open the sketch's details.
+  4. Make questions from this lecture.
+  5. A clip's details → Save to a course… → a course → a topic.
+- **Expected**: the note shows under the topic; Practise this opens 3 questions in Learn, each labelled Trove-made
+  with the note as its source; the lecture gets a full transcript (iPad, iOS 26: SpeechAnalyzer; otherwise a
+  minute at a time) and its questions use what was said; the clip appears under that topic.
+- **Failure looks like**: a transcript that stops after a minute or so; questions about something else.
+- **Automated by**: `QuestionWriterTests/yourOwnMaterialBecomesQuestions`.

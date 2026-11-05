@@ -26,6 +26,8 @@ Decisions this session took for you (undo in brackets):
 - The website doesn't pause bridges itself; the apps do it on launch (one place to get it right). [port
   `BridgePause` to `web/public/core` if you want the website to do it too.]
 - The readable copy setting is per Mac (`VaultConfig.readableCopy`), like the mirror owner. [none needed]
+- Practise this makes 3 questions at a time; the start of a long lecture (12,000 characters of material) is used.
+  [`practiseThis(_:count:)`, `LearningMaterial.limit`]
 - Specification statements are worked out on each device and cached, not stored as records (they're the same on
   every device from the same PDF, and a course has hundreds). Problems and attempts name them by concept id.
   [store them as `spec` records with `inSpec` edges if the website ever needs them without the PDF]
@@ -130,6 +132,14 @@ Steps done (plan §9):
 - **Step 7** (cards in Learn, plan §4 B1): Learn → Cards lists your flashcard decks with due and new counts (most due
   first) and opens the existing StudyView for a deck or for everything due; Home's Up next shows the due count.
   Test: `DeckTests`, TEST-LEARN-011.
+- **Step 8** (notes and the clipboard, plan §6): a course's spec topic lists its notes (`about` edges) with **New note
+  for this topic** (own courses had it in step 5); **Practise this** on any note, PDF or sketch writes 3 questions from
+  it (with real questions on the same topic as the style when there are some; never shared) and opens them in
+  Learn, the item linked as their source; on a sketch with a recorded lecture it's **Make questions from this
+  lecture**. Transcripts (ink audio, already built) now use SpeechAnalyzer on iOS/macOS 26 when the locale's model is
+  installed (checked at runtime, installed on first use), else the old recognizer a minute at a time. A clip's
+  details have **Save to a course…** (course → topic). Test: `yourOwnMaterialBecomesQuestions`, TEST-LEARN-012.
+  The location permission text now says it's off unless chosen.
 - **Catalogue rebuilt** (2026-11-05): 683 courses, 666 with their specification (AQA 111/111, OCR 96/96, Eduqas 77/77,
   WJEC 101/102, Cambridge 133/133, Pearson 148/164: some GCSEs aren't tagged by Pearson's search; AS courses
   share the A level's document). WJEC's Health and Social Care site didn't answer once (502); it kept its listing.

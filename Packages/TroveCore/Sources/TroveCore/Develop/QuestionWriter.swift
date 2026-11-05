@@ -290,7 +290,9 @@ public struct QuestionRequest: Sendable, Equatable {
         s += "\nWrite \(questions) question\(questions == 1 ? "" : "s")"
         if let parts { s += " of \(parts) part\(parts == 1 ? "" : "s")" }
         if let totalMarks { s += ", \(totalMarks) marks each" }
-        s += ", in the style of the real questions above. Set brief to \"\(QuestionBrief.version)\" and tags.madeFrom to the ids of the real questions you used."
+        s += examples.isEmpty
+            ? ". There are no real questions for this: write exam-style questions (short answer and structured) that test the student material below, at this level, with mark points. Set brief to \"\(QuestionBrief.version)\" and tags.madeFrom to [\"material\"]."
+            : ", in the style of the real questions above. Set brief to \"\(QuestionBrief.version)\" and tags.madeFrom to the ids of the real questions you used."
         if let material, !material.isEmpty { s += "\n<student_material>\n\(material)\n</student_material>" }
         return s
     }
@@ -491,7 +493,9 @@ public enum QuestionWriter {
 
     /// No examples, no generation: the course asks for a paper first (plan §C2.3).
     public static func write(_ request: QuestionRequest, model: some QuestionModel) async throws -> Report {
-        guard !request.examples.isEmpty else {
+        // Real questions are the examples; with none, only your own material (Practise this on a note, a sketch or a
+        // lecture) can be written from, and it's never shared (QuestionBank.shareable).
+        guard !request.examples.isEmpty || !(request.material ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw Failure(message: "Trove writes new questions from real ones: download or upload a paper with this topic first.")
         }
         var tokens = 0

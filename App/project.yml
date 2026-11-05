@@ -106,8 +106,8 @@ targets:
         NSSpeechRecognitionUsageDescription: Trove turns your voice notes into searchable text on this device.
         NSPhotoLibraryUsageDescription: Trove can import your screenshots so their text becomes searchable.
         NSAppleEventsUsageDescription: Trove reads your Apple Notes so they appear in Trove search.
-        NSLocationWhenInUseUsageDescription: Trove keeps where you were with each copy and paste in your clipboard history (you can turn this off in Settings, Clipboard).
-        NSLocationUsageDescription: Trove keeps where you were with each copy and paste in your clipboard history (you can turn this off in Settings, Clipboard).
+        NSLocationWhenInUseUsageDescription: If you turn it on in Settings, Clipboard, Trove keeps where you were with each copy and paste in your clipboard history. It is off unless you choose it.
+        NSLocationUsageDescription: If you turn it on in Settings, Clipboard, Trove keeps where you were with each copy and paste in your clipboard history. It is off unless you choose it.
         NSCalendarsWriteOnlyAccessUsageDescription: Trove can add events it finds in your saved items to your calendar.
         NSRemindersFullAccessUsageDescription: Trove can turn tasks in your notes into reminders.
         NSUserActivityTypes: [com.mrlancus.trove.item]

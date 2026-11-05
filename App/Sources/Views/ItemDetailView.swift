@@ -34,6 +34,7 @@ struct ItemDetailView: View {
                     .card(cornerRadius: Theme.Radius.medium)
                 }
                 tags
+                PractiseThisRow(item: item)
                 ItemConceptsSection(item: item)
                 ConnectionsSection(item: item)
                 if !similar.isEmpty { similarSection }
@@ -434,5 +435,37 @@ enum HTMLLikeDuration {
             }
         }
         return result
+    }
+}
+
+/// Practise this on any note, PDF or sketch; "Make questions from this lecture" when it has a recording with a
+/// transcript (learn-pivot plan §6). Your AI, on a tap; the questions open in Learn.
+private struct PractiseThisRow: View {
+    @Environment(AppModel.self) private var model
+    let item: Item
+    @State private var working = false
+    @State private var note: String?
+
+    var body: some View {
+        if item.kind == .note || item.kind == .sketch || item.kind == .pdf || !(item.ocrText ?? "").isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Button {
+                    working = true
+                    note = nil
+                    Task {
+                        do {
+                            try await DevelopModel.shared.practiseThis(item)
+                            model.openLearn()
+                        } catch { note = error.localizedDescription }
+                        working = false
+                    }
+                } label: {
+                    BusyLabel(LearningMaterial.isLecture(item) ? "Make questions from this lecture" : "Practise this", busy: working)
+                }
+                .buttonStyle(.bordered)
+                .disabled(working)
+                if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
+            }
+        }
     }
 }

@@ -364,7 +364,8 @@ struct SpecificationSection: View {
                     .disabled(working)
                 } else {
                     ForEach(SpecReader.topics(statements)) { topic in
-                        SpecTopicRow(topic: topic, statements: statements)
+                        SpecTopicRow(develop: develop, course: develop.courses.first { $0.spec == spec.id }?.name ?? spec.subject,
+                                     topic: topic, statements: statements)
                     }
                 }
             } header: {
@@ -380,11 +381,15 @@ struct SpecificationSection: View {
 }
 
 private struct SpecTopicRow: View {
+    @Environment(AppModel.self) private var model
+    let develop: DevelopModel
+    let course: String
     let topic: SpecStatement
     let statements: [SpecStatement]
 
     var body: some View {
         DisclosureGroup {
+            TopicNotes(develop: develop, course: course, topic: topic, statements: statements)
             ForEach(SpecReader.under(topic.number, in: statements)) { s in
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(s.label).font(.subheadline.weight(s.depth <= topic.depth + 1 ? .semibold : .regular))
@@ -397,6 +402,42 @@ private struct SpecTopicRow: View {
         } label: {
             Text(topic.label).font(.body.weight(.medium))
         }
+    }
+}
+
+/// A topic's notes (items `about` it or one of its statements) and "New note for this topic" (plan §6).
+private struct TopicNotes: View {
+    @Environment(AppModel.self) private var model
+    let develop: DevelopModel
+    let course: String
+    let topic: SpecStatement
+    let statements: [SpecStatement]
+
+    @State private var notes: [(id: String, title: String)] = []
+
+    var body: some View {
+        ForEach(notes, id: \.id) { note in
+            Button { model.selectedItemID = note.id } label: { Label(note.title, systemImage: "doc.text") }
+                .buttonStyle(.borderless)
+        }
+        .task(id: model.dataVersion) {
+            let ids = Set(([topic] + SpecReader.under(topic.number, in: statements)).flatMap { develop.aboutItems[$0.concept] ?? [] })
+            guard !ids.isEmpty, let library = model.library else { notes = []; return }
+            var out: [(id: String, title: String)] = []
+            for id in ids.sorted().prefix(10) { if let item = await library.item(id), !item.record.isDeleted { out.append((id, item.displayTitle)) } }
+            notes = out
+        }
+        Button {
+            Task {
+                guard let library = model.library else { return }
+                let id = await library.addNote(title: topic.label, body: "", folder: ["Learn", course, topic.title])
+                _ = await library.setEdge(from: id, to: topic.concept, type: .about, state: .accepted, origin: .user)
+                await model.reload()
+                await develop.reload()
+                model.selectedItemID = id
+            }
+        } label: { Label("New note for this topic", systemImage: "square.and.pencil") }
+        .buttonStyle(.borderless)
     }
 }
 

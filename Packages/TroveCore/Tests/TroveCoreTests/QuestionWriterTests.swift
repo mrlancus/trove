@@ -118,6 +118,31 @@ import Testing
         #expect(!QuestionBank.shareable(req), "never from your own uploads")
     }
 
+    /// Practise this (plan §6): a note, sketch or lecture with no real questions still becomes questions, from its
+    /// own material, and is never shareable to the bank.
+    @Test func yourOwnMaterialBecomesQuestions() async throws {
+        let lib = Library(engine: SyncEngine(device: "D", keys: .generate(), transports: []))
+        let id = await lib.addNote(title: "Lecture 3: momentum", body: "Momentum is mass times velocity. It is conserved in collisions.")
+        let rec: JSONValue = ["attachment": ["id": "att1", "name": "a.m4a", "mime": "audio/mp4", "size": 10], "start": 1, "duration": 60,
+                              "transcript": "Today we look at impulse, the change in momentum."]
+        _ = await lib.engine.set(["recordings": .array([rec]), "inkText": "p = mv"], record: id, kind: "item")
+        let item = try #require(await lib.item(id))
+        let material = LearningMaterial.text(of: item)
+        #expect(material.contains("mass times velocity") && material.contains("Handwriting: p = mv") && material.contains("Lecture transcript: Today we look at impulse"))
+        #expect(LearningMaterial.isLecture(item))
+        #expect(LearningMaterial.text(of: item, limit: 20).count == 20)
+
+        let (_, c) = try Self.load()
+        let req = QuestionRequest(board: "Your notes", spec: "upload", level: "alevel", examples: [], specPoints: ["Momentum"], material: material)
+        #expect(req.askText.contains("There are no real questions") && req.askText.contains("<student_material>"))
+        #expect(!QuestionBank.shareable(req))
+        var q = c.cases[0].question
+        q.tags.madeFrom = ["material"]
+        let fake = Fake([Self.set(q), Self.cleanCheck])
+        let report = try await QuestionWriter.write(QuestionRequest(board: "Your notes", spec: "upload", level: "alevel", examples: [], specPoints: ["Momentum"], material: material, questions: 1), model: fake)
+        #expect(report.made.count == 1 && fake.calls[0].cached.isEmpty)
+    }
+
     @Test func noExamplesNoGeneration() async throws {
         var (req, _) = try Self.load()
         req.examples = []

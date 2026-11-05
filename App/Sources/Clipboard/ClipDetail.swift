@@ -43,6 +43,7 @@ struct ClipDetailForm: View {
                 }
             }
             found
+            SaveToCourseSection(clip: clip)
             Section("Tags") {
                 TextField("Tags", text: $tags, prompt: Text("work, ideas"))
             }
@@ -251,6 +252,54 @@ struct ClipHistoryList: View {
         case .copy: return place.map { "Copied from \($0)" } ?? "Copied"
         case .paste: return place.map { "Pasted into \($0)" } ?? "Pasted"
         case .use: return "Copied again from Trove"
+        }
+    }
+}
+
+/// "Save to a course" (learn-pivot plan §6): the clip becomes a note under one of your courses' topics, so it shows
+/// with that topic's notes in Learn.
+private struct SaveToCourseSection: View {
+    let clip: Clip
+    @State private var develop = DevelopModel.shared
+    @State private var saved: String?
+
+    var body: some View {
+        if !develop.courses.isEmpty {
+            Section {
+                Menu("Save to a course…") {
+                    ForEach(develop.courses) { course in
+                        let topics = topics(of: course)
+                        if topics.isEmpty {
+                            Button(course.name) { save(course: course, topic: nil) }
+                        } else {
+                            Menu(course.name) {
+                                ForEach(topics, id: \.id) { t in Button(t.name) { save(course: course, topic: t) } }
+                            }
+                        }
+                    }
+                }
+                if let saved { Text(saved).font(.caption).foregroundStyle(.secondary) }
+            }
+        }
+    }
+
+    /// Own courses' topics, or the specification's topics for an exam course (when it's been read).
+    private func topics(of course: Course) -> [(id: String, name: String)] {
+        if course.isOwn { return (develop.ownTopics[course.spec] ?? []).map { ($0.id, $0.name) } }
+        let statements = develop.specStatements[course.spec] ?? []
+        return SpecReader.topics(statements).map { ($0.concept, $0.label) }
+    }
+
+    private func save(course: Course, topic: (id: String, name: String)?) {
+        Task {
+            guard let library = develop.app?.library else { return }
+            let text = clip.text.isEmpty ? (clip.ocrText ?? clip.displayTitle) : clip.text
+            let folder = ["Learn", course.name] + (topic.map { [$0.name] } ?? [])
+            let id = await library.addNote(title: clip.displayTitle, body: text, folder: folder)
+            if let topic { _ = await library.setEdge(from: id, to: topic.id, type: .about, state: .accepted, origin: .user) }
+            await develop.app?.reload()
+            await develop.reload()
+            saved = "Saved to \(topic?.name ?? course.name)."
         }
     }
 }

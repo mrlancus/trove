@@ -27,6 +27,8 @@ final class DevelopModel {
     /// A statement's concept id → the name Your work groups it under ("3.4.1 Force, energy and momentum").
     @ObservationIgnored var specTopicNames: [String: String] = [:]
     @ObservationIgnored var specTried: Set<String> = []
+    /// Items about each concept (accepted `about` edges), for notes per topic.
+    var aboutItems: [String: [String]] = [:]
     /// Your own courses' topics (`OwnCourseView.swift`), by course spec.
     var ownTopics: [String: [Concept]] = [:]
     /// Questions you typed this session (note id → question, answer), before the note's text is read back.
@@ -170,7 +172,12 @@ final class DevelopModel {
         attempts = await library.attempts()
         concepts = await library.concepts()
         goals = await library.campaigns()
-        index = EdgeIndex(edges: await library.edges(), concepts: concepts)
+        let edges = await library.edges()
+        index = EdgeIndex(edges: edges, concepts: concepts)
+        // Notes about each topic (learn-pivot plan §6): concept → items with an accepted `about` edge to it.
+        var about: [String: [String]] = [:]
+        for e in edges where e.type == .about && e.state == .accepted { about[e.to, default: []].append(e.from) }
+        aboutItems = about
         await loadOwnTopics()
         let all = attempts
         skills = await Task.detached(priority: .userInitiated) { Mastery.evaluate(all) }.value

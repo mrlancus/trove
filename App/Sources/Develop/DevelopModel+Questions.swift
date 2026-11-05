@@ -50,7 +50,7 @@ extension DevelopModel {
         var fromBank = 0
         if let spec, let relay = app?.vault.relayClient, let file = try? await relay.bank(spec.id) {
             for e in QuestionBank.pick(file, specPoints: points, seen: Self.bankSeen, count: count) {
-                await save(e.question, brief: e.brief, effort: e.effort, model: e.model, like: p, board: board, code: spec.code, paper: paper,
+                await save(e.question, brief: e.brief, effort: e.effort, model: e.model, skills: p.skills, level: p.level, topic: topic(skills: p.skills, label: p.label), board: board, code: spec.code, paper: paper,
                            course: course, examples: [], bank: (e.id, spec.id))
                 fromBank += 1
             }
@@ -71,7 +71,7 @@ extension DevelopModel {
                let id = try? await relay.addToBank(made.question, spec: spec.id, brief: made.brief, model: made.model, effort: made.effort) {
                 bank = (id, spec.id)
             }
-            await save(made.question, brief: made.brief, effort: made.effort, model: made.model, like: p, board: board, code: spec?.code ?? "",
+            await save(made.question, brief: made.brief, effort: made.effort, model: made.model, skills: p.skills, level: p.level, topic: topic(skills: p.skills, label: p.label), board: board, code: spec?.code ?? "",
                        paper: paper, course: course, examples: examples, bank: bank)
         }
         await app?.reload()
@@ -100,20 +100,22 @@ extension DevelopModel {
     }
 
     /// Saves one question as a Trove-made note and its problem, labelled honestly, linked to its examples.
-    private func save(_ q: GeneratedQuestion, brief: String, effort: String, model: String, like p: Problem, board: String, code: String,
-                      paper: String?, course: String, examples: [QuestionRequest.Example], bank: (String, String)?) async {
+    private func save(_ q: GeneratedQuestion, brief: String, effort: String, model: String, skills: [String], level: ProblemLevel, topic: String, board: String, code: String,
+                      paper: String?, course: String, examples: [QuestionRequest.Example], bank: (String, String)?, source: String? = nil) async {
         guard let library = app?.library else { return }
         let label = QuestionWriter.label(board: board, spec: code, paper: paper)
         let body = q.questionText + "\n\n**Answer:** " + q.schemeText
-        let note = await library.addNote(title: "Trove-made: \(topic(skills: p.skills, label: p.label))", body: body, folder: ["Learn", "Trove-made", course])
-        let id = await library.addProblem(sourceKey: "item:\(note)", key: "1", pages: [], marks: q.totalMarks, level: p.level,
-                                          label: label, skills: p.skills, splitBy: "user")
+        let note = await library.addNote(title: "Trove-made: \(topic)", body: body, folder: ["Learn", "Trove-made", course])
+        let id = await library.addProblem(sourceKey: "item:\(note)", key: "1", pages: [], marks: q.totalMarks, level: level,
+                                          label: label, skills: skills, splitBy: "user")
         _ = await library.engine.set(["origin": "ai", "brief": .string(brief), "effort": .string(effort), "model": .string(model)],
                                      record: id, kind: Develop.problemKind)
         for e in examples {
             let parts = e.id.split(separator: "#", maxSplits: 1).map(String.init)
             if parts.count == 2 { _ = await library.setEdge(from: id, to: Develop.problemId(sourceKey: parts[0], key: parts[1]), type: .madeFrom, state: .accepted, origin: .ai) }
         }
+        // Made from your own item: it's the source you can open (plan §C2.3, "labelled honestly").
+        if let source { _ = await library.setEdge(from: id, to: source, type: .madeFrom, state: .accepted, origin: .ai) }
         typedQuestions[note] = (q.questionText, q.schemeText)
         if let (bankId, spec) = bank {
             Self.bankSeen.insert(bankId)
@@ -130,5 +132,37 @@ extension DevelopModel {
         await app?.reload()
         await reload()
         message = "Removed. Trove won't show it again."
+    }
+
+    // MARK: Practise this (learn-pivot plan §6)
+
+    /// Makes questions from any note, PDF, sketch or lecture, with the item as their source; real questions on the
+    /// same topic (an `about` edge) are the style to copy when there are some. Never shared. Starts practising them.
+    func practiseThis(_ item: Item, count: Int = 3) async throws {
+        guard let ai = app?.ownAI, let library = app?.library else {
+            throw DevelopError("Practise this writes questions with your AI: set it up in Settings → AI.")
+        }
+        let material = LearningMaterial.text(of: item)
+        guard material.count > 40 else { throw DevelopError("There isn't enough here to make questions from yet.") }
+        let topics = Set(await library.edges().filter { $0.from == item.id && $0.type == .about && $0.state == .accepted }.map(\.to))
+        let like = practisable.first { !topics.isDisjoint(with: $0.skills) }
+        let examples = like.map { examples(like: $0) } ?? []
+        let spec = like.flatMap { $0.sourceKey.hasPrefix("cat:") ? spec(ofDoc: String($0.sourceKey.dropFirst(4))) : nil }
+        let board = spec.map { boardName($0.board) } ?? "Your notes"
+        let request = QuestionRequest(board: board, spec: spec?.id ?? "notes", level: like?.level.rawValue ?? "other", examples: examples,
+                                      specPoints: like.map { specPoints(for: $0) } ?? [item.displayTitle], material: material, questions: count)
+        let report = try await QuestionWriter.write(request, model: ai)
+        let before = Set(problems.map(\.id))
+        let skills = like?.skills ?? Array(topics)
+        for made in report.made {
+            await save(made.question, brief: made.brief, effort: made.effort, model: made.model, skills: skills, level: like?.level ?? .other, topic: item.displayTitle, board: board, code: spec?.code ?? "",
+                       paper: nil, course: like.map { courseName($0.sourceKey) } ?? "My notes", examples: examples, bank: nil, source: item.id)
+        }
+        await app?.reload()
+        await reload()
+        let new = problems.filter { !before.contains($0.id) }
+        guard !new.isEmpty else { message = "No question passed its checks this time. Try again."; return }
+        session = Session(problems: Practice.interleave(new), seed: 1)
+        message = "\(new.count) question\(new.count == 1 ? "" : "s") from \(item.displayTitle)."
     }
 }
