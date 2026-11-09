@@ -1,6 +1,6 @@
 {
 "v": 2,
-"updated": "2026-11-05",
+"updated": "2026-11-09",
 "note": "Facts and links only, from each board's own site. Built by scripts/catalogue/build.py.",
 "boards": [
 {
@@ -2454,11 +2454,11 @@
 "code": "9231",
 "level": "alevel",
 "url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-mathematics-further-9231/",
-"papers": 8,
-"files": 18,
+"papers": 12,
+"files": 26,
 "years": [
 2020,
-2024
+2027
 ]
 },
 {
@@ -6370,7 +6370,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 21,
-"files": 59,
+"files": 60,
 "years": [
 2016,
 2025
@@ -6400,7 +6400,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 20,
-"files": 60,
+"files": 61,
 "years": [
 2016,
 2025
@@ -6475,7 +6475,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 20,
-"files": 59,
+"files": 60,
 "years": [
 2016,
 2025
@@ -6610,7 +6610,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 18,
-"files": 54,
+"files": 55,
 "years": [
 2016,
 2025
@@ -6640,7 +6640,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 10,
-"files": 30,
+"files": 31,
 "years": [
 2016,
 2020
@@ -6670,7 +6670,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 18,
-"files": 54,
+"files": 55,
 "years": [
 2016,
 2025
@@ -6715,7 +6715,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 18,
-"files": 54,
+"files": 55,
 "years": [
 2016,
 2025
@@ -6790,7 +6790,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 9,
-"files": 31,
+"files": 32,
 "years": [
 2017,
 2020
@@ -6865,7 +6865,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 16,
-"files": 49,
+"files": 50,
 "years": [
 2017,
 2025
@@ -6910,7 +6910,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 8,
-"files": 31,
+"files": 32,
 "years": [
 2017,
 2020
@@ -7000,7 +7000,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 135,
-"files": 409,
+"files": 410,
 "years": [
 2016,
 2025
@@ -7165,7 +7165,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 3,
-"files": 14,
+"files": 15,
 "years": [
 2017,
 2019
@@ -7240,7 +7240,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 8,
-"files": 29,
+"files": 30,
 "years": [
 2017,
 2020
@@ -7270,7 +7270,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 20,
-"files": 60,
+"files": 61,
 "years": [
 2016,
 2025
@@ -7375,7 +7375,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 18,
-"files": 54,
+"files": 55,
 "years": [
 2016,
 2025
@@ -7420,7 +7420,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 58,
-"files": 177,
+"files": 178,
 "years": [
 2017,
 2025
@@ -7480,7 +7480,7 @@
 "level": "alevel",
 "url": "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html",
 "papers": 6,
-"files": 24,
+"files": 25,
 "years": [
 2017,
 2019
