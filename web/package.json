@@ -11,6 +11,6 @@
     "bench:search": "node --test test/search.bench.mjs"
   },
   "devDependencies": {
-    "playwright-core": "^1.56.0"
+    "playwright-core": "^1.65.0"
   }
 }
