@@ -1,6 +1,6 @@
 {
 "v": 2,
-"updated": "2026-11-16",
+"updated": "2026-11-23",
 "note": "Facts and links only, from each board's own site. Built by scripts/catalogue/build.py.",
 "boards": [
 {
@@ -1580,21 +1580,6 @@
 ]
 },
 {
-"id": "aqa-8061",
-"board": "aqa",
-"qualification": "GCSE",
-"subject": "Religious Studies",
-"code": "8061",
-"level": "gcse",
-"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
-"papers": 29,
-"files": 81,
-"years": [
-2020,
-2025
-]
-},
-{
 "id": "aqa-8062",
 "board": "aqa",
 "qualification": "GCSE",
@@ -1604,6 +1589,21 @@
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 53,
 "files": 149,
+"years": [
+2020,
+2025
+]
+},
+{
+"id": "aqa-8061",
+"board": "aqa",
+"qualification": "GCSE",
+"subject": "Religious Studies",
+"code": "8061",
+"level": "gcse",
+"url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
+"papers": 29,
+"files": 81,
 "years": [
 2020,
 2025
@@ -1675,7 +1675,7 @@
 "level": "gcse",
 "url": "https://www.aqa.org.uk/find-past-papers-and-mark-schemes",
 "papers": 41,
-"files": 105,
+"files": 106,
 "years": [
 2019,
 2025
@@ -2439,11 +2439,11 @@
 "code": "9709",
 "level": "alevel",
 "url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-international-as-and-a-level-mathematics-9709/",
-"papers": 12,
-"files": 26,
+"papers": 24,
+"files": 44,
 "years": [
 2020,
-2024
+2027
 ]
 },
 {
@@ -3024,8 +3024,8 @@
 "code": "0460",
 "level": "igcse",
 "url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-geography-0460/",
-"papers": 9,
-"files": 20,
+"papers": 10,
+"files": 21,
 "years": [
 2020,
 2027
@@ -3399,11 +3399,11 @@
 "code": "0995",
 "level": "igcse",
 "url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-physical-education-0995/",
-"papers": 2,
-"files": 6,
+"papers": 3,
+"files": 8,
 "years": [
 2019,
-2024
+2029
 ]
 },
 {
